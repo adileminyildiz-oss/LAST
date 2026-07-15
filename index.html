@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#3f372b">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LAST">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#0a0e17">
 <title>LAST — logiciel de traitement des demandes (AEM CONSEIL)</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 88 88'%3E%3Crect width='88' height='88' rx='18' fill='%233a3227'/%3E%3Cpath d='M26 64 L44 24 L62 64' fill='none' stroke='%23f3ead6' stroke-width='8' stroke-linejoin='miter'/%3E%3Ccircle cx='44' cy='55' r='4.5' fill='%23f3ead6'/%3E%3C/svg%3E">
@@ -565,7 +572,6 @@ const nivTag=n=>`<span class="tag ${n==='chaud'?'hot':n==='tiède'?'warm':'mut'}
    ROUTER / RENDER
    ================================================================= */
 const PAGES=[
-  {id:'dash',lbl:'Tableau de bord',ic:'dash',sub:'Vue d\'ensemble de l\'activité'},
   {id:'demandes',lbl:'Demandes',ic:'inbox',sub:'Réception & qualification IA'},
   {id:'clients',lbl:'Clients',ic:'users',sub:'Fiches & informations'},
   {id:'tiers',lbl:'Tiers',ic:'idcard',sub:'Identités clients & fournisseurs'},
@@ -577,7 +583,7 @@ const PAGES=[
   {id:'marge',lbl:'Marge',ic:'trend',sub:'Rentabilité par dossier',soon:1},
   {id:'params',lbl:'Paramètres',ic:'gear',sub:'Équipe & réglages'}
 ];
-const state={page:'dash',q:''};
+const state={page:'demandes',q:''};
 function toggleNav(o){document.getElementById('side').classList.toggle('open',o);document.getElementById('scrim').classList.toggle('show',o);}
 function go(p){state.page=p;toggleNav(false);render();window.scrollTo(0,0);}
 function onSearch(v){state.q=v.trim().toLowerCase();if(['clients','dossiers','demandes'].includes(state.page))render();}
@@ -586,11 +592,11 @@ function buildNav(){
   const nb=DB.demandes.filter(d=>!d.dossierId&&d.statut!=='Clôturé').length;
   document.getElementById('nav').innerHTML=
     `<div class="nav-lbl">Pilotage</div>`+
-    PAGES.slice(0,7).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(0,6).map(p=>navBtn(p,nb)).join('')+
     `<div class="nav-lbl">Facturation</div>`+
-    PAGES.slice(7,10).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(6,9).map(p=>navBtn(p,nb)).join('')+
     `<div class="nav-lbl">Système</div>`+
-    PAGES.slice(10).map(p=>navBtn(p,nb)).join('');
+    PAGES.slice(9).map(p=>navBtn(p,nb)).join('');
 }
 function navBtn(p,nb){
   const badge=p.id==='demandes'&&nb?`<span class="nav-badge">${nb}</span>`:'';
@@ -604,8 +610,8 @@ function render(){
   document.getElementById('ptitle').firstChild.textContent=p.lbl;
   document.getElementById('psub').textContent=p.sub;
   const V=document.getElementById('view');
-  V.innerHTML=({dash:pageDash,demandes:pageDemandes,clients:pageClients,tiers:pageTiers,dossiers:pageDossiers,espace:pageEspace,
-    services:pageServices,devis:pageSoon,facturation:pageFacturation,marge:pageMarge,params:pageParams}[state.page]||pageDash)();
+  V.innerHTML=({demandes:pageDemandes,clients:pageClients,tiers:pageTiers,dossiers:pageDossiers,espace:pageEspace,
+    services:pageServices,devis:pageSoon,facturation:pageFacturation,marge:pageMarge,params:pageParams}[state.page]||pageDemandes)();
   wireCards();
 }
 
@@ -1761,6 +1767,33 @@ function lastGate(){
   document.head.appendChild(st);
   var i=document.getElementById('lg-pwd');if(i)i.focus();
 }
+/* ===== PWA : installation en application + hors-ligne ===== */
+(function(){var s=document.createElement('style');s.textContent='#pwa-install{position:fixed;left:0;right:0;bottom:0;z-index:100002;display:flex;justify-content:center;padding:12px;pointer-events:none}'
++'#pwa-install .pwa-in{pointer-events:auto;display:flex;align-items:center;gap:12px;background:#3f372b;color:#f7f2e6;border-radius:13px;padding:11px 13px;box-shadow:0 16px 40px -14px rgba(40,30,10,.6);max-width:440px;width:calc(100% - 24px)}'
++'#pwa-install .pwa-ic{font-size:24px;flex:none}'
++'#pwa-install .pwa-tx{flex:1;display:flex;flex-direction:column;line-height:1.3;min-width:0}'
++'#pwa-install .pwa-tx b{font-size:13px}#pwa-install .pwa-tx span{font-size:11px;color:#cbbfa9}'
++'#pwa-install .pwa-btn{background:#e9dcc0;color:#3f372b;border:none;border-radius:8px;padding:8px 15px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;flex:none}'
++'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
+var _pwaPrompt=null;
+function pwaInstalled(){return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;}
+function pwaHideBanner(){var b=document.getElementById('pwa-install');if(b)b.remove();}
+function pwaDismiss(){try{sessionStorage.setItem('pwa-dismiss','1');}catch(e){}pwaHideBanner();}
+function pwaInstall(){if(!_pwaPrompt){toast&&toast('Utilisez le menu du navigateur → « Installer / Ajouter à l\'écran d\'accueil »');return;}_pwaPrompt.prompt();_pwaPrompt.userChoice.then(function(){pwaHideBanner();_pwaPrompt=null;});}
+function pwaShowBanner(ios){
+  if(pwaInstalled())return;var d=false;try{d=sessionStorage.getItem('pwa-dismiss')==='1';}catch(e){}if(d)return;
+  if(document.getElementById('pwa-install'))return;
+  var b=document.createElement('div');b.id='pwa-install';
+  b.innerHTML='<div class="pwa-in"><div class="pwa-ic">📲</div>'
+    +'<div class="pwa-tx"><b>Installer LAST</b><span>'+(ios?'Appuyez sur Partager puis « Sur l\'écran d\'accueil ».':'Ajoutez l\'application sur votre appareil.')+'</span></div>'
+    +(ios?'':'<button class="pwa-btn" onclick="pwaInstall()">Installer</button>')
+    +'<button class="pwa-x" onclick="pwaDismiss()" aria-label="Fermer">✕</button></div>';
+  document.body.appendChild(b);
+}
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();_pwaPrompt=e;pwaShowBanner(false);});
+window.addEventListener('appinstalled',function(){pwaHideBanner();_pwaPrompt=null;});
+(function(){var ua=navigator.userAgent||'';var isIOS=/iPad|iPhone|iPod/.test(ua)&&!/CriOS|FxiOS/.test(ua);if(isIOS&&!pwaInstalled()){setTimeout(function(){pwaShowBanner(true);},1400);}})();
 lastGate();
 </script>
 
