@@ -825,7 +825,8 @@ function modalDemandeView(id){
     '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
     +'<button class="btn" onclick="assignDemande(\''+id+'\')">Assigner</button>'
     +'<button class="btn" onclick="demDevis(\''+id+'\')">🧾 Devis</button>'
-    +'<button class="btn btn-pri" onclick="demOuvrirDossier(\''+id+'\')">Ouvrir le dossier</button>');
+    +'<button class="btn" onclick="demQuestionnaire(\''+id+'\')">📋 Questionnaire</button>'
+    +'<button class="btn btn-pri" onclick="demOuvrirDossier(\''+id+'\')">📂 Ouvrir le dossier</button>');
 }
 function modalDemandeMail(id){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
@@ -910,8 +911,9 @@ function creerDossierDepuis(id){
   const ref='DOS-'+(DB.seq.dossier++);
   const dos={id:uid('do'),ref,clientIds:[c.id],serviceIds:[],statut:'Qualification',assigneA:d.assigneA,createdAt:today(),
     historique:[{d:today(),t:'Créé depuis la demande de '+d.clientNom}]};
+  try{ if(typeof formEnrichDossier==='function') formEnrichDossier(c,dos,d); }catch(e){}
   DB.dossiers.unshift(dos);d.dossierId=dos.id;
-  save();closeModal();toast('Dossier '+ref+' créé');state.page='espace';state.espaceDossier=dos.id;render();
+  save();closeModal();toast('Dossier '+ref+' créé'+(dos.__prerempli?' · pré-rempli depuis le questionnaire':''));state.page='espace';state.espaceDossier=dos.id;render();
 }
 function demOuvrirDossier(id){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
   if(d.dossierId&&DB.dossiers.find(function(x){return x.id===d.dossierId;})){closeModal();state.page='espace';state.espaceDossier=d.dossierId;toast('Dossier ouvert dans Traitement');render();return;}
@@ -1281,6 +1283,7 @@ function espMailCard(d){
    +'<div class="esp-from"><span class="av" style="background:linear-gradient(160deg,#4a4034,#2c271f)">'+initials(dossierClients(d))+'</span>'
    +'<div><div class="tname">'+esc(dossierClients(d))+'</div><div class="tsub">'+esc(email)+' · '+esc(canal)+'</div></div></div>'
    +'<div class="esp-mail"><div class="esp-mail-obj">Objet : '+esc(objet)+'</div><div class="esp-mail-body">'+corps+'</div></div>'
+   +(d.messageClient?('<div class="esp-mail" style="margin-top:8px"><div class="esp-mail-obj">💬 Message du client</div><div class="esp-mail-body">'+esc(d.messageClient)+'</div></div>'):'')
    +'<div class="esp-notes"><span class="tag '+du.c+'">⏱ '+du.lbl+' · '+du.temps+'</span><span class="tag '+fi.c+'">'+fi.lbl+'</span></div>'
    +'<div class="esp-fiche-row"><button class="btn btn-sm" onclick="espFicheOpen(\''+d.id+'\')">📋 Fiche technique — pièces</button>'
    +'<button class="btn btn-sm" onclick="espDocsModal(\''+d.id+'\')">📄 Documents à produire</button></div>'
@@ -2021,7 +2024,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=6;
+var LAST_VER=7;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2364,6 +2367,149 @@ lastGate();
   };
   global.FactureVente = API;
 })(typeof window !== 'undefined' ? window : this);
+</script>
+<script>
+/* ============ Questionnaires de formalité (par mail) ============ */
+var FORM_TYPES=[
+ {k:'sas',label:'Création SAS',forme:'SAS'},
+ {k:'sasu',label:'Création SASU (associé unique)',forme:'SASU'},
+ {k:'sarl',label:'Création SARL',forme:'SARL'},
+ {k:'eurl',label:'Création EURL (associé unique)',forme:'EURL'},
+ {k:'sci',label:'Création SCI',forme:'SCI'},
+ {k:'transfert',label:'Transfert de siège social'},
+ {k:'dirigeant',label:'Changement de dirigeant'},
+ {k:'denomination',label:'Changement de dénomination'},
+ {k:'objet',label:"Modification de l'objet social"},
+ {k:'capital',label:'Augmentation de capital'}
+];
+var FORM_FIELDS=[
+ {key:'denomination',label:'Dénomination sociale'},
+ {key:'nomCommercial',label:'Sigle / nom commercial'},
+ {key:'forme',label:'Forme juridique'},
+ {key:'objet',label:'Objet social (activités)'},
+ {key:'siege',label:'Adresse du siège social'},
+ {key:'cp',label:'Code postal'},
+ {key:'ville',label:'Ville'},
+ {key:'capital',label:'Capital social (en euros)'},
+ {key:'debut',label:"Date de début d'activité"},
+ {key:'fonction',label:'Fonction du dirigeant (Président / Gérant)'},
+ {key:'civilite',label:'Civilité du dirigeant (M. / Mme)'},
+ {key:'nom',label:'Nom du dirigeant'},
+ {key:'prenom',label:'Prénom du dirigeant'},
+ {key:'naissance',label:'Date de naissance du dirigeant'},
+ {key:'lieuNaissance',label:'Lieu (ville) de naissance'},
+ {key:'pays',label:'Pays de naissance'},
+ {key:'nationalite',label:'Nationalité'},
+ {key:'adressePerso',label:'Adresse personnelle du dirigeant'},
+ {key:'situation',label:'Situation matrimoniale'},
+ {key:'associes',label:'Associés (pour chacun : Nom Prénom, apport en euros, nombre de parts ou actions)'},
+ {key:'siren',label:'SIREN de la société'},
+ {key:'ancienSiege',label:'Ancienne adresse du siège'},
+ {key:'nouveauSiege',label:'Nouvelle adresse du siège'},
+ {key:'ancienDirigeant',label:'Ancien dirigeant (Nom Prénom)'},
+ {key:'nouvelleDenomination',label:'Nouvelle dénomination'},
+ {key:'nouvelObjet',label:'Nouvel objet social'},
+ {key:'capitalActuel',label:'Capital actuel (en euros)'},
+ {key:'nouveauCapital',label:'Nouveau capital (en euros)'},
+ {key:'dateEffet',label:"Date d'effet souhaitée"}
+];
+function formNorm(s){return (''+s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();}
+function formFieldByKey(k){for(var i=0;i<FORM_FIELDS.length;i++)if(FORM_FIELDS[i].key===k)return FORM_FIELDS[i];return {key:k,label:k};}
+function formQuestionKeys(k){
+ var creation=['denomination','nomCommercial','objet','siege','cp','ville','capital','debut','fonction','civilite','nom','prenom','naissance','lieuNaissance','pays','nationalite','adressePerso','situation'];
+ switch(k){
+  case 'sas': case 'sarl': case 'sci': return creation.concat(['associes']);
+  case 'sasu': case 'eurl': return creation;
+  case 'transfert': return ['denomination','siren','forme','ancienSiege','nouveauSiege','cp','ville','dateEffet','fonction','civilite','nom','prenom'];
+  case 'dirigeant': return ['denomination','siren','ancienDirigeant','fonction','civilite','nom','prenom','naissance','lieuNaissance','pays','nationalite','adressePerso','dateEffet'];
+  case 'denomination': return ['denomination','siren','nouvelleDenomination','dateEffet','fonction','civilite','nom','prenom'];
+  case 'objet': return ['denomination','siren','nouvelObjet','dateEffet','fonction','civilite','nom','prenom'];
+  case 'capital': return ['denomination','siren','capitalActuel','nouveauCapital','dateEffet','fonction','civilite','nom','prenom'];
+  default: return creation.concat(['associes']);
+ }
+}
+function formGuessType(d){var s=formNorm((d&&d.serviceSouhaite||'')+' '+(d&&d.message||''));
+ if(/transfert.*sieg|sieg.*social/.test(s))return 'transfert';
+ if(/changement.*dirigeant|nouveau.*gerant|nouveau.*president/.test(s))return 'dirigeant';
+ if(/denomination|changement.*nom/.test(s))return 'denomination';
+ if(/objet social/.test(s))return 'objet';
+ if(/augmentation.*capital/.test(s))return 'capital';
+ if(/sasu/.test(s))return 'sasu';
+ if(/eurl/.test(s))return 'eurl';
+ if(/sarl/.test(s))return 'sarl';
+ if(/\bsci\b/.test(s))return 'sci';
+ return 'sas';
+}
+function formTexte(d,k){
+ var t=null;for(var i=0;i<FORM_TYPES.length;i++)if(FORM_TYPES[i].k===k)t=FORM_TYPES[i];if(!t)t={label:'votre formalité'};
+ var keys=formQuestionKeys(k);
+ var lignes=keys.map(function(kk){return formFieldByKey(kk).label+' : ';}).join('\n');
+ var prenom=(d&&d.clientNom||'').split(/\s+/)[0]||'';
+ return 'Bonjour'+(prenom?(' '+prenom):'')+',\n\n'
+  +'Nous vous remercions pour votre confiance concernant « '+t.label+' ».\n'
+  +"Afin d'ouvrir votre dossier dans les meilleurs délais, merci de compléter les informations ci-dessous en écrivant votre réponse juste après chaque « : » :\n\n"
+  +'— INFORMATIONS —\n'+lignes+'\n\n'
+  +'— VOTRE MESSAGE (facultatif) —\n(vous pouvez écrire ici toute précision utile pour votre dossier)\n\n\n'
+  +'Il vous suffit de répondre à ce message avec vos réponses. Nous restons à votre entière disposition.\n\n'
+  +'Bien à vous,\nL\'équipe AEM CONSEIL';
+}
+function demQuestionnaire(id){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;window._mailAtt=[];
+ var def=formGuessType(d);
+ var opts=FORM_TYPES.map(function(x){return '<option value="'+x.k+'"'+(x.k===def?' selected':'')+'>'+esc(x.label)+'</option>';}).join('');
+ openModal('📋 Questionnaire au client — '+esc(d.clientNom||''),
+   '<div class="hint" style="margin-bottom:8px">Choisis le type de formalité : les <b>bonnes questions</b> sont générées automatiquement. Le client répond par mail, puis « 📂 Ouvrir le dossier » pré-remplira la formalité.</div>'
+   +'<label>Type de formalité</label><select id="form-type" onchange="formTypeChange(\''+id+'\')">'+opts+'</select>'
+   +'<label style="margin-top:8px">Destinataire</label><input id="ml-to" value="'+esc(d.clientEmail||'')+'">'
+   +'<label>Objet du mail</label><input id="ml-sujet" value="">'
+   +'<label>Questionnaire (généré — modifiable)</label><textarea id="ml-corps" style="min-height:300px"></textarea>'
+   +mailComposerExtra(),
+   '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn" onclick="demMailCopier()">Copier</button><button class="btn btn-pri" onclick="demMailEnvoyer()">✉ Générer l\'e-mail</button>');
+ setTimeout(function(){formTypeChange(id);if(typeof mailAttRender==='function')mailAttRender();},0);
+}
+function formTypeChange(id){var d=DB.demandes.find(function(x){return x.id===id;});var sel=document.getElementById('form-type');var k=(sel&&sel.value)||'sas';
+ var t=null;for(var i=0;i<FORM_TYPES.length;i++)if(FORM_TYPES[i].k===k)t=FORM_TYPES[i];
+ var suj=document.getElementById('ml-sujet');if(suj)suj.value='Questionnaire — '+(t?t.label:'')+' - AEM CONSEIL';
+ var ta=document.getElementById('ml-corps');if(ta)ta.value=formTexte(d,k);
+}
+function formParse(text){text=(''+text);var lines=text.split(/\r?\n/);var out={};var byNorm={};
+ FORM_FIELDS.forEach(function(f){byNorm[formNorm(f.label)]=f.key;});
+ lines.forEach(function(ln){var i=ln.indexOf(':');var j=ln.indexOf('：');if(j>=0&&(i<0||j<i))i=j;if(i<0)return;
+   var lab=formNorm(ln.slice(0,i));var val=ln.slice(i+1).trim();if(!val||val==='.'||/^_+$/.test(val))return;
+   var key=byNorm[lab];
+   if(!key){for(var nk in byNorm){if(nk.length>4&&(lab.indexOf(nk)>=0||(lab.length>4&&nk.indexOf(lab)>=0))){key=byNorm[nk];break;}}}
+   if(key&&!out[key])out[key]=val;});
+ var m=text.match(/VOTRE MESSAGE[^\n]*\n([\s\S]*?)(?:\n\s*\n|$)/i);
+ if(m){var msg=m[1].replace(/\(vous pouvez écrire ici[^\n]*\)/i,'').replace(/\(écrivez ici[^\n]*\)/i,'').trim();if(msg)out.message=msg;}
+ return out;
+}
+function formEnrichDossier(c,dos,d){
+ var p=formParse(d&&d.message||'');var any=false;
+ function set(o,k,v){if(v){o[k]=v;any=true;}}
+ if(p.denomination)set(c,'denomination',p.denomination);
+ if(p.nomCommercial)set(c,'nomCommercial',p.nomCommercial);
+ if(p.forme)set(c,'forme',(''+p.forme).toUpperCase().replace(/[^A-Z]/g,'')||p.forme);
+ if(p.objet)set(c,'activites',p.objet.split(/[,;\/]+/).map(function(s){return s.trim();}).filter(Boolean));
+ if(p.siege)set(c,'siege',p.siege);
+ if(p.ville)set(c,'ville',p.ville);
+ if(p.cp)set(c,'cp',p.cp);
+ if(p.capital){var cap=parseInt((''+p.capital).replace(/[^0-9]/g,''),10);if(cap){c.capital=cap;any=true;}}
+ var pren=p.prenom||'',nom=p.nom||'';var full=((pren+' '+nom).trim());
+ if(full){c.president=full;
+   if(!c.associes||!c.associes.length)c.associes=[{nom:full,parts:c.capital||100}];
+   else c.associes[0].nom=full;any=true;}
+ var ex={};
+ if(p.civilite)ex.civilite=/mme|madame|f\b/i.test(p.civilite)?'Mme':'M.';
+ if(pren)ex.prenom=pren; if(nom)ex.nom=nom;
+ if(p.naissance)ex.dateNaissance=p.naissance;
+ if(p.lieuNaissance)ex.lieuNaissance=p.lieuNaissance;
+ if(p.pays)ex.paysNaissance=p.pays;
+ if(p.nationalite)ex.nationalite=p.nationalite;
+ if(p.adressePerso)ex.adresse=p.adressePerso;
+ if(p.siege)ex.siege=p.siege;
+ if(Object.keys(ex).length){dos.verif=dos.verif||{};dos.verif.extract=Object.assign(dos.verif.extract||{},ex);any=true;}
+ if(p.message){dos.messageClient=p.message;d.messageClient=p.message;any=true;}
+ if(any){dos.__prerempli=true;(dos.historique=dos.historique||[]).push({d:today(),t:'Pré-rempli depuis le questionnaire'});}
+}
 </script>
 </body>
 </html>
