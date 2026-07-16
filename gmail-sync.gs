@@ -2,76 +2,71 @@
  * LAST — Passerelle « boîte mail → demandes »
  * Compte : aemconseil.sas@gmail.com
  *
- * Ce script expose en JSON les mails reçus, pour que le site LAST
- * (last.aemconseil.eu) les récupère automatiquement et les transforme en demandes.
- *
- * Voir la méthode d'installation en bas de ce fichier.
+ * Expose en JSON (et JSONP) les mails reçus, pour que LAST (last.aemconseil.eu)
+ * les récupère AUTOMATIQUEMENT et les transforme en demandes.
+ * Le JSONP (paramètre ?callback=) permet l'appel depuis le navigateur sans blocage CORS.
  */
 
-// 1) Mot de passe partagé avec LAST (à recopier dans LAST > Importer les mails > Clé secrète).
-//    Choisis une longue chaîne aléatoire. NE PAS la publier ailleurs.
+// 1) Clé secrète partagée avec LAST (à recopier dans LAST > Configurer la boîte > Clé secrète).
 var TOKEN = 'REMPLACE-PAR-UNE-CLE-SECRETE-LONGUE';
 
 // 2) Filtre Gmail des mails à transmettre.
-//    - Tout l'inbox récent :            'in:inbox newer_than:60d'
-//    - Seulement le formulaire du site : 'in:inbox from:formulaire@aemconseil.eu newer_than:60d'
-//    - Seulement un libellé "Site" :     'label:Site newer_than:90d'
+//    Tout l'inbox récent : 'in:inbox newer_than:60d'
+//    Un expéditeur précis : 'in:inbox from:formulaire@aemconseil.eu newer_than:60d'
+//    Un libellé "Site"     : 'label:Site newer_than:90d'
 var QUERY = 'in:inbox newer_than:60d';
 
-// 3) Nombre maximum de fils de discussion lus par appel.
+// 3) Nombre maximum de fils lus par appel.
 var MAX = 120;
 
 function doGet(e) {
-  var out = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
-  if (!e || !e.parameter || e.parameter.key !== TOKEN) {
-    return out.setContent(JSON.stringify({ error: 'unauthorized' }));
-  }
-  var mails = [];
-  try {
-    var threads = GmailApp.search(QUERY, 0, MAX);
-    for (var t = 0; t < threads.length; t++) {
-      var msgs = threads[t].getMessages();
-      for (var i = 0; i < msgs.length; i++) {
-        var m = msgs[i];
-        mails.push({
-          id: m.getId(),
-          from: m.getFrom(),
-          subject: m.getSubject(),
-          date: m.getDate().toISOString(),
-          body: (m.getPlainBody() || '').slice(0, 4000)
-        });
+  var p = (e && e.parameter) ? e.parameter : {};
+  var payload;
+  if (p.key !== TOKEN) {
+    payload = { error: 'unauthorized' };
+  } else {
+    var mails = [];
+    try {
+      var threads = GmailApp.search(QUERY, 0, MAX);
+      for (var t = 0; t < threads.length; t++) {
+        var msgs = threads[t].getMessages();
+        for (var i = 0; i < msgs.length; i++) {
+          var m = msgs[i];
+          mails.push({
+            id: m.getId(),
+            from: m.getFrom(),
+            subject: m.getSubject(),
+            date: m.getDate().toISOString(),
+            body: (m.getPlainBody() || '').slice(0, 4000)
+          });
+        }
       }
+      payload = { mails: mails, count: mails.length };
+    } catch (err) {
+      payload = { error: String(err) };
     }
-  } catch (err) {
-    return out.setContent(JSON.stringify({ error: String(err) }));
   }
-  return out.setContent(JSON.stringify({ mails: mails, count: mails.length }));
+  var json = JSON.stringify(payload);
+  // JSONP si un callback est demandé (appel depuis LAST) — sinon JSON simple.
+  if (p.callback) {
+    return ContentService.createTextOutput(p.callback + '(' + json + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(json)
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
- * ── MÉTHODE D'INSTALLATION ──────────────────────────────────────────────
- * 1. Connecte-toi à la boîte  aemconseil.sas@gmail.com  (c'est important : le
- *    script lit les mails du compte qui l'exécute).
- * 2. Va sur  https://script.google.com  → « Nouveau projet ».
- * 3. Colle tout ce fichier dans l'éditeur (remplace le contenu par défaut).
- * 4. Remplace la valeur de TOKEN par une clé secrète longue (ex. 32 caractères).
- *    Ajuste QUERY si tu veux filtrer (voir commentaires ci-dessus).
- * 5. Clique « Déployer » → « Nouveau déploiement » → type « Application Web » :
- *       • Description  : LAST sync mails
- *       • Exécuter en tant que : Moi (aemconseil.sas@gmail.com)
- *       • Qui a accès  : « Tout le monde »   (la clé TOKEN protège l'accès)
- *    → « Déployer ». Autorise les accès Gmail quand Google le demande
- *      (Avancé → Accéder au projet … → Autoriser).
- * 6. Copie l'URL fournie (elle finit par …/exec).
- * 7. Dans LAST → onglet « Demandes » → bouton « 📥 Importer les mails » :
- *       • colle l'URL dans « URL du script »
- *       • colle le TOKEN dans « Clé secrète »
- *       • clique « 💾 Enregistrer & synchroniser ».
- *    → À partir de là, LAST récupère les nouveaux mails à l'ouverture,
- *      toutes les 3 minutes, et via le bouton « 🔄 Synchroniser la boîte ».
- *      Les mails déjà traités ne sont jamais réimportés (dédoublonnage par ID).
- *
- * (Facultatif) Pour un ajout instantané : dans script.google.com → « Déclencheurs »
- * → aucun n'est nécessaire ici, car c'est LAST qui interroge le script.
+ * ── INSTALLATION / MISE À JOUR ───────────────────────────────────────────
+ * 1. Connecte-toi UNIQUEMENT à aemconseil.sas@gmail.com (fenêtre InPrivate conseillée).
+ * 2. script.google.com → ouvre ton projet (ou Nouveau projet) → colle ce fichier.
+ * 3. Remplace TOKEN par ta clé secrète. Ajuste QUERY si besoin.
+ * 4. Déployer :
+ *    - 1re fois : « Nouveau déploiement » → Application Web →
+ *        Exécuter en tant que : Moi · Qui a accès : « Tout le monde » → Déployer.
+ *    - Mise à jour (garde la MÊME URL) : « Gérer les déploiements » → ✏️ (modifier)
+ *        → Version : « Nouvelle version » → Déployer.
+ * 5. Dans LAST → Demandes → « ⚙ Configurer la boîte » : colle l'URL …/exec + le TOKEN,
+ *    puis « 💾 Enregistrer & synchroniser ». C'est tout — la synchro est ensuite automatique.
  * ────────────────────────────────────────────────────────────────────────
  */

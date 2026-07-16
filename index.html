@@ -751,17 +751,27 @@ function demImportRun(){var ta=document.getElementById('dem-imp-text');var text=
   var mails=demParseMails(text);if(!mails.length)return toast('Aucun mail détecté dans le contenu fourni.');
   var r=demIngest(mails);save();closeModal();toast(r.add+' demande(s) importée(s)'+(r.dup?(' · '+r.dup+' doublon(s) ignoré(s)'):''));state.demTab='nouveau';state.q='';render();}
 function demSyncCfg(){DB.parametres=DB.parametres||{};DB.parametres.mailSync=DB.parametres.mailSync||{url:'',key:''};return DB.parametres.mailSync;}
-function demSyncSave(){var c=demSyncCfg();var u=document.getElementById('dem-sync-url'),k=document.getElementById('dem-sync-key');if(u)c.url=(u.value||'').trim();if(k)c.key=(k.value||'').trim();save();toast('Configuration enregistrée');demSyncMails(false);}
-function demSyncMails(silent){var c=demSyncCfg();if(!c.url){if(!silent)toast('Renseignez d\'abord l\'URL du script (bouton « 📥 Importer les mails »).');return;}
-  var url=c.url+(c.url.indexOf('?')>=0?'&':'?')+'key='+encodeURIComponent(c.key||'');
-  if(!silent)toast('Synchronisation en cours…');
-  fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
-    if(j&&j.error){if(!silent)toast('Erreur du script : '+j.error);return;}
+function demSyncSave(){var c=demSyncCfg();var u=document.getElementById('dem-sync-url'),k=document.getElementById('dem-sync-key');if(u)c.url=(u.value||'').trim();if(k)c.key=(k.value||'').trim();save();closeModal();toast('Configuration enregistrée');demSyncMails(false);}
+function demSyncConfig(){var c=demSyncCfg();
+  openModal('🔄 Boîte mail — synchronisation automatique',
+    '<div class="hint" style="margin-bottom:10px">Renseigne l\'adresse du script Google (déployé sur <b>aemconseil.sas@gmail.com</b>) et la clé secrète. LAST récupère alors <b>automatiquement</b> les mails et les transforme en demandes — à l\'ouverture, toutes les 3 minutes, et via « 🔄 Synchroniser la boîte ».</div>'
+    +'<label>URL du script (Web App …/exec)</label><input id="dem-sync-url" value="'+esc(c.url||'')+'" placeholder="https://script.google.com/macros/s/…/exec">'
+    +'<label style="margin-top:8px">Clé secrète (TOKEN du script)</label><input id="dem-sync-key" value="'+esc(c.key||'')+'" placeholder="identique au TOKEN du script">',
+    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="demSyncSave()">💾 Enregistrer & synchroniser</button>');}
+function demSyncMails(silent){var c=demSyncCfg();if(!c.url){if(!silent)demSyncConfig();return;}
+  if(window.__demSyncBusy)return;window.__demSyncBusy=true;
+  var cb='__lastcb'+(window.__demCb=(window.__demCb||0)+1);var done=false;var s=document.createElement('script');
+  function cleanup(){window.__demSyncBusy=false;try{delete window[cb];}catch(e){window[cb]=undefined;}if(s&&s.parentNode)s.parentNode.removeChild(s);clearTimeout(to);}
+  var to=setTimeout(function(){if(done)return;cleanup();if(!silent)toast('Boîte injoignable — vérifie l\'URL …/exec et le déploiement « Tout le monde ».');},20000);
+  window[cb]=function(j){done=true;cleanup();
+    if(j&&j.error){if(!silent)toast(j.error==='unauthorized'?'Clé secrète incorrecte.':('Erreur du script : '+j.error));return;}
     var r=demIngest(demParseMails(JSON.stringify(j)));save();
-    if(!silent||r.add)toast(r.add+' nouveau(x) mail(s) transmis'+(r.dup?(' · '+r.dup+' déjà traité(s)'):''));
-    if(r.add)state.demTab='nouveau';
-    if(!silent||r.add)render();
-  }).catch(function(e){if(!silent)toast('Synchronisation impossible (URL/CORS). Utilisez l\'import manuel.');});}
+    if(!silent||r.add)toast(r.add?(r.add+' nouveau(x) mail(s) transmis'+(r.dup?(' · '+r.dup+' déjà traité(s)'):'')):'Aucun nouveau mail'+(r.dup?(' ('+r.dup+' déjà traité(s))'):''));
+    if(r.add)state.demTab='nouveau';render();};
+  s.onerror=function(){if(done)return;cleanup();if(!silent)toast('Synchronisation impossible — vérifie l\'URL et le redéploiement du script.');};
+  var url=c.url+(c.url.indexOf('?')>=0?'&':'?')+'key='+encodeURIComponent(c.key||'')+'&callback='+cb;
+  s.src=url;document.body.appendChild(s);
+  if(!silent)toast('Synchronisation en cours…');}
 function demSyncAuto(){try{if(typeof DB==='undefined'||!DB.parametres)return;var c=DB.parametres.mailSync;if(c&&c.url)demSyncMails(true);}catch(e){}}
 window.addEventListener('load',function(){setTimeout(demSyncAuto,6000);setInterval(demSyncAuto,180000);});
 document.addEventListener('visibilitychange',function(){if(!document.hidden)demSyncAuto();});
@@ -773,7 +783,7 @@ function pageDemandes(){
   if(q)list=list.filter(function(d){return (d.clientNom+' '+IA.objet(d)+' '+(d.serviceSouhaite||'')+' '+(d.message||'')).toLowerCase().includes(q);});
   var tabs='<div class="dem-tabs">'+DEM_TABS.map(function(t){return '<button class="dem-tab '+(t[0]===tab?'on':'')+'" onclick="state.demTab=\''+t[0]+'\';render()">'+t[1]+' <span class="dem-c">'+counts[t[0]]+'</span></button>';}).join('')+'</div>';
   var search='<div class="dem-search">'+svg(IC.inbox)+'<input value="'+esc(state.q||'')+'" oninput="state.q=this.value.toLowerCase();render()" placeholder="Rechercher un client ou un type de demande…"></div>';
-  return tabs+'<div class="dem-toolbar">'+search+'<button class="btn btn-sm dem-imp-btn" onclick="demSyncMails(false)">🔄 Synchroniser la boîte</button><button class="btn btn-sm dem-imp-btn" onclick="demImportOuvrir()">📥 Importer les mails</button></div>'+'<div class="card"><div class="card-b" style="padding:0">'
+  return tabs+'<div class="dem-toolbar">'+search+'<button class="btn btn-sm dem-imp-btn" onclick="demSyncMails(false)">🔄 Synchroniser la boîte</button><button class="btn btn-sm dem-imp-btn" onclick="demSyncConfig()">⚙ Configurer la boîte</button></div>'+'<div class="card"><div class="card-b" style="padding:0">'
     +(list.length?tableDemandes(list,tab):'<div class="empty">Aucune demande dans cet onglet.</div>')
     +'</div></div>';
 }
@@ -2005,7 +2015,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=4;
+var LAST_VER=5;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
