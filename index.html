@@ -731,14 +731,6 @@ function demParseMails(text){text=(''+text);var t=text.trim();var out=[];
     var from=H('From'),subj=mailDecodeWord(H('Subject')),date=H('Date'),id=H('Message-ID')||H('Message-Id');
     if(!from&&!subj&&!body)return;out.push({from:from,subject:subj,date:date,body:body,id:id});});
   return out;}
-function demImportOuvrir(){window._demImpFile='';var c=demSyncCfg();
-  openModal('📥 Importer les mails — aemconseil.sas@gmail.com',
-    '<div class="hint" style="margin-bottom:10px">Chaque mail reçu sur <b>aemconseil.sas@gmail.com</b> devient une <b>demande</b> dans l\'onglet « À traiter ». Importez un export de mails (<b>.eml</b>, <b>.mbox</b>, <b>.json</b>) ou collez le contenu ci-dessous. Les doublons sont détectés et ignorés automatiquement.</div>'
-    +'<label class="btn btn-sm btn-ghost" style="cursor:pointer">📎 Choisir un fichier (.eml / .mbox / .json)<input type="file" accept=".eml,.mbox,.json,.txt,message/rfc822" style="display:none" onchange="demImportFile(this)"></label>'
-    +'<div id="dem-imp-fname" class="hint" style="margin:6px 0;font-size:11px;color:var(--ink-3)"></div>'
-    +'<label style="margin-top:6px">…ou coller le(s) mail(s)</label><textarea id="dem-imp-text" style="min-height:160px" placeholder="From: Client &lt;client@email.fr&gt;\nSubject: Création SAS\n\nBonjour, je souhaite créer ma société..."></textarea>'+'<div class="section-t" style="margin-top:14px">🔄 Synchronisation automatique (Google Apps Script)</div>'+'<div class="hint" style="font-size:11px;margin-bottom:6px">Colle l\'URL du script déployé et la clé secrète : LAST récupère alors automatiquement les nouveaux mails de la boîte.</div>'+'<label>URL du script (Web App …/exec)</label><input id="dem-sync-url" value="'+esc(c.url||'')+'" placeholder="https://script.google.com/macros/s/…/exec">'+'<label>Clé secrète (TOKEN du script)</label><input id="dem-sync-key" value="'+esc(c.key||'')+'" placeholder="identique au TOKEN du script">'+'<button class="btn btn-sm btn-pri" style="margin-top:8px" onclick="demSyncSave()">💾 Enregistrer & synchroniser</button>',
-    '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-pri" onclick="demImportRun()">Importer les demandes</button>');}
-function demImportFile(inp){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(e){window._demImpFile=''+e.target.result;var el=document.getElementById('dem-imp-fname');if(el)el.textContent='📄 '+f.name+' chargé — cliquez « Importer les demandes ».';};r.readAsText(f);}
 function demIngest(mails){DB.parametres=DB.parametres||{};DB.parametres.mailsImportes=DB.parametres.mailsImportes||[];var seen=DB.parametres.mailsImportes;var add=0,dup=0;
   (mails||[]).forEach(function(m){var fr=mailParseFrom(m.from);var key=((''+(m.id||'')).trim())||(fr.email+'|'+(m.subject||'')+'|'+(m.date||''));
     if(seen.indexOf(key)>=0){dup++;return;}
@@ -746,10 +738,6 @@ function demIngest(mails){DB.parametres=DB.parametres||{};DB.parametres.mailsImp
     DB.demandes.unshift({id:uid('d'),clientNom:fr.nom||fr.email||'Client',clientEmail:fr.email||'',clientTel:'',canal:'Mail · aemconseil.sas@gmail.com',serviceSouhaite:((m.subject||'').slice(0,80))||'À qualifier',message:mailCleanBody(m.body)||(m.subject||''),date:dateISO,statut:'Nouveau',assigneA:'',docsRecus:false,dossierId:'',msgKey:key});
     seen.push(key);add++;});
   return {add:add,dup:dup};}
-function demImportRun(){var ta=document.getElementById('dem-imp-text');var text=((ta&&ta.value)||'').trim()||window._demImpFile||'';
-  if(!(''+text).trim())return toast('Collez des mails ou choisissez un fichier.');
-  var mails=demParseMails(text);if(!mails.length)return toast('Aucun mail détecté dans le contenu fourni.');
-  var r=demIngest(mails);save();closeModal();toast(r.add+' demande(s) importée(s)'+(r.dup?(' · '+r.dup+' doublon(s) ignoré(s)'):''));state.demTab='nouveau';state.q='';render();}
 function demSyncCfg(){DB.parametres=DB.parametres||{};DB.parametres.mailSync=DB.parametres.mailSync||{url:'',key:''};return DB.parametres.mailSync;}
 function demSyncSave(){var c=demSyncCfg();var u=document.getElementById('dem-sync-url'),k=document.getElementById('dem-sync-key');if(u)c.url=(u.value||'').trim();if(k)c.key=(k.value||'').trim();save();closeModal();toast('Configuration enregistrée');demSyncMails(false);}
 function demSyncConfig(){var c=demSyncCfg();
