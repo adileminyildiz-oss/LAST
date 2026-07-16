@@ -291,6 +291,16 @@ body[data-page="dash"] .grid.g2{margin-top:12px}
 .esp-verif-btn{width:100%;justify-content:center;margin-top:6px;font-size:11px}
 #esp-verif{position:fixed;inset:0;z-index:100001;display:none;align-items:center;justify-content:center;background:rgba(40,30,10,.45);padding:16px}
 #esp-verif.show{display:flex}
+#esp-statuts{position:fixed;inset:0;z-index:100001;display:none;align-items:center;justify-content:center;background:rgba(40,30,10,.45);padding:16px}
+#esp-statuts.show{display:flex}
+#esp-statuts .es-card{background:var(--card);border:1px solid var(--line-2);border-radius:14px;width:96%;max-width:900px;height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 70px -30px rgba(40,30,10,.6)}
+#esp-statuts .es-head{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+#esp-statuts .es-head b{font-size:13px;flex:1;min-width:180px}
+#esp-statuts .es-hint{font-size:10.5px;color:var(--ink-3)}
+#esp-statuts .es-x{background:none;border:none;font-size:18px;color:var(--ink-3);cursor:pointer}
+#esp-statuts .es-body{flex:1;overflow:auto;padding:16px;background:#e7e0d1}
+#esp-statuts #esp-st-edit{background:#fff;outline:none;border-radius:6px}
+#esp-statuts #esp-st-edit:focus-within{box-shadow:0 0 0 2px #cbbc93}
 #esp-verif .ev-card{background:var(--card);border:1px solid var(--line-2);border-radius:14px;width:96%;max-width:1160px;height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 70px -30px rgba(40,30,10,.6)}
 #esp-verif .ev-head{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line-soft)}
 #esp-verif .ev-head b{font-size:14px;flex:1}
@@ -1300,8 +1310,39 @@ function espPanel(d,list,id){
   return '<div class="grid esp-top" style="align-items:start">'
    +espMailCard(d)
    +espDlist(list,id)
+   +espStatutsCard(d)
    +'</div>';
 }
+function espStatutsCard(d){
+  var perso=!!(d.statutsCustom&&(''+d.statutsCustom).trim());
+  return '<div class="card esp-statuts-card"><div class="card-h"><h2>📝 Statuts — modèle modifiable</h2>'
+   +'<span class="tag '+(perso?'ok':'mut')+'" style="margin-left:auto">'+(perso?'Modèle personnalisé ✓':'Modèle standard')+'</span></div>'
+   +'<div class="card-b">'
+   +'<div class="tsub" style="margin:-2px 0 10px">Modifiez le texte des statuts d\'exemple de ce dossier. '+(perso?'Le modèle personnalisé est utilisé pour la génération et l\'aperçu de vérification.':'Les informations extraites (dirigeant, capital, siège…) restent reprises automatiquement tant que le modèle n\'est pas personnalisé.')+'</div>'
+   +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+   +'<button class="btn btn-sm btn-pri" onclick="espStatutsEdit(\''+d.id+'\')">✏️ Modifier les statuts d\'exemple</button>'
+   +'<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\'statuts\')">👁 Aperçu</button>'
+   +(perso?'<button class="btn btn-sm btn-ghost" onclick="espStatutsReset(\''+d.id+'\')">↺ Réinitialiser le modèle</button>':'')
+   +'</div></div></div>';
+}
+function espStatutsEdit(id){
+  var d=espDoss().find(function(x){return x.id===id;});if(!d)return;
+  var perso=!!(d.statutsCustom&&(''+d.statutsCustom).trim());
+  var contenu=perso?d.statutsCustom:statutsSasHTML(d);
+  var html='<div class="es-card"><div class="es-head"><b>Modifier les statuts d\'exemple — '+esc(dossierClients(d))+'</b>'
+   +'<span class="es-hint">Cliquez dans le document pour éditer le texte</span>'
+   +'<button class="btn btn-sm btn-ghost" onclick="espStatutsReset(\''+id+'\')">↺ Réinitialiser</button>'
+   +'<button class="btn btn-sm btn-pri" onclick="espStatutsSave(\''+id+'\')">💾 Enregistrer le modèle</button>'
+   +'<button class="btn btn-sm btn-ghost" onclick="espStatutsPrint()">🖨 Imprimer</button>'
+   +'<button class="es-x" onclick="espStatutsClose()" aria-label="Fermer">✕</button></div>'
+   +'<div class="es-body"><div id="esp-st-edit" class="doc-gen" contenteditable="true" spellcheck="false">'+contenu+'</div></div></div>';
+  var ov=document.getElementById('esp-statuts');if(!ov){ov=document.createElement('div');ov.id='esp-statuts';document.body.appendChild(ov);}
+  ov.innerHTML=html;ov.classList.add('show');
+}
+function espStatutsSave(id){var d=espDoss().find(function(x){return x.id===id;});var el=document.getElementById('esp-st-edit');if(!d||!el)return;d.statutsCustom=el.innerHTML;save();toast('Modèle de statuts enregistré');espStatutsClose();render();}
+function espStatutsReset(id){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;if(!confirm('Réinitialiser le modèle de statuts (revenir au modèle standard généré depuis les données) ?'))return;delete d.statutsCustom;save();toast('Modèle réinitialisé');var el=document.getElementById('esp-st-edit');if(el){el.innerHTML=statutsSasHTML(d);}else{render();}}
+function espStatutsClose(){var ov=document.getElementById('esp-statuts');if(ov)ov.classList.remove('show');}
+function espStatutsPrint(){var el=document.getElementById('esp-st-edit');if(!el)return;if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}pa.innerHTML='<div class="doc-gen">'+el.innerHTML+'</div>';setTimeout(function(){window.print();},120);}
 function espPieceState(d,k){d.pieces=d.pieces||{};return d.pieces[k]||{recu:false};}
 function espPiecesCount(d){return ESP_PIECES.filter(function(pc){return espPieceState(d,pc.k).recu;}).length+'/'+ESP_PIECES.length;}
 function espPieceRow(d,pc){var st=espPieceState(d,pc.k);
@@ -1407,7 +1448,7 @@ function espDocVoir(id,k){var d=espDoss().find(function(x){return x.id===id;});v
 }
 function espDocPrint(){var el=document.querySelector('#ov .doc-gen');if(!el)return;if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}pa.innerHTML='<div class="doc-gen">'+el.innerHTML+'</div>';setTimeout(function(){window.print();},120);}
 function espDocHTML(d,dc){
-  if(dc.k==='statuts')return statutsSasHTML(d);
+  if(dc.k==='statuts')return (d.statutsCustom&&(''+d.statutsCustom).trim())?d.statutsCustom:statutsSasHTML(d);
   if(dc.k==='souscripteurs')return souscripteursHTML(d);
   if(dc.k==='pouvoir')return pouvoirHTML(d);
   if(dc.k==='dnc')return dncHTML(d);
