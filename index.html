@@ -299,7 +299,7 @@ body[data-page="dash"] .grid.g2{margin-top:12px}
 #esp-verif .ev-badge.ko{background:#f7f0e0;color:#7a6a3a;border:1px solid #e6d8b2}
 #esp-verif .ev-x{background:none;border:none;font-size:18px;color:var(--ink-3);cursor:pointer}
 #esp-verif .ev-infos{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;padding:7px 14px;border-bottom:1px solid var(--line-soft);background:var(--paper)}
-#esp-verif .ev-info-t{flex:1 0 100%;font-size:11px;color:var(--ink-3);margin-bottom:2px}
+#esp-verif .ev-info-t{flex:1 0 100%;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-3);margin-bottom:4px}#esp-verif .ev-info-t span{flex:1}#esp-verif .ev-ia{white-space:nowrap}#esp-verif .ev-xgrid{flex:1 0 100%;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px}#esp-verif .ev-xf{display:flex;flex-direction:column;gap:2px;font-size:10px;color:var(--ink-3)}#esp-verif .ev-xf span{font-weight:600;letter-spacing:.2px}#esp-verif .ev-xf input{padding:4px 7px;border:1px solid var(--line-2);border-radius:6px;background:var(--card);color:var(--ink);font:inherit;font-size:11.5px;outline:none}#esp-verif .ev-xf input:focus{border-color:#cbbc93;box-shadow:var(--focus)}#esp-verif .ev-xf-bool{flex-direction:row;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--line-2);border-radius:6px;padding:4px 8px}#esp-verif .ev-xf-bool input{width:auto}#esp-verif .ev-transmit:disabled{opacity:.45;cursor:not-allowed}
 #esp-verif .ev-info{display:flex;flex-direction:column;gap:2px;font-size:11.5px;background:var(--card);border:1px solid var(--line-2);border-radius:7px;padding:5px 9px;min-width:150px;flex:1}
 #esp-verif .ev-info label{display:flex;align-items:center;gap:7px;font-weight:600;cursor:pointer}
 #esp-verif .ev-info label input{width:auto}
@@ -750,8 +750,8 @@ function modalDemandeView(id){
     +'<div class="hint" style="margin-top:6px;font-size:11px">Sans assignation, la demande reste dans l\'onglet « À traiter ».</div>',
     '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
     +'<button class="btn" onclick="assignDemande(\''+id+'\')">Assigner</button>'
-    +'<button class="btn" onclick="modalDemandeMail(\''+id+'\')">✉ Mail IA</button>'
-    +'<button class="btn btn-pri" onclick="creerDossierDepuis(\''+id+'\')">Ouvrir le dossier</button>');
+    +'<button class="btn" onclick="demDevis(\''+id+'\')">🧾 Devis</button>'
+    +'<button class="btn btn-pri" onclick="demOuvrirDossier(\''+id+'\')">Ouvrir le dossier</button>');
 }
 function modalDemandeMail(id){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
@@ -839,6 +839,9 @@ function creerDossierDepuis(id){
   DB.dossiers.unshift(dos);d.dossierId=dos.id;
   save();closeModal();toast('Dossier '+ref+' créé');state.page='espace';state.espaceDossier=dos.id;render();
 }
+function demOuvrirDossier(id){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
+  if(d.dossierId&&DB.dossiers.find(function(x){return x.id===d.dossierId;})){closeModal();state.page='espace';state.espaceDossier=d.dossierId;toast('Dossier ouvert dans Traitement');render();return;}
+  creerDossierDepuis(id);}
 
 /* ---------- CLIENTS ---------- */
 function pageClients(){
@@ -1208,7 +1211,7 @@ function espMailCard(d){
    +'<div class="esp-fiche-row"><button class="btn btn-sm" onclick="espFicheOpen(\''+d.id+'\')">📋 Fiche technique — pièces</button>'
    +'<button class="btn btn-sm" onclick="espDocsModal(\''+d.id+'\')">📄 Documents à produire</button></div>'
    +'<button class="btn btn-sm esp-verif-btn" onclick="espVerifOpen(\''+d.id+'\')">✔ Vérifier les documents'+(espVerifOk(d)?' — vérifié ✓':'')+'</button>'
-   +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-sm btn-ghost" onclick="espFacture(\''+d.id+'\')">Facture</button><button class="btn btn-sm btn-ghost" onclick="modalDossier(\''+d.id+'\')">Éditer</button></div>'
+   +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-sm" onclick="espFicheOpen(\''+d.id+'\')">✉ Mail au client</button><button class="btn btn-sm btn-ghost" onclick="espDevis(\''+d.id+'\')">🧾 Devis</button><button class="btn btn-sm btn-ghost" onclick="espFacture(\''+d.id+'\')">Facture</button><button class="btn btn-sm btn-ghost" onclick="modalDossier(\''+d.id+'\')">Éditer</button></div>'
    +'</div></div>';
 }
 function espPiecesManquantes(d){return ESP_PIECES.filter(function(pc){return !espPieceState(d,pc.k).recu;});}
@@ -1322,9 +1325,26 @@ function espDocRow(d,dc){var st=espDocState(d,dc.k);var req=espDocReq(d,dc.k);
    +'<button class="btn btn-sm btn-pri" onclick="espDocGen(\''+d.id+'\',\''+dc.k+'\')">'+(st.genere?'Régénérer':'Générer')+'</button></td></tr>';
 }
 var DIRIGEANT_PIECES=[
-  {k:'cni',l:"Pièce d'identité du dirigeant"},
-  {k:'domicile',l:"Justificatif de domicile"},
-  {k:'capital',l:"Attestation de dépôt de capital"}
+  {k:'identite',l:"Pièce d'identité (CNI / passeport / titre de séjour)"},
+  {k:'domiciliation',l:"Contrat de domiciliation"},
+  {k:'edf',l:"Facture EDF (justificatif de domicile)"},
+  {k:'impot',l:"Avis d'impôt sur le revenu"}
+];
+var EXTRACT_FIELDS=[
+  {k:'civilite',l:'Civilité'},
+  {k:'prenom',l:'Prénom'},
+  {k:'nom',l:'Nom'},
+  {k:'dateNaissance',l:'Date de naissance'},
+  {k:'lieuNaissance',l:'Lieu de naissance'},
+  {k:'paysNaissance',l:'Pays de naissance'},
+  {k:'nationalite',l:'Nationalité'},
+  {k:'typePiece',l:"Type de pièce d'identité"},
+  {k:'numPiece',l:'N° de la pièce'},
+  {k:'travailAutorise',l:'Titre de séjour — travail autorisé',type:'bool'},
+  {k:'adresse',l:'Adresse personnelle (EDF)'},
+  {k:'siege',l:'Siège social (domiciliation)'},
+  {k:'domiciliataire',l:'Société de domiciliation'},
+  {k:'revenuFiscal',l:"Revenu fiscal de référence (avis d'impôt)"}
 ];
 var DOC_JUR=[
   {k:'statuts',l:'Projet de statuts'},
@@ -1333,13 +1353,17 @@ var DOC_JUR=[
   {k:'dnc',l:'Déclaration de non-condamnation'}
 ];
 function espVerifState(d){d.verif=d.verif||{};d.verif.pieces=d.verif.pieces||{};d.verif.infos=d.verif.infos||{};if(!d.verif.docSel)d.verif.docSel='statuts';return d.verif;}
-function espVerifOk(d){var v=espVerifState(d);var pOk=DIRIGEANT_PIECES.every(function(pc){return (v.pieces[pc.k]||{}).statut==='conforme';});var iOk=['nom','naissance','adresse'].every(function(f){return !!v.infos[f];});return pOk&&iOk;}
+function espVerifOk(d){var v=espVerifState(d);var pOk=DIRIGEANT_PIECES.every(function(pc){return (v.pieces[pc.k]||{}).statut==='conforme';});var ex=v.extract||{};var iOk=['nom','dateNaissance','lieuNaissance','nationalite','adresse'].every(function(f){return !!(''+(ex[f]||'')).trim();});return pOk&&iOk;}
 function espDirigeant(d){var c=clientById((d.clientIds||[])[0])||{};var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});var pres=assoc.filter(function(a){return (''+(a.nom||'')).trim()===(''+(c.president||'')).trim();})[0]||assoc[0]||{};return {nom:((c.president||pres.nom||'')+'').trim(),naissance:(pres.naissance||''),lieu:(pres.lieuNaissance||''),adresse:((pres.adresse||c.adresse||'')+'').trim()};}
 function espVerifPreview(st){if(!st||!st.data)return '<div class="ev-noprev">Aucun fichier déposé — utilisez « ＋ Déposer ».</div>';var u=st.data;if(/^data:image\//.test(u))return '<img class="ev-img" src="'+u+'" alt="apercu">';if(/^data:application\/pdf/.test(u))return '<iframe class="ev-pdf" src="'+u+'"></iframe>';return '<div class="ev-noprev">📎 '+esc(st.nom||'fichier')+' (aperçu non disponible)</div>';}
 function espVerifRender(id){
   var d=espDoss().find(function(x){return x.id===id;});if(!d)return;var v=espVerifState(d);var dir=espDirigeant(d);
-  function chk(f){var lbl=f==='nom'?'Nom & prénom':f==='naissance'?'Date & lieu de naissance':'Adresse';var val=f==='nom'?(dir.nom||'«—»'):f==='naissance'?((dir.naissance||'«—»')+(dir.lieu?(' · '+dir.lieu):'')):(dir.adresse||'«—»');return '<div class="ev-info"><label><input type="checkbox" '+(v.infos[f]?'checked':'')+' onchange="espVerifInfo(\''+id+'\',\''+f+'\',this.checked)"> '+lbl+'</label><span>'+esc(val)+'</span></div>';}
-  var infos='<div class="ev-infos"><div class="ev-info-t">Contrôle des informations du dirigeant (à confronter aux pièces) :</div>'+chk('nom')+chk('naissance')+chk('adresse')+'</div>';
+  v.extract=v.extract||{};
+  function exf(fk,fl,ft){var val=(v.extract[fk]||'');
+    if(ft==='bool')return '<label class="ev-xf ev-xf-bool"><span>'+fl+'</span><input type="checkbox" '+(val?'checked':'')+' onchange="espVerifExtract(\''+id+'\',\''+fk+'\',this.checked)"></label>';
+    return '<label class="ev-xf"><span>'+fl+'</span><input value="'+esc(val)+'" oninput="espVerifExtract(\''+id+'\',\''+fk+'\',this.value)" placeholder="—"></label>';}
+  var grid=EXTRACT_FIELDS.map(function(ff){return exf(ff.k,ff.l,ff.type);}).join('');
+  var infos='<div class="ev-infos"><div class="ev-info-t"><span>Informations extraites des pièces — reprises automatiquement dans les statuts et tous les documents :</span><button class="btn btn-sm btn-pri ev-ia" onclick="espVerifAnalyser(\''+id+'\')">🪄 Analyser les documents (IA)</button></div><div class="ev-xgrid">'+grid+'</div></div>';
   var pieces=DIRIGEANT_PIECES.map(function(pc){var st=espPieceState(d,pc.k);var vs=v.pieces[pc.k]||{};
     return '<div class="ev-piece"><div class="ev-piece-h"><b>'+esc(pc.l)+'</b><span>'+(st.data?'<button class="btn btn-sm btn-ghost" onclick="espPieceDl(\''+id+'\',\''+pc.k+'\')">⤓</button> ':'')+'<label class="btn btn-sm btn-ghost" style="cursor:pointer">＋ Déposer<input type="file" accept="image/*,application/pdf" style="display:none" onchange="espVerifUpload(\''+id+'\',\''+pc.k+'\',this)"></label></span></div>'
       +'<div class="ev-preview">'+espVerifPreview(st)+'</div>'
@@ -1349,7 +1373,7 @@ function espVerifRender(id){
   var docsel='<div class="ev-docsel">'+DOC_JUR.map(function(dc){return '<button class="ev-doc '+(v.docSel===dc.k?'on':'')+'" onclick="espVerifSelDoc(\''+id+'\',\''+dc.k+'\')">'+esc(dc.l)+'</button>';}).join('')+'</div>';
   var docview='<div class="ev-docview"><div class="doc-gen">'+espDocHTML(d,{k:v.docSel,l:''})+'</div></div>';
   var ok=espVerifOk(d);
-  var html='<div class="ev-card"><div class="ev-head"><b>Vérification — '+esc(dossierClients(d))+'</b><span class="ev-badge '+(ok?'ok':'ko')+'">'+(ok?'✓ Documents vérifiés':'À vérifier')+'</span><button class="ev-x" onclick="espVerifClose()" aria-label="Fermer">✕</button></div>'+infos+'<div class="ev-body"><div class="ev-left"><div class="ev-col-t">Pièces du dirigeant</div>'+pieces+'</div><div class="ev-right"><div class="ev-col-t">Document juridique généré</div>'+docsel+docview+'</div></div></div>';
+  var html='<div class="ev-card"><div class="ev-head"><b>Vérification — '+esc(dossierClients(d))+'</b><span class="ev-badge '+(ok?'ok':'ko')+'">'+(ok?'✓ Documents vérifiés':'À vérifier')+'</span><button class="btn btn-sm btn-pri ev-transmit'+(ok?' on':'')+'" '+(ok?'':'disabled')+' onclick="espVerifTransmettre(\''+id+'\')">📤 Transmettre au greffe</button><button class="ev-x" onclick="espVerifClose()" aria-label="Fermer">✕</button></div>'+infos+'<div class="ev-body"><div class="ev-left"><div class="ev-col-t">Pièces du dirigeant</div>'+pieces+'</div><div class="ev-right"><div class="ev-col-t">Document juridique généré</div>'+docsel+docview+'</div></div></div>';
   var ov=document.getElementById('esp-verif');if(!ov){ov=document.createElement('div');ov.id='esp-verif';document.body.appendChild(ov);}
   ov.innerHTML=html;ov.classList.add('show');
 }
@@ -1360,6 +1384,22 @@ function espVerifMotif(id,k,val){var d=espDoss().find(function(x){return x.id===
 function espVerifInfo(id,f,val){var d=espDoss().find(function(x){return x.id===id;});var v=espVerifState(d);v.infos[f]=val;save();espVerifRender(id);}
 function espVerifSelDoc(id,k){var d=espDoss().find(function(x){return x.id===id;});var v=espVerifState(d);v.docSel=k;save();espVerifRender(id);}
 function espVerifUpload(id,k,inp){var f=inp.files[0];if(!f)return;var d=espDoss().find(function(x){return x.id===id;});var r=new FileReader();r.onload=function(e){d.pieces=d.pieces||{};d.pieces[k]=Object.assign(espPieceState(d,k),{recu:true,nom:f.name,data:e.target.result});save();espVerifRender(id);};r.readAsDataURL(f);}
+function espVerifExtract(id,fk,val){var d=espDoss().find(function(x){return x.id===id;});var v=espVerifState(d);v.extract=v.extract||{};v.extract[fk]=val;save();espVerifRefreshDoc(id);}
+function espVerifRefreshDoc(id){var d=espDoss().find(function(x){return x.id===id;});var v=espVerifState(d);var ok=espVerifOk(d);var dv=document.querySelector('#esp-verif .ev-docview');if(dv)dv.innerHTML='<div class="doc-gen">'+espDocHTML(d,{k:v.docSel,l:''})+'</div>';var bg=document.querySelector('#esp-verif .ev-badge');if(bg){bg.className='ev-badge '+(ok?'ok':'ko');bg.textContent=ok?'✓ Documents vérifiés':'À vérifier';}var tb=document.querySelector('#esp-verif .ev-transmit');if(tb){tb.disabled=!ok;tb.classList.toggle('on',ok);}}
+function espVerifAnalyser(id){var d=espDoss().find(function(x){return x.id===id;});var v=espVerifState(d);v.extract=v.extract||{};var c=clientById((d.clientIds||[])[0])||{};var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});var pres=assoc.filter(function(a){return (''+(a.nom||'')).trim()===(''+(c.president||'')).trim();})[0]||assoc[0]||{};
+  function setIf(k,val){if(val&&!(''+(v.extract[k]||'')).trim())v.extract[k]=val;}
+  var full=((c.president||pres.nom||'')+'').trim();var parts=full.split(/\s+/).filter(Boolean);
+  setIf('civilite','M.');
+  if(parts.length>=2){setIf('prenom',parts.slice(0,-1).join(' '));setIf('nom',parts[parts.length-1]);}else if(full)setIf('nom',full);
+  setIf('dateNaissance',pres.naissance||'');
+  setIf('lieuNaissance',pres.lieuNaissance||'');
+  setIf('paysNaissance','France');
+  setIf('nationalite','française');
+  setIf('typePiece','Carte nationale d’identité');
+  setIf('adresse',((pres.adresse||c.adresse||'')+'').trim());
+  setIf('siege',((c.siege||(DB.societe&&DB.societe.adresse)||'')+'').trim());
+  save();toast('Analyse effectuée — vérifiez et complétez les informations extraites.');espVerifRender(id);}
+function espVerifTransmettre(id){var d=espDoss().find(function(x){return x.id===id;});if(!espVerifOk(d)){toast('⚠ Rendez tous les éléments conformes avant la transmission.');return;}d.statut='Transmis greffe';(d.historique=d.historique||[]).push({d:today(),t:'Transmission au greffe'});save();toast('✅ Éléments conformes — dossier transmis au greffe.');espVerifClose();render();}
 function espDocGen(id,k){var d=espDoss().find(function(x){return x.id===id;});if(!espVerifOk(d)){toast('⚠ Vérifiez d’abord les documents du dirigeant (bouton « ✔ Vérifier les documents »).');espVerifOpen(id);return;}d.docs=d.docs||{};d.docs[k]={genere:true,date:today()};save();toast('Document généré');espDocVoir(id,k);}
 function espDocVoir(id,k){var d=espDoss().find(function(x){return x.id===id;});var dc=ESP_DOCS.find(function(x){return x.k===k;});
   openModal(esc(dc.l),'<div class="fv-view-scroll" style="background:#e7e0d1"><div class="doc-gen">'+espDocHTML(d,dc)+'</div></div>',
@@ -1393,11 +1433,11 @@ function stLettres(n){n=Math.round(Number(n)||0);if(!n)return'zéro';var U=['','
   if(mille)parts.push(mille===1?'mille':c3(mille)+' mille');
   if(reste)parts.push(c3(reste));
   var t=parts.join(' ').trim();return t.charAt(0).toUpperCase()+t.slice(1);}
-function stCivil(a,ph){var nom=esc((a&&a.nom||'').trim())||'«nom prénom»';
+function stCivil(a,ph){var nom=esc((a&&a.nom||'').trim())||'«nom prénom»';var civ=(a&&a.civilite)?esc(a.civilite):'M.';
   var naiss=(a&&a.naissance)?esc(a.naissance):'«…»';var lieu=(a&&a.lieuNaissance)?esc(a.lieuNaissance):'«lieu»';
   var pays=(a&&a.pays)?esc(a.pays):'«pays»';var nat=(a&&a.nationalite)?esc(a.nationalite):'«…»';
   var adr=(a&&a.adresse)?esc(a.adresse):(ph||'«adresse»');
-  return 'M. '+nom+' né le '+naiss+' à '+lieu+' en '+pays+', de nationalité '+nat+', demeurant au '+adr+'.';}
+  return civ+' '+nom+' né le '+naiss+' à '+lieu+' en '+pays+', de nationalité '+nat+', demeurant au '+adr+'.';}
 function stFormeLabel(f){return {SAS:'Société par actions simplifiée',SASU:'Société par actions simplifiée Unipersonnelle',SARL:'Société à responsabilité limitée',EURL:'Entreprise unipersonnelle à responsabilité limitée',SCI:'Société civile immobilière',SA:'Société anonyme'}[f]||'Société par actions simplifiée';}
 function stQualite(f){return (f==='SARL'||f==='EURL'||f==='SCI')?'gérant':'Président';}
 function stDossData(d){
@@ -1408,10 +1448,17 @@ function stDossData(d){
   var cap=Number(c.capital)||0;
   var nominal=(totalParts>0&&cap>0)?(cap/totalParts):100;
   var nbActions=totalParts>0?totalParts:(nominal>0?Math.round(cap/nominal):0);
+  var ex=(d.verif&&d.verif.extract)||{};
+  var presName0=((c.president||(assoc[0]&&assoc[0].nom))||'').trim();
+  if(ex&&(ex.nom||ex.dateNaissance||ex.adresse)){assoc=assoc.map(function(a){
+    if((''+(a.nom||'')).trim()!==presName0)return a;
+    var nm=a.nom;if(ex.prenom||ex.nom)nm=((ex.prenom||'')+' '+(ex.nom||'')).trim()||a.nom;
+    return Object.assign({},a,{nom:nm,civilite:ex.civilite||a.civilite,naissance:ex.dateNaissance||a.naissance,lieuNaissance:ex.lieuNaissance||a.lieuNaissance,pays:ex.paysNaissance||a.pays,nationalite:ex.nationalite||a.nationalite,adresse:ex.adresse||a.adresse});
+  });}
   return {s:s,c:c,assoc:assoc,totalParts:totalParts,cap:cap,nominal:nominal,nbActions:nbActions,
     denom:((c.denomination||d.denomination||'')+'').trim().toUpperCase()||'«DÉNOMINATION SOCIALE»',
     forme:(c.forme||d.forme||'SAS'),
-    siege:((c.siege||c.adresse||'')+'').trim()||'«adresse du siège»',
+    siege:((ex.siege||c.siege||c.adresse||'')+'').trim()||'«adresse du siège»',
     ville:((c.ville||s.ville||'')+'').trim()||'«ville»',
     president:((c.president||(assoc[0]&&assoc[0].nom)||'')+'').trim()||'«Président»'};
 }
@@ -1505,11 +1552,13 @@ function statutsSasHTML(d){
   var denom=((c.denomination||c.raisonProjet||d.denomination||'')+'').trim().toUpperCase()||'«DÉNOMINATION SOCIALE»';
   var nomCom=((c.nomCommercial||'')+'').trim();
   var cap=Number(c.capital)||0;var capN=cap?stNum(cap):'«…»';var capL=cap?stLettres(cap):'«…»';
-  var siege=((c.siege||c.siegeAdresse||c.adresse||'')+'').trim()||'«adresse du siège social»';
+  var siege=(((d.verif&&d.verif.extract&&d.verif.extract.siege)||c.siege||c.siegeAdresse||c.adresse||'')+'').trim()||'«adresse du siège social»';
   var ville=((c.ville||s.ville||'')+'').trim()||'«ville»';
   var objet=((c.activites||[]).join(', ')||'').trim()||'«objet social — activités de la société»';
   var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
   if(!assoc.length)assoc=[{nom:''}];
+  var _ex=(d.verif&&d.verif.extract)||{};var _pn=((c.president||(assoc[0]&&assoc[0].nom))||'').trim();
+  if(_ex&&(_ex.nom||_ex.dateNaissance||_ex.adresse)){assoc=assoc.map(function(a){if((''+(a.nom||'')).trim()!==_pn)return a;var nm=a.nom;if(_ex.prenom||_ex.nom)nm=((_ex.prenom||'')+' '+(_ex.nom||'')).trim()||a.nom;return Object.assign({},a,{nom:nm,civilite:_ex.civilite||a.civilite,naissance:_ex.dateNaissance||a.naissance,lieuNaissance:_ex.lieuNaissance||a.lieuNaissance,pays:_ex.paysNaissance||a.pays,nationalite:_ex.nationalite||a.nationalite,adresse:_ex.adresse||a.adresse});});}
   var totalParts=assoc.reduce(function(n,a){return n+(Number(a.parts)||0);},0);
   var nominal=(totalParts>0&&cap>0)?(cap/totalParts):100;
   var nbActions=totalParts>0?totalParts:(nominal>0?Math.round(cap/nominal):0);
@@ -1669,6 +1718,20 @@ function espFacture(id){var d=espDoss().find(function(x){return x.id===id;});var
 function fvSociete(){var s=DB.societe||{};return {raison:s.raison||'AEM CONSEIL',formeJur:s.formeJur||'SAS',siren:s.siren||'',siret:s.siret||'',adresse:s.adresse||'',cp:s.cp||'',ville:s.ville||'',iban:s.iban||'',bic:s.bic||'',banqueBenef:s.banqueBenef||s.raison||'AEM CONSEIL',tvaCondition:s.tvaCondition||'Sur les encaissements',fraisRecouvrement:(s.fraisRecouvrement!=null?s.fraisRecouvrement:40)};}
 function fvClients(){return (DB.clients||[]).map(function(c){return {id:c.id,nom:(c.prenom+' '+c.nom).trim(),adresse:c.adresse||'',cp:c.cp||'',ville:c.ville||'',email:c.email||'',siret:c.siret||''};});}
 function fvNextNum(){DB.seq=DB.seq||{};return 'FV-'+(2600+(DB.seq.factVente||1));}
+function fvNextNumDevis(){DB.seq=DB.seq||{};return 'DEV-'+(1000+(DB.seq.devis||1));}
+function devisLignesFromServices(serviceIds){var L=[];(serviceIds||[]).forEach(function(id){var v=svcById(id);if(!v)return;L.push({desc:v.nom,qte:1,unite:'forfait',pu:(+v.prix||0),taux:20,forfait:true});if(+v.debours>0)L.push({desc:'Débours / frais officiels — '+v.nom,qte:1,unite:'forfait',pu:(+v.debours||0),taux:0,forfait:true});});return L.length?L:[{desc:'',qte:1,unite:'forfait',pu:0,taux:20,forfait:true}];}
+function svcMatchDemande(txt){txt=(''+(txt||'')).toLowerCase();var best=null;(DB.services||[]).forEach(function(s){var nom=(''+s.nom).toLowerCase();if(txt&&(txt.indexOf(nom.slice(0,10))>=0||nom.split(/\s+/).some(function(w){return w.length>4&&txt.indexOf(w)>=0;})))best=best||s;});if(!best&&/cr[ée]a|sas|sarl|soci[ée]t[ée]|entreprise/.test(txt))best=(DB.services||[])[0];return best;}
+function fvOnCreerDevis(doc){if(!DB.devis)DB.devis=[];var c=(DB.clients||[]).find(function(x){return x.id===doc.clientId;});var name=c?(c.prenom+' '+c.nom).trim():(window._devisClientNom||'(client)');DB.devis.unshift({id:uid('dev'),num:doc.numero,tiers:name,date:doc.date,ech:doc.echeance,ht:doc.ht,tva:doc.tva,ttc:doc.ttc,statut:'Émis',doc:doc,createdAt:today()});DB.seq=DB.seq||{};DB.seq.devis=(DB.seq.devis||1)+1;save();toast('Devis '+doc.numero+' créé');if(typeof render==='function')render();}
+function espDevis(id){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;if(typeof FactureVente==='undefined')return toast('Module devis indisponible');var cid=(d.clientIds||[])[0];window._devisClientNom=dossierClients(d);FactureVente.ouvrir({societe:fvSociete(),clients:fvClients(),numero:fvNextNumDevis(),initial:{type:'devis',clientId:cid,lignes:devisLignesFromServices(d.serviceIds)},onCreer:fvOnCreerDevis});}
+function demDevis(id){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;if(typeof FactureVente==='undefined')return toast('Module devis indisponible');
+  var clients=fvClients();var cid='';
+  if(d.dossierId){var dos=DB.dossiers.find(function(x){return x.id===d.dossierId;});if(dos)cid=(dos.clientIds||[])[0];}
+  if(!cid){var m=clients.find(function(c){return (d.clientEmail&&c.email&&c.email.toLowerCase()===(''+d.clientEmail).toLowerCase())||c.nom.toLowerCase()===(''+d.clientNom).toLowerCase();});if(m)cid=m.id;}
+  if(!cid){cid='demc-'+d.id;clients=clients.concat([{id:cid,nom:d.clientNom||'Client',email:d.clientEmail||'',adresse:'',cp:'',ville:'',siret:''}]);}
+  window._devisClientNom=d.clientNom||'Client';
+  var svc=svcMatchDemande((d.serviceSouhaite||'')+' '+(d.message||''));
+  var lignes=svc?devisLignesFromServices([svc.id]):[{desc:d.serviceSouhaite||'',qte:1,unite:'forfait',pu:0,taux:20,forfait:true}];
+  FactureVente.ouvrir({societe:fvSociete(),clients:clients,numero:fvNextNumDevis(),initial:{type:'devis',clientId:cid,lignes:lignes},onCreer:fvOnCreerDevis});}
 function fvOpen(){
   if(typeof FactureVente==='undefined')return toast('Module facture indisponible');
   FactureVente.ouvrir({societe:fvSociete(),clients:fvClients(),numero:fvNextNum(),onCreer:fvOnCreer});
