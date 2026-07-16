@@ -731,24 +731,40 @@ function demParseMails(text){text=(''+text);var t=text.trim();var out=[];
     var from=H('From'),subj=mailDecodeWord(H('Subject')),date=H('Date'),id=H('Message-ID')||H('Message-Id');
     if(!from&&!subj&&!body)return;out.push({from:from,subject:subj,date:date,body:body,id:id});});
   return out;}
-function demImportOuvrir(){window._demImpFile='';
+function demImportOuvrir(){window._demImpFile='';var c=demSyncCfg();
   openModal('📥 Importer les mails — aemconseil.sas@gmail.com',
     '<div class="hint" style="margin-bottom:10px">Chaque mail reçu sur <b>aemconseil.sas@gmail.com</b> devient une <b>demande</b> dans l\'onglet « À traiter ». Importez un export de mails (<b>.eml</b>, <b>.mbox</b>, <b>.json</b>) ou collez le contenu ci-dessous. Les doublons sont détectés et ignorés automatiquement.</div>'
     +'<label class="btn btn-sm btn-ghost" style="cursor:pointer">📎 Choisir un fichier (.eml / .mbox / .json)<input type="file" accept=".eml,.mbox,.json,.txt,message/rfc822" style="display:none" onchange="demImportFile(this)"></label>'
     +'<div id="dem-imp-fname" class="hint" style="margin:6px 0;font-size:11px;color:var(--ink-3)"></div>'
-    +'<label style="margin-top:6px">…ou coller le(s) mail(s)</label><textarea id="dem-imp-text" style="min-height:200px" placeholder="From: Client &lt;client@email.fr&gt;\nSubject: Création SAS\n\nBonjour, je souhaite créer ma société..."></textarea>',
+    +'<label style="margin-top:6px">…ou coller le(s) mail(s)</label><textarea id="dem-imp-text" style="min-height:160px" placeholder="From: Client &lt;client@email.fr&gt;\nSubject: Création SAS\n\nBonjour, je souhaite créer ma société..."></textarea>'+'<div class="section-t" style="margin-top:14px">🔄 Synchronisation automatique (Google Apps Script)</div>'+'<div class="hint" style="font-size:11px;margin-bottom:6px">Colle l\'URL du script déployé et la clé secrète : LAST récupère alors automatiquement les nouveaux mails de la boîte.</div>'+'<label>URL du script (Web App …/exec)</label><input id="dem-sync-url" value="'+esc(c.url||'')+'" placeholder="https://script.google.com/macros/s/…/exec">'+'<label>Clé secrète (TOKEN du script)</label><input id="dem-sync-key" value="'+esc(c.key||'')+'" placeholder="identique au TOKEN du script">'+'<button class="btn btn-sm btn-pri" style="margin-top:8px" onclick="demSyncSave()">💾 Enregistrer & synchroniser</button>',
     '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-pri" onclick="demImportRun()">Importer les demandes</button>');}
 function demImportFile(inp){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(e){window._demImpFile=''+e.target.result;var el=document.getElementById('dem-imp-fname');if(el)el.textContent='📄 '+f.name+' chargé — cliquez « Importer les demandes ».';};r.readAsText(f);}
-function demImportRun(){var ta=document.getElementById('dem-imp-text');var text=((ta&&ta.value)||'').trim()||window._demImpFile||'';
-  if(!(''+text).trim())return toast('Collez des mails ou choisissez un fichier.');
-  var mails=demParseMails(text);if(!mails.length)return toast('Aucun mail détecté dans le contenu fourni.');
-  DB.parametres=DB.parametres||{};DB.parametres.mailsImportes=DB.parametres.mailsImportes||[];var seen=DB.parametres.mailsImportes;var add=0,dup=0;
-  mails.forEach(function(m){var fr=mailParseFrom(m.from);var key=((''+(m.id||'')).trim())||(fr.email+'|'+(m.subject||'')+'|'+(m.date||''));
+function demIngest(mails){DB.parametres=DB.parametres||{};DB.parametres.mailsImportes=DB.parametres.mailsImportes||[];var seen=DB.parametres.mailsImportes;var add=0,dup=0;
+  (mails||[]).forEach(function(m){var fr=mailParseFrom(m.from);var key=((''+(m.id||'')).trim())||(fr.email+'|'+(m.subject||'')+'|'+(m.date||''));
     if(seen.indexOf(key)>=0){dup++;return;}
     var dateISO=today();try{if(m.date){var d=new Date(m.date);if(!isNaN(d.getTime()))dateISO=d.toISOString().slice(0,10);}}catch(e){}
     DB.demandes.unshift({id:uid('d'),clientNom:fr.nom||fr.email||'Client',clientEmail:fr.email||'',clientTel:'',canal:'Mail · aemconseil.sas@gmail.com',serviceSouhaite:((m.subject||'').slice(0,80))||'À qualifier',message:mailCleanBody(m.body)||(m.subject||''),date:dateISO,statut:'Nouveau',assigneA:'',docsRecus:false,dossierId:'',msgKey:key});
     seen.push(key);add++;});
-  save();closeModal();toast(add+' demande(s) importée(s)'+(dup?(' · '+dup+' doublon(s) ignoré(s)'):''));state.demTab='nouveau';state.q='';render();}
+  return {add:add,dup:dup};}
+function demImportRun(){var ta=document.getElementById('dem-imp-text');var text=((ta&&ta.value)||'').trim()||window._demImpFile||'';
+  if(!(''+text).trim())return toast('Collez des mails ou choisissez un fichier.');
+  var mails=demParseMails(text);if(!mails.length)return toast('Aucun mail détecté dans le contenu fourni.');
+  var r=demIngest(mails);save();closeModal();toast(r.add+' demande(s) importée(s)'+(r.dup?(' · '+r.dup+' doublon(s) ignoré(s)'):''));state.demTab='nouveau';state.q='';render();}
+function demSyncCfg(){DB.parametres=DB.parametres||{};DB.parametres.mailSync=DB.parametres.mailSync||{url:'',key:''};return DB.parametres.mailSync;}
+function demSyncSave(){var c=demSyncCfg();var u=document.getElementById('dem-sync-url'),k=document.getElementById('dem-sync-key');if(u)c.url=(u.value||'').trim();if(k)c.key=(k.value||'').trim();save();toast('Configuration enregistrée');demSyncMails(false);}
+function demSyncMails(silent){var c=demSyncCfg();if(!c.url){if(!silent)toast('Renseignez d\'abord l\'URL du script (bouton « 📥 Importer les mails »).');return;}
+  var url=c.url+(c.url.indexOf('?')>=0?'&':'?')+'key='+encodeURIComponent(c.key||'');
+  if(!silent)toast('Synchronisation en cours…');
+  fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+    if(j&&j.error){if(!silent)toast('Erreur du script : '+j.error);return;}
+    var r=demIngest(demParseMails(JSON.stringify(j)));save();
+    if(!silent||r.add)toast(r.add+' nouveau(x) mail(s) transmis'+(r.dup?(' · '+r.dup+' déjà traité(s)'):''));
+    if(r.add)state.demTab='nouveau';
+    if(!silent||r.add)render();
+  }).catch(function(e){if(!silent)toast('Synchronisation impossible (URL/CORS). Utilisez l\'import manuel.');});}
+function demSyncAuto(){try{if(typeof DB==='undefined'||!DB.parametres)return;var c=DB.parametres.mailSync;if(c&&c.url)demSyncMails(true);}catch(e){}}
+window.addEventListener('load',function(){setTimeout(demSyncAuto,6000);setInterval(demSyncAuto,180000);});
+document.addEventListener('visibilitychange',function(){if(!document.hidden)demSyncAuto();});
 function pageDemandes(){
   var tab=state.demTab||'nouveau';var q=(state.q||'').toLowerCase();
   var counts={nouveau:0,assigne:0,encours:0,finalise:0};
@@ -757,7 +773,7 @@ function pageDemandes(){
   if(q)list=list.filter(function(d){return (d.clientNom+' '+IA.objet(d)+' '+(d.serviceSouhaite||'')+' '+(d.message||'')).toLowerCase().includes(q);});
   var tabs='<div class="dem-tabs">'+DEM_TABS.map(function(t){return '<button class="dem-tab '+(t[0]===tab?'on':'')+'" onclick="state.demTab=\''+t[0]+'\';render()">'+t[1]+' <span class="dem-c">'+counts[t[0]]+'</span></button>';}).join('')+'</div>';
   var search='<div class="dem-search">'+svg(IC.inbox)+'<input value="'+esc(state.q||'')+'" oninput="state.q=this.value.toLowerCase();render()" placeholder="Rechercher un client ou un type de demande…"></div>';
-  return tabs+'<div class="dem-toolbar">'+search+'<button class="btn btn-sm dem-imp-btn" onclick="demImportOuvrir()">📥 Importer les mails</button></div>'+'<div class="card"><div class="card-b" style="padding:0">'
+  return tabs+'<div class="dem-toolbar">'+search+'<button class="btn btn-sm dem-imp-btn" onclick="demSyncMails(false)">🔄 Synchroniser la boîte</button><button class="btn btn-sm dem-imp-btn" onclick="demImportOuvrir()">📥 Importer les mails</button></div>'+'<div class="card"><div class="card-b" style="padding:0">'
     +(list.length?tableDemandes(list,tab):'<div class="empty">Aucune demande dans cet onglet.</div>')
     +'</div></div>';
 }
@@ -1989,7 +2005,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=3;
+var LAST_VER=4;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
