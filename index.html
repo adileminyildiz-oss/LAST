@@ -745,21 +745,39 @@ function demSyncConfig(){var c=demSyncCfg();
     '<div class="hint" style="margin-bottom:10px">Renseigne l\'adresse du script Google (déployé sur <b>aemconseil.sas@gmail.com</b>) et la clé secrète. LAST récupère alors <b>automatiquement</b> les mails et les transforme en demandes — à l\'ouverture, toutes les 3 minutes, et via « 🔄 Synchroniser la boîte ».</div>'
     +'<label>URL du script (Web App …/exec)</label><input id="dem-sync-url" value="'+esc(c.url||'')+'" placeholder="https://script.google.com/macros/s/…/exec">'
     +'<label style="margin-top:8px">Clé secrète (TOKEN du script)</label><input id="dem-sync-key" value="'+esc(c.key||'')+'" placeholder="identique au TOKEN du script">',
-    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="demSyncSave()">💾 Enregistrer & synchroniser</button>');}
+    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-ghost" onclick="demSyncTest()">🔌 Tester la connexion</button><button class="btn btn-pri" onclick="demSyncSave()">💾 Enregistrer & synchroniser</button>');}
 function demSyncMails(silent){var c=demSyncCfg();if(!c.url){if(!silent)demSyncConfig();return;}
   if(window.__demSyncBusy)return;window.__demSyncBusy=true;
-  var cb='__lastcb'+(window.__demCb=(window.__demCb||0)+1);var done=false;var s=document.createElement('script');
-  function cleanup(){window.__demSyncBusy=false;try{delete window[cb];}catch(e){window[cb]=undefined;}if(s&&s.parentNode)s.parentNode.removeChild(s);clearTimeout(to);}
-  var to=setTimeout(function(){if(done)return;cleanup();if(!silent)toast('Boîte injoignable — vérifie l\'URL …/exec et le déploiement « Tout le monde ».');},20000);
-  window[cb]=function(j){done=true;cleanup();
-    if(j&&j.error){if(!silent)toast(j.error==='unauthorized'?'Clé secrète incorrecte.':('Erreur du script : '+j.error));return;}
+  if(!silent)toast('Synchronisation en cours…');
+  var base=c.url+(c.url.indexOf('?')>=0?'&':'?')+'key='+encodeURIComponent(c.key||'');
+  function finish(j){window.__demSyncBusy=false;
+    if(!j){if(!silent)toast('Boîte injoignable — vérifie l\'URL …/exec et l\'accès « Tout le monde ».');return;}
+    if(j.error){if(!silent)toast(j.error==='unauthorized'?'Clé secrète incorrecte.':('Erreur du script : '+j.error));return;}
     var r=demIngest(demParseMails(JSON.stringify(j)));save();
     if(!silent||r.add)toast(r.add?(r.add+' nouveau(x) mail(s) transmis'+(r.dup?(' · '+r.dup+' déjà traité(s)'):'')):'Aucun nouveau mail'+(r.dup?(' ('+r.dup+' déjà traité(s))'):''));
-    if(r.add)state.demTab='nouveau';render();};
-  s.onerror=function(){if(done)return;cleanup();if(!silent)toast('Synchronisation impossible — vérifie l\'URL et le redéploiement du script.');};
-  var url=c.url+(c.url.indexOf('?')>=0?'&':'?')+'key='+encodeURIComponent(c.key||'')+'&callback='+cb;
-  s.src=url;document.body.appendChild(s);
-  if(!silent)toast('Synchronisation en cours…');}
+    if(r.add)state.demTab='nouveau';render();}
+  var settled=false;function once(j){if(settled)return;settled=true;finish(j);}
+  try{fetch(base,{cache:'no-store'}).then(function(r){return r.text();}).then(function(txt){
+    var j=null;try{j=JSON.parse(txt);}catch(e){}
+    if(j)once(j);else demJsonp(base,once);
+  }).catch(function(){demJsonp(base,once);});}
+  catch(e){demJsonp(base,once);}}
+function demJsonp(base,cbf){
+  var cb='__lastcb'+(window.__demCb=(window.__demCb||0)+1);var done=false;var s=document.createElement('script');
+  function cleanup(){try{delete window[cb];}catch(e){window[cb]=undefined;}if(s&&s.parentNode)s.parentNode.removeChild(s);clearTimeout(to);}
+  var to=setTimeout(function(){if(done)return;done=true;cleanup();cbf(null);},15000);
+  window[cb]=function(j){if(done)return;done=true;cleanup();cbf(j);};
+  s.onerror=function(){if(done)return;done=true;cleanup();cbf(null);};
+  s.src=base+'&callback='+cb;document.body.appendChild(s);}
+function demSyncTest(){var c=demSyncCfg();var u=document.getElementById('dem-sync-url'),k=document.getElementById('dem-sync-key');
+  var url=(u&&u.value||c.url||'').trim(),key=(k&&k.value||c.key||'').trim();
+  if(!url)return toast('Renseigne d\'abord l\'URL du script.');
+  var base=url+(url.indexOf('?')>=0?'&':'?')+'key='+encodeURIComponent(key);
+  toast('Test en cours…');var settled=false;function done(j){if(settled)return;settled=true;
+    if(!j)return toast('❌ Injoignable — vérifie l\'URL /exec et l\'accès « Tout le monde ».');
+    if(j.error)return toast(j.error==='unauthorized'?'❌ Clé secrète incorrecte.':('❌ '+j.error));
+    toast('✅ Connexion OK — '+((j.mails&&j.mails.length)||j.count||0)+' mail(s) détecté(s).');}
+  try{fetch(base,{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var j=null;try{j=JSON.parse(t);}catch(e){}if(j)done(j);else demJsonp(base,done);}).catch(function(){demJsonp(base,done);});}catch(e){demJsonp(base,done);}}
 function demSyncAuto(){try{if(typeof DB==='undefined'||!DB.parametres)return;var c=DB.parametres.mailSync;if(c&&c.url)demSyncMails(true);}catch(e){}}
 window.addEventListener('load',function(){setTimeout(demSyncAuto,6000);setInterval(demSyncAuto,180000);});
 document.addEventListener('visibilitychange',function(){if(!document.hidden)demSyncAuto();});
@@ -2003,7 +2021,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=5;
+var LAST_VER=6;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
