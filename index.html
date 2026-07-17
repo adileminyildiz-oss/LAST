@@ -2024,7 +2024,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=8;
+var LAST_VER=9;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2531,5 +2531,176 @@ function formEnrichDossier(c,dos,d){
  if(any){dos.__prerempli=true;(dos.historique=dos.historique||[]).push({d:today(),t:'Pré-rempli depuis le questionnaire'});}
 }
 </script>
-</body>
+<script>
+/* ============ Demandes — Tour de contrôle ============ */
+function demSubjectNorm(s){return (''+s).toLowerCase().replace(/^\s*(re|tr|fwd|fw)\s*:\s*/i,'').replace(/^\s*(re|tr|fwd|fw)\s*:\s*/i,'').replace(/\s+/g,' ').trim();}
+function demIsNoise(from,subject){var f=(''+from).toLowerCase(),s=(''+subject).toLowerCase();
+ if(/(no-?reply|noreply|do-?not-?reply|ne-?pas-?repondre|mailer-daemon|postmaster|bounce|newsletter|notification|mailchimp|sendinblue|sendgrid|no_reply)/.test(f))return true;
+ if(/(undeliverable|delivery status|mail delivery|out of office|absence du bureau|réponse automatique|automatic reply|se désabonner|unsubscribe)/i.test(s))return true;
+ return false;}
+function demType(d){
+ var body=(''+(d.message||''));
+ if(/—\s*INFORMATIONS\s*—/i.test(body)||/VOTRE MESSAGE/i.test(body))return 'questionnaire';
+ var nf=0;try{if(typeof formParse==='function'){var p=formParse(body);for(var k in p){if(k!=='message'&&p[k])nf++;}}}catch(e){}
+ if(nf>=3)return 'questionnaire';
+ if(d.__reponse||/^\s*(re|tr|fwd|fw)\s*:/i.test(d.subject||d.serviceSouhaite||''))return 'reponse';
+ if(d.attachments&&d.attachments.length)return 'piece';
+ return 'nouvelle';
+}
+function demTypeBadge(d){var t=demType(d);
+ if(t==='questionnaire')return '<span class="tag ok">📋 Questionnaire rempli</span>';
+ if(t==='reponse')return '<span class="tag blue">💬 Réponse</span>';
+ if(t==='piece')return '<span class="tag warm">📎 Pièces jointes</span>';
+ return '<span class="tag mut">✉ Nouvelle demande</span>';}
+function demAtt(d){return (d.attachments||[]).map(function(a){return (typeof a==='string')?{name:a}:a;});}
+function demIsFormSubmit(m){var f=(''+(m&&m.from||'')).toLowerCase();var b=(''+(m&&m.body||'')).toLowerCase();var s=(''+(m&&m.subject||'')).toLowerCase();
+ return /formsubmit/.test(f)||/formsubmit/.test(b)||/new submission from your form|nouvelle soumission|you've got a new submission|submitted from|via le formulaire/i.test(b)||/formulaire|form submission/i.test(s);}
+function fsNorm(s){return (''+s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();}
+function formSubmitExtract(m){var body=(''+(m&&m.body||''));var out={fields:{}};
+ body.split(/\r?\n/).forEach(function(ln){var i=ln.indexOf(':');if(i<1)return;var lab=fsNorm(ln.slice(0,i));var val=ln.slice(i+1).trim();if(!val||val.length>400)return;if(!out.fields[lab])out.fields[lab]=val;});
+ var F=out.fields;function pick(){for(var i=0;i<arguments.length;i++){if(F[arguments[i]])return F[arguments[i]];}return '';}
+ out.nom=pick('nom','last name','nom de famille');
+ out.prenom=pick('prenom','first name','prenom du client');
+ out.nomComplet=pick('nom complet','nom et prenom','name','full name','votre nom')||((out.prenom+' '+out.nom).trim());
+ var emails=(body.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g)||[]).filter(function(e){return !/formsubmit\.co|aemconseil|no-?reply|noreply/i.test(e);});
+ out.email=pick('email','e-mail','mail','courriel','adresse email','adresse e-mail')||emails[0]||'';
+ out.tel=pick('telephone','tel','phone','portable','numero','mobile','numero de telephone');
+ out.message=pick('message','votre message','demande','votre demande','projet','description','commentaire');
+ out.type=pick('type de societe','forme juridique','formalite','type de formalite','objet','service','sujet','type de demande');
+ var frn=(mailParseFrom(m.from)||{}).nom||'';
+ if((!out.nomComplet||/formsubmit/i.test(out.nomComplet))&&frn&&!/formsubmit/i.test(frn))out.nomComplet=frn;
+ return out;
+}
+
+window.demIngest=function(mails){
+ DB.parametres=DB.parametres||{};DB.parametres.mailsImportes=DB.parametres.mailsImportes||[];
+ var seen=DB.parametres.mailsImportes;var add=0,dup=0,noise=0,fil=0;
+ (mails||[]).forEach(function(m){
+   var fr=mailParseFrom(m.from);
+   var key=((''+(m.id||'')).trim())||(fr.email+'|'+(m.subject||'')+'|'+(m.date||''));
+   if(seen.indexOf(key)>=0){dup++;return;}
+   seen.push(key);
+   var isFS=demIsFormSubmit(m);
+   if(!isFS&&demIsNoise(m.from,m.subject)){noise++;return;}
+   var dateISO=today();try{if(m.date){var dd=new Date(m.date);if(!isNaN(dd.getTime()))dateISO=dd.toISOString().slice(0,10);}}catch(e){}
+   var body=mailCleanBody(m.body)||(m.subject||'');
+   var subj=(m.subject||'');
+   var atts=(m.att||m.attachments||[]).map(function(a){return (typeof a==='string')?{name:a}:a;});
+   var cliNom=fr.nom||fr.email||'Client',cliEmail=fr.email||'',tel='',msg=body,objet=subj;
+   if(isFS){var fsx=formSubmitExtract(m);
+     if(fsx.nomComplet)cliNom=fsx.nomComplet;
+     if(fsx.email)cliEmail=fsx.email;
+     if(fsx.tel)tel=fsx.tel;
+     if(fsx.message)msg=fsx.message;
+     if(fsx.type)objet=fsx.type;}
+   var existing=null;
+   if(cliEmail){var nrm=demSubjectNorm(subj);
+     for(var i=0;i<DB.demandes.length;i++){var x=DB.demandes[i];
+       if(x.clientEmail&&x.clientEmail.toLowerCase()===cliEmail.toLowerCase()&&x.statut!=='Clôturé'&&demSubjectNorm(x.subject||x.serviceSouhaite||'')===nrm){existing=x;break;}}}
+   if(!isFS&&!existing){noise++;return;}
+   if(existing){
+     existing.thread=existing.thread||[{from:existing.clientNom,subject:existing.subject||existing.serviceSouhaite,date:existing.date,body:existing.message}];
+     existing.thread.push({from:cliNom,subject:subj,date:dateISO,body:body});
+     existing.message=body;existing.date=dateISO;existing.__reponse=true;
+     if(atts.length)existing.attachments=(existing.attachments||[]).concat(atts);
+     fil++;
+   } else {
+     DB.demandes.unshift({id:uid('d'),clientNom:cliNom,clientEmail:cliEmail,clientTel:tel,
+       canal:'Formulaire du site',subject:subj,serviceSouhaite:((''+objet).slice(0,80))||'À qualifier',
+       message:msg,date:dateISO,statut:'Nouveau',assigneA:'',docsRecus:atts.length>0,dossierId:'',msgKey:key,
+       attachments:atts,thread:[{from:cliNom,subject:subj,date:dateISO,body:msg}]});
+     add++;
+   }
+ });
+ window.__lastIngest={add:add,dup:dup,noise:noise,fil:fil};
+ return {add:add+fil,dup:dup,noise:noise,fil:fil};
+};
+
+window.pageDemandes=function(){
+ var tab=state.demTab||'nouveau';var q=(state.q||'').toLowerCase();
+ var counts={nouveau:0,assigne:0,encours:0,finalise:0};
+ DB.demandes.forEach(function(d){counts[demEtat(d)]++;});
+ var actifs=DB.demandes.filter(function(d){return demEtat(d)!=='finalise';});
+ var kQuest=actifs.filter(function(d){return demType(d)==='questionnaire';}).length;
+ var kPieces=actifs.filter(function(d){return demAtt(d).length>0;}).length;
+ var kRep=actifs.filter(function(d){return (d.thread&&d.thread.length>1);}).length;
+ var kpis='<div class="dem-kpis">'
+  +'<div class="dem-k"><div class="dem-k-v">'+counts.nouveau+'</div><div class="dem-k-l">📥 À traiter</div></div>'
+  +'<div class="dem-k"><div class="dem-k-v">'+kQuest+'</div><div class="dem-k-l">📋 Questionnaires remplis</div></div>'
+  +'<div class="dem-k"><div class="dem-k-v">'+kPieces+'</div><div class="dem-k-l">📎 Avec pièces jointes</div></div>'
+  +'<div class="dem-k"><div class="dem-k-v">'+counts.encours+'</div><div class="dem-k-l">⚙ En cours</div></div>'
+  +'<div class="dem-k"><div class="dem-k-v">'+kRep+'</div><div class="dem-k-l">💬 Fils / réponses</div></div></div>';
+ var list=DB.demandes.filter(function(d){return demEtat(d)===tab;});
+ if(q)list=list.filter(function(d){return (d.clientNom+' '+IA.objet(d)+' '+(d.serviceSouhaite||'')+' '+(d.message||'')+' '+demType(d)).toLowerCase().includes(q);});
+ var tabs='<div class="dem-tabs">'+DEM_TABS.map(function(t){return '<button class="dem-tab '+(t[0]===tab?'on':'')+'" onclick="state.demTab=\''+t[0]+'\';render()">'+t[1]+' <span class="dem-c">'+counts[t[0]]+'</span></button>';}).join('')+'</div>';
+ var search='<div class="dem-search">'+svg(IC.inbox)+'<input value="'+esc(state.q||'')+'" oninput="state.q=this.value.toLowerCase();render()" placeholder="Rechercher un client, un objet, un type…"></div>';
+ return kpis+tabs+'<div class="dem-toolbar">'+search+'<button class="btn btn-sm dem-imp-btn" onclick="demSyncMails(false)">🔄 Synchroniser la boîte</button><button class="btn btn-sm dem-imp-btn" onclick="demSyncConfig()">⚙ Configurer la boîte</button></div>'
+  +'<div class="card"><div class="card-b" style="padding:0">'
+  +(list.length?tableDemandes(list,tab):'<div class="empty">Aucune demande dans cet onglet.</div>')
+  +'</div></div>';
+};
+
+window.tableDemandes=function(list,tab){
+ return '<table class="dem-tbl"><thead><tr><th>Client</th><th>Objet (IA)</th><th>Type</th><th class="hide-sm">Pièces</th><th class="hide-sm">Assigné</th><th></th></tr></thead><tbody>'
+  +list.map(function(d){var u=userById(d.assigneA);var t=demType(d);var atts=demAtt(d);
+     var pcell=atts.length?('<span class="tag warm">📎 '+atts.length+'</span>'):(d.thread&&d.thread.length>1?('<span class="tag blue">💬 '+d.thread.length+'</span>'):'<span class="tag mut">—</span>');
+     return '<tr class="'+(t==='questionnaire'?'dem-row-q':'')+'" onclick="modalDemandeView(\''+d.id+'\')" style="cursor:pointer">'
+       +'<td><div class="tname">'+esc(d.clientNom)+'</div><div class="tsub">'+esc(d.clientEmail||d.canal)+' · '+frDate(d.date)+'</div></td>'
+       +'<td><span class="tag blue">'+esc(IA.objet(d))+'</span></td>'
+       +'<td>'+demTypeBadge(d)+'</td>'
+       +'<td class="hide-sm">'+pcell+'</td>'
+       +'<td class="hide-sm">'+(u?'<span class="tag"><span class="av" style="width:18px;height:18px;font-size:8px;background:'+u.couleur+'">'+initials(u.nom)+'</span> '+u.nom+'</span>':'<span class="tag mut">Non assigné</span>')+'</td>'
+       +'<td onclick="event.stopPropagation()"><button class="btn btn-sm '+(t==='questionnaire'?'btn-pri':'btn-ghost')+'" onclick="'+(t==='questionnaire'?'demOuvrirDossier':'modalDemandeView')+'(\''+d.id+'\')">'+(t==='questionnaire'?'📂 Ouvrir le dossier':'Récapitulatif')+'</button></td>'
+       +'</tr>';
+   }).join('')
+  +'</tbody></table>';
+};
+
+window.modalDemandeView=function(id){
+ var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
+ var p=IA.pieces(d);var t=demType(d);var atts=demAtt(d);
+ var ptag=p.complet?'<span class="tag ok">Dossier complet</span>':(p.flou?'<span class="tag warm">Précisions à obtenir (appel conseillé)</span>':'<span class="tag mut">Pièces à demander</span>');
+ var thread='';
+ if(d.thread&&d.thread.length>1){thread='<label>Fil de discussion ('+d.thread.length+' messages)</label><div class="dem-thread">'
+   +d.thread.map(function(mm){return '<div class="dem-msg"><div class="dem-msg-h">'+esc(mm.from||'')+' · '+frDate(mm.date||'')+'</div><div class="dem-msg-b">'+esc((mm.body||'').slice(0,600))+'</div></div>';}).join('')+'</div>';}
+ var attBlock='';
+ if(atts.length){attBlock='<label>Pièces jointes ('+atts.length+')</label><div class="dem-atts">'
+   +atts.map(function(a,i){return '<span class="dem-att">📎 '+esc(a.name||('pièce '+(i+1)))+(a.dataB64?(' <a href="data:'+(a.type||'application/octet-stream')+';base64,'+a.dataB64+'" download="'+esc(a.name||'piece')+'">⤓</a>'):'')+'</span>';}).join('')+'</div>';}
+ openModal('Fiche technique — '+esc(d.clientNom),
+   '<div class="chips" style="margin-bottom:12px">'+demTypeBadge(d)+'<span class="tag blue">Objet : '+esc(IA.objet(d))+'</span>'+ptag+'</div>'
+   +'<div class="grid g2" style="gap:10px">'
+   +'<div><label>Email</label><div class="hint">'+esc(d.clientEmail||'—')+'</div></div>'
+   +'<div><label>Téléphone</label><div class="hint">'+esc(d.clientTel||'—')+'</div></div>'
+   +'<div><label>Canal</label><div class="hint">'+esc(d.canal||'—')+'</div></div>'
+   +'<div><label>Reçue le</label><div class="hint">'+frDate(d.date)+'</div></div></div>'
+   +attBlock
+   +'<label>Message reçu</label><div class="hint" style="background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:11px;white-space:pre-wrap;max-height:220px;overflow:auto">'+esc(d.message||'—')+'</div>'
+   +thread
+   +'<label>Assigner à un collaborateur</label>'
+   +'<select id="dm-assign">'+['<option value="">— Non assigné —</option>'].concat(DB.users.map(function(u){return '<option value="'+u.id+'" '+(d.assigneA===u.id?'selected':'')+'>'+esc(u.nom)+(u.role==='admin'?' (admin)':'')+'</option>';})).join('')+'</select>'
+   +'<div class="hint" style="margin-top:6px;font-size:11px">Sans assignation, la demande reste dans « À traiter ».</div>',
+   '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+   +'<button class="btn" onclick="assignDemande(\''+id+'\')">Assigner</button>'
+   +'<button class="btn" onclick="demDevis(\''+id+'\')">🧾 Devis</button>'
+   +'<button class="btn" onclick="demQuestionnaire(\''+id+'\')">📋 Questionnaire</button>'
+   +'<button class="btn btn-pri" onclick="demOuvrirDossier(\''+id+'\')">📂 Ouvrir le dossier</button>');
+};
+</script>
+<style id="dem-tower-mod">
+.dem-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
+@media(max-width:900px){.dem-kpis{grid-template-columns:repeat(2,1fr)}}
+.dem-k{background:var(--card);border:1px solid var(--line-2);border-radius:12px;padding:10px 12px}
+.dem-k-v{font-size:22px;font-weight:700;color:var(--ink);line-height:1}
+.dem-k-l{font-size:11px;color:var(--ink-3);margin-top:4px}
+.dem-row-q{background:linear-gradient(90deg,rgba(90,150,90,.10),transparent)}
+.dem-thread{max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px;background:var(--paper);margin-bottom:6px}
+.dem-msg{border-bottom:1px solid var(--line-soft);padding:6px 4px}
+.dem-msg:last-child{border-bottom:none}
+.dem-msg-h{font-size:11px;color:var(--ink-3);font-weight:600;margin-bottom:2px}
+.dem-msg-b{font-size:12px;white-space:pre-wrap;color:var(--ink-2)}
+.dem-atts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.dem-att{font-size:11.5px;background:var(--card);border:1px solid var(--line-2);border-radius:7px;padding:4px 9px}
+.dem-att a{color:var(--accent,#8a6d3b);text-decoration:none;font-weight:700}
+</style>
+<</body>
 </html>
