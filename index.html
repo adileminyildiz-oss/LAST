@@ -2038,7 +2038,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=25;
+var LAST_VER=26;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3670,6 +3670,7 @@ window.modalDemandeView=function(id){
      +clientBlock+formBlock
      +'<div class="esp-notes"><span class="tag '+du.c+'">⏱ '+du.lbl+' · '+du.temps+'</span><span class="tag '+fi.c+'">'+fi.lbl+'</span></div>'
      +'<div class="esp-fiche-row"><button class="btn btn-sm btn-pri" onclick="espVerifOpen(\''+d.id+'\')">🪄 Analyser les pièces &amp; compléter les documents</button></div>'
+     +'<div class="esp-fiche-row" style="margin-top:6px"><button class="btn btn-sm btn-pri" onclick="espEdOpen(\''+d.id+'\',\'statuts\')">✏️ Éditer les documents</button></div>'
      +'<div class="esp-fiche-row" style="margin-top:6px"><button class="btn btn-sm" onclick="espFicheTechnique(\''+d.id+'\')">📋 Fiche technique</button>'
      +'<button class="btn btn-sm" onclick="espDocsModal(\''+d.id+'\')">📄 Documents à produire</button></div>'
      +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-sm" onclick="espFicheOpen(\''+d.id+'\')">✉ Mail au client</button><button class="btn btn-sm btn-ghost" onclick="espDevis(\''+d.id+'\')">🧾 Devis</button><button class="btn btn-sm btn-ghost" onclick="espFacture(\''+d.id+'\')">Facture</button><button class="btn btn-sm btn-ghost" onclick="modalDossier(\''+d.id+'\')">Éditer</button></div>'
@@ -3854,6 +3855,125 @@ window.modalDemandeView=function(id){
   .a4-page.a4-cover .st-cover{min-height:0;padding:30mm 0}
   .a4-num{display:none}
 }
+</style>
+
+<script id="doc-editor-mod">
+/* ===== Éditeur de documents : page latérale (tous les champs) + aperçu A4 paginé en direct ===== */
+(function(){
+  function cli(d){return clientById((d.clientIds||[])[0])||{};}
+  function edI(id,grp,key,val){return '<input class="de-i" value="'+esc(val==null?'':val)+'" oninput="espEdSet(\''+id+'\',\''+grp+'\',\''+key+'\',this.value)">';}
+  function edA(id,i,key,val){return '<input class="de-i" value="'+esc(val==null?'':val)+'" oninput="espEdAssoc(\''+id+'\','+i+',\''+key+'\',this.value)">';}
+
+  function espEdSideHTML(d){
+    var c=cli(d);var ex=(d.verif&&d.verif.extract)||{};
+    var soc='<div class="de-grp"><div class="de-grp-h">Société</div>'
+      +'<label class="de-l">Dénomination sociale</label>'+edI(d.id,'c','denomination',c.denomination)
+      +'<label class="de-l">Sigle / nom commercial</label>'+edI(d.id,'c','nomCommercial',c.nomCommercial)
+      +'<label class="de-l">Forme juridique</label><select class="de-i" onchange="espEdSet(\''+d.id+'\',\'c\',\'forme\',this.value)">'+['SAS','SASU','SARL','EURL','SCI'].map(function(f){return '<option '+((''+(c.forme||'')).toUpperCase()===f?'selected':'')+'>'+f+'</option>';}).join('')+'</select>'
+      +'<label class="de-l">Capital social (€)</label>'+edI(d.id,'c','capital',c.capital)
+      +'<label class="de-l">Objet social (activités)</label><textarea class="de-i" rows="2" oninput="espEdSet(\''+d.id+'\',\'c\',\'activites\',this.value)">'+esc((c.activites||[]).join(', '))+'</textarea>'
+      +'<label class="de-l">Adresse du siège social</label>'+edI(d.id,'c','siege',c.siege)
+      +'<div class="de-row2"><div><label class="de-l">Ville</label>'+edI(d.id,'c','ville',c.ville)+'</div><div><label class="de-l">Code postal</label>'+edI(d.id,'c','cp',c.cp)+'</div></div>'
+      +'<div class="de-row2"><div><label class="de-l">SIREN</label>'+edI(d.id,'c','siren',c.siren)+'</div><div><label class="de-l">SIRET</label>'+edI(d.id,'c','siret',c.siret)+'</div></div>'
+      +'</div>';
+    var dir='<div class="de-grp"><div class="de-grp-h">Dirigeant</div>'
+      +'<label class="de-l">Civilité</label><select class="de-i" onchange="espEdSet(\''+d.id+'\',\'ex\',\'civilite\',this.value)">'+['M.','Mme'].map(function(x){return '<option '+((ex.civilite||'M.')===x?'selected':'')+'>'+x+'</option>';}).join('')+'</select>'
+      +'<div class="de-row2"><div><label class="de-l">Prénom</label>'+edI(d.id,'ex','prenom',ex.prenom)+'</div><div><label class="de-l">Nom</label>'+edI(d.id,'ex','nom',ex.nom)+'</div></div>'
+      +'<div class="de-row2"><div><label class="de-l">Date de naissance</label>'+edI(d.id,'ex','dateNaissance',ex.dateNaissance)+'</div><div><label class="de-l">Lieu de naissance</label>'+edI(d.id,'ex','lieuNaissance',ex.lieuNaissance)+'</div></div>'
+      +'<div class="de-row2"><div><label class="de-l">Pays de naissance</label>'+edI(d.id,'ex','paysNaissance',ex.paysNaissance)+'</div><div><label class="de-l">Nationalité</label>'+edI(d.id,'ex','nationalite',ex.nationalite)+'</div></div>'
+      +'<label class="de-l">Adresse personnelle</label>'+edI(d.id,'ex','adresse',ex.adresse)
+      +'<div class="de-row2"><div><label class="de-l">Type de pièce</label>'+edI(d.id,'ex','typePiece',ex.typePiece)+'</div><div><label class="de-l">N° de la pièce</label>'+edI(d.id,'ex','numPiece',ex.numPiece)+'</div></div>'
+      +'</div>';
+    var assoc=(c.associes||[]).map(function(a,i){return '<div class="de-assoc"><button class="de-ax" title="Retirer" onclick="espEdAssocDel(\''+d.id+'\','+i+')">✕</button>'
+      +'<label class="de-l">Associé '+(i+1)+' — Nom Prénom</label>'+edA(d.id,i,'nom',a.nom)
+      +'<div class="de-row2"><div><label class="de-l">Apport (€)</label>'+edA(d.id,i,'apport',a.apport)+'</div><div><label class="de-l">Parts / actions</label>'+edA(d.id,i,'parts',a.parts)+'</div></div></div>';}).join('');
+    var asg='<div class="de-grp"><div class="de-grp-h">Associés &amp; répartition</div>'+assoc+'<button class="de-add" onclick="espEdAssocAdd(\''+d.id+'\')">+ Ajouter un associé</button></div>';
+    return soc+dir+asg;
+  }
+  function espEdDocs(){
+    var list=(typeof ESP_DOCS!=='undefined'?ESP_DOCS.slice():[]);
+    list.push({k:'fiche',l:'Fiche technique'});
+    return list;
+  }
+  function espEdHeadHTML(d){
+    var cur=window.__edDoc||'statuts';
+    var tabs=espEdDocs().map(function(dc){return '<button class="de-tab'+(dc.k===cur?' on':'')+'" onclick="espEdDoc(\''+d.id+'\',\''+dc.k+'\')">'+esc(dc.l)+'</button>';}).join('');
+    return '<div class="de-head"><b>Éditeur — '+esc(dossierClients(d))+'</b><div class="de-docsel">'+tabs+'</div>'
+      +'<div class="de-sp"><button class="btn btn-sm btn-pri" onclick="espEdPrint()">🖨 Imprimer</button><button class="btn btn-sm" onclick="espEdClose()">✕ Fermer</button></div></div>';
+  }
+  function espEdPreviewHTML(d){
+    var k=window.__edDoc||'statuts';
+    var html=(k==='fiche')?ficheTechniqueHTML(d):espDocHTML(d,{k:k,l:k});
+    return '<div class="doc-gen">'+a4Paginate(html)+'</div>';
+  }
+  function espEdRender(id){
+    var d=espDoss().find(function(x){return x.id===id;});if(!d)return;
+    var o=document.getElementById('doc-editor');if(!o){o=document.createElement('div');o.id='doc-editor';o.className='de-ov';document.body.appendChild(o);}
+    o.innerHTML=espEdHeadHTML(d)+'<div class="de-body"><aside class="de-side">'+espEdSideHTML(d)+'</aside><main class="de-preview" id="de-preview">'+espEdPreviewHTML(d)+'</main></div>';
+    o.classList.add('show');setTimeout(espEdFit,40);
+  }
+  function espEdFit(){
+    var pv=document.getElementById('de-preview');if(!pv)return;var dg=pv.querySelector('.doc-gen');if(!dg)return;
+    var doc=dg.querySelector('.a4-doc,.st-doc,.ft-doc,.dg-page');if(!doc)return;
+    doc.style.transform='';var nat=doc.offsetWidth||794;var s=Math.min(1,(pv.clientWidth-44)/nat);
+    doc.style.transformOrigin='top left';doc.style.transform='scale('+s+')';
+    dg.style.width=(nat*s)+'px';dg.style.height=(doc.offsetHeight*s)+'px';dg.style.margin='0 auto';
+  }
+  window.espEdOpen=function(id,k){window.__edDoc=k||window.__edDoc||'statuts';espEdRender(id);};
+  window.espEdClose=function(){var o=document.getElementById('doc-editor');if(o)o.classList.remove('show');};
+  window.espEdDoc=function(id,k){window.__edDoc=k;espEdRender(id);};
+  window.espEdRefresh=function(id){clearTimeout(window.__edT);window.__edT=setTimeout(function(){var pv=document.getElementById('de-preview');if(!pv)return;var d=espDoss().find(function(x){return x.id===id;});if(!d)return;pv.innerHTML=espEdPreviewHTML(d);espEdFit();},220);};
+  window.espEdSet=function(id,grp,key,val){
+    var d=espDoss().find(function(x){return x.id===id;});if(!d)return;var c=cli(d);
+    if(grp==='c'){
+      if(key==='capital')c.capital=parseInt((''+val).replace(/[^0-9]/g,''),10)||0;
+      else if(key==='activites')c.activites=(''+val).split(/[,;\/]+/).map(function(s){return s.trim();}).filter(Boolean);
+      else if(key==='forme')c.forme=(''+val).toUpperCase();
+      else c[key]=val;
+    } else {
+      d.verif=d.verif||{};d.verif.extract=d.verif.extract||{};var ex=d.verif.extract;
+      if(key==='civilite')ex.civilite=(/mme|madame|f/i.test(val)?'Mme':'M.');else ex[key]=val;
+      if(key==='prenom'||key==='nom'){var full=((ex.prenom||'')+' '+(ex.nom||'')).trim();if(full){var old=c.president;c.president=full;
+        if(c.associes&&c.associes.length){var i=c.associes.map(function(a){return (''+(a.nom||'')).trim();}).indexOf((''+(old||'')).trim());if(i>=0)c.associes[i].nom=full;else c.associes[0].nom=full;}}}
+    }
+    save();espEdRefresh(id);
+  };
+  window.espEdAssoc=function(id,i,key,val){
+    var d=espDoss().find(function(x){return x.id===id;});if(!d)return;var c=cli(d);c.associes=c.associes||[];if(!c.associes[i])c.associes[i]={};
+    if(key==='parts'||key==='apport')c.associes[i][key]=parseInt((''+val).replace(/[^0-9]/g,''),10)||0;
+    else{var old=c.associes[i].nom;c.associes[i][key]=val;if(key==='nom'&&(''+(old||'')).trim()===(''+(c.president||'')).trim())c.president=val;}
+    save();espEdRefresh(id);
+  };
+  window.espEdAssocAdd=function(id){var d=espDoss().find(function(x){return x.id===id;});var c=cli(d);c.associes=c.associes||[];c.associes.push({nom:'',parts:0,apport:0});save();espEdRender(id);};
+  window.espEdAssocDel=function(id,i){var d=espDoss().find(function(x){return x.id===id;});var c=cli(d);if(c.associes)c.associes.splice(i,1);save();espEdRender(id);};
+  window.espEdPrint=function(){var el=document.querySelector('#de-preview .doc-gen');if(!el)return;if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}pa.innerHTML='<div class="doc-gen">'+el.innerHTML+'</div>';setTimeout(function(){window.print();},120);};
+  window.addEventListener('resize',function(){try{espEdFit();}catch(e){}});
+})();
+</script>
+<style id="doc-editor-css">
+.de-ov{position:fixed;inset:0;z-index:100050;background:var(--bg,#faf6ec);display:none;flex-direction:column}
+.de-ov.show{display:flex}
+.de-head{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--panel,#f6f1e6);border-bottom:1px solid var(--line,#e0d8c6);flex-wrap:wrap}
+.de-head b{font:600 15px/1.2 Georgia,"Times New Roman",serif;color:var(--ink,#2a2117)}
+.de-docsel{display:flex;gap:6px;flex-wrap:wrap}
+.de-tab{border:1px solid var(--line,#e0d8c6);background:transparent;color:var(--ink,#2a2117);font:600 11.5px/1 inherit;padding:6px 10px;border-radius:7px;cursor:pointer}
+.de-tab.on{background:var(--accent,#8a6d3b);color:#fff;border-color:var(--accent,#8a6d3b)}
+.de-sp{margin-left:auto;display:flex;gap:8px}
+.de-body{flex:1;display:grid;grid-template-columns:360px 1fr;overflow:hidden;min-height:0}
+.de-side{overflow-y:auto;padding:16px 16px 48px;background:var(--panel,#f6f1e6);border-right:1px solid var(--line,#e0d8c6)}
+.de-grp{margin-bottom:18px}
+.de-grp-h{font:700 11px/1 inherit;letter-spacing:1px;text-transform:uppercase;color:var(--accent,#8a6d3b);border-bottom:1px solid var(--line,#e0d8c6);padding-bottom:6px;margin:0 0 10px}
+.de-l{display:block;font-size:11px;font-weight:600;color:var(--ink-2,#5b5040);margin:8px 0 3px}
+.de-i,.de-side select,.de-side textarea{width:100%;padding:8px 10px;border:1px solid var(--line-2,#d9ccb2);border-radius:8px;background:#fff;color:var(--ink,#2a2117);font:inherit;font-size:13px;box-sizing:border-box;outline:none}
+.de-i:focus,.de-side select:focus,.de-side textarea:focus{border-color:var(--accent,#8a6d3b)}
+.de-row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.de-assoc{position:relative;border:1px solid var(--line,#e0d8c6);border-radius:8px;padding:10px;margin-bottom:8px;background:#fff}
+.de-ax{position:absolute;top:6px;right:6px;border:0;background:transparent;color:#b0442f;cursor:pointer;font-size:15px;line-height:1}
+.de-add{width:100%;border:1px dashed var(--line-2,#d9ccb2);background:transparent;color:var(--ink-2,#5b5040);padding:9px;border-radius:8px;cursor:pointer;font-weight:600;font-size:12.5px}
+.de-add:hover{border-color:var(--accent,#8a6d3b);color:var(--accent,#8a6d3b)}
+.de-preview{overflow:auto;background:var(--paper-desk,#e7ded0);padding:22px;min-width:0}
+@media(max-width:860px){.de-body{grid-template-columns:1fr;grid-template-rows:auto 1fr}.de-side{border-right:0;border-bottom:1px solid var(--line,#e0d8c6);max-height:42vh}}
+@media print{.a4-doc{transform:none!important}}
 </style>
 
 </body>
