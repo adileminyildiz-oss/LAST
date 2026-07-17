@@ -912,6 +912,7 @@ function creerDossierDepuis(id){
   const dos={id:uid('do'),ref,clientIds:[c.id],serviceIds:[],statut:'Qualification',assigneA:d.assigneA,createdAt:today(),
     historique:[{d:today(),t:'Créé depuis la demande de '+d.clientNom}]};
   try{ if(typeof formEnrichDossier==='function') formEnrichDossier(c,dos,d); }catch(e){}
+  try{ if(d.attachments&&d.attachments.length) dos.attachments=(d.attachments||[]).slice(); }catch(e){}
   DB.dossiers.unshift(dos);d.dossierId=dos.id;
   save();closeModal();toast('Dossier '+ref+' créé'+(dos.__prerempli?' · pré-rempli depuis le questionnaire':''));state.page='espace';state.espaceDossier=dos.id;render();
 }
@@ -2024,7 +2025,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=9;
+var LAST_VER=10;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2585,7 +2586,7 @@ window.demIngest=function(mails){
    var dateISO=today();try{if(m.date){var dd=new Date(m.date);if(!isNaN(dd.getTime()))dateISO=dd.toISOString().slice(0,10);}}catch(e){}
    var body=mailCleanBody(m.body)||(m.subject||'');
    var subj=(m.subject||'');
-   var atts=(m.att||m.attachments||[]).map(function(a){return (typeof a==='string')?{name:a}:a;});
+   var atts=(m.att||m.attachments||[]).map(function(a){var o=(typeof a==='string')?{name:a}:Object.assign({},a);o.msgId=o.msgId||m.id;return o;});
    var cliNom=fr.nom||fr.email||'Client',cliEmail=fr.email||'',tel='',msg=body,objet=subj;
    if(isFS){var fsx=formSubmitExtract(m);
      if(fsx.nomComplet)cliNom=fsx.nomComplet;
@@ -2656,6 +2657,18 @@ window.tableDemandes=function(list,tab){
   +'</tbody></table>';
 };
 
+function demFetchAtts(mid,cb){var c=(typeof demSyncCfg==='function')?demSyncCfg():{};if(!c||!c.url){toast('Configure la boîte (⚙ Configurer la boîte).');cb([]);return;}
+ var base=c.url+(c.url.indexOf('?')>=0?'&':'?')+'action=attachments&key='+encodeURIComponent(c.key||'')+'&id='+encodeURIComponent(mid);
+ var settled=false;function done(j){if(settled)return;settled=true;if(j&&j.error){toast('Erreur script : '+j.error);cb([]);return;}cb((j&&j.attachments)||[]);}
+ try{fetch(base,{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var j=null;try{j=JSON.parse(t);}catch(e){}if(j)done(j);else demJsonp(base,done);}).catch(function(){demJsonp(base,done);});}catch(e){demJsonp(base,done);}}
+function demAttRecuperer(id){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;var atts=demAtt(d);
+ var ids=[];atts.forEach(function(a){if(a.msgId&&!a.dataB64&&ids.indexOf(a.msgId)<0)ids.push(a.msgId);});
+ if(!ids.length){toast('Aucun fichier à récupérer (ou déjà récupérés).');return;}
+ toast('Récupération des pièces jointes…');var pending=ids.length;
+ ids.forEach(function(mid){demFetchAtts(mid,function(list){
+   (list||[]).forEach(function(fa){for(var i=0;i<atts.length;i++){var a=atts[i];if(a.msgId===mid&&!a.dataB64&&(a.name===fa.name||!a.name)){a.dataB64=fa.dataB64;a.type=fa.type;a.name=a.name||fa.name;break;}}});
+   if(--pending===0){d.attachments=atts;save();toast('✅ Pièces jointes récupérées.');modalDemandeView(id);}
+ });});}
 window.modalDemandeView=function(id){
  var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
  var p=IA.pieces(d);var t=demType(d);var atts=demAtt(d);
@@ -2664,8 +2677,10 @@ window.modalDemandeView=function(id){
  if(d.thread&&d.thread.length>1){thread='<label>Fil de discussion ('+d.thread.length+' messages)</label><div class="dem-thread">'
    +d.thread.map(function(mm){return '<div class="dem-msg"><div class="dem-msg-h">'+esc(mm.from||'')+' · '+frDate(mm.date||'')+'</div><div class="dem-msg-b">'+esc((mm.body||'').slice(0,600))+'</div></div>';}).join('')+'</div>';}
  var attBlock='';
- if(atts.length){attBlock='<label>Pièces jointes ('+atts.length+')</label><div class="dem-atts">'
-   +atts.map(function(a,i){return '<span class="dem-att">📎 '+esc(a.name||('pièce '+(i+1)))+(a.dataB64?(' <a href="data:'+(a.type||'application/octet-stream')+';base64,'+a.dataB64+'" download="'+esc(a.name||'piece')+'">⤓</a>'):'')+'</span>';}).join('')+'</div>';}
+ if(atts.length){var needF=atts.some(function(a){return a.msgId&&!a.dataB64;});
+   attBlock='<label>Pièces jointes ('+atts.length+')</label><div class="dem-atts">'
+   +atts.map(function(a,i){return '<span class="dem-att">📎 '+esc(a.name||('pièce '+(i+1)))+(a.dataB64?(' <a href="data:'+(a.type||'application/octet-stream')+';base64,'+a.dataB64+'" download="'+esc(a.name||'piece')+'">⤓</a>'):'')+'</span>';}).join('')
+   +(needF?'<button class="btn btn-sm btn-pri" style="margin-left:4px" onclick="demAttRecuperer(\''+id+'\')">📥 Récupérer les fichiers</button>':'')+'</div>';}
  openModal('Fiche technique — '+esc(d.clientNom),
    '<div class="chips" style="margin-bottom:12px">'+demTypeBadge(d)+'<span class="tag blue">Objet : '+esc(IA.objet(d))+'</span>'+ptag+'</div>'
    +'<div class="grid g2" style="gap:10px">'
