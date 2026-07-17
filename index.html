@@ -915,7 +915,7 @@ function creerDossierDepuis(id){
     historique:[{d:today(),t:'Créé depuis la demande de '+d.clientNom}]};
   try{ if(typeof formEnrichDossier==='function') formEnrichDossier(c,dos,d); }catch(e){}
   try{ if(d.attachments&&d.attachments.length) dos.attachments=(d.attachments||[]).slice(); }catch(e){}
-  try{ dos.docs=dos.docs||{}; (typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).forEach(function(dc){ if(!(dos.docsExclus&&dos.docsExclus[dc.k])) dos.docs[dc.k]={genere:true,date:today()}; }); }catch(e){}
+  try{ dos.docs=dos.docs||{}; (typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).forEach(function(dc){ if(typeof espDocReq==='function'?espDocReq(dos,dc.k):!(dos.docsExclus&&dos.docsExclus[dc.k])) dos.docs[dc.k]={genere:true,date:today()}; }); }catch(e){}
   DB.dossiers.unshift(dos);d.dossierId=dos.id;
   save();closeModal();toast('Dossier '+ref+' créé'+(dos.__prerempli?' · pré-rempli depuis le questionnaire':''));state.page='espace';state.espaceDossier=dos.id;render();
 }
@@ -2038,7 +2038,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=15;
+var LAST_VER=16;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3130,6 +3130,91 @@ window.modalDemandeView=function(id){
     if(f){var fm=models.filter(function(m){return m.forme===f;})[0];if(fm)return fm.id;}
     return models[0].id;
   };
+})();
+</script>
+<script id="extra-docs-mod">
+/* ===== Documents supplémentaires (modification / assemblée) : Cession d'actions ou de parts + Feuille de présence ===== */
+(function(){
+  function moisFr(){return ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];}
+  function dateJour(){return new Date().getDate()+' '+moisFr()+' '+new Date().getFullYear();}
+  function titreDes(forme){return (forme==='SARL'||forme==='EURL'||forme==='SCI')?'PARTS SOCIALES':'ACTIONS';}
+  function motDes(forme){return (forme==='SARL'||forme==='EURL'||forme==='SCI')?'parts sociales':'actions';}
+
+  /* ---------- CESSION D'ACTIONS / DE PARTS (d'après modèle fourni) ---------- */
+  window.cessionActionsHTML=function(d){
+    var x=stDossData(d);var forme=x.forme;var des=motDes(forme);
+    var rcsVille=(x.ville&&x.ville!=='«ville»')?x.ville:(x.s.ville||'«ville RCS»');
+    var siren=((x.c.siren||x.s.siren||'')+'').trim()||'«SIREN»';
+    var repr=x.president||'«représentant légal»';
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">ACTE DE CESSION DE '+titreDes(forme)+'</div>'
+      +'<div style="text-align:center;font-size:11px;margin:-4px 0 14px">'+esc(x.denom)+' — '+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros — RCS de '+esc(rcsVille)+' n° '+esc(siren)+'</div>'
+      +'<p><b>ENTRE LES SOUSSIGNÉS :</b></p>'
+      +'<p><b>Le(s) cédant(s) :</b> «Civilité Nom Prénom du cédant», né(e) le «…» à «…», de nationalité «…», demeurant au «adresse du cédant» ;</p>'
+      +'<p><b>Le(s) cessionnaire(s) :</b> «Civilité Nom Prénom du cessionnaire», né(e) le «…» à «…», de nationalité «…», demeurant au «adresse du cessionnaire» ;</p>'
+      +'<p>concernant la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros, dont le siège social est situé '+esc(x.siege)+(x.ville&&x.ville!=='«ville»'?(' '+esc(x.ville)):'')+', immatriculée au RCS de '+esc(rcsVille)+' sous le numéro '+esc(siren)+', représentée par '+esc(repr)+'.</p>'
+      +'<p style="margin-top:6px"><b>IL A ÉTÉ CONVENU CE QUI SUIT :</b></p>'
+      +'<p><b>Article 1 — Cession.</b> Le cédant cède et transporte, sous les garanties ordinaires et de droit, au cessionnaire qui accepte, «nombre» '+des+' sur les «total» '+des+' qu\'il possède dans ladite société '+esc(x.denom)+'.</p>'
+      +'<p><b>Article 2 — Propriété · Jouissance.</b> Le cessionnaire devient propriétaire des '+des+' cédées avec effet à compter du «date d\'effet». Il est subrogé dans tous les droits et obligations attachés aux '+des+' cédées.</p>'
+      +'<p><b>Article 3 — Prix.</b> La présente cession est consentie et acceptée moyennant le prix de «montant en lettres» euros (« montant » €), que le cédant reconnaît avoir reçu du cessionnaire, dont quittance.</p>'
+      +'<p><b>Article 4 — Agrément.</b> La présente cession a été autorisée par décision '+((forme==='SARL'||forme==='EURL'||forme==='SCI')?'collective des associés':'de la collectivité des associés')+' en date du «date», conformément aux statuts de la société.</p>'
+      +'<p><b>Article 5 — Frais.</b> Les frais, droits et honoraires des présentes et tous ceux qui en seront la conséquence seront supportés par «le cessionnaire / la société».</p>'
+      +'<div class="st-fin"><p>Fait à '+esc((x.ville&&x.ville!=='«ville»')?x.ville:'«ville»')+', le '+dateJour()+',</p><p>en autant d\'originaux que de parties, plus un pour l\'enregistrement.</p>'
+      +'<div class="st-sign"><div class="sg"><b>Le Cédant</b>Signature (précédée de « Bon pour cession »)</div><div class="sg"><b>Le Cessionnaire</b>Signature (précédée de « Bon pour acquisition »)</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---------- FEUILLE DE PRÉSENCE (assemblée générale) ---------- */
+  window.feuillePresenceHTML=function(d){
+    var x=stDossData(d);var forme=x.forme;var des=motDes(forme);
+    var assoc=x.assoc.length?x.assoc:[{nom:''}];
+    var total=x.totalParts||0;
+    var rows=assoc.map(function(a){var p=Number(a.parts)||0;
+      return '<tr><td class="al">'+(esc((a.nom||'').trim())||'«associé»')+'</td><td>'+(p||'«…»')+'</td><td>☐ Présent&nbsp;&nbsp;☐ Représenté</td><td></td></tr>';
+    }).join('');
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-hdr"><b>'+esc(x.denom)+'</b>'
+      +'<div class="sub">'+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
+      +'<div class="sub">Siège social : '+esc(x.siege)+(x.ville&&x.ville!=='«ville»'?(' '+esc(x.ville)):'')+'</div></div>'
+      +'<div class="st-titre">FEUILLE DE PRÉSENCE</div>'
+      +'<p style="text-align:center;margin:-4px 0 12px">Assemblée générale du «date de l\'assemblée» — «heure» — «lieu de l\'assemblée»</p>'
+      +'<table class="st-tbl"><thead><tr><th class="al">Associé (nom, prénom ou dénomination)</th><th>Nombre de '+des+'</th><th>Présence</th><th>Signature</th></tr></thead><tbody>'
+      +rows
+      +'<tr class="tot"><td class="al">TOTAL</td><td>'+(total||'«…»')+'</td><td></td><td></td></tr>'
+      +'</tbody></table>'
+      +'<p style="margin-top:14px">La présente feuille de présence, certifiée exacte et sincère, a été arrêtée à la somme de '+(total||'«…»')+' '+des+' représentées, sur un total de '+(total||'«…»')+' '+des+' composant le capital social.</p>'
+      +'<div class="st-fin"><p>Fait à '+esc((x.ville&&x.ville!=='«ville»')?x.ville:'«ville»')+', le «date»</p>'
+      +'<div class="st-sign"><div class="sg"><b>'+esc(x.president)+'</b>'+((forme==='SARL'||forme==='EURL'||forme==='SCI')?'Le Gérant':'Le Président')+' de séance — Signature</div><div class="sg"><b>Le Secrétaire</b>Signature</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---------- Enregistrement : nouveaux types de documents OPTIONNELS (opt-in) ---------- */
+  try{
+    if(typeof ESP_DOCS!=='undefined'){
+      if(!ESP_DOCS.some(function(x){return x.k==='cession';})) ESP_DOCS.push({k:'cession',l:'Cession d\'actions / de parts',prix:120,optional:true});
+      if(!ESP_DOCS.some(function(x){return x.k==='presence';})) ESP_DOCS.push({k:'presence',l:'Feuille de présence (assemblée)',prix:0,optional:true});
+    }
+  }catch(e){}
+  if(window.DOC_MODELS){
+    window.DOC_MODELS.cession=[{id:'standard',label:'Cession d\'actions / de parts — modèle',fn:function(d){return cessionActionsHTML(d);}}];
+    window.DOC_MODELS.presence=[{id:'standard',label:'Feuille de présence — modèle',fn:function(d){return feuillePresenceHTML(d);}}];
+  }
+
+  /* espDocReq : les documents « optionnels » sont opt-in (docsInclus), les autres requis par défaut (docsExclus) */
+  window.espDocReq=function(d,k){
+    var dc=(typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).filter(function(x){return x.k===k;})[0];
+    if(dc&&dc.optional){return !!(d&&d.docsInclus&&d.docsInclus[k]);}
+    return !(d&&d.docsExclus&&d.docsExclus[k]);
+  };
+  function toggleReq(id,k){
+    var d=espDoss().find(function(x){return x.id===id;});if(!d)return null;
+    var dc=(typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).filter(function(x){return x.k===k;})[0];
+    if(dc&&dc.optional){d.docsInclus=d.docsInclus||{};if(d.docsInclus[k])delete d.docsInclus[k];else d.docsInclus[k]=true;}
+    else{d.docsExclus=d.docsExclus||{};if(d.docsExclus[k])delete d.docsExclus[k];else d.docsExclus[k]=true;}
+    save();return d;
+  }
+  window.espDocToggleReq=function(id,k){if(toggleReq(id,k))render();};
+  window.espDocToggleReqM=function(id,k){if(toggleReq(id,k)&&typeof espDocsModal==='function')espDocsModal(id);};
 })();
 </script>
 </body>
