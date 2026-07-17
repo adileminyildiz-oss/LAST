@@ -2038,7 +2038,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=24;
+var LAST_VER=25;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3763,6 +3763,97 @@ window.modalDemandeView=function(id){
 .esp-form-tbl td.l{color:var(--ink-3,#8a7d69);width:44%;font-weight:600}
 .esp-form-tbl td.v{color:var(--ink,#2a2117);white-space:pre-wrap}
 .esp-formmail{background:var(--card,#fffdf8);border:1px solid var(--line-soft,#e8e0d0);border-radius:8px;padding:8px 10px}
+</style>
+
+<script id="a4-pages-mod">
+/* ===== Vue A4 paginée : le contenu se répartit en pages A4 distinctes (comme à l'impression) ===== */
+(function(){
+  window.a4Paginate=function(html){
+    try{
+      var MM=3.7795, marg=20, pageH=297;
+      var contentWpx=(210-2*marg)*MM;
+      var contentHpx=(pageH-2*marg)*MM;
+      var tmp=document.createElement('div');tmp.innerHTML=html;
+      var root=tmp.firstElementChild;if(!root)return html;
+      var wrap=(root.className.split(/\s+/).filter(function(c){return c==='st-doc'||c==='ft-doc'||c==='dg-page';})[0])||'st-doc';
+      var sections=[];
+      if(root.classList.contains('st-doc')){
+        Array.prototype.forEach.call(root.children,function(ch){
+          if(ch.classList.contains('st-cover'))sections.push({cover:ch});
+          else if(ch.classList.contains('st-page'))sections.push({blocks:Array.prototype.slice.call(ch.children)});
+          else sections.push({blocks:[ch]});
+        });
+      } else { sections.push({blocks:Array.prototype.slice.call(root.children)}); }
+      var meas=document.createElement('div');meas.className=wrap;
+      meas.style.cssText='position:fixed;left:-99999px;top:0;width:'+contentWpx+'px;visibility:hidden';
+      document.body.appendChild(meas);
+      function measure(node){meas.appendChild(node);var r=node.getBoundingClientRect();var cs=getComputedStyle(node);var h=r.height+(parseFloat(cs.marginTop)||0)+(parseFloat(cs.marginBottom)||0);meas.removeChild(node);return h;}
+      var pages=[];
+      sections.forEach(function(sec){
+        if(sec.cover){pages.push({cover:sec.cover});return;}
+        var cur=[],curH=0;
+        sec.blocks.forEach(function(node){
+          var h=measure(node.cloneNode(true));
+          if(h>contentHpx){ if(cur.length){pages.push({blocks:cur});cur=[];curH=0;} pages.push({blocks:[node],tall:true}); return; }
+          if(curH+h>contentHpx&&cur.length){pages.push({blocks:cur});cur=[];curH=0;}
+          cur.push(node);curH+=h;
+        });
+        if(cur.length)pages.push({blocks:cur});
+      });
+      meas.remove();
+      if(!pages.length)return html;
+      var n=pages.length;
+      var out='<div class="a4-doc" data-pages="'+n+'">';
+      pages.forEach(function(pg,i){
+        var num='<div class="a4-num">'+(i+1)+' / '+n+'</div>';
+        if(pg.cover){ out+='<div class="a4-page a4-cover"><div class="'+wrap+'">'+pg.cover.outerHTML+'</div>'+num+'</div>'; }
+        else { var inner=pg.blocks.map(function(x){return x.outerHTML;}).join(''); out+='<div class="a4-page'+(pg.tall?' a4-tall':'')+'"><div class="a4-inner '+wrap+'">'+inner+'</div>'+num+'</div>'; }
+      });
+      out+='</div>';
+      return out;
+    }catch(e){ return html; }
+  };
+
+  /* Aperçus paginés */
+  window.espDocVoir=function(id,k){
+    var d=espDoss().find(function(x){return x.id===id;});var dc=(typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).find(function(x){return x.k===k;})||{k:k,l:k};
+    openModal(esc(dc.l),'<div class="fv-view-scroll" style="background:#e7e0d1"><div class="doc-gen">'+a4Paginate(espDocHTML(d,dc))+'</div></div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="espDocPrint()">Imprimer</button>');
+  };
+  window.espFicheTechnique=function(id){
+    var d=espDoss().find(function(x){return x.id===id;});if(!d)return;
+    openModal('Fiche technique — '+esc(dossierClients(d)),
+      '<div class="fv-view-scroll" style="background:#e7e0d1"><div class="doc-gen">'+a4Paginate(ficheTechniqueHTML(d))+'</div></div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="espDocPrint()">Imprimer</button>');
+  };
+
+  /* Ajuste la vue paginée à la largeur de la fenêtre */
+  window.docFitView=function(){
+    var w=document.querySelector('#ov .fv-view-scroll');if(!w)return;
+    var page=w.querySelector('.doc-gen > .a4-doc, .doc-gen > .st-doc, .doc-gen > .dg-page, .doc-gen > .ft-doc');if(!page)return;
+    var nat=page.offsetWidth||794;
+    var s=Math.min(1,(w.clientWidth-4)/nat);
+    page.style.transformOrigin='top left';
+    page.style.transform='scale('+s+')';
+    w.style.height=((page.offsetHeight*s)+14)+'px';
+  };
+})();
+</script>
+<style id="a4-pages-css">
+.doc-gen .a4-doc{display:flex;flex-direction:column;align-items:center;gap:16px;background:transparent!important;box-shadow:none!important;width:210mm}
+.a4-page{width:210mm;height:297mm;box-sizing:border-box;background:#fff;position:relative;overflow:hidden;padding:20mm;box-shadow:0 8px 24px rgba(60,45,20,.28);border-radius:2px}
+.a4-page.a4-tall{height:auto;min-height:297mm;overflow:visible}
+.a4-page.a4-cover{padding:0}
+.a4-page .a4-inner,.a4-page .st-doc,.a4-page .ft-doc,.a4-page .dg-page{width:auto!important;min-height:0!important;margin:0!important;box-shadow:none!important;padding:0!important;background:transparent!important}
+.a4-page.a4-cover .st-doc{height:100%;display:flex;flex-direction:column;justify-content:center}
+.a4-page.a4-cover .st-cover{min-height:0;width:auto;box-sizing:border-box}
+.a4-num{position:absolute;bottom:8mm;right:12mm;font:11px/1 ui-sans-serif,-apple-system,Arial,sans-serif;color:#9a8f7c}
+@media print{
+  .doc-gen .a4-doc{gap:0;width:auto}
+  .a4-page{box-shadow:none;border-radius:0;page-break-after:always;height:auto;min-height:0;padding:0;overflow:visible}
+  .a4-page.a4-cover .st-cover{min-height:0;padding:30mm 0}
+  .a4-num{display:none}
+}
 </style>
 
 </body>
