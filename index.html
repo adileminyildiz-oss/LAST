@@ -1229,11 +1229,7 @@ const ESP_DOCS=[
   {k:'statuts',l:'Projet de statuts',prix:150},
   {k:'souscripteurs',l:"Liste des souscripteurs d'actions",prix:40},
   {k:'pouvoir',l:'Pouvoir (formalités RCS)',prix:40},
-  {k:'dnc',l:'Déclaration de non-condamnation',prix:30},
-  {k:'rbe',l:'Déclaration des bénéficiaires effectifs (RBE)',prix:40},
-  {k:'m0',l:'Formulaire M0 (constitution)',prix:60},
-  {k:'nomination',l:'Acte de nomination du dirigeant',prix:40},
-  {k:'annonce',l:"Avis d'annonce légale",prix:165}
+  {k:'dnc',l:'Déclaration de non-condamnation',prix:30}
 ];
 function espDocReq(d,k){return !(d.docsExclus&&d.docsExclus[k]);}
 function espDocToggleReq(id,k){var d=espDoss().find(function(x){return x.id===id;});d.docsExclus=d.docsExclus||{};if(d.docsExclus[k])delete d.docsExclus[k];else d.docsExclus[k]=true;save();render();}
@@ -2038,7 +2034,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=18;
+var LAST_VER=19;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2788,10 +2784,6 @@ window.modalDemandeView=function(id){
     souscripteurs:[{id:'standard',label:'Liste des souscripteurs — standard',fn:function(d){return souscripteursHTML(d);}}],
     pouvoir:[{id:'standard',label:'Pouvoir — standard',fn:function(d){return pouvoirHTML(d);}}],
     dnc:[{id:'standard',label:'Déclaration de non-condamnation — standard',fn:function(d){return dncHTML(d);}}],
-    rbe:[{id:'standard',label:'Bénéficiaires effectifs (RBE) — modèle générique',fn:gen('rbe','Déclaration des bénéficiaires effectifs (RBE)')}],
-    m0:[{id:'standard',label:'Formulaire M0 — modèle générique',fn:gen('m0','Formulaire M0 (constitution)')}],
-    nomination:[{id:'standard',label:'Acte de nomination du dirigeant — modèle générique',fn:gen('nomination','Acte de nomination du dirigeant')}],
-    annonce:[{id:'standard',label:"Avis d'annonce légale — modèle générique",fn:gen('annonce',"Avis d'annonce légale")}]
   };
 
   function forme(d){try{return stDossData(d).forme;}catch(e){return null;}}
@@ -3425,6 +3417,38 @@ window.modalDemandeView=function(id){
       if(!ESP_DOCS.some(function(x){return x.k==='pv';})) ESP_DOCS.push({k:'pv',l:'Procès-verbal d\'assemblée',prix:0,optional:true});
     }
   }catch(e){}
+})();
+</script>
+<script id="domic-mod">
+/* ===== Déclaration sur l'honneur de domiciliation (siège au domicile du dirigeant) ===== */
+(function(){
+  function moisFr(){return ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];}
+  function dateJour(){return new Date().getDate()+' '+moisFr()+' '+new Date().getFullYear();}
+  window.declaDomicileHTML=function(d){
+    var x=stDossData(d);var forme=x.forme;
+    var qualite=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'gérant':'président';
+    var ville=(x.ville&&x.ville!=='«ville»')?x.ville:'';
+    var greffe=ville||(x.s.ville||'«ville du greffe»');
+    var dir=(x.assoc||[]).filter(function(a){return (''+(a.nom||'')).trim()===(''+x.president).trim();})[0]||(x.assoc||[])[0]||{};
+    var domicile=((dir.adresse||x.c.adresse||x.siege||'')+'').trim()||'«adresse personnelle du '+qualite+'»';
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">DÉCLARATION SUR L\'HONNEUR</div>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(domiciliation du siège social au domicile du '+qualite+')</p>'
+      +'<p style="margin-top:10px">Je soussigné, <b>'+esc(x.president)+'</b>, demeurant '+esc(domicile)+', '+qualite+' de la société ci-après référencée :</p>'
+      +'<p style="margin-top:8px">Dénomination sociale : <b>'+esc(x.denom)+'</b></p>'
+      +'<p>Siège social : '+esc(x.siege)+(ville?(' '+esc(ville)):'')+'</p>'
+      +'<p style="margin-top:12px"><b>Déclare :</b></p>'
+      +'<p>fixer le siège social de la société susvisée à mon domicile personnel situé au '+esc(domicile)+', et y exercer une activité, aucune disposition législative ou stipulation contraire ne s\'y opposant, conformément à l\'article L.123-11-1 du Code de commerce.</p>'
+      +'<p style="margin-top:10px">La présente déclaration est établie et produite en vue de l\'immatriculation ou de l\'inscription modificative de la société susvisée au Registre du Commerce et des Sociétés de '+esc(greffe)+'.</p>'
+      +'<div class="st-fin" style="margin-top:30px"><p>Fait à '+esc(ville||'«ville»')+', le '+dateJour()+'</p>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+esc(x.president)+'</b>Le '+qualite+' — Signature</div></div></div>'
+      +'</div></div>';
+  };
+  try{
+    if(typeof ESP_DOCS!=='undefined' && !ESP_DOCS.some(function(x){return x.k==='decladomicile';}))
+      ESP_DOCS.push({k:'decladomicile',l:'Déclaration de domiciliation (siège au domicile)',prix:0,optional:true});
+  }catch(e){}
+  if(window.DOC_MODELS) window.DOC_MODELS.decladomicile=[{id:'standard',label:'Déclaration de domiciliation — modèle',fn:function(d){return declaDomicileHTML(d);}}];
 })();
 </script>
 </body>
