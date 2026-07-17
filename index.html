@@ -356,7 +356,7 @@ body[data-page="dash"] .grid.g2{margin-top:12px}
 .mail-att span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mail-att-x{background:none;border:none;color:var(--ink-3);cursor:pointer;font-size:13px;line-height:1}
 /* documents générés (aperçu papier) */
-.doc-gen .dg-page{background:#fff;color:#1a1a1a;padding:28px 30px;border-radius:6px;font-size:10.5px;line-height:1.8;box-shadow:0 8px 24px rgba(60,45,20,.2)}
+.doc-gen .dg-page{background:#fff;color:#1a1a1a;width:210mm;min-height:297mm;box-sizing:border-box;margin:0 auto;padding:22mm 20mm;border-radius:6px;font-size:10.5px;line-height:1.8;box-shadow:0 8px 24px rgba(60,45,20,.2)}
 .dg-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #302c24;padding-bottom:10px;margin-bottom:6px}
 .dg-em{font-weight:800;font-size:15px}.dg-t{font-weight:800;font-size:13px;letter-spacing:.5px;text-align:right}
 .dg-sub{color:#666;font-size:10.5px;margin-bottom:14px}
@@ -364,9 +364,9 @@ body[data-page="dash"] .grid.g2{margin-top:12px}
 .dg-l{font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:#8a7f6c;font-weight:700;margin-bottom:3px}
 .dg-note{background:#f7f0e0;border:1px solid #e6d8b2;border-radius:6px;padding:12px 14px;margin-top:18px;font-size:10px;color:#5a5344}
 .dg-foot{border-top:1px solid #ccc;margin-top:16px;padding-top:8px;font-size:9.5px;color:#888}
-.doc-gen .st-doc{background:#fff;color:#000;font-family:'Times New Roman',Georgia,serif;font-size:11.5px;line-height:1.55;text-align:justify;box-shadow:0 8px 24px rgba(60,45,20,.2)}
-.st-page{background:#fff;padding:24mm 20mm;min-height:auto}
-.st-cover{text-align:center;padding:40mm 20mm}
+.doc-gen .st-doc{background:#fff;color:#000;font-family:'Times New Roman',Georgia,serif;font-size:11.5px;line-height:1.55;text-align:justify;width:210mm;margin:0 auto;box-shadow:0 8px 24px rgba(60,45,20,.2)}
+.st-page{background:#fff;width:210mm;min-height:297mm;box-sizing:border-box;padding:24mm 20mm}
+.st-cover{text-align:center;width:210mm;min-height:297mm;box-sizing:border-box;padding:40mm 20mm}
 .st-cover .st-c1{font-weight:700;letter-spacing:2px;font-size:16px;margin-bottom:26px}
 .st-cover .st-c2{font-weight:700;font-size:13px;letter-spacing:1px;margin-bottom:22px}
 .st-cover .st-c3{font-weight:700;font-size:20px;text-transform:uppercase;margin-bottom:10px}
@@ -387,7 +387,13 @@ body[data-page="dash"] .grid.g2{margin-top:12px}
 .st-tbl th{font-weight:700;background:#f2ede3}
 .st-tbl td.al{text-align:left}
 .st-tbl tr.tot td{font-weight:700}
-@media print{.st-page,.st-cover{page-break-after:always}.st-doc .st-titre{page-break-after:avoid}.st-doc .st-art{page-break-after:avoid}}
+@media print{@page{size:A4;margin:14mm}
+.doc-gen .st-doc,.doc-gen .dg-page,.doc-gen .ft-doc{width:auto;margin:0;box-shadow:none;border-radius:0;transform:none!important}
+.st-page,.doc-gen .dg-page{width:auto;min-height:0;box-shadow:none;padding:0}
+.st-cover{width:auto;min-height:0;padding:30mm 0}
+.st-page,.st-cover{page-break-after:always}
+.st-doc .st-titre,.st-doc .st-art{page-break-after:avoid}
+.st-tbl tr,.st-doc .st-sign,.dg-grid{break-inside:avoid}}
 
 /* ============ RESPONSIVE ============ */
 @media(max-width:980px){ .g4{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:1fr} }
@@ -1285,7 +1291,7 @@ function espMailCard(d){
    +'<div class="esp-mail"><div class="esp-mail-obj">Objet : '+esc(objet)+'</div><div class="esp-mail-body">'+corps+'</div></div>'
    +(d.messageClient?('<div class="esp-mail" style="margin-top:8px"><div class="esp-mail-obj">💬 Message du client</div><div class="esp-mail-body">'+esc(d.messageClient)+'</div></div>'):'')
    +'<div class="esp-notes"><span class="tag '+du.c+'">⏱ '+du.lbl+' · '+du.temps+'</span><span class="tag '+fi.c+'">'+fi.lbl+'</span></div>'
-   +'<div class="esp-fiche-row"><button class="btn btn-sm" onclick="espFicheOpen(\''+d.id+'\')">📋 Fiche technique — pièces</button>'
+   +'<div class="esp-fiche-row"><button class="btn btn-sm" onclick="espFicheTechnique(\''+d.id+'\')">📋 Fiche technique</button>'
    +'<button class="btn btn-sm" onclick="espDocsModal(\''+d.id+'\')">📄 Documents à produire</button></div>'
    +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-sm" onclick="espFicheOpen(\''+d.id+'\')">✉ Mail au client</button><button class="btn btn-sm btn-ghost" onclick="espDevis(\''+d.id+'\')">🧾 Devis</button><button class="btn btn-sm btn-ghost" onclick="espFacture(\''+d.id+'\')">Facture</button><button class="btn btn-sm btn-ghost" onclick="modalDossier(\''+d.id+'\')">Éditer</button></div>'
    +'</div></div>';
@@ -2034,7 +2040,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=19;
+var LAST_VER=20;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3449,6 +3455,156 @@ window.modalDemandeView=function(id){
       ESP_DOCS.push({k:'decladomicile',l:'Déclaration de domiciliation (siège au domicile)',prix:0,optional:true});
   }catch(e){}
   if(window.DOC_MODELS) window.DOC_MODELS.decladomicile=[{id:'standard',label:'Déclaration de domiciliation — modèle',fn:function(d){return declaDomicileHTML(d);}}];
+})();
+</script>
+<script id="fiche-tech-mod">
+/* ===== Fiche technique : mise en page de TOUTES les informations société du client (A4) ===== */
+(function(){
+  function V(v){v=(''+(v==null?'':v)).trim();return v?esc(v):'<span class="ft-e">—</span>';}
+  function row(l,v){return '<div class="ft-row"><div class="ft-l">'+l+'</div><div class="ft-v">'+v+'</div></div>';}
+  window.ficheTechniqueHTML=function(d){
+    var x=stDossData(d);var c=x.c;var ex=(d.verif&&d.verif.extract)||{};
+    var forme=x.forme;var qualite=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'Gérant':'Président';
+    var desMot=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'parts':'actions';
+    var objet=((c.activites||[]).join(', ')||'').trim();
+    var ville=(x.ville&&x.ville!=='«ville»')?x.ville:'';
+    /* dirigeant : fusion données extraites + associé président */
+    var dcl=(x.assoc||[]).filter(function(a){return (''+(a.nom||'')).trim()===(''+x.president).trim();})[0]||(x.assoc||[])[0]||{};
+    var dirNom=((ex.prenom||'')+' '+(ex.nom||'')).trim()||x.president;
+    var civ=ex.civilite||dcl.civilite||'';
+    var naiss=ex.dateNaissance||dcl.naissance||'';
+    var lieu=ex.lieuNaissance||dcl.lieuNaissance||'';
+    var pays=ex.paysNaissance||dcl.pays||'';
+    var nat=ex.nationalite||dcl.nationalite||'';
+    var adrPerso=ex.adresse||dcl.adresse||c.adresse||'';
+    var piece=((ex.typePiece||'')+(ex.numPiece?(' · n° '+ex.numPiece):'')).trim();
+    var pere=((dcl.pereNom||c.pereNom||'')+'').trim();var mere=((dcl.mereNom||c.mereNom||'')+'').trim();
+    var filiation=(pere||mere)?((pere||'—')+' et '+(mere||'—')):'';
+    /* associés */
+    var assoc=(x.assoc||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
+    var arows=assoc.map(function(a,i){var p=Number(a.parts)||0;var m=(x.nominal&&p)?stNum(Math.round(x.nominal*p))+' €':'—';
+      var pct=(x.totalParts>0&&p)?Math.round(p/x.totalParts*1000)/10+' %':'—';
+      return '<tr><td>'+(i+1)+'</td><td class="al">'+V(a.nom)+'</td><td>'+m+'</td><td>'+(p||'—')+' '+desMot+'</td><td>'+pct+'</td></tr>';
+    }).join('')||'<tr><td colspan="5" class="ft-e" style="text-align:center">Aucun associé renseigné</td></tr>';
+    /* pièces (état) */
+    function ptag(k){var v=(d.verif&&d.verif.pieces&&d.verif.pieces[k])||{};var st=espPieceState(d,k);
+      if(v.statut==='conforme')return '<span class="ft-ok">✔ conforme</span>';
+      if(v.statut==='refus')return '<span class="ft-ko">✖ non conforme</span>';
+      return st.recu?'<span class="ft-mid">reçue</span>':'<span class="ft-e">manquante</span>';}
+    var statutDossier=d.statut||'—';
+    var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
+    var dateEt=new Date().getDate()+' '+moisNom+' '+new Date().getFullYear();
+    return '<div class="ft-doc">'
+      +'<div class="ft-head"><div><div class="ft-em">'+esc(x.s.raison||'AEM CONSEIL')+'</div><div class="ft-hsub">Fiche technique du dossier · '+esc(d.ref||'')+'</div></div>'
+      +'<div class="ft-hr"><div class="ft-chip">'+esc(statutDossier)+'</div><div class="ft-date">Établie le '+dateEt+'</div></div></div>'
+      +'<div class="ft-name">'+esc(x.denom)+'</div>'
+      +'<div class="ft-badges"><span class="ft-b">'+esc(stFormeLabel(forme))+'</span><span class="ft-b">Capital '+(x.cap?stNum(x.cap)+' €':'—')+'</span><span class="ft-b">'+assoc.length+' associé'+(assoc.length>1?'s':'')+'</span></div>'
+
+      +'<div class="ft-sec">Identité de la société</div>'
+      +'<div class="ft-grid">'
+      +row('Dénomination sociale',V(x.denom!=='«DÉNOMINATION SOCIALE»'?x.denom:''))
+      +row('Forme juridique',V(stFormeLabel(forme))+' <span class="ft-sub">('+esc(forme)+')</span>')
+      +row('Capital social',V(x.cap?(stNum(x.cap)+' € ('+stLettres(x.cap)+' euros)'):''))
+      +row('Nombre de '+desMot,V(x.nbActions?(''+x.nbActions):'')+(x.nominal?(' <span class="ft-sub">à '+stNum(Math.round(x.nominal))+' € l\'unité</span>'):''))
+      +row('SIREN',V(c.siren))
+      +row('SIRET',V(c.siret))
+      +'</div>'
+      +row('Objet social (activités)',V(objet))
+      +row('Siège social',V(x.siege!=='«adresse du siège»'?x.siege:'')+(ville?(' — '+esc(ville)):''))
+
+      +'<div class="ft-sec">'+qualite+' de la société</div>'
+      +'<div class="ft-grid">'
+      +row('Nom & prénom',V(((civ?civ+' ':'')+dirNom).trim()))
+      +row('Date de naissance',V(naiss))
+      +row('Lieu de naissance',V(lieu)+(pays?(' — '+esc(pays)):''))
+      +row('Nationalité',V(nat))
+      +row('Pièce d\'identité',V(piece))
+      +row('Adresse personnelle',V(adrPerso))
+      +'</div>'
+      +(filiation?row('Filiation (père et mère)',V(filiation)):'')
+
+      +'<div class="ft-sec">Associés & répartition du capital</div>'
+      +'<table class="ft-tbl"><thead><tr><th>N°</th><th class="al">Associé</th><th>Apport</th><th>Détention</th><th>Quote-part</th></tr></thead><tbody>'+arows+'</tbody></table>'
+
+      +'<div class="ft-sec">Informations extraites des pièces</div>'
+      +'<div class="ft-grid">'
+      +row('Adresse (justificatif de domicile)',V(ex.adresse))
+      +row('Siège (contrat de domiciliation)',V(ex.siege))
+      +row('Société de domiciliation',V(ex.domiciliataire))
+      +row('Revenu fiscal de référence',V(ex.revenuFiscal))
+      +row('Titre de séjour — travail autorisé',ex.travailAutorise?'<span class="ft-ok">Oui</span>':'<span class="ft-e">— / non renseigné</span>')
+      +row('Coordonnées',V(c.email)+(c.tel?(' · '+esc(c.tel)):''))
+      +'</div>'
+
+      +'<div class="ft-sec">État des pièces du dirigeant</div>'
+      +'<div class="ft-pieces">'
+      +'<div class="ft-p"><span>Pièce d\'identité</span>'+ptag('identite')+'</div>'
+      +'<div class="ft-p"><span>Contrat de domiciliation</span>'+ptag('domiciliation')+'</div>'
+      +'<div class="ft-p"><span>Justificatif de domicile (EDF)</span>'+ptag('edf')+'</div>'
+      +'<div class="ft-p"><span>Avis d\'impôt</span>'+ptag('impot')+'</div>'
+      +'</div>'
+      +'<div class="ft-foot">'+esc(x.s.raison||'AEM CONSEIL')+' · document de travail interne — informations communiquées par le client, à vérifier avant établissement des actes.</div>'
+      +'</div>';
+  };
+  window.espFicheTechnique=function(id){
+    var d=espDoss().find(function(x){return x.id===id;});if(!d)return;
+    openModal('Fiche technique — '+esc(dossierClients(d)),
+      '<div class="fv-view-scroll" style="background:#e7e0d1"><div class="doc-gen">'+ficheTechniqueHTML(d)+'</div></div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="espDocPrint()">Imprimer</button>');
+  };
+})();
+</script>
+<style id="fiche-tech-css">
+.doc-gen .ft-doc{background:#fff;color:#1c1a16;width:210mm;min-height:297mm;box-sizing:border-box;margin:0 auto;padding:18mm 16mm;
+  font:12px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;text-align:left;box-shadow:0 8px 24px rgba(60,45,20,.2)}
+.ft-doc .ft-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #2c2620;padding-bottom:10px;margin-bottom:14px}
+.ft-doc .ft-em{font-weight:800;font-size:16px;letter-spacing:1px;color:#2c2620}
+.ft-doc .ft-hsub{font-size:10.5px;color:#8a7f6c;margin-top:2px}
+.ft-doc .ft-hr{text-align:right}
+.ft-doc .ft-chip{display:inline-block;background:#efe6d1;color:#7a5f1f;border:1px solid #e0d2ab;border-radius:20px;padding:3px 12px;font-size:10.5px;font-weight:700}
+.ft-doc .ft-date{font-size:10px;color:#9a8f7c;margin-top:5px}
+.ft-doc .ft-name{font:800 24px/1.15 Georgia,"Times New Roman",serif;color:#211d17;margin:2px 0 8px}
+.ft-doc .ft-badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.ft-doc .ft-b{background:#f4efe4;border:1px solid #e6ddca;border-radius:7px;padding:4px 10px;font-size:10.5px;color:#5f5744;font-weight:600}
+.ft-doc .ft-sec{font:700 11px/1 inherit;letter-spacing:1px;text-transform:uppercase;color:#9a7636;
+  border-bottom:1px solid #e6ddca;padding-bottom:5px;margin:20px 0 10px}
+.ft-doc .ft-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 26px}
+.ft-doc .ft-row{display:grid;grid-template-columns:170px 1fr;gap:10px;padding:6px 0;border-bottom:1px solid #f0ebe0;align-items:baseline}
+.ft-doc .ft-l{font-size:10px;letter-spacing:.3px;text-transform:uppercase;color:#8f8571;font-weight:700}
+.ft-doc .ft-v{font-size:12.5px;color:#26221b}
+.ft-doc .ft-sub{color:#9a8f7c;font-size:11px}
+.ft-doc .ft-e{color:#b3a98f;font-style:italic}
+.ft-doc .ft-ok{color:#3d7a3d;font-weight:700}
+.ft-doc .ft-ko{color:#b0442f;font-weight:700}
+.ft-doc .ft-mid{color:#9a7636;font-weight:700}
+.ft-doc .ft-tbl{width:100%;border-collapse:collapse;margin:6px 0 2px;font-size:11.5px}
+.ft-doc .ft-tbl th,.ft-doc .ft-tbl td{border:1px solid #ddd3bf;padding:6px 8px;text-align:center}
+.ft-doc .ft-tbl th{background:#f4efe4;font-weight:700;color:#5f5744;font-size:10px;letter-spacing:.4px;text-transform:uppercase}
+.ft-doc .ft-tbl td.al,.ft-doc .ft-tbl th.al{text-align:left}
+.ft-doc .ft-pieces{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ft-doc .ft-p{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#faf7f0;border:1px solid #ece4d3;border-radius:8px;padding:8px 12px;font-size:11.5px}
+.ft-doc .ft-foot{border-top:1px solid #e6ddca;margin-top:20px;padding-top:8px;font-size:9.5px;color:#a99e88}
+@media print{.doc-gen .ft-doc{width:auto;min-height:0;box-shadow:none;padding:0}.ft-doc .ft-tbl tr,.ft-doc .ft-row,.ft-doc .ft-p{break-inside:avoid}}
+@media(max-width:820px){.doc-gen .ft-doc{width:100%;min-height:0;padding:16px}.ft-doc .ft-grid,.ft-doc .ft-pieces{grid-template-columns:1fr}.ft-doc .ft-row{grid-template-columns:1fr}}
+</style>
+
+<script id="docfit-mod">
+/* ===== Ajuste les aperçus de documents A4 (statuts, fiche technique…) à la largeur de la fenêtre ===== */
+(function(){
+  window.docFitView=function(){
+    var w=document.querySelector('#ov .fv-view-scroll');if(!w)return;
+    var page=w.querySelector('.doc-gen > .st-doc, .doc-gen > .dg-page, .doc-gen > .ft-doc');if(!page)return;
+    var natW=page.offsetWidth||794;
+    var s=Math.min(1,(w.clientWidth-4)/natW);
+    page.style.transformOrigin='top left';
+    page.style.transform='scale('+s+')';
+    w.style.height=((page.offsetHeight*s)+14)+'px';
+  };
+  if(typeof window.openModal==='function'){
+    var _om=window.openModal;
+    window.openModal=function(t,b,f){_om(t,b,f);setTimeout(window.docFitView,30);};
+  }
+  window.addEventListener('resize',function(){try{window.docFitView();}catch(e){}});
 })();
 </script>
 </body>
