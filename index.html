@@ -2036,7 +2036,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=12;
+var LAST_VER=13;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2758,5 +2758,157 @@ window.modalDemandeView=function(id){
 .dem-att{font-size:11.5px;background:var(--card);border:1px solid var(--line-2);border-radius:7px;padding:4px 9px}
 .dem-att a{color:var(--accent,#8a6d3b);text-decoration:none;font-weight:700}
 </style>
-<</body>
+<script id="doc-models-mod">
+/* ===== Registre de MODÈLES de documents — choix si plusieurs, sinon un seul ===== */
+(function(){
+  function genericHTML(d,dc){
+    var s=DB.societe||{}; var c=clientById((d.clientIds||[])[0])||{};
+    var cl=((c.prenom?c.prenom+' ':'')+(c.nom||'')).trim();
+    var assoc=(c.associes||[]).map(function(a){return '<div>• '+esc(a.nom)+' — '+(esc(a.parts)||'?')+' parts</div>';}).join('')||'<div>—</div>';
+    var act=(c.activites||[]).join(', ')||'—';
+    return '<div class="dg-page">'
+     +'<div class="dg-head"><div class="dg-em">'+esc(s.raison||'AEM CONSEIL')+'</div><div class="dg-t">'+esc(dc.l).toUpperCase()+'</div></div>'
+     +'<div class="dg-sub">Dossier '+esc(d.ref)+' — établi le '+frDate(today())+'</div>'
+     +'<div class="dg-grid"><div><div class="dg-l">Client / porteur de projet</div><b>'+esc(cl||'—')+'</b><div>'+esc(c.adresse||'')+'</div><div>'+esc(c.email||'')+'</div></div>'
+     +'<div><div class="dg-l">Capital / activité</div><div>Capital : '+eur(c.capital)+'</div><div>Activité : '+esc(act)+'</div></div></div>'
+     +'<div class="dg-l" style="margin-top:14px">Associés & répartition</div>'+assoc
+     +'<div class="dg-note">Document généré par LAST à partir des données du dossier. <b>Le contenu détaillé (clauses, mentions légales) sera produit selon le modèle fourni</b> — champs à compléter/valider avant dépôt.</div>'
+     +'<div class="dg-foot">'+esc(s.raison||'AEM CONSEIL')+' — '+esc(s.formeJur||'SAS')+' · accompagnement administratif</div></div>';
+  }
+  window.espDocGenericHTML=genericHTML;
+  function gen(k,l){return function(d){return genericHTML(d,{k:k,l:l});};}
+
+  /* Registre : clé de document -> [ {id,label,forme?,fn} ].
+     Ajouter un modèle = pousser une entrée ici (ex. plusieurs statuts par forme).
+     Dès qu'une clé a 2 modèles ou plus, un sélecteur de modèle apparaît ; sinon le modèle unique est utilisé. */
+  window.DOC_MODELS = window.DOC_MODELS || {
+    statuts:[{id:'standard',label:'Statuts — modèle standard',fn:function(d){return statutsSasHTML(d);}}],
+    souscripteurs:[{id:'standard',label:'Liste des souscripteurs — standard',fn:function(d){return souscripteursHTML(d);}}],
+    pouvoir:[{id:'standard',label:'Pouvoir — standard',fn:function(d){return pouvoirHTML(d);}}],
+    dnc:[{id:'standard',label:'Déclaration de non-condamnation — standard',fn:function(d){return dncHTML(d);}}],
+    rbe:[{id:'standard',label:'Bénéficiaires effectifs (RBE) — modèle générique',fn:gen('rbe','Déclaration des bénéficiaires effectifs (RBE)')}],
+    m0:[{id:'standard',label:'Formulaire M0 — modèle générique',fn:gen('m0','Formulaire M0 (constitution)')}],
+    nomination:[{id:'standard',label:'Acte de nomination du dirigeant — modèle générique',fn:gen('nomination','Acte de nomination du dirigeant')}],
+    annonce:[{id:'standard',label:"Avis d'annonce légale — modèle générique",fn:gen('annonce',"Avis d'annonce légale")}]
+  };
+
+  function forme(d){try{return stDossData(d).forme;}catch(e){return null;}}
+  window.espDocModels=function(k,d){
+    var all=(window.DOC_MODELS[k]||[]);
+    if(all.length<2)return all;
+    var f=forme(d);
+    if(f){
+      var match=all.filter(function(m){return !m.forme||m.forme===f;});
+      if(match.length)return match;
+    }
+    return all;
+  };
+  window.espDocModelId=function(d,k){
+    var models=window.espDocModels(k,d);if(!models.length)return null;
+    var sel=(d.docModel&&d.docModel[k]);
+    if(sel&&models.some(function(m){return m.id===sel;}))return sel;
+    return models[0].id;
+  };
+  window.espDocSetModel=function(id,k,mid){
+    var d=espDoss().find(function(x){return x.id===id;});if(!d)return;
+    d.docModel=d.docModel||{};d.docModel[k]=mid;save();
+    var ov=document.getElementById('ov');
+    if(ov&&ov.classList.contains('show')&&ov.querySelector('.esp-doc-tbl')&&typeof espDocsModal==='function'){espDocsModal(id);return;}
+    var evv=document.getElementById('esp-verif');
+    if(evv&&evv.classList.contains('show')&&typeof espVerifRefreshDoc==='function'){espVerifRefreshDoc(id);}
+    render();
+  };
+  window.espDocRender=function(d,k){
+    if(k==='statuts'&&d.statutsCustom&&(''+d.statutsCustom).trim())return d.statutsCustom;
+    var models=window.espDocModels(k,d);
+    if(!models.length)models=(window.DOC_MODELS[k]||[]);
+    if(models.length){var mid=window.espDocModelId(d,k);var m=models.filter(function(x){return x.id===mid;})[0]||models[0];try{return m.fn(d);}catch(e){}}
+    return genericHTML(d,{k:k,l:k});
+  };
+  /* espDocHTML repasse par le registre (respecte le modèle choisi + le statuts personnalisé) */
+  window.espDocHTML=function(d,dc){return window.espDocRender(d,dc.k);};
+
+  /* Sélecteur de modèle inline — vide s'il n'y a qu'un seul modèle */
+  window.espDocModelSelect=function(d,k){
+    var models=window.espDocModels(k,d);if(models.length<2)return '';
+    var cur=window.espDocModelId(d,k);
+    return '<select class="esp-model-sel" title="Choisir le modèle de document" onchange="espDocSetModel(\''+d.id+'\',\''+k+'\',this.value)">'
+      +models.map(function(m){return '<option value="'+esc(m.id)+'" '+(m.id===cur?'selected':'')+'>'+esc(m.label)+'</option>';}).join('')+'</select>';
+  };
+
+  /* Ligne du tableau « Documents du dossier » (carte) — ajoute le sélecteur si plusieurs modèles */
+  window.espDocRow=function(d,dc){var st=espDocState(d,dc.k);var req=espDocReq(d,dc.k);var sel=window.espDocModelSelect(d,dc.k);
+    return '<tr class="'+(req?'':'esp-doc-off')+'">'
+     +'<td style="text-align:center"><input type="checkbox" '+(req?'checked':'')+' onchange="espDocToggleReq(\''+d.id+'\',\''+dc.k+'\')"></td>'
+     +'<td class="tname">'+esc(dc.l)+sel+'</td>'
+     +'<td style="text-align:right">'+eur(dc.prix||0)+'</td>'
+     +'<td>'+(st.genere?'<span class="tag ok">✓ Prêt</span>':'<span class="tag mut">À générer</span>')+'</td>'
+     +'<td style="text-align:right">'+(st.genere?'<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+dc.k+'\')">Voir</button> ':'')
+     +'<button class="btn btn-sm btn-pri" onclick="espDocGen(\''+d.id+'\',\''+dc.k+'\')">'+(st.genere?'Régénérer':'Générer')+'</button></td></tr>';
+  };
+
+  /* Modale « Documents à produire » — même sélecteur */
+  window.espDocsModal=function(id){
+    var d=espDoss().find(function(x){return x.id===id;});if(!d)return;
+    var total=espDocsTotal(d);
+    var rows=ESP_DOCS.map(function(dc){var st=espDocState(d,dc.k);var req=espDocReq(d,dc.k);var sel=window.espDocModelSelect(d,dc.k);
+      return '<tr class="'+(req?'':'esp-doc-off')+'">'
+       +'<td style="text-align:center"><input type="checkbox" '+(req?'checked':'')+' onchange="espDocToggleReqM(\''+d.id+'\',\''+dc.k+'\')"></td>'
+       +'<td class="tname">'+esc(dc.l)+sel+'</td>'
+       +'<td style="text-align:right">'+eur(dc.prix||0)+'</td>'
+       +'<td>'+(st.genere?'<span class="tag ok">✓ Prêt</span>':'<span class="tag mut">À générer</span>')+'</td>'
+       +'<td style="text-align:right">'+(st.genere?'<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+dc.k+'\')">Voir</button> ':'')
+       +'<button class="btn btn-sm btn-pri" onclick="espDocGen(\''+d.id+'\',\''+dc.k+'\')">'+(st.genere?'Régénérer':'Générer')+'</button></td></tr>';
+    }).join('');
+    var body='<div class="chips" style="margin-bottom:10px;align-items:center"><span class="tag blue">Documents nécessaires pour la demande</span><span class="esp-total" style="margin-left:auto">Total : '+eur(total)+'</span></div>'
+      +'<table class="esp-doc-tbl"><thead><tr><th style="width:34px">Requis</th><th>Document</th><th style="width:80px;text-align:right">Montant</th><th style="width:96px">Statut</th><th style="width:150px"></th></tr></thead><tbody>'+rows+'</tbody></table>';
+    openModal('Documents à produire — '+esc(dossierClients(d)),body,
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+  };
+
+  /* Carte « Statuts — modèle modifiable » : ajoute le choix de modèle si plusieurs */
+  window.espStatutsCard=function(d){
+    var perso=!!(d.statutsCustom&&(''+d.statutsCustom).trim());
+    var sel=window.espDocModelSelect(d,'statuts');
+    return '<div class="card esp-statuts-card"><div class="card-h"><h2>📝 Statuts — modèle modifiable</h2>'
+     +'<span class="tag '+(perso?'ok':'mut')+'" style="margin-left:auto">'+(perso?'Modèle personnalisé ✓':'Modèle standard')+'</span></div>'
+     +'<div class="card-b">'
+     +'<div class="tsub" style="margin:-2px 0 10px">Modifiez le texte des statuts d\'exemple de ce dossier. '+(perso?'Le modèle personnalisé est utilisé pour la génération et l\'aperçu de vérification.':'Les informations extraites (dirigeant, capital, siège…) restent reprises automatiquement tant que le modèle n\'est pas personnalisé.')+'</div>'
+     +(sel?('<div class="esp-model-row"><span class="esp-model-lbl">Modèle de statuts :</span>'+sel+'</div>'):'')
+     +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+     +'<button class="btn btn-sm btn-pri" onclick="espStatutsEdit(\''+d.id+'\')">✏️ Modifier les statuts d\'exemple</button>'
+     +'<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\'statuts\')">👁 Aperçu</button>'
+     +(perso?'<button class="btn btn-sm btn-ghost" onclick="espStatutsReset(\''+d.id+'\')">↺ Réinitialiser le modèle</button>':'')
+     +'</div></div></div>';
+  };
+
+  /* Éditeur des statuts : part du modèle choisi (ou du personnalisé) */
+  window.espStatutsEdit=function(id){
+    var d=espDoss().find(function(x){return x.id===id;});if(!d)return;
+    var contenu=window.espDocRender(d,'statuts');
+    var html='<div class="es-card"><div class="es-head"><b>Modifier les statuts d\'exemple — '+esc(dossierClients(d))+'</b>'
+     +'<span class="es-hint">Cliquez dans le document pour éditer le texte</span>'
+     +'<button class="btn btn-sm btn-ghost" onclick="espStatutsReset(\''+id+'\')">↺ Réinitialiser</button>'
+     +'<button class="btn btn-sm btn-pri" onclick="espStatutsSave(\''+id+'\')">💾 Enregistrer le modèle</button>'
+     +'<button class="btn btn-sm btn-ghost" onclick="espStatutsPrint()">🖨 Imprimer</button>'
+     +'<button class="es-x" onclick="espStatutsClose()" aria-label="Fermer">✕</button></div>'
+     +'<div class="es-body"><div id="esp-st-edit" class="doc-gen" contenteditable="true" spellcheck="false">'+contenu+'</div></div></div>';
+    var ov=document.getElementById('esp-statuts');if(!ov){ov=document.createElement('div');ov.id='esp-statuts';document.body.appendChild(ov);}
+    ov.innerHTML=html;ov.classList.add('show');
+  };
+  window.espStatutsReset=function(id){
+    var d=espDoss().find(function(x){return x.id===id;});if(!d)return;
+    if(!confirm('Réinitialiser le modèle de statuts (revenir au modèle choisi généré depuis les données) ?'))return;
+    delete d.statutsCustom;save();toast('Modèle réinitialisé');
+    var el=document.getElementById('esp-st-edit');if(el){el.innerHTML=window.espDocRender(d,'statuts');}else{render();}
+  };
+})();
+</script>
+<style id="doc-models-css">
+.esp-model-sel{display:block;margin-top:4px;font-size:11px;padding:3px 7px;border:1px solid var(--line-2,#d9ccb2);border-radius:7px;background:var(--card,#fffdf8);color:var(--ink-2,#5b5040);max-width:260px}
+.esp-model-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.esp-model-row .esp-model-sel{margin-top:0}
+.esp-model-lbl{font-size:11.5px;font-weight:600;color:var(--ink-3,#8a7d69)}
+</style>
+</body>
 </html>
