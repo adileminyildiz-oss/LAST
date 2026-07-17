@@ -2038,7 +2038,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=14;
+var LAST_VER=15;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2912,5 +2912,225 @@ window.modalDemandeView=function(id){
 .esp-model-row .esp-model-sel{margin-top:0}
 .esp-model-lbl{font-size:11.5px;font-weight:600;color:var(--ink-3,#8a7d69)}
 </style>
+<script id="statuts-models-mod">
+/* ===== Modèles de STATUTS supplémentaires : SASU + SCI (fidèles aux modèles fournis) ===== */
+(function(){
+  function moisFr(){return ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];}
+  function art(t,ps){return '<div class="st-art">'+t+'</div>'+ps.map(function(p){return '<p>'+p+'</p>';}).join('');}
+
+  /* ---------- STATUTS SASU (d'après modèle WAFFLE COFFEE) ---------- */
+  window.statutsSasuHTML=function(d){
+    var x=stDossData(d);var c=x.c;
+    var denom=x.denom, cap=x.cap, capN=cap?stNum(cap):'«…»', capL=cap?stLettres(cap):'«…»';
+    var siege=x.siege, ville=(x.ville&&x.ville!=='«ville»')?x.ville:'';
+    var objet=((c.activites||[]).join(', ')||'').trim()||'«objet social — activités de la société»';
+    var uni=x.assoc[0]||{nom:''};
+    var nominal=Math.round(x.nominal)||10;
+    var nbActions=x.nbActions||(cap&&nominal?Math.round(cap/nominal):100);
+    var annee=new Date().getFullYear();var jour=new Date().getDate();
+    var cover='<div class="st-cover"><div class="st-c1">STATUTS</div>'
+      +'<div class="st-c2">SOCIÉTÉ PAR ACTIONS SIMPLIFIÉE UNIPERSONNELLE</div>'
+      +'<div class="st-c3">'+esc(denom)+'</div>'
+      +'<div class="st-c4">au capital de '+capN+' euros</div>'
+      +'<div class="st-c4">Siège social : '+esc(siege)+(ville?(', '+esc(ville)):'')+'</div></div>';
+    var preambule='<p><b>La soussignée :</b></p><p>'+stCivil(uni)+'</p>'
+      +'<p>établit ainsi qu\'il suit les statuts d\'une société par actions simplifiée unipersonnelle.</p>';
+    var A=[];
+    A.push(art('ARTICLE 1 — FORME',
+      ['Il existe entre le propriétaire des actions ci-après créées, une société par actions simplifiée régie par les lois et règlements en vigueur, et par les présents statuts. Elle fonctionne sous la même forme avec un ou plusieurs Actionnaires et ne peut faire appel public à l\'épargne.']));
+    A.push(art('ARTICLE 2 — OBJET',
+      ['La société a pour objet en France et à l\'étranger : '+esc(objet)+'.',
+       'Et plus généralement, toutes opérations, de quelque nature qu\'elles soient, juridiques, économiques et financières, se rattachant à l\'objet sus-indiqué ou à tous autres objets similaires ou connexes, de nature à favoriser, directement ou indirectement, le but poursuivi par la société, son extension ou son développement, tant en France qu\'à l\'étranger.']));
+    A.push('<div class="st-art">ARTICLE 3 — DÉNOMINATION</div><p>La dénomination sociale est : « '+esc(denom)+' ».</p>'
+      +'<p>Dans tous les actes et documents émanant de la Société et destinés aux tiers, la dénomination sera précédée ou suivie immédiatement des mots écrits lisiblement "Société par actions simplifiée" ou des initiales "S.A.S.U" et de l\'énonciation du montant du capital social.</p>');
+    A.push(art('ARTICLE 4 — SIÈGE SOCIAL',
+      ['Le siège social est fixé '+esc(siege)+(ville?(', '+esc(ville)):'')+'.',
+       'Il peut être transféré en tout endroit par décision du Président qui est habilité à modifier les statuts en conséquence.']));
+    A.push(art('ARTICLE 5 — DURÉE',
+      ['La durée de la Société est fixée à quatre-vingt-dix-neuf années à compter de la date de son immatriculation au Registre du commerce et des sociétés, sauf les cas de dissolution anticipée ou de prorogation.']));
+    A.push('<div class="st-art">ARTICLE 6 — APPORTS</div><p>À la constitution, l\'actionnaire unique a procédé aux apports suivants :</p>'
+      +'<p>'+(esc((uni.nom||'').trim())||'«actionnaire unique»')+' : '+capN+' euros</p>'
+      +'<p>Soit une somme en numéraire de '+capN+' ('+capL+' euros), correspondant à '+nbActions+' actions de numéraire, d\'une valeur nominale de '+stNum(nominal)+' euros chacune, souscrites en totalité. À la constitution, le capital est libéré en totalité.</p>');
+    A.push(art('ARTICLE 7 — CAPITAL SOCIAL',
+      ['À la constitution, le capital a été fixé à '+capN+' euros, réparti en '+nbActions+' actions de '+stNum(nominal)+' euros chacune, de même catégorie.']));
+    A.push(art('ARTICLE 8 — MODIFICATIONS DU CAPITAL SOCIAL',
+      ['I — Le capital social peut être augmenté par tous moyens et selon toutes modalités prévues par la loi. Le capital social est augmenté soit par émission d\'actions ordinaires ou d\'actions de préférence, soit par majoration du montant nominal des titres de capital existants. Il peut également être augmenté par l\'exercice de droits attachés à des valeurs mobilières donnant accès au capital, dans les conditions prévues par la loi.',
+       'II — La réduction du capital est autorisée ou décidée par l\'actionnaire unique délibérant dans les conditions prévues par la loi.']));
+    A.push(art('ARTICLE 9 — LIBÉRATION DES ACTIONS',
+      ['Lors d\'une augmentation de capital, les actions de numéraire sont libérées, lors de la souscription, d\'un quart au moins de leur valeur nominale et, le cas échéant, de la totalité de la prime d\'émission.',
+       'La libération du surplus doit intervenir dans le délai de cinq ans à compter du jour où l\'opération est devenue définitive en cas d\'augmentation de capital. Les appels de fonds sont portés à la connaissance du ou des souscripteurs quinze jours au moins avant la date fixée pour chaque versement.']));
+    A.push(art('ARTICLE 10 — FORME DES ACTIONS',
+      ['Les actions sont obligatoirement nominatives. Elles donnent lieu à une inscription en compte individuel dans les conditions et selon les modalités prévues par la loi et les règlements en vigueur.',
+       'Tout actionnaire peut demander à la Société la délivrance d\'une attestation d\'inscription en compte.']));
+    A.push(art('ARTICLE 11 — TRANSMISSION DES ACTIONS',
+      ['Les actions ne sont négociables qu\'après l\'immatriculation de la Société au Registre du Commerce et des Sociétés. En cas d\'augmentation du capital, les actions sont négociables à compter de la réalisation de celle-ci. Les actions demeurent négociables après la dissolution de la Société et jusqu\'à la clôture de la liquidation.',
+       'La propriété des actions résulte de leur inscription en compte individuel au nom du titulaire sur les registres tenus à cet effet au siège social.',
+       'La transmission des actions s\'opère à l\'égard de la Société et des tiers par un virement du compte du cédant au compte du cessionnaire, sur production d\'un ordre de mouvement établi sur un formulaire fourni ou agréé par la Société et signé par le cédant ou son mandataire. L\'ordre de mouvement est enregistré sur un registre coté et paraphé, tenu chronologiquement, dit "registre des mouvements".']));
+    A.push(art('ARTICLE 12 — DROITS ET OBLIGATIONS ATTACHÉS AUX ACTIONS',
+      ['Toute action donne droit, dans les bénéfices et l\'actif social, à une part nette proportionnelle à la quotité de capital qu\'elle représente.',
+       'Chaque action donne en outre le droit au vote et à la représentation dans les assemblées générales, ainsi que le droit d\'être informé sur la marche de la Société et d\'obtenir communication de certains documents sociaux aux époques et dans les conditions prévues par la loi et les statuts.',
+       'La propriété d\'une action comporte de plein droit adhésion aux statuts de la Société.']));
+    A.push(art('ARTICLE 13 — GESTION DE LA SOCIÉTÉ',
+      ['La société est représentée, dirigée et administrée par un Président.',
+       'Le Président de la société est élu à la majorité simple par l\'assemblée générale. Le mandat du Président est renouvelable sans limitation. Le Président est nommé pour une durée de six ans.',
+       'Les fonctions de Président prennent fin soit par le décès, la démission, la révocation, l\'expiration de son mandat, soit par l\'ouverture à l\'encontre de celui-ci d\'une procédure de redressement ou de liquidation judiciaires.',
+       'Le Président peut recevoir une rémunération dont les modalités sont fixées par la décision de nomination.']));
+    A.push(art('ARTICLE 14 — CONVENTIONS ENTRE LA SOCIÉTÉ ET SES DIRIGEANTS OU ASSOCIÉS',
+      ['En application des dispositions de l\'article L. 227-10 du Code de commerce, le Commissaire aux Comptes (s\'il en est nommé un) présente un rapport sur les conventions intervenues directement ou par personne interposée entre la Société et son Président et actionnaire unique.',
+       'Les interdictions prévues à l\'article L. 225-43 du Code de commerce s\'appliquent, dans les conditions déterminées par cet article, au Président.']));
+    A.push(art('ARTICLE 15 — DÉCISIONS COLLECTIVES',
+      ['L\'assemblée générale est seule compétente pour prendre les décisions suivantes : approbation des comptes annuels et affectation des résultats ; approbation des conventions réglementées ; nomination des Commissaires aux Comptes ; augmentation, amortissement et réduction du capital social ; transformation de la Société ; modification des statuts, sauf transfert du siège social.',
+       'Toutes autres décisions relèvent de la compétence du Président.']));
+    A.push(art('ARTICLE 16 — FORME ET MODALITÉS DES DÉCISIONS COLLECTIVES',
+      ['Les décisions collectives sont prises en assemblée générale. Elles peuvent également faire l\'objet d\'une consultation écrite et être prises par tous moyens de télécommunication électronique.',
+       'Les décisions collectives prises en assemblée sont constatées par des procès-verbaux signés par le Président et le secrétaire et établis sur un registre spécial, ou sur des feuillets mobiles numérotés.']));
+    A.push(art('ARTICLE 17 — EXERCICE SOCIAL',
+      ['Chaque exercice social a une durée d\'une année, qui commence le premier janvier et finit le trente et un décembre.',
+       'Par exception, le premier exercice commencera le jour de l\'immatriculation de la Société au Registre du commerce et des sociétés et se terminera le 31 décembre '+annee+'.']));
+    A.push(art('ARTICLE 18 — INVENTAIRE · COMPTES ANNUELS',
+      ['Il est tenu une comptabilité régulière des opérations sociales, conformément à la loi et aux usages du commerce. À la clôture de chaque exercice, le Président dresse l\'inventaire des divers éléments de l\'actif et du passif existant à cette date, ainsi que le bilan, le compte de résultat et l\'annexe.',
+       'Dans les six mois de la clôture de l\'exercice, l\'actionnaire doit statuer sur les comptes annuels, au vu du rapport de gestion et des rapports du Commissaire aux Comptes (éventuellement).']));
+    A.push(art('ARTICLE 19 — CAPITAUX PROPRES INFÉRIEURS À LA MOITIÉ DU CAPITAL SOCIAL',
+      ['Si, du fait des pertes constatées dans les documents comptables, les capitaux propres de la Société deviennent inférieurs à la moitié du capital social, le Président doit, dans les quatre mois qui suivent l\'approbation des comptes ayant fait apparaître ces pertes, décider en assemblée générale s\'il y a lieu à dissolution anticipée de la Société.']));
+    A.push(art('ARTICLE 20 — DISSOLUTION · LIQUIDATION',
+      ['La société est dissoute dans les cas prévus par la loi et, sauf prorogation, à l\'expiration du terme fixé par les statuts, ou à la suite d\'une décision de l\'actionnaire. Un ou plusieurs liquidateurs sont alors nommés par cette décision.',
+       'Le liquidateur représente la Société. Il est investi des pouvoirs les plus étendus pour réaliser l\'actif. Il est habilité à payer les créanciers et à répartir le solde disponible.']));
+    A.push(art('ARTICLE 21 — CONTESTATIONS',
+      ['Les parties attribuent compétence au Président du Tribunal de commerce du lieu du siège social, tant pour l\'application des dispositions qui précèdent que pour le règlement de toutes autres difficultés.']));
+    A.push('<div class="st-art">ARTICLE 22 — NOMINATION DES DIRIGEANTS</div>'
+      +'<p>Le premier Président de la Société nommé aux termes des présents statuts, pour une durée indéterminée, est '+esc(x.president)+'.</p>');
+    A.push(art('ARTICLE 23 — REPRISE DES ENGAGEMENTS ACCOMPLIS POUR LE COMPTE DE LA SOCIÉTÉ EN FORMATION',
+      ['Conformément à la loi, la Société ne jouira de la personnalité morale qu\'à compter du jour de son immatriculation au Registre du commerce et des sociétés.',
+       'La signature des présents statuts emportera reprise de ces engagements par la Société, lorsque celle-ci aura été immatriculée au Registre du commerce et des sociétés.']));
+    A.push(art('ARTICLE 24 — FORMALITÉS DE PUBLICITÉ · POUVOIRS · FRAIS',
+      ['Tous pouvoirs sont donnés au porteur d\'un original ou d\'une copie certifiée conforme des présentes pour effectuer l\'ensemble des formalités légales relatives à la constitution de la société.']));
+    var fin='<div class="st-fin"><p>Fait à '+esc(ville||'«ville»')+',</p><p>Le '+jour+' '+moisFr()+' '+annee+'</p>'
+      +'<div class="st-sign"><div class="sg"><b>'+esc(x.president)+'</b>Le Président — Signature</div></div></div>';
+    return '<div class="st-doc">'+cover+'<div class="st-page">'+preambule+A.join('')+fin+'</div></div>';
+  };
+
+  /* ---------- STATUTS SCI (d'après modèle SCI DU 42) ---------- */
+  window.statutsSciHTML=function(d){
+    var x=stDossData(d);var c=x.c;
+    var denom=x.denom, cap=x.cap, capN=cap?stNum(cap):'«…»';
+    var siege=x.siege, ville=(x.ville&&x.ville!=='«ville»')?x.ville:'';
+    var objet=((c.activites||[]).join(', ')||'').trim();
+    var assoc=x.assoc.length?x.assoc:[{nom:''}];
+    var totalParts=x.totalParts||0;var nbParts=totalParts>0?totalParts:100;
+    var nominal=Math.round(x.nominal)||10;
+    var gerant=x.president;
+    var annee=new Date().getFullYear();var jour=new Date().getDate();
+    var cover='<div class="st-cover"><div class="st-c1">'+esc(denom)+'</div>'
+      +'<div class="st-c2">Société Civile Immobilière</div>'
+      +'<div class="st-c4">au capital de '+capN+' euros</div>'
+      +'<div class="st-c4">Siège social : '+esc(siege)+(ville?(', '+esc(ville)):'')+'</div>'
+      +'<div class="st-c4">RCS : en cours d\'attribution</div></div>';
+    var soussignes=assoc.map(function(a){return '<p>- '+stCivil(a)+'</p>';}).join('');
+    var preambule='<p><b>ENTRE LES SOUSSIGNÉS :</b></p>'+soussignes
+      +'<p>Il a été convenu d\'établir ainsi qu\'il suit les statuts de la Société civile immobilière qu\'ils ont convenu de constituer.</p>';
+    var A=[];
+    A.push('<div class="st-titre">TITRE PREMIER — FORME · OBJET · DÉNOMINATION · SIÈGE · DURÉE</div>');
+    A.push(art('ARTICLE 1 — Forme',
+      ['Il est formé par les présentes, entre les propriétaires des parts ci-après créées et de celles qui pourront l\'être ultérieurement, une Société civile régie par les dispositions du titre 9 du livre III du code civil et par les textes d\'application subséquents ainsi que par les présents statuts.']));
+    A.push(art('ARTICLE 2 — Objet',
+      ['La Société a pour objet : '+(objet?(esc(objet)+' ; '):'')+'l\'acquisition de droits immobiliers comprenant celui de construire ; l\'acquisition de tous terrains annexes ou adjacents ; la construction sur ce terrain d\'un immeuble de toutes destinations et usages ; la division de cet immeuble en appartements et locaux distincts ou en lots de volumes ; l\'emprunt de tous les fonds nécessaires à la réalisation de cet objet ; la vente, en totalité ou par fraction des immeubles construits, avant ou après leur achèvement ; accessoirement, la location desdits immeubles ;',
+       'Et, plus généralement, la réalisation de toutes opérations financières, mobilières ou immobilières de caractère purement civil et se rattachant à l\'objet social.']));
+    A.push('<div class="st-art">ARTICLE 3 — Dénomination</div><p>La Société prend pour dénomination : « '+esc(denom)+' ».</p>'
+      +'<p>Dans tous les actes et documents émanant de la Société et destinés aux tiers, la dénomination doit être précédée ou suivie, de manière lisible, une fois au moins des mots « Société civile » suivie de l\'indication du capital social.</p>');
+    A.push(art('ARTICLE 4 — Siège social',
+      ['Le siège social est fixé au '+esc(siege)+(ville?(', '+esc(ville)):'')+'.',
+       'Il ne pourra être fixé partout ailleurs que par décision extraordinaire des associés représentant au moins deux tiers du capital social.']));
+    A.push(art('ARTICLE 5 — Durée',
+      ['La durée de la Société est fixée à QUATRE-VINGT-DIX-NEUF ans à compter de son immatriculation au registre du commerce et des sociétés, sauf cas de dissolution anticipée ou de prorogation.',
+       'La Société ne sera pas dissoute par le décès, la déconfiture, la faillite, la banqueroute, la liquidation ou le règlement judiciaire d\'un associé.']));
+    A.push('<div class="st-titre">TITRE DEUXIÈME — APPORTS · CAPITAL SOCIAL · PARTS SOCIALES</div>');
+    var apports=assoc.map(function(a){var p=Number(a.parts)||0;var m=(nominal&&p)?stNum(nominal*p):'«…»';return '<p>'+(esc((a.nom||'').trim())||'«associé»')+' apporte à la Société une somme en numéraire de '+m+' euros.</p>';}).join('');
+    A.push('<div class="st-art">ARTICLE 6 — Apports</div><p>Les apports faits par les associés sont les suivants :</p>'+apports
+      +'<p>Soit au total '+capN+' euros. Cette somme sera déposée ultérieurement sur un compte ouvert au nom de la Société à la Banque sur demande du Gérant.</p>');
+    var repart=assoc.map(function(a){var p=Number(a.parts)||0;return '<p>'+(esc((a.nom||'').trim())||'«associé»')+' détient '+(p||'«…»')+' parts</p>';}).join('');
+    A.push('<div class="st-art">ARTICLE 7 — Capital social · Parts sociales</div>'
+      +'<p>Le capital social est fixé à '+capN+' euros. Il est divisé en '+nbParts+' parts sociales de '+stNum(nominal)+' euros chacune.</p>'
+      +'<p>Ce capital social est réparti de la façon suivante :</p>'+repart+'<p>Total : '+nbParts+' parts.</p>');
+    A.push(art('ARTICLE 8 — Augmentation et réduction du capital',
+      ['Le capital social pourra être augmenté en une ou plusieurs fois, en vertu d\'une décision prise par les associés, notamment par la création de parts nouvelles attribuées en représentation d\'apports en nature ou en numéraire. Il pourra aussi à toute époque être réduit, soit par retrait d\'apports, soit par des remboursements égaux sur toutes les parts sociales, ou par rachat et annulation de parts sociales, le tout par décision collective des associés.']));
+    A.push(art('ARTICLE 9 — Représentation des parts sociales',
+      ['Les parts sociales ne peuvent être représentées par des titres négociables. Les droits de chaque associé dans la société résultent seulement des présentes, des actes modificatifs ultérieurs et des cessions de parts régulièrement consenties, constatées et publiées.']));
+    A.push(art('ARTICLE 10 — Cession entre vifs des parts sociales',
+      ['Les parts sociales sont librement cessibles entre associés. Elles ne peuvent être cédées à titre onéreux ou gratuit, à quelque cessionnaire que ce soit, y compris le conjoint, ascendant ou descendant du cédant, qu\'avec le consentement des associés représentant au moins les deux tiers des parts sociales, cette majorité étant déterminée en tenant compte de la personne et des parts du cédant.',
+       'La cession de parts sociales doit être constatée par écrit. Elle n\'est opposable à la société qu\'après avoir été signifiée à cette dernière ou acceptée par elle dans un acte authentique conformément à l\'article 1690 du Code civil.']));
+    A.push(art('ARTICLE 11 — Décès ou retrait d\'un associé',
+      ['La Société n\'est pas dissoute par le décès de l\'un des associés mais continue entre les associés survivants et les héritiers ou ayants droit de l\'associé décédé, sous réserve de leur agrément.',
+       'Sans préjudice des droits des tiers, un associé peut se retirer totalement ou partiellement de la Société après autorisation donnée à l\'unanimité des autres associés, ou pour justes motifs par une décision de justice.']));
+    A.push(art('ARTICLE 12 — Droits attachés aux parts sociales',
+      ['Chaque part sociale confère un droit égal dans les bénéfices de la Société et dans tout l\'actif social. Les droits et obligations attachés aux parts sociales les suivent dans quelque main qu\'elles passent. La propriété d\'une part emporte de plein droit adhésion aux statuts et aux décisions régulièrement prises par les associés.',
+       'Chaque part sociale est indivisible à l\'égard de la Société. Les copropriétaires indivis sont tenus, pour l\'exercice de leurs droits, de se faire représenter par un mandataire unique.']));
+    A.push(art('ARTICLE 13 — Responsabilité des associés',
+      ['À l\'égard des tiers, chacun des associés n\'est tenu indéfiniment des dettes sociales que dans la proportion du nombre de parts qu\'il possède à la date de l\'exigibilité ou au jour de la cessation des paiements, conformément aux dispositions de l\'article 1857 du Code civil. En outre, il sera fait application des articles 1858, 1859 et 1860 du Code civil.']));
+    A.push('<div class="st-titre">TITRE TROISIÈME — ADMINISTRATION DE LA SOCIÉTÉ</div>');
+    A.push('<div class="st-art">ARTICLE 14 — Gérance : nomination et durée des fonctions</div>'
+      +'<p>La Société est administrée par un ou plusieurs Gérants, associés ou non, personnes physiques ou morales, désignés par décision collective des associés représentant plus de la moitié du capital social.</p>'
+      +'<p>'+esc(gerant)+' est nommé(e) Gérant de la Société civile immobilière pour une durée illimitée. Il/elle déclare accepter ces fonctions et n\'être soumis(e) à aucune mesure pouvant lui en interdire l\'exercice.</p>');
+    A.push(art('ARTICLE 15 — Pouvoirs de la gérance',
+      ['Dans les rapports entre associés, le Gérant peut accomplir tous les actes de gestion que demande l\'intérêt de la Société.',
+       'Dans les rapports avec les tiers, le Gérant jouit des pouvoirs les plus étendus pour agir au nom de la Société et faire ou autoriser tous les actes et opérations entrant dans l\'objet social.',
+       'En cas de pluralité de Gérants, chacun exerce séparément ces pouvoirs, sauf le droit de chacun d\'eux de s\'opposer à une opération avant qu\'elle ne soit conclue.']));
+    A.push(art('ARTICLE 16 — Responsabilité du Gérant',
+      ['Chaque Gérant est responsable individuellement envers la Société et envers les tiers, soit des infractions aux lois et règlements, soit de la violation des statuts, soit des fautes commises dans la gestion. Si plusieurs Gérants ont participé aux mêmes faits, leur responsabilité est solidaire à l\'égard des tiers et des associés.']));
+    A.push('<div class="st-titre">TITRE QUATRIÈME — DÉCISIONS COLLECTIVES</div>');
+    A.push(art('ARTICLE 17 — Objet',
+      ['Les décisions collectives des associés ont notamment pour objet d\'approuver les comptes sociaux, d\'autoriser le(s) Gérant(s) pour des opérations excédant leurs pouvoirs, de nommer et révoquer le(s) Gérant(s) et de modifier les statuts.']));
+    A.push(art('ARTICLE 18 — Modes de consultation',
+      ['La volonté des associés s\'exprime par des décisions collectives qui obligent les associés, même absents, dissidents ou incapables. Ces décisions peuvent résulter soit d\'une assemblée générale, soit du consentement de tous les associés exprimé dans un acte.']));
+    A.push(art('ARTICLE 19 — Décisions collectives ordinaires',
+      ['Sont qualifiées d\'ordinaires les décisions des associés ne concernant ni les modifications statutaires, ni l\'agrément de nouveaux associés. Les décisions collectives ordinaires doivent, pour être valables, être adoptées par un ou plusieurs associés représentant plus de la moitié du capital social.']));
+    A.push(art('ARTICLE 20 — Décisions collectives extraordinaires',
+      ['Sont qualifiées d\'extraordinaires les décisions des associés portant agrément de nouveaux associés ou modification des statuts. Elles ne peuvent être valablement prises qu\'à l\'unanimité s\'il s\'agit de changer la nationalité de la Société ou d\'augmenter les engagements d\'un associé, et, dans tous les autres cas, avec le consentement des associés représentant au moins les deux tiers du capital social.']));
+    A.push('<div class="st-titre">TITRE CINQUIÈME — EXERCICE SOCIAL · COMPTES · AFFECTATION DES BÉNÉFICES</div>');
+    A.push(art('ARTICLE 21 — Exercice social',
+      ['Chaque exercice social a une durée d\'une année qui commence le 1er janvier et finit le 31 décembre.',
+       'Par exception, le premier exercice social comprendra le temps à courir depuis l\'immatriculation de la Société jusqu\'au 31 décembre '+annee+'.']));
+    A.push(art('ARTICLE 22 — Comptes',
+      ['À la clôture de chaque exercice, il est dressé par les soins de la gérance un inventaire de l\'actif et du passif de la société, un compte d\'exploitation générale, un compte de pertes et profits et un bilan.',
+       'Les associés sont réunis dans les six mois de la clôture de l\'exercice pour statuer sur les comptes de l\'exercice et l\'affectation des résultats.']));
+    A.push(art('ARTICLE 23 — Affectation et répartition du bénéfice',
+      ['Le bénéfice dégagé pour la période de référence est réparti entre les associés à proportion de leur participation dans le capital. Toutefois, les associés peuvent reporter à nouveau tout ou partie de la part leur revenant, ou l\'affecter à toutes réserves. Les pertes, s\'il en existe, sont supportées par les associés proportionnellement au nombre de parts leur appartenant.']));
+    A.push('<div class="st-titre">TITRE SIXIÈME — DISSOLUTION · LIQUIDATION</div>');
+    A.push(art('ARTICLE 24 — Dissolution',
+      ['La Société est en liquidation dès l\'instant de sa dissolution quelle qu\'en soit la cause. À compter de la dissolution, la mention « Société en liquidation » ainsi que le nom du ou des liquidateurs doivent figurer sur tous les actes et documents émanant de la Société et destinés aux tiers.']));
+    A.push(art('ARTICLE 25 — Liquidation',
+      ['Le liquidateur est désigné par la collectivité des associés statuant comme en matière ordinaire ou, à défaut, par décision de justice. L\'acte de nomination définit ses pouvoirs et sa rémunération. La décision de clôture de la liquidation est prise par les associés après approbation des comptes définitifs de la liquidation.']));
+    A.push('<div class="st-titre">TITRE SEPTIÈME — PUBLICITÉ · CONSTATATIONS</div>');
+    A.push('<div class="st-art">ARTICLE 26 — Publicité</div><p>Tous pouvoirs sont donnés à '+esc(gerant)+' pour effectuer les formalités de publicité prescrites par la loi et, notamment, pour signer l\'avis à insérer dans un journal d\'annonces légales.</p>');
+    A.push(art('ARTICLE 27 — Frais',
+      ['À compter de l\'immatriculation au RCS, les frais, droits et honoraires auxquels donnera lieu la constitution de la Société seront amortis avant toute distribution de bénéfice.']));
+    A.push(art('ARTICLE 28 — Contestations',
+      ['Toutes les contestations qui pourraient s\'élever pendant la durée de la Société ou lors de sa liquidation, soit entre associés, soit entre le ou les gérants et la société, seront soumises à la juridiction des tribunaux compétents du lieu du siège social.']));
+    A.push('<div class="st-art">ARTICLE 29 — Engagements contractés au nom de la Société avant son immatriculation</div><p>Néant.</p>');
+    var signs=assoc.map(function(a){return '<div class="sg"><b>'+(esc((a.nom||'').trim())||'«associé»')+'</b>Associé — Signature</div>';}).join('');
+    var fin='<div class="st-fin"><p>Fait à '+esc(ville||'«ville»')+',</p><p>Le '+jour+' '+moisFr()+' '+annee+',</p><p>en autant d\'exemplaires que nécessaire.</p>'
+      +'<div class="st-sign"><div class="sg"><b>'+esc(gerant)+'</b>Le Gérant — Signature</div>'+signs+'</div></div>';
+    return '<div class="st-doc">'+cover+'<div class="st-page">'+preambule+A.join('')+fin+'</div></div>';
+  };
+
+  /* ---------- Enregistrement des 3 modèles de statuts + choix par forme ---------- */
+  if(window.DOC_MODELS){
+    window.DOC_MODELS.statuts=[
+      {id:'sas',label:'Statuts SAS',forme:'SAS',fn:function(d){return statutsSasHTML(d);}},
+      {id:'sasu',label:'Statuts SASU',forme:'SASU',fn:function(d){return statutsSasuHTML(d);}},
+      {id:'sci',label:'Statuts SCI',forme:'SCI',fn:function(d){return statutsSciHTML(d);}}
+    ];
+  }
+  /* Tous les modèles restent proposés (choix), le modèle par défaut suit la forme du dossier */
+  window.espDocModels=function(k,d){return (window.DOC_MODELS[k]||[]);};
+  window.espDocModelId=function(d,k){
+    var models=window.espDocModels(k,d);if(!models.length)return null;
+    var sel=(d.docModel&&d.docModel[k]);
+    if(sel&&models.some(function(m){return m.id===sel;}))return sel;
+    var f=null;try{f=stDossData(d).forme;}catch(e){}
+    if(f){var fm=models.filter(function(m){return m.forme===f;})[0];if(fm)return fm.id;}
+    return models[0].id;
+  };
+})();
+</script>
 </body>
 </html>
