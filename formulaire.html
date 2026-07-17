@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AEM CONSEIL — Formulaire de formalité</title>
+<style>
+:root{--bg:#faf6ec;--card:#fffdf8;--ink:#2a2117;--ink2:#5b5040;--ink3:#8a7d69;--line:#e7ddc9;--line2:#d9ccb2;--accent:#3f372b;--accent2:#7a6a49;--focus:0 0 0 3px rgba(122,106,73,.2)}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#f3ecdc,#faf6ec 240px);color:var(--ink);font:15px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;padding:24px 14px}
+.wrap{max-width:760px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.brand .logo{font:800 24px/1 Georgia,serif;letter-spacing:2px;color:var(--accent)}
+.brand .sub{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);font-weight:700}
+h1{font-size:22px;margin:16px 0 4px}
+.lead{color:var(--ink2);margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--line2);border-radius:16px;padding:22px 20px;box-shadow:0 24px 60px -40px rgba(70,55,25,.4)}
+label{display:block;font-size:12.5px;font-weight:600;color:var(--ink2);margin:14px 0 5px}
+label .req{color:#b0442f}
+input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--line2);border-radius:10px;background:#fff;color:var(--ink);font:inherit;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent2);box-shadow:var(--focus)}
+textarea{min-height:110px;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.row{grid-template-columns:1fr}}
+.sec{margin-top:20px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--ink3);font-weight:700;border-top:1px solid var(--line);padding-top:16px}
+.btn{margin-top:22px;width:100%;padding:14px;border:none;border-radius:12px;background:var(--accent);color:#fff;font:600 15px/1 inherit;cursor:pointer;transition:opacity .15s}
+.btn:hover{opacity:.9}
+.note{font-size:12px;color:var(--ink3);margin-top:12px;text-align:center}
+.ok{display:none;text-align:center;padding:30px 10px}
+.ok h2{color:#3d6b3d}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><span class="logo">AEM</span><span class="sub">Conseil · Formalités</span></div>
+  <h1 id="titre">Formulaire de création de société</h1>
+  <p class="lead">Merci de compléter ce formulaire : il nous permet d'ouvrir votre dossier et de préparer vos documents. Les champs marqués <span style="color:#b0442f">*</span> sont recommandés.</p>
+
+  <div class="card" id="cardForm">
+    <form id="f" action="https://formsubmit.co/aemconseil.sas@gmail.com" method="POST">
+      <input type="hidden" name="_subject" id="_subject" value="Formulaire — Nouvelle demande - AEM CONSEIL">
+      <input type="hidden" name="_captcha" value="false">
+      <input type="hidden" name="_template" value="box">
+      <input type="hidden" name="_next" id="_next" value="">
+      <input type="hidden" name="Origine" value="Formulaire LAST">
+
+      <label>Type de formalité <span class="req">*</span></label>
+      <select id="type" name="Type de formalité" required></select>
+
+      <div class="sec">Vos coordonnées</div>
+      <div class="row">
+        <div><label>Nom <span class="req">*</span></label><input name="Nom" required></div>
+        <div><label>Prénom <span class="req">*</span></label><input name="Prénom" required></div>
+      </div>
+      <div class="row">
+        <div><label>Email <span class="req">*</span></label><input type="email" name="Email" required></div>
+        <div><label>Téléphone</label><input name="Téléphone"></div>
+      </div>
+
+      <div id="fields"></div>
+
+      <div class="sec">Votre message</div>
+      <label>Précisions (facultatif)</label>
+      <textarea name="Message" placeholder="Toute information utile pour votre dossier…"></textarea>
+
+      <button class="btn" type="submit">Envoyer ma demande</button>
+      <div class="note">Vos informations sont transmises à AEM CONSEIL pour l'ouverture de votre dossier.</div>
+    </form>
+  </div>
+
+  <div class="card ok" id="cardOk">
+    <h2>✅ Merci, votre demande est envoyée !</h2>
+    <p class="lead" style="text-align:center">Nous avons bien reçu vos informations. Notre équipe ouvre votre dossier et revient vers vous rapidement.</p>
+  </div>
+</div>
+
+<script>
+var TYPES=[
+ {k:'sas',label:'Création SAS'},{k:'sasu',label:'Création SASU'},{k:'sarl',label:'Création SARL'},
+ {k:'eurl',label:'Création EURL'},{k:'sci',label:'Création SCI'},
+ {k:'transfert',label:'Transfert de siège social'},{k:'dirigeant',label:'Changement de dirigeant'},
+ {k:'denomination',label:'Changement de dénomination'},{k:'objet',label:"Modification de l'objet social"},
+ {k:'capital',label:'Augmentation de capital'}
+];
+var F={
+ denomination:'Dénomination sociale',nomCommercial:'Sigle / nom commercial',forme:'Forme juridique',
+ objet:'Objet social (activités)',siege:'Adresse du siège social',cp:'Code postal',ville:'Ville',
+ capital:'Capital social (en euros)',debut:"Date de début d'activité",fonction:'Fonction du dirigeant (Président / Gérant)',
+ civilite:'Civilité du dirigeant (M. / Mme)',nom:'Nom du dirigeant',prenom:'Prénom du dirigeant',
+ naissance:'Date de naissance du dirigeant',lieuNaissance:'Lieu (ville) de naissance',pays:'Pays de naissance',
+ nationalite:'Nationalité',adressePerso:'Adresse personnelle du dirigeant',situation:'Situation matrimoniale',
+ associes:'Associés (Nom Prénom, apport en euros, nombre de parts/actions)',siren:'SIREN de la société',
+ ancienSiege:'Ancienne adresse du siège',nouveauSiege:'Nouvelle adresse du siège',ancienDirigeant:'Ancien dirigeant (Nom Prénom)',
+ nouvelleDenomination:'Nouvelle dénomination',nouvelObjet:'Nouvel objet social',capitalActuel:'Capital actuel (en euros)',
+ nouveauCapital:'Nouveau capital (en euros)',dateEffet:"Date d'effet souhaitée"
+};
+function keys(k){
+ var creation=['denomination','nomCommercial','objet','siege','cp','ville','capital','debut','fonction','naissance','lieuNaissance','pays','nationalite','adressePerso','situation'];
+ switch(k){
+  case 'sas':case 'sarl':case 'sci':return creation.concat(['associes']);
+  case 'sasu':case 'eurl':return creation;
+  case 'transfert':return ['denomination','siren','forme','ancienSiege','nouveauSiege','cp','ville','dateEffet'];
+  case 'dirigeant':return ['denomination','siren','ancienDirigeant','fonction','naissance','lieuNaissance','pays','nationalite','adressePerso','dateEffet'];
+  case 'denomination':return ['denomination','siren','nouvelleDenomination','dateEffet'];
+  case 'objet':return ['denomination','siren','nouvelObjet','dateEffet'];
+  case 'capital':return ['denomination','siren','capitalActuel','nouveauCapital','dateEffet'];
+  default:return creation.concat(['associes']);
+ }
+}
+function qp(n){var m=location.search.match(new RegExp('[?&]'+n+'=([^&]*)'));return m?decodeURIComponent(m[1].replace(/\+/g,' ')):'';}
+var sel=document.getElementById('type');
+TYPES.forEach(function(t){var o=document.createElement('option');o.value=t.k;o.textContent=t.label;sel.appendChild(o);});
+var pre=qp('type');if(pre&&TYPES.some(function(t){return t.k===pre;}))sel.value=pre;
+function render(){
+ var k=sel.value;var t=TYPES.filter(function(x){return x.k===k;})[0]||{label:''};
+ document.getElementById('titre').textContent='Formulaire — '+t.label;
+ document.getElementById('_subject').value='Formulaire — '+t.label+' - AEM CONSEIL';
+ var wrap=document.getElementById('fields');wrap.innerHTML='<div class="sec">Informations de la société / formalité</div>';
+ keys(k).forEach(function(fk){var lab=F[fk];var lg='textarea'===({associes:1}[fk]?'textarea':'input');
+   var el=(fk==='associes'||fk==='objet'||fk==='nouvelObjet')?('<textarea name="'+lab+'"></textarea>'):('<input name="'+lab+'">');
+   wrap.insertAdjacentHTML('beforeend','<label>'+lab+'</label>'+el);});
+}
+sel.addEventListener('change',render);render();
+document.getElementById('_next').value=location.href.split('#')[0]+'#ok';
+document.getElementById('f').addEventListener('submit',function(){try{localStorage.setItem('aem-form-sent','1');}catch(e){}});
+if(location.hash==='#ok'){document.getElementById('cardForm').style.display='none';document.getElementById('cardOk').style.display='block';}
+</script>
+</body>
+</html>

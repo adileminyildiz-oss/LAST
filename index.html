@@ -789,7 +789,7 @@ function pageDemandes(){
   if(q)list=list.filter(function(d){return (d.clientNom+' '+IA.objet(d)+' '+(d.serviceSouhaite||'')+' '+(d.message||'')).toLowerCase().includes(q);});
   var tabs='<div class="dem-tabs">'+DEM_TABS.map(function(t){return '<button class="dem-tab '+(t[0]===tab?'on':'')+'" onclick="state.demTab=\''+t[0]+'\';render()">'+t[1]+' <span class="dem-c">'+counts[t[0]]+'</span></button>';}).join('')+'</div>';
   var search='<div class="dem-search">'+svg(IC.inbox)+'<input value="'+esc(state.q||'')+'" oninput="state.q=this.value.toLowerCase();render()" placeholder="Rechercher un client ou un type de demande…"></div>';
-  return tabs+'<div class="dem-toolbar">'+search+'<button class="btn btn-sm dem-imp-btn" onclick="demSyncMails(false)">🔄 Synchroniser la boîte</button><button class="btn btn-sm dem-imp-btn" onclick="demSyncConfig()">⚙ Configurer la boîte</button></div>'+'<div class="card"><div class="card-b" style="padding:0">'
+  return tabs+'<div class="dem-toolbar">'+search+'<button class="btn btn-sm dem-imp-btn" onclick="demSyncMails(false)">🔄 Synchroniser la boîte</button><button class="btn btn-sm dem-imp-btn" onclick="demSyncConfig()">⚙ Configurer la boîte</button><button class="btn btn-sm dem-imp-btn" onclick="demSaisieInterne()">➕ Saisir un dossier</button></div>'+'<div class="card"><div class="card-b" style="padding:0">'
     +(list.length?tableDemandes(list,tab):'<div class="empty">Aucune demande dans cet onglet.</div>')
     +'</div></div>';
 }
@@ -2025,7 +2025,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=10;
+var LAST_VER=11;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2479,7 +2479,7 @@ function demQuestionnaire(id){var d=DB.demandes.find(function(x){return x.id===i
  var opts=FORM_TYPES.map(function(x){return '<option value="'+x.k+'"'+(x.k===def?' selected':'')+'>'+esc(x.label)+'</option>';}).join('');
  openModal('📋 Questionnaire au client — '+esc(d.clientNom||''),
    '<div class="hint" style="margin-bottom:8px">Choisis le type de formalité : les <b>bonnes questions</b> sont générées automatiquement. Le client répond par mail, puis « 📂 Ouvrir le dossier » pré-remplira la formalité.</div>'
-   +'<label>Type de formalité</label><select id="form-type" onchange="formTypeChange(\''+id+'\')">'+opts+'</select>'
+   +'<label>Type de formalité</label><select id="form-type" onchange="formTypeChange(\''+id+'\')">'+opts+'</select>'+'<div style="display:flex;gap:8px;margin:8px 0"><button type="button" class="btn btn-sm" onclick="formTypeChange(\''+id+'\')">📋 Questions dans le mail</button><button type="button" class="btn btn-sm btn-pri" onclick="demQLien(\''+id+'\')">🔗 Lien du formulaire en ligne</button></div>'
    +'<label style="margin-top:8px">Destinataire</label><input id="ml-to" value="'+esc(d.clientEmail||'')+'">'
    +'<label>Objet du mail</label><input id="ml-sujet" value="">'
    +'<label>Questionnaire (généré — modifiable)</label><textarea id="ml-corps" style="min-height:300px"></textarea>'
@@ -2504,17 +2504,20 @@ function formParse(text){text=(''+text);var lines=text.split(/\r?\n/);var out={}
  return out;
 }
 function formEnrichDossier(c,dos,d){
- var p=formParse(d&&d.message||'');var any=false;
+ var src=(d&&(d.rawBody||d.message))||'';var p=formParse(src);var any=false;
  function set(o,k,v){if(v){o[k]=v;any=true;}}
  if(p.denomination)set(c,'denomination',p.denomination);
  if(p.nomCommercial)set(c,'nomCommercial',p.nomCommercial);
- if(p.forme)set(c,'forme',(''+p.forme).toUpperCase().replace(/[^A-Z]/g,'')||p.forme);
+ var forme=p.forme;
+ if(!forme&&d&&d.serviceSouhaite){try{var tk=formGuessType({serviceSouhaite:d.serviceSouhaite,message:''});var ft=FORM_TYPES.filter(function(x){return x.k===tk;})[0];if(ft&&ft.forme)forme=ft.forme;}catch(e){}}
+ if(forme)set(c,'forme',(''+forme).toUpperCase().replace(/[^A-Z]/g,'')||forme);
  if(p.objet)set(c,'activites',p.objet.split(/[,;\/]+/).map(function(s){return s.trim();}).filter(Boolean));
  if(p.siege)set(c,'siege',p.siege);
  if(p.ville)set(c,'ville',p.ville);
  if(p.cp)set(c,'cp',p.cp);
  if(p.capital){var cap=parseInt((''+p.capital).replace(/[^0-9]/g,''),10);if(cap){c.capital=cap;any=true;}}
  var pren=p.prenom||'',nom=p.nom||'';var full=((pren+' '+nom).trim());
+ if(!full&&d&&d.clientNom&&!/formsubmit/i.test(d.clientNom)){full=d.clientNom;var sp=full.split(/\s+/);pren=sp[0]||'';nom=sp.slice(1).join(' ')||'';}
  if(full){c.president=full;
    if(!c.associes||!c.associes.length)c.associes=[{nom:full,parts:c.capital||100}];
    else c.associes[0].nom=full;any=true;}
@@ -2554,6 +2557,33 @@ function demTypeBadge(d){var t=demType(d);
  if(t==='piece')return '<span class="tag warm">📎 Pièces jointes</span>';
  return '<span class="tag mut">✉ Nouvelle demande</span>';}
 function demAtt(d){return (d.attachments||[]).map(function(a){return (typeof a==='string')?{name:a}:a;});}
+function demFormBase(){return 'https://last.aemconseil.eu/formulaire.html';}
+function demQLien(id){var d=DB.demandes.find(function(x){return x.id===id;});var sel=document.getElementById('form-type');var k=(sel&&sel.value)||'sas';
+ var link=demFormBase()+'?type='+encodeURIComponent(k);var prenom=(d&&d.clientNom||'').split(/\s+/)[0]||'';
+ var suj=document.getElementById('ml-sujet');if(suj)suj.value='Votre formulaire à compléter — AEM CONSEIL';
+ var ta=document.getElementById('ml-corps');if(ta)ta.value='Bonjour'+(prenom?(' '+prenom):'')+',\n\nPour ouvrir votre dossier, merci de compléter notre formulaire en ligne (quelques minutes) :\n'+link+'\n\nUne fois votre formulaire envoyé, nous préparons vos documents et revenons vers vous.\n\nBien à vous,\nL\'équipe AEM CONSEIL';}
+function demSaisieInterne(){var opts=FORM_TYPES.map(function(x){return '<option value="'+x.k+'">'+esc(x.label)+'</option>';}).join('');
+ openModal('➕ Saisir un dossier (formulaire interne)',
+  '<div class="hint" style="margin-bottom:8px">Remplis le formulaire pour créer un dossier pré-rempli (ex. demande reçue par téléphone ou en rendez-vous).</div>'
+  +'<label>Type de formalité</label><select id="si-type" onchange="demSaisieFields()">'+opts+'</select>'
+  +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>Nom</label><input id="si-nom"></div><div><label>Prénom</label><input id="si-prenom"></div></div>'
+  +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>Email</label><input id="si-email"></div><div><label>Téléphone</label><input id="si-tel"></div></div>'
+  +'<div id="si-fields"></div>',
+  '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-pri" onclick="demSaisieCreer()">📂 Créer le dossier</button>');
+ setTimeout(demSaisieFields,0);}
+function demSaisieFields(){var sel=document.getElementById('si-type');var k=(sel&&sel.value)||'sas';var wrap=document.getElementById('si-fields');if(!wrap)return;
+ wrap.innerHTML='<div class="section-t" style="margin-top:10px">Informations de la société / formalité</div>'+formQuestionKeys(k).map(function(fk){var lab=formFieldByKey(fk).label;return '<label>'+esc(lab)+'</label><input class="si-f" data-lab="'+esc(lab)+'">';}).join('');}
+function demSaisieCreer(){var sel=document.getElementById('si-type');var k=(sel&&sel.value)||'sas';
+ var g=function(x){return (document.getElementById(x)||{}).value||'';};
+ var nom=g('si-nom').trim(),prenom=g('si-prenom').trim(),email=g('si-email').trim(),tel=g('si-tel').trim();
+ var t=FORM_TYPES.filter(function(x){return x.k===k;})[0]||{label:''};
+ var lines=[];if(nom)lines.push('Nom : '+nom);if(prenom)lines.push('Prénom : '+prenom);if(email)lines.push('Email : '+email);if(tel)lines.push('Téléphone : '+tel);
+ Array.prototype.forEach.call(document.querySelectorAll('#si-fields .si-f'),function(inp){var v=(inp.value||'').trim();if(v)lines.push(inp.getAttribute('data-lab')+' : '+v);});
+ var raw=lines.join('\n');
+ var d={id:uid('d'),clientNom:((prenom+' '+nom).trim())||email||'Client',clientEmail:email,clientTel:tel,
+   canal:'Saisie interne',subject:'Saisie — '+t.label,serviceSouhaite:t.label,message:raw,rawBody:raw,
+   date:today(),statut:'Nouveau',assigneA:'',docsRecus:false,dossierId:'',attachments:[],thread:[{from:((prenom+' '+nom).trim()),subject:'Saisie — '+t.label,date:today(),body:raw}]};
+ DB.demandes.unshift(d);save();closeModal();creerDossierDepuis(d.id);}
 function demIsFormSubmit(m){var f=(''+(m&&m.from||'')).toLowerCase();var b=(''+(m&&m.body||'')).toLowerCase();var s=(''+(m&&m.subject||'')).toLowerCase();
  return /formsubmit/.test(f)||/formsubmit/.test(b)||/new submission from your form|nouvelle soumission|you've got a new submission|submitted from|via le formulaire/i.test(b)||/formulaire|form submission/i.test(s);}
 function fsNorm(s){return (''+s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();}
@@ -2602,13 +2632,13 @@ window.demIngest=function(mails){
    if(existing){
      existing.thread=existing.thread||[{from:existing.clientNom,subject:existing.subject||existing.serviceSouhaite,date:existing.date,body:existing.message}];
      existing.thread.push({from:cliNom,subject:subj,date:dateISO,body:body});
-     existing.message=body;existing.date=dateISO;existing.__reponse=true;
+     existing.message=body;existing.date=dateISO;existing.__reponse=true;if(isFS)existing.rawBody=body;
      if(atts.length)existing.attachments=(existing.attachments||[]).concat(atts);
      fil++;
    } else {
      DB.demandes.unshift({id:uid('d'),clientNom:cliNom,clientEmail:cliEmail,clientTel:tel,
        canal:'Formulaire du site',subject:subj,serviceSouhaite:((''+objet).slice(0,80))||'À qualifier',
-       message:msg,date:dateISO,statut:'Nouveau',assigneA:'',docsRecus:atts.length>0,dossierId:'',msgKey:key,
+       message:msg,rawBody:(isFS?body:''),date:dateISO,statut:'Nouveau',assigneA:'',docsRecus:atts.length>0,dossierId:'',msgKey:key,
        attachments:atts,thread:[{from:cliNom,subject:subj,date:dateISO,body:msg}]});
      add++;
    }
@@ -2635,7 +2665,7 @@ window.pageDemandes=function(){
  if(q)list=list.filter(function(d){return (d.clientNom+' '+IA.objet(d)+' '+(d.serviceSouhaite||'')+' '+(d.message||'')+' '+demType(d)).toLowerCase().includes(q);});
  var tabs='<div class="dem-tabs">'+DEM_TABS.map(function(t){return '<button class="dem-tab '+(t[0]===tab?'on':'')+'" onclick="state.demTab=\''+t[0]+'\';render()">'+t[1]+' <span class="dem-c">'+counts[t[0]]+'</span></button>';}).join('')+'</div>';
  var search='<div class="dem-search">'+svg(IC.inbox)+'<input value="'+esc(state.q||'')+'" oninput="state.q=this.value.toLowerCase();render()" placeholder="Rechercher un client, un objet, un type…"></div>';
- return kpis+tabs+'<div class="dem-toolbar">'+search+'<button class="btn btn-sm dem-imp-btn" onclick="demSyncMails(false)">🔄 Synchroniser la boîte</button><button class="btn btn-sm dem-imp-btn" onclick="demSyncConfig()">⚙ Configurer la boîte</button></div>'
+ return kpis+tabs+'<div class="dem-toolbar">'+search+'<button class="btn btn-sm dem-imp-btn" onclick="demSyncMails(false)">🔄 Synchroniser la boîte</button><button class="btn btn-sm dem-imp-btn" onclick="demSyncConfig()">⚙ Configurer la boîte</button><button class="btn btn-sm dem-imp-btn" onclick="demSaisieInterne()">➕ Saisir un dossier</button></div>'
   +'<div class="card"><div class="card-b" style="padding:0">'
   +(list.length?tableDemandes(list,tab):'<div class="empty">Aucune demande dans cet onglet.</div>')
   +'</div></div>';
