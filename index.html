@@ -913,6 +913,7 @@ function creerDossierDepuis(id){
     historique:[{d:today(),t:'Créé depuis la demande de '+d.clientNom}]};
   try{ if(typeof formEnrichDossier==='function') formEnrichDossier(c,dos,d); }catch(e){}
   try{ if(d.attachments&&d.attachments.length) dos.attachments=(d.attachments||[]).slice(); }catch(e){}
+  try{ dos.docs=dos.docs||{}; (typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).forEach(function(dc){ if(!(dos.docsExclus&&dos.docsExclus[dc.k])) dos.docs[dc.k]={genere:true,date:today()}; }); }catch(e){}
   DB.dossiers.unshift(dos);d.dossierId=dos.id;
   save();closeModal();toast('Dossier '+ref+' créé'+(dos.__prerempli?' · pré-rempli depuis le questionnaire':''));state.page='espace';state.espaceDossier=dos.id;render();
 }
@@ -1343,7 +1344,7 @@ function espDocsModal(id){
      +'<td style="text-align:center"><input type="checkbox" '+(req?'checked':'')+' onchange="espDocToggleReqM(\''+d.id+'\',\''+dc.k+'\')"></td>'
      +'<td class="tname">'+esc(dc.l)+'</td>'
      +'<td style="text-align:right">'+eur(dc.prix||0)+'</td>'
-     +'<td>'+(st.genere?'<span class="tag ok">Généré</span>':'<span class="tag mut">À générer</span>')+'</td>'
+     +'<td>'+(st.genere?'<span class="tag ok">✓ Prêt</span>':'<span class="tag mut">À générer</span>')+'</td>'
      +'<td style="text-align:right">'+(st.genere?'<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+dc.k+'\')">Voir</button> ':'')
      +'<button class="btn btn-sm btn-pri" onclick="espDocGen(\''+d.id+'\',\''+dc.k+'\')">'+(st.genere?'Régénérer':'Générer')+'</button></td></tr>';
   }).join('');
@@ -1356,12 +1357,21 @@ function espDocToggleReqM(id,k){var d=espDoss().find(function(x){return x.id===i
 function espDocsCard(d){
   var total=espDocsTotal(d);
   var rows=ESP_DOCS.map(function(dc){return espDocRow(d,dc);}).join('');
-  return '<div class="card esp-wide"><div class="card-h"><h2>Documents nécessaires pour la demande</h2>'
-   +'<span class="esp-total" style="margin-left:auto">Total : '+eur(total)+'</span></div>'
+  var nbPrets=ESP_DOCS.filter(function(dc){return espDocReq(d,dc.k)&&espDocState(d,dc.k).genere;}).length;
+  return '<div class="card esp-wide"><div class="card-h"><h2>Documents du dossier — prêts à l\'emploi</h2>'
+   +'<span class="tag ok" style="margin-left:auto">'+nbPrets+'/'+ESP_DOCS.length+' prêt(s)</span>'
+   +'<button class="btn btn-sm" style="margin-left:8px" onclick="espDocsTousGenerer(\''+d.id+'\')">⚙ Tout régénérer</button>'
+   +'<button class="btn btn-sm btn-pri" style="margin-left:6px" onclick="espDocsPrintAll(\''+d.id+'\')">🖨 Tout imprimer</button></div>'
    +'<div class="card-b" style="padding:0"><table class="esp-doc-tbl"><thead><tr>'
    +'<th style="width:34px">Requis</th><th>Document</th><th style="width:90px;text-align:right">Montant</th><th style="width:120px">Statut</th><th style="width:180px"></th></tr></thead>'
    +'<tbody>'+rows+'</tbody></table></div></div>';
 }
+function espDocsPrintAll(id){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;
+  if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();
+  var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}
+  var html=ESP_DOCS.filter(function(dc){return espDocReq(d,dc.k)&&espDocState(d,dc.k).genere;}).map(function(dc){return '<div class="doc-gen" style="page-break-after:always">'+espDocHTML(d,dc)+'</div>';}).join('');
+  if(!html){toast('Aucun document prêt.');return;}pa.innerHTML=html;setTimeout(function(){window.print();},150);}
+function espDocsTousGenerer(id){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;d.docs=d.docs||{};ESP_DOCS.forEach(function(dc){if(espDocReq(d,dc.k))d.docs[dc.k]={genere:true,date:today()};});save();toast('Tous les documents régénérés.');render();}
 function espPiecesCard(d){
   var got=ESP_PIECES.filter(function(pc){return espPieceState(d,pc.k).recu;}).length;
   var all=got===ESP_PIECES.length;
@@ -1378,6 +1388,7 @@ function espPanel(d,list,id){
    +espMailCard(d)
    +espDlist(list,id)
    +espStatutsCard(d)
+   +espDocsCard(d)
    +'</div>';
 }
 function espStatutsCard(d){
@@ -1428,7 +1439,7 @@ function espDocRow(d,dc){var st=espDocState(d,dc.k);var req=espDocReq(d,dc.k);
    +'<td style="text-align:center"><input type="checkbox" '+(req?'checked':'')+' onchange="espDocToggleReq(\''+d.id+'\',\''+dc.k+'\')"></td>'
    +'<td class="tname">'+esc(dc.l)+'</td>'
    +'<td style="text-align:right">'+eur(dc.prix||0)+'</td>'
-   +'<td>'+(st.genere?'<span class="tag ok">Généré</span>':'<span class="tag mut">À générer</span>')+'</td>'
+   +'<td>'+(st.genere?'<span class="tag ok">✓ Prêt</span>':'<span class="tag mut">À générer</span>')+'</td>'
    +'<td style="text-align:right">'+(st.genere?'<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+dc.k+'\')">Voir</button> ':'')
    +'<button class="btn btn-sm btn-pri" onclick="espDocGen(\''+d.id+'\',\''+dc.k+'\')">'+(st.genere?'Régénérer':'Générer')+'</button></td></tr>';
 }
@@ -2025,7 +2036,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=11;
+var LAST_VER=12;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
