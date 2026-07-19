@@ -1554,6 +1554,7 @@ function stLettres(n){n=Math.round(Number(n)||0);if(!n)return'zéro';var U=['','
   if(mille)parts.push(mille===1?'mille':c3(mille)+' mille');
   if(reste)parts.push(c3(reste));
   var t=parts.join(' ').trim();return t.charAt(0).toUpperCase()+t.slice(1);}
+function stAdrPerso(ex){ex=ex||{};var a=((ex.adresse||'')+'').trim();var cp=((ex.cpPerso||'')+'').trim();var v=((ex.villePerso||'')+'').trim().toUpperCase();var suf=(cp||v)?(', '+(cp?cp+' ':'')+v).replace(/\s+$/,''):'';return a?(a+suf):'';}
 function stCivil(a,ph){var nom=esc((a&&a.nom||'').trim())||'«nom prénom»';var civ=(a&&a.civilite)?esc(a.civilite):'M.';
   var naiss=(a&&a.naissance)?esc(a.naissance):'«…»';var lieu=(a&&a.lieuNaissance)?esc(a.lieuNaissance):'«lieu»';
   var pays=(a&&a.pays)?esc(a.pays):'«pays»';var nat=(a&&a.nationalite)?esc(a.nationalite):'«…»';
@@ -1576,7 +1577,7 @@ function stDossData(d){
   if(ex&&(ex.nom||ex.dateNaissance||ex.adresse)){assoc=assoc.map(function(a){
     if((''+(a.nom||'')).trim()!==presName0)return a;
     var nm=a.nom;if(ex.prenom||ex.nom)nm=((ex.prenom||'')+' '+(ex.nom||'')).trim()||a.nom;
-    return Object.assign({},a,{nom:nm,civilite:ex.civilite||a.civilite,naissance:ex.dateNaissance||a.naissance,lieuNaissance:ex.lieuNaissance||a.lieuNaissance,pays:ex.paysNaissance||a.pays,nationalite:ex.nationalite||a.nationalite,adresse:ex.adresse||a.adresse});
+    return Object.assign({},a,{nom:nm,civilite:ex.civilite||a.civilite,naissance:ex.dateNaissance||a.naissance,lieuNaissance:ex.lieuNaissance||a.lieuNaissance,pays:ex.paysNaissance||a.pays,nationalite:ex.nationalite||a.nationalite,adresse:stAdrPerso(ex)||a.adresse});
   });}
   var _M=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
   var _now=new Date();
@@ -1697,7 +1698,7 @@ function statutsSasHTML(d){
   var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
   if(!assoc.length)assoc=[{nom:''}];
   var _ex=(d.verif&&d.verif.extract)||{};var _pn=((c.president||(assoc[0]&&assoc[0].nom))||'').trim();
-  if(_ex&&(_ex.nom||_ex.dateNaissance||_ex.adresse)){assoc=assoc.map(function(a){if((''+(a.nom||'')).trim()!==_pn)return a;var nm=a.nom;if(_ex.prenom||_ex.nom)nm=((_ex.prenom||'')+' '+(_ex.nom||'')).trim()||a.nom;return Object.assign({},a,{nom:nm,civilite:_ex.civilite||a.civilite,naissance:_ex.dateNaissance||a.naissance,lieuNaissance:_ex.lieuNaissance||a.lieuNaissance,pays:_ex.paysNaissance||a.pays,nationalite:_ex.nationalite||a.nationalite,adresse:_ex.adresse||a.adresse});});}
+  if(_ex&&(_ex.nom||_ex.dateNaissance||_ex.adresse)){assoc=assoc.map(function(a){if((''+(a.nom||'')).trim()!==_pn)return a;var nm=a.nom;if(_ex.prenom||_ex.nom)nm=((_ex.prenom||'')+' '+(_ex.nom||'')).trim()||a.nom;return Object.assign({},a,{nom:nm,civilite:_ex.civilite||a.civilite,naissance:_ex.dateNaissance||a.naissance,lieuNaissance:_ex.lieuNaissance||a.lieuNaissance,pays:_ex.paysNaissance||a.pays,nationalite:_ex.nationalite||a.nationalite,adresse:stAdrPerso(_ex)||a.adresse});});}
   var _dv=(c.docVars||{});
   var totalParts=assoc.reduce(function(n,a){return n+(Number(a.parts)||0);},0);
   var nominal=(totalParts>0&&cap>0)?(cap/totalParts):100;
@@ -2061,7 +2062,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=29;
+var LAST_VER=30;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3529,7 +3530,7 @@ window.modalDemandeView=function(id){
     var lieu=ex.lieuNaissance||dcl.lieuNaissance||'';
     var pays=ex.paysNaissance||dcl.pays||'';
     var nat=ex.nationalite||dcl.nationalite||'';
-    var adrPerso=ex.adresse||dcl.adresse||c.adresse||'';
+    var adrPerso=stAdrPerso(ex)||dcl.adresse||c.adresse||'';
     var piece=((ex.typePiece||'')+(ex.numPiece?(' · n° '+ex.numPiece):'')).trim();
     var pere=(x.pere||((dcl.pereNom||c.pereNom||'')+'')).trim();var mere=(x.mere||((dcl.mereNom||c.mereNom||'')+'')).trim();
     var filiation=(pere||mere)?((pere||'—')+' et '+(mere||'—')):'';
@@ -3581,7 +3582,7 @@ window.modalDemandeView=function(id){
 
       +'<div class="ft-sec">Informations extraites des pièces</div>'
       +'<div class="ft-grid">'
-      +row('Adresse (justificatif de domicile)',V(ex.adresse))
+      +row('Adresse (justificatif de domicile)',V(stAdrPerso(ex)||ex.adresse))
       +row('Siège (contrat de domiciliation)',V(ex.siege))
       +row('Société de domiciliation',V(ex.domiciliataire))
       +row('Revenu fiscal de référence',V(ex.revenuFiscal))
@@ -3906,6 +3907,7 @@ window.modalDemandeView=function(id){
       +'<div class="de-row2"><div><label class="de-l">Date de naissance</label>'+edI(d.id,'ex','dateNaissance',ex.dateNaissance)+'</div><div><label class="de-l">Lieu de naissance</label>'+edI(d.id,'ex','lieuNaissance',ex.lieuNaissance)+'</div></div>'
       +'<div class="de-row2"><div><label class="de-l">Pays de naissance</label>'+edI(d.id,'ex','paysNaissance',ex.paysNaissance)+'</div><div><label class="de-l">Nationalité</label>'+edI(d.id,'ex','nationalite',ex.nationalite)+'</div></div>'
       +'<label class="de-l">Adresse personnelle</label>'+edI(d.id,'ex','adresse',ex.adresse)
+      +'<div class="de-row2"><div><label class="de-l">Code postal</label>'+edI(d.id,'ex','cpPerso',ex.cpPerso)+'</div><div><label class="de-l">Ville</label>'+edI(d.id,'ex','villePerso',ex.villePerso)+'</div></div>'
       +'<div class="de-row2"><div><label class="de-l">Type de pièce</label>'+edI(d.id,'ex','typePiece',ex.typePiece)+'</div><div><label class="de-l">N° de la pièce</label>'+edI(d.id,'ex','numPiece',ex.numPiece)+'</div></div>'
       +'<div class="de-row2"><div><label class="de-l">Nom du père</label>'+edD(d.id,'pereNom',(c.docVars||{}).pereNom)+'</div><div><label class="de-l">Nom de la mère</label>'+edD(d.id,'mereNom',(c.docVars||{}).mereNom)+'</div></div>'
       +'</div>';
