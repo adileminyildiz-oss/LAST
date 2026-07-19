@@ -1,4 +1,4 @@
-var CACHE='last-v42';
+var CACHE='last-v43';
 var ASSETS=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-512-maskable.png'];
 self.addEventListener('install',function(e){e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(ASSETS).catch(function(){});}).then(function(){return self.skipWaiting();}));});
 self.addEventListener('message',function(e){if(e.data==='skipWaiting'){self.skipWaiting();}});
