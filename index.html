@@ -668,7 +668,7 @@ function render(){
   document.getElementById('ptitle').firstChild.textContent=p.lbl;
   document.getElementById('psub').textContent=p.sub;
   const V=document.getElementById('view');
-  V.innerHTML=({demandes:pageDemandes,clients:pageClients,espace:pageEspace,
+  V.innerHTML=({demandes:pageDemandes,clients:pageClientsEspace,espace:pageEspace,
     services:pageServices,devis:pageSoon,facturation:pageFacturation,marge:pageMarge,params:pageParams}[state.page]||pageDemandes)();
   wireCards();
 }
@@ -949,6 +949,87 @@ function pageClients(){
   </tbody></table>`:`<div class="empty">Aucun client. Ajoute ta première fiche.</div>`}
   </div></div>`;
 }
+/* ===== Module Clients : barre latérale (comme Traitement) + onglets Dirigeant / Salarié / État ===== */
+function clNom(c){return (((c.prenom||'')+' '+(c.nom||'')).trim())||c.denomination||'Client';}
+function pageClientsEspace(){
+  var list=DB.clients.slice();
+  if(state.q)list=list.filter(function(c){return (clNom(c)+(c.email||'')+(c.denomination||'')+(c.activites||[]).join(' ')).toLowerCase().includes(state.q);});
+  var head='<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap"><span class="tag blue">'+DB.clients.length+' clients</span><button class="btn btn-sm btn-pri" onclick="modalClient(\'\')">+ Nouveau client</button></div>';
+  if(!list.length)return head+'<div class="card"><div class="card-b"><div class="empty">Aucun client. Les fiches sont créées automatiquement depuis les demandes, ou manuellement.</div></div></div>';
+  var id=state.clientSel;if(!list.find(function(c){return c.id===id;}))id=list[0].id;
+  var c=DB.clients.find(function(x){return x.id===id;});
+  return head+'<div class="esp-shell">'+clMiniList(list,id)+'<div class="esp-main">'+clDetail(c)+'</div></div>';
+}
+function clMiniList(list,id){
+  return '<aside class="esp-mini"><div class="esp-mini-h">Clients<span class="esp-mini-n">'+list.length+'</span></div><div class="esp-mini-list">'
+   +list.map(function(c){var nd=DB.dossiers.filter(function(d){return d.clientIds.includes(c.id);}).length;
+     return '<button class="esp-mini-item'+(c.id===id?' on':'')+'" onclick="clSelect(\''+c.id+'\')">'
+       +'<span class="esp-mini-av">'+initials(clNom(c))+'</span>'
+       +'<span class="esp-mini-txt"><b>'+esc(clNom(c))+'</b><span>'+esc(c.denomination||(nd+' dossier(s)'))+'</span></span>'
+       +'</button>';
+   }).join('')+'</div></aside>';
+}
+function clSelect(id){state.clientSel=id;render();}
+function clSetTab(t){state.clientTab=t;render();}
+function clDetail(c){
+  if(!c)return '<div class="card"><div class="card-b"><div class="empty">Sélectionnez un client.</div></div></div>';
+  var tab=state.clientTab||'dirigeant';
+  var tabs=[['dirigeant','Dirigeant'],['salarie','Salarié'],['etat','État']];
+  var bar='<div class="cl-tabs">'+tabs.map(function(t){return '<button class="cl-tab'+(t[0]===tab?' on':'')+'" onclick="clSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
+  var body=(tab==='salarie')?clTabSalarie(c):(tab==='etat')?clTabEtat(c):clTabDirigeant(c);
+  return '<div class="card"><div class="card-h"><h2>'+esc(clNom(c))+'</h2>'
+    +'<span class="sub" style="margin-left:auto">'+esc(c.denomination||c.forme||'')+'</span>'
+    +'<button class="btn btn-sm" style="margin-left:10px" onclick="modalClient(\''+c.id+'\')">Éditer la fiche</button></div>'
+    +'<div class="card-b">'+bar+'<div class="cl-tabbody">'+body+'</div></div></div>';
+}
+function clKV(l,v){return '<div class="cl-kv"><span class="cl-kv-l">'+esc(l)+'</span><span class="cl-kv-v">'+(v?esc(v):'—')+'</span></div>';}
+function clTabDirigeant(c){
+  var soc='<div class="cl-sec">Société</div><div class="cl-kv2">'
+    +clKV('Dénomination',c.denomination)+clKV('Forme',c.forme)+clKV('Capital',c.capital?eur(c.capital):'')+clKV('Nom commercial',c.nomCommercial)
+    +clKV('Siège',c.siege||c.adresse)+clKV('Ville',c.ville)+'</div>';
+  var dir='<div class="cl-sec">Dirigeant / Président</div><div class="cl-kv2">'
+    +clKV('Nom & prénom',(((c.prenom||'')+' '+(c.nom||'')).trim())||c.president)+clKV('E-mail',c.email)
+    +clKV('Téléphone',c.tel)+clKV('Adresse',c.adresse)+'</div>';
+  var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
+  var asg=assoc.length?('<div class="cl-sec">Associés & répartition</div><table class="cl-tbl"><thead><tr><th>Associé</th><th>Parts</th><th>Apport</th><th>Naissance</th><th>Nationalité</th></tr></thead><tbody>'
+    +assoc.map(function(a){return '<tr><td>'+esc(a.nom)+'</td><td>'+esc(a.parts||'—')+'</td><td>'+(a.apport?eur(a.apport):'—')+'</td><td>'+esc(a.naissance||'—')+'</td><td>'+esc(a.nationalite||'—')+'</td></tr>';}).join('')+'</tbody></table>')
+    :'<div class="cl-sec">Associés</div><div class="empty" style="padding:10px">Aucun associé renseigné.</div>';
+  return soc+dir+asg;
+}
+function clTabSalarie(c){
+  var sals=c.salaries||[];
+  var listHTML=sals.length?('<table class="cl-tbl"><thead><tr><th>Nom</th><th>Poste</th><th>Contrat</th><th>Entrée</th><th>Salaire brut</th><th></th></tr></thead><tbody>'
+    +sals.map(function(s,i){return '<tr><td>'+esc(s.nom||'—')+'</td><td>'+esc(s.poste||'—')+'</td><td>'+esc(s.contrat||'—')+'</td><td>'+esc(s.debut||'—')+'</td><td>'+(s.salaire?eur(s.salaire):'—')+'</td><td><button class="btn btn-sm btn-ghost" onclick="clSalDel(\''+c.id+'\','+i+')">Retirer</button></td></tr>';}).join('')+'</tbody></table>')
+    :'<div class="empty" style="padding:12px">Aucun salarié enregistré.</div>';
+  var form='<div class="cl-sec">Ajouter un salarié</div><div class="cl-salform">'
+    +'<input id="sal-nom" placeholder="Nom Prénom">'
+    +'<input id="sal-poste" placeholder="Poste">'
+    +'<select id="sal-contrat"><option>CDI</option><option>CDD</option><option>Alternance</option><option>Stage</option><option>Intérim</option></select>'
+    +'<input id="sal-debut" placeholder="Entrée (jj/mm/aaaa)">'
+    +'<input id="sal-salaire" type="number" placeholder="Salaire brut (€)">'
+    +'<button class="btn btn-sm btn-pri" onclick="clSalAdd(\''+c.id+'\')">Ajouter</button></div>';
+  return '<div class="cl-sec">Salariés ('+sals.length+')</div>'+listHTML+form;
+}
+function clSalAdd(id){var c=clientById(id);if(!c)return;var g=function(x){var e=document.getElementById(x);return e?(''+e.value).trim():'';};
+  var nom=g('sal-nom');if(!nom)return toast('Nom du salarié requis');
+  c.salaries=c.salaries||[];c.salaries.push({nom:nom,poste:g('sal-poste'),contrat:(document.getElementById('sal-contrat')||{}).value||'CDI',debut:g('sal-debut'),salaire:g('sal-salaire')});
+  save();render();toast('Salarié ajouté');}
+function clSalDel(id,i){var c=clientById(id);if(!c||!c.salaries)return;c.salaries.splice(i,1);save();render();}
+function clTabEtat(c){
+  var doss=DB.dossiers.filter(function(d){return d.clientIds.includes(c.id);});
+  if(!doss.length)return '<div class="empty" style="padding:12px">Aucun dossier ouvert pour ce client.</div>';
+  return '<div class="cl-sec">Dossiers & avancement</div>'+doss.map(function(d){
+    var req=(typeof espDocsRequis==='function')?espDocsRequis(d):[];var st=d.docState||{};
+    var prets=req.filter(function(dc){return st[dc.k]&&st[dc.k].ts;}).length;
+    var complets=req.filter(function(dc){return st[dc.k]&&st[dc.k].ts&&(typeof espDocComplet==='function'?espDocComplet(d,dc.k):true);}).length;
+    var tous=(typeof espTousPrets==='function')&&espTousPrets(d);
+    var lbl=tous?'Prêt à produire':(complets>0?'En cours':'À démarrer');var cls=tous?'ok':(complets>0?'blue':'warm');
+    return '<div class="cl-etat-row"><div class="cl-etat-top"><b>'+esc(d.ref)+'</b> <span class="tag '+cls+'">'+lbl+'</span> <span class="tag mut">'+esc(d.statut||'—')+'</span></div>'
+      +'<div class="cl-etat-meta">Documents : '+complets+'/'+(req.length||0)+' complets · '+prets+' préparé(s)</div>'
+      +'<button class="btn btn-sm" onclick="clOuvrirDossier(\''+d.id+'\')">Ouvrir le dossier</button></div>';
+  }).join('');
+}
+function clOuvrirDossier(id){state.page='espace';state.espaceDossier=id;render();}
 function modalClient(id){
   const c=id?DB.clients.find(x=>x.id===id):{prenom:'',nom:'',email:'',tel:'',adresse:'',parts:'',capital:'',activites:[],associes:[]};
   window._assoc=(c.associes||[]).map(a=>({...a}));if(!window._assoc.length)window._assoc=[{nom:'',parts:''}];
@@ -2166,7 +2247,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=41;
+var LAST_VER=42;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3943,6 +4024,28 @@ window.modalDemandeView=function(id){
 .esp-mini-txt b{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .esp-mini-txt span{font-size:9.5px;color:var(--ink-3,#9c9078);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .esp-main{min-width:0;padding-top:14px}
+/* Module Clients : avatar mini-liste + onglets Dirigeant/Salarié/État */
+.esp-mini-av{width:26px;height:26px;border-radius:7px;flex:none;display:grid;place-items:center;font-size:10px;font-weight:700;color:#f3ead6;background:linear-gradient(160deg,#4a4034,#2c271f)}
+.cl-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line-2,#e2d9c6);margin:-4px 0 14px}
+.cl-tab{background:none;border:0;border-bottom:2px solid transparent;padding:8px 14px;font:inherit;font-size:13px;font-weight:600;color:var(--ink-3,#9c9078);cursor:pointer;margin-bottom:-1px}
+.cl-tab:hover{color:var(--ink,#302c24)}
+.cl-tab.on{color:var(--ink,#302c24);border-bottom-color:#b99a52}
+.cl-sec{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-3,#9c9078);font-weight:700;margin:16px 0 8px}
+.cl-sec:first-child{margin-top:2px}
+.cl-kv2{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px}
+.cl-kv{display:flex;flex-direction:column;gap:2px;padding:8px 11px;background:var(--paper,#fffef9);border:1px solid var(--line-soft,#f0e9da);border-radius:8px}
+.cl-kv-l{font-size:10px;letter-spacing:.4px;text-transform:uppercase;color:var(--ink-3,#9c9078);font-weight:600}
+.cl-kv-v{font-size:13px;color:var(--ink,#302c24)}
+.cl-tbl{width:100%;border-collapse:collapse;margin-top:4px;font-size:12.5px}
+.cl-tbl th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3,#9c9078);padding:6px 9px;border-bottom:1px solid var(--line-2,#e2d9c6)}
+.cl-tbl td{padding:8px 9px;border-bottom:1px solid var(--line-soft,#f0e9da);color:var(--ink,#302c24)}
+.cl-salform{display:grid;grid-template-columns:1.4fr 1fr .9fr 1fr .9fr auto;gap:8px;align-items:center}
+.cl-salform input,.cl-salform select{padding:8px 9px;border:1px solid var(--line-2,#e2d9c6);border-radius:8px;background:var(--paper,#fffef9);color:var(--ink,#302c24);font:inherit;font-size:12.5px;min-width:0}
+.cl-etat-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:11px 13px;border:1px solid var(--line-soft,#f0e9da);border-radius:9px;background:var(--paper,#fffef9);margin-bottom:8px}
+.cl-etat-top{display:flex;align-items:center;gap:8px}
+.cl-etat-meta{font-size:11.5px;color:var(--ink-3,#9c9078)}
+.cl-etat-row .btn{margin-left:auto}
+@media(max-width:760px){.cl-kv2{grid-template-columns:1fr}.cl-salform{grid-template-columns:1fr 1fr}}
 /* Documents prêts (par dossier) */
 .dpret-list{display:flex;flex-direction:column;gap:7px}
 .dpret-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line-soft,#f0e9da);border-radius:9px;background:var(--paper,#fffef9)}
