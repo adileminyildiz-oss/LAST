@@ -1409,13 +1409,21 @@ function espDocsPretsCard(d){
     var s=st[k];var t=new Date(s.editTs||s.ts);
     var dt=p2(t.getDate())+'/'+p2(t.getMonth()+1)+'/'+t.getFullYear();
     var hh=p2(t.getHours())+':'+p2(t.getMinutes());
-    var done=!!s.done;
-    return '<div class="dpret-row'+(done?' done':'')+'">'
+    var manques=espDocManques(d,k);var complet=(manques.length===0);
+    var done=!!s.done&&complet;
+    var tag=done?'<span class="tag ok">Terminé</span>':(complet?'<span class="tag blue">valide</span>':'<span class="tag warm">À compléter</span>');
+    var btns='<button class="btn btn-sm" onclick="espEdOpen(\''+d.id+'\',\''+k+'\')">Modifier</button>';
+    if(done)btns+='<span class="dpret-done">Terminé ✓</span>';
+    else if(complet)btns+='<button class="btn btn-sm btn-pri" onclick="espDocTerminer(\''+d.id+'\',\''+k+'\')">Terminer</button>';
+    var visibles=manques.filter(function(m){return !/^[.…·\s]+$/.test(m);});
+    var missText=visibles.length?(esc(visibles.slice(0,8).join(', '))+(visibles.length>8?'…':'')):'des informations restent à compléter';
+    var miss=complet?'':('<div class="dpret-miss">Informations manquantes : '+missText+'</div>');
+    return '<div class="dpret-row'+(done?' done':'')+(complet?'':' incomplet')+'">'
       +'<span class="dpret-name">'+esc(espDocLabel(k))+'</span>'
-      +'<span class="tag '+(done?'ok':'blue')+'">'+(done?'Terminé':'valide')+'</span>'
+      +tag
       +'<span class="dpret-when">Édité le '+dt+' à '+hh+'</span>'
-      +(done?'<span class="dpret-done">Terminé ✓</span>':'<button class="btn btn-sm" onclick="espDocTerminer(\''+d.id+'\',\''+k+'\')">Terminer</button>')
-      +'</div>';
+      +'<span class="dpret-row-btns">'+btns+'</span>'
+      +'</div>'+miss;
   }).join('');
   var bar='';
   if(espTousPrets(d)){
@@ -1429,7 +1437,12 @@ function espDocsPretsCard(d){
   return '<div class="card"><div class="card-h"><h2>Documents prêts</h2><span class="sub" style="margin-left:auto">'+keys.length+'</span></div><div class="card-b dpret-list">'+rows+bar+'</div></div>';
 }
 function espDocsRequis(d){var L=(typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]);return L.filter(function(dc){return (typeof espDocReq==='function')?espDocReq(d,dc.k):true;});}
-function espTousPrets(d){var req=espDocsRequis(d);if(!req.length)return false;var st=d.docState||{};return req.every(function(dc){return st[dc.k]&&st[dc.k].ts;});}
+/* Informations manquantes d'un document = trous « … » restants dans le texte généré */
+function espDocManques(d,k){try{var body=(k==='fiche')?ficheTechniqueHTML(d):espDocHTML(d,{k:k,l:k});
+  var holes=(body.match(/«(?!\s)[^«»]{0,80}(?<!\s)»/g)||[]).map(function(s){return s.replace(/[«»]/g,'').replace(/\s+/g,' ').trim();}).filter(Boolean);
+  var seen={},out=[];holes.forEach(function(h){var n=h.toLowerCase();if(!seen[n]){seen[n]=1;out.push(h);}});return out;}catch(e){return [];}}
+function espDocComplet(d,k){return espDocManques(d,k).length===0;}
+function espTousPrets(d){var req=espDocsRequis(d);if(!req.length)return false;var st=d.docState||{};return req.every(function(dc){return st[dc.k]&&st[dc.k].ts&&espDocComplet(d,dc.k);});}
 function espDocBody(d,dc){return (dc.k==='fiche')?ficheTechniqueHTML(d):espDocHTML(d,dc);}
 function espDocFileBase(d){var c=clientById((d.clientIds||[])[0])||{};return ((c.denomination||dossierClients(d)||'dossier')+'').replace(/[^\wÀ-ÿ \-]/g,'').replace(/\s+/g,'-');}
 function espImprimerTout(id){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;var docs=espDocsRequis(d);if(!docs.length)return;
@@ -1633,7 +1646,8 @@ function stAdrPerso(ex){ex=ex||{};var a=((ex.adresse||'')+'').trim();var cp=((ex
 /* Date de l'acte au format jj/mm/aaaa (barres automatiques) */
 function stDateSlash(v){var MO=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];function p2(n){n=String(parseInt(n,10)||0);return n.length<2?('0'+n):n;}var s=((v==null?'':v)+'').trim();if(!s){var t=new Date();return p2(t.getDate())+'/'+p2(t.getMonth()+1)+'/'+t.getFullYear();}var low=s.toLowerCase(),moi=0;for(var i=0;i<12;i++){if(low.indexOf(MO[i])>=0){moi=i+1;break;}}var nums=(s.match(/\d+/g)||[]);if(moi){var jj=nums[0]||'',an=(nums[1]||'');if(an.length===2)an='20'+an;if(jj)return p2(jj)+'/'+p2(moi)+'/'+(an||(''+new Date().getFullYear()));return s;}if(nums.length>=3){var an3=nums[2];if(an3.length===2)an3='20'+an3;return p2(nums[0])+'/'+p2(nums[1])+'/'+an3;}var d=s.replace(/\D/g,'');if(d.length>=8)return d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4,8);if(d.length===6)return d.slice(0,2)+'/'+d.slice(2,4)+'/20'+d.slice(4,6);return s;}
 /* Remplace les « … » restants (trous non renseignés) par une ligne à compléter, sans les guillemets */
-function stCleanHoles(html){return (''+html).replace(/«[^«»]{0,80}»/g,function(){return '<span class="doc-fill"></span>';});}
+/* Placeholder = guillemets SERRÉS «X» (sans espace interne). Les vraies citations « X » (avec espaces) sont conservées. */
+function stCleanHoles(html){return (''+html).replace(/«(?!\s)[^«»]{0,80}(?<!\s)»|«»/g,function(){return '<span class="doc-fill"></span>';});}
 function stCivil(a,ph){var nom=esc((a&&a.nom||'').trim())||'«nom prénom»';var civ=(a&&a.civilite)?esc(a.civilite):'M.';
   var naiss=(a&&a.naissance)?esc(a.naissance):'«…»';var lieu=(a&&a.lieuNaissance)?esc(a.lieuNaissance):'«lieu»';
   var pays=(a&&a.pays)?esc(a.pays):'«pays»';var nat=(a&&a.nationalite)?esc(a.nationalite):'«…»';
@@ -1723,7 +1737,7 @@ function pouvoirHTML(d){
   var mandant=x.president;
   var adrMandant=((x.c.adresse||x.siege)+'').trim()||'«adresse»';
   var qualite=stQualite(x.forme);
-  var repFirm=((s.representant||s.dirigeant||'')+'').trim()||'«représentant»';
+  var repFirm=((s.representant||s.dirigeant||s.raison||'')+'').trim()||'«représentant»';
   var repTit=/^(M\.|Mme|M |Mr|Monsieur|Madame)/i.test(repFirm)?esc(repFirm):'M. '+esc(repFirm);
   var adrFirm=((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«adresse du mandataire»';
   var mandataire=repTit+' dirigeant de la société '+esc(s.raison||'AEM CONSEIL')+' situé au '+esc(adrFirm);
@@ -1814,7 +1828,7 @@ function statutsSasHTML(d){
      'Elle peut émettre toutes valeurs mobilières définies à l\'article L 211-2 du Code monétaire et financier, donnant accès au capital ou à l\'attribution de titres de créances, dans les conditions prévues par la loi et les présents statuts.']));
   A.push('<div class="st-art">ARTICLE 2 — Dénomination sociale</div><p>La dénomination sociale est :</p><p class="st-den">'+esc(denom)+'</p>'
     +(nomCom?('<p>Nom commercial : '+esc(nomCom)+'</p>'):'')
-    +'<p>Sur tous les actes et documents émanant de la Société, la dénomination sociale doit être précédée ou suivie immédiatement des mots «Société par actions simplifiée» ou des initiales «S.A.S.» et de l\'énonciation du capital social.</p>');
+    +'<p>Sur tous les actes et documents émanant de la Société, la dénomination sociale doit être précédée ou suivie immédiatement des mots « Société par actions simplifiée » ou des initiales « S.A.S. » et de l\'énonciation du capital social.</p>');
   A.push(art('ARTICLE 3 — Siège social',
     ['Le siège social est fixé à '+esc(siegeComplet)+'.',
      'Il ne peut être transféré que par décision collective des associés.']));
@@ -2152,7 +2166,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=40;
+var LAST_VER=41;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3936,7 +3950,11 @@ window.modalDemandeView=function(id){
 .dpret-name{font-weight:700;font-size:12.5px;color:var(--ink,#302c24)}
 .dpret-when{margin-left:auto;font-size:11px;color:var(--ink-3,#9c9078);white-space:nowrap}
 .dpret-done{font-size:11.5px;font-weight:700;color:#3f8f5b;white-space:nowrap}
-@media(max-width:640px){.dpret-row{flex-wrap:wrap}.dpret-when{margin-left:0;width:100%}}
+.dpret-row-btns{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.dpret-row.incomplet{border-color:#e6cfa0;background:#fdf7ea}
+.dpret-when{margin-left:auto}
+.dpret-miss{font-size:11px;color:#9a6a1e;background:#fbf1dc;border:1px solid #e6d5a8;border-radius:7px;padding:6px 10px;margin:-2px 0 2px}
+@media(max-width:640px){.dpret-row{flex-wrap:wrap}.dpret-when{margin-left:0;width:100%}.dpret-row-btns{width:100%}}
 .dpret-actions{margin-top:4px;padding-top:12px;border-top:1px dashed var(--line-2,#e2d9c6);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .dpret-ready{font-size:12px;color:#3f8f5b;font-weight:600}
 .dpret-btns{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
@@ -4124,7 +4142,9 @@ window.modalDemandeView=function(id){
     dg.style.width=(nat*s)+'px';dg.style.height=(doc.offsetHeight*s)+'px';dg.style.margin='0 auto';
   }
   window.espDocTouch=function(id,k){if(!k)return;var d=espDoss().find(function(x){return x.id===id;});if(!d)return;d.docState=d.docState||{};var s=d.docState[k]||{};if(!s.ts)s.ts=Date.now();s.editTs=Date.now();d.docState[k]=s;if(typeof save==='function')save();};
-  window.espDocTerminer=function(id,k){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;d.docState=d.docState||{};var s=d.docState[k]||{};if(!s.ts)s.ts=Date.now();s.done=true;s.doneTs=Date.now();d.docState[k]=s;if(typeof save==='function')save();if(typeof render==='function')render();};
+  window.espDocTerminer=function(id,k){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;
+    if(typeof espDocManques==='function'){var mq=espDocManques(d,k);if(mq.length){if(typeof toast==='function')toast('Document incomplet — il manque : '+mq.slice(0,4).join(', '));return;}}
+    d.docState=d.docState||{};var s=d.docState[k]||{};if(!s.ts)s.ts=Date.now();s.done=true;s.doneTs=Date.now();d.docState[k]=s;if(typeof save==='function')save();if(typeof render==='function')render();};
   window.espEdOpen=function(id,k){window.__edDoc=k||window.__edDoc||'statuts';espDocTouch(id,window.__edDoc);espEdRender(id);};
   window.espEdClose=function(){var o=document.getElementById('doc-editor');if(o)o.classList.remove('show');};
   window.espEdDoc=function(id,k){window.__edDoc=k;espDocTouch(id,k);espEdRender(id);};
