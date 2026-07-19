@@ -1562,13 +1562,15 @@ function stCivil(a,ph){var nom=esc((a&&a.nom||'').trim())||'«nom prénom»';var
 function stFormeLabel(f){return {SAS:'Société par actions simplifiée',SASU:'Société par actions simplifiée Unipersonnelle',SARL:'Société à responsabilité limitée',EURL:'Entreprise unipersonnelle à responsabilité limitée',SCI:'Société civile immobilière',SA:'Société anonyme'}[f]||'Société par actions simplifiée';}
 function stQualite(f){return (f==='SARL'||f==='EURL'||f==='SCI')?'gérant':'Président';}
 function stDossData(d){
-  var s=DB.societe||{};var c=clientById((d.clientIds||[])[0])||{};
+  var s=DB.societe||{};var c=clientById((d.clientIds||[])[0])||{};var dv=c.docVars||{};
   var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
   if(!assoc.length)assoc=[{nom:''}];
   var totalParts=assoc.reduce(function(n,a){return n+(Number(a.parts)||0);},0);
   var cap=Number(c.capital)||0;
   var nominal=(totalParts>0&&cap>0)?(cap/totalParts):100;
+  if(dv.nominal!=null&&(''+dv.nominal).trim()!=='')nominal=Number((''+dv.nominal).replace(/[^0-9.]/g,''))||nominal;
   var nbActions=totalParts>0?totalParts:(nominal>0?Math.round(cap/nominal):0);
+  if(dv.nbTitres!=null&&(''+dv.nbTitres).trim()!=='')nbActions=parseInt((''+dv.nbTitres).replace(/[^0-9]/g,''),10)||nbActions;
   var ex=(d.verif&&d.verif.extract)||{};
   var presName0=((c.president||(assoc[0]&&assoc[0].nom))||'').trim();
   if(ex&&(ex.nom||ex.dateNaissance||ex.adresse)){assoc=assoc.map(function(a){
@@ -1576,11 +1578,20 @@ function stDossData(d){
     var nm=a.nom;if(ex.prenom||ex.nom)nm=((ex.prenom||'')+' '+(ex.nom||'')).trim()||a.nom;
     return Object.assign({},a,{nom:nm,civilite:ex.civilite||a.civilite,naissance:ex.dateNaissance||a.naissance,lieuNaissance:ex.lieuNaissance||a.lieuNaissance,pays:ex.paysNaissance||a.pays,nationalite:ex.nationalite||a.nationalite,adresse:ex.adresse||a.adresse});
   });}
+  var _M=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  var _now=new Date();
+  var dateActe=((dv.dateActe||'')+'').trim()||(_now.getDate()+' '+_M[_now.getMonth()]+' '+_now.getFullYear());
+  var annee=((dv.anneeExo||'')+'').trim()||(''+_now.getFullYear());
+  var villeB=((c.ville||s.ville||'')+'').trim();
+  var villeSignature=((dv.villeSignature||'')+'').trim()||villeB||'«ville»';
+  var rcsVille=((dv.rcsVille||'')+'').trim()||villeB||((s.ville||'')+'').trim()||'«ville RCS»';
   return {s:s,c:c,assoc:assoc,totalParts:totalParts,cap:cap,nominal:nominal,nbActions:nbActions,
     denom:((c.denomination||d.denomination||'')+'').trim().toUpperCase()||'«DÉNOMINATION SOCIALE»',
     forme:(c.forme||d.forme||'SAS'),
     siege:((ex.siege||c.siege||c.adresse||'')+'').trim()||'«adresse du siège»',
     ville:((c.ville||s.ville||'')+'').trim()||'«ville»',
+    dateActe:dateActe,annee:annee,villeSignature:villeSignature,rcsVille:rcsVille,
+    pere:((dv.pereNom||'')+'').trim(),mere:((dv.mereNom||'')+'').trim(),
     president:((c.president||(assoc[0]&&assoc[0].nom)||'')+'').trim()||'«Président»'};
 }
 function souscripteursHTML(d){
@@ -1588,7 +1599,7 @@ function souscripteursHTML(d){
   var uni=(x.assoc.length<=1);
   var formeTxt=stFormeLabel(uni&&x.forme==='SAS'?'SASU':x.forme);
   var capN=x.cap?stNum(x.cap):'«…»';
-  var rcsVille=((x.ville!=='«ville»'?x.ville:'')||x.s.ville||'').trim()||'«ville RCS»';
+  var rcsVille=x.rcsVille;
   var rows=x.assoc.map(function(a,i){
     var p=Number(a.parts)||0;var m=(x.nominal&&p)?Math.round(x.nominal*p):0;
     var mTxt=m?(stNum(m)+' € ('+stLettres(m)+' euros)'):'«…»';
@@ -1598,7 +1609,7 @@ function souscripteursHTML(d){
   var totTxt=x.cap?(stNum(x.cap)+' € ('+stLettres(x.cap)+' euros)'):'«…»';
   var totAct=x.nbActions?(x.nbActions+' ('+stLettres(x.nbActions).toLowerCase()+' actions)'):'«…»';
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
-  var dateTxt=new Date().getDate()+' '+moisNom+' '+new Date().getFullYear();
+  var dateTxt=x.dateActe;
   return '<div class="st-doc"><div class="st-page">'
     +'<div class="st-hdr"><b>'+esc(x.denom)+'</b>'
     +'<div class="sub">'+esc(formeTxt)+' au capital de '+capN+' euros — RCS de '+esc(rcsVille)+'</div>'
@@ -1613,7 +1624,7 @@ function souscripteursHTML(d){
     +'<tr class="tot"><td></td><td class="al">TOTAL</td><td>'+totTxt+'</td><td>'+totTxt+'</td><td>'+totAct+'</td></tr>'
     +'</tbody></table>'
     +'<p style="margin-top:12px">Le présent état, qui constate la souscription de '+(x.nbActions||'«…»')+' ('+(x.nbActions?stLettres(x.nbActions):'«…»')+') actions de la société '+esc(x.denom)+', ainsi que le versement de la somme de '+totTxt+' correspondant au moins à la moitié du nominal desdites actions, est certifié exact, sincère et véritable par '+esc(x.president)+', associé fondateur et '+stQualite(x.forme)+'.</p>'
-    +'<div class="st-fin"><p>Fait à '+esc(x.ville)+', le '+dateTxt+'</p>'
+    +'<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+', le '+dateTxt+'</p>'
     +'<div class="st-sign"><div class="sg"><b>Le '+stQualite(x.forme)+'</b>Signature</div></div></div>'
     +'</div></div>';
 }
@@ -1626,9 +1637,9 @@ function pouvoirHTML(d){
   var repTit=/^(M\.|Mme|M |Mr|Monsieur|Madame)/i.test(repFirm)?esc(repFirm):'M. '+esc(repFirm);
   var adrFirm=((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«adresse du mandataire»';
   var mandataire=repTit+' dirigeant de la société '+esc(s.raison||'AEM CONSEIL')+' situé au '+esc(adrFirm);
-  var villeFait=((s.ville||x.ville)+'').trim()||'«ville»';
+  var villeFait=x.villeSignature;
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
-  var dateTxt=new Date().getDate()+' '+moisNom+' '+new Date().getFullYear();
+  var dateTxt=x.dateActe;
   return '<div class="st-doc"><div class="st-page">'
     +'<div class="st-titre" style="font-size:15px;margin-top:8px">POUVOIR</div>'
     +'<p style="margin-top:18px">Je soussigné '+esc(mandant)+' demeurant à '+esc(adrMandant)+', agissant en qualité de '+qualite+' de la Société '+esc(x.denom)+' en cours de constitution donne par les présentes pouvoirs à '+mandataire+' aux fins d\'effectuer toutes démarches relatives aux formalités d\'inscription au Registre du commerce et des sociétés, de signer tous documents à cet effet, et d\'une façon générale, de faire tout ce qui sera nécessaire pour l\'exécution des présentes.</p>'
@@ -1645,13 +1656,13 @@ function dncHTML(d){
   var pays=dcl.pays?(' en '+esc(dcl.pays)):'';
   var nat=dcl.nationalite?esc(dcl.nationalite):'«…»';
   var adr=dcl.adresse?esc(dcl.adresse):(esc(c.adresse||'')||'«adresse»');
-  var pere=((dcl.pereNom||c.pereNom||'')+'').trim();
-  var mere=((dcl.mereNom||c.mereNom||'')+'').trim();
+  var pere=(x.pere||((dcl.pereNom||c.pereNom||'')+'')).trim();
+  var mere=(x.mere||((dcl.mereNom||c.mereNom||'')+'')).trim();
   var filiation=(pere||mere)?('Déclare être le fils ou la fille de '+esc(pere||'«père»')+' et de '+esc(mere||'«mère»')):'Déclare être le fils ou la fille de «père» et de «mère»';
   var qualite=stQualite(x.forme);
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
-  var dateTxt=new Date().getDate()+' '+moisNom+' '+new Date().getFullYear();
-  var villeFait=((x.ville!=='«ville»'?x.ville:'')||x.s.ville||'').trim()||'«ville»';
+  var dateTxt=x.dateActe;
+  var villeFait=x.villeSignature;
   return '<div class="st-doc"><div class="st-page">'
     +'<div class="st-titre" style="font-size:14px">DÉCLARATION DE NON-CONDAMNATION</div>'
     +'<p style="text-align:center;font-size:10px;margin-top:-4px">(Arrêté et Instructions du 9 février 1988 relatif au Registre du commerce et des sociétés)</p>'
@@ -1680,11 +1691,14 @@ function statutsSasHTML(d){
   if(!assoc.length)assoc=[{nom:''}];
   var _ex=(d.verif&&d.verif.extract)||{};var _pn=((c.president||(assoc[0]&&assoc[0].nom))||'').trim();
   if(_ex&&(_ex.nom||_ex.dateNaissance||_ex.adresse)){assoc=assoc.map(function(a){if((''+(a.nom||'')).trim()!==_pn)return a;var nm=a.nom;if(_ex.prenom||_ex.nom)nm=((_ex.prenom||'')+' '+(_ex.nom||'')).trim()||a.nom;return Object.assign({},a,{nom:nm,civilite:_ex.civilite||a.civilite,naissance:_ex.dateNaissance||a.naissance,lieuNaissance:_ex.lieuNaissance||a.lieuNaissance,pays:_ex.paysNaissance||a.pays,nationalite:_ex.nationalite||a.nationalite,adresse:_ex.adresse||a.adresse});});}
+  var _dv=(c.docVars||{});
   var totalParts=assoc.reduce(function(n,a){return n+(Number(a.parts)||0);},0);
   var nominal=(totalParts>0&&cap>0)?(cap/totalParts):100;
+  if(_dv.nominal!=null&&(''+_dv.nominal).trim()!=='')nominal=Number((''+_dv.nominal).replace(/[^0-9.]/g,''))||nominal;
   var nbActions=totalParts>0?totalParts:(nominal>0?Math.round(cap/nominal):0);
+  if(_dv.nbTitres!=null&&(''+_dv.nbTitres).trim()!=='')nbActions=parseInt((''+_dv.nbTitres).replace(/[^0-9]/g,''),10)||nbActions;
   var president=((c.president||(assoc[0]&&assoc[0].nom)||'')+'').trim()||'«Président»';
-  var annee=new Date().getFullYear();
+  var annee=((_dv.anneeExo||'')+'').trim()||(''+new Date().getFullYear());
   var A=[];
   // Page de couverture
   var cover='<div class="st-cover">'
@@ -1826,7 +1840,9 @@ function statutsSasHTML(d){
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
   var jour=new Date().getDate();
   var signs=assoc.map(function(a){return '<div class="sg"><b>'+(esc((a.nom||'').trim())||'«associé»')+'</b>Signature</div>';}).join('');
-  var fin='<div class="st-fin"><p>Fait à '+esc(ville)+',</p><p>Le '+jour+' '+moisNom+' '+annee+',</p>'
+  var _villeSig=((_dv.villeSignature||'')+'').trim()||ville;
+  var _dateActe=((_dv.dateActe||'')+'').trim()||(jour+' '+moisNom+' '+annee);
+  var fin='<div class="st-fin"><p>Fait à '+esc(_villeSig)+',</p><p>Le '+_dateActe+',</p>'
     +'<p>en autant d\'originaux que nécessaire, dont un exemplaire pour l\'enregistrement et deux exemplaires pour le dépôt au greffe du tribunal de commerce.</p>'
     +'<div class="st-sign">'+signs+'</div></div>';
   return '<div class="st-doc">'+cover+'<div class="st-page">'+preambule+A.join('')+fin+'</div></div>';
@@ -2038,7 +2054,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=27;
+var LAST_VER=28;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2955,7 +2971,7 @@ window.modalDemandeView=function(id){
     var uni=x.assoc[0]||{nom:''};
     var nominal=Math.round(x.nominal)||10;
     var nbActions=x.nbActions||(cap&&nominal?Math.round(cap/nominal):100);
-    var annee=new Date().getFullYear();var jour=new Date().getDate();
+    var annee=x.annee;var jour=new Date().getDate();
     var cover='<div class="st-cover"><div class="st-c1">STATUTS</div>'
       +'<div class="st-c2">SOCIÉTÉ PAR ACTIONS SIMPLIFIÉE UNIPERSONNELLE</div>'
       +'<div class="st-c3">'+esc(denom)+'</div>'
@@ -3032,7 +3048,7 @@ window.modalDemandeView=function(id){
        'La signature des présents statuts emportera reprise de ces engagements par la Société, lorsque celle-ci aura été immatriculée au Registre du commerce et des sociétés.']));
     A.push(art('ARTICLE 24 — FORMALITÉS DE PUBLICITÉ · POUVOIRS · FRAIS',
       ['Tous pouvoirs sont donnés au porteur d\'un original ou d\'une copie certifiée conforme des présentes pour effectuer l\'ensemble des formalités légales relatives à la constitution de la société.']));
-    var fin='<div class="st-fin"><p>Fait à '+esc(ville||'«ville»')+',</p><p>Le '+jour+' '+moisFr()+' '+annee+'</p>'
+    var fin='<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+',</p><p>Le '+x.dateActe+'</p>'
       +'<div class="st-sign"><div class="sg"><b>'+esc(x.president)+'</b>Le Président — Signature</div></div></div>';
     return '<div class="st-doc">'+cover+'<div class="st-page">'+preambule+A.join('')+fin+'</div></div>';
   };
@@ -3047,7 +3063,7 @@ window.modalDemandeView=function(id){
     var totalParts=x.totalParts||0;var nbParts=totalParts>0?totalParts:100;
     var nominal=Math.round(x.nominal)||10;
     var gerant=x.president;
-    var annee=new Date().getFullYear();var jour=new Date().getDate();
+    var annee=x.annee;var jour=new Date().getDate();
     var cover='<div class="st-cover"><div class="st-c1">'+esc(denom)+'</div>'
       +'<div class="st-c2">Société Civile Immobilière</div>'
       +'<div class="st-c4">au capital de '+capN+' euros</div>'
@@ -3135,7 +3151,7 @@ window.modalDemandeView=function(id){
       ['Toutes les contestations qui pourraient s\'élever pendant la durée de la Société ou lors de sa liquidation, soit entre associés, soit entre le ou les gérants et la société, seront soumises à la juridiction des tribunaux compétents du lieu du siège social.']));
     A.push('<div class="st-art">ARTICLE 29 — Engagements contractés au nom de la Société avant son immatriculation</div><p>Néant.</p>');
     var signs=assoc.map(function(a){return '<div class="sg"><b>'+(esc((a.nom||'').trim())||'«associé»')+'</b>Associé — Signature</div>';}).join('');
-    var fin='<div class="st-fin"><p>Fait à '+esc(ville||'«ville»')+',</p><p>Le '+jour+' '+moisFr()+' '+annee+',</p><p>en autant d\'exemplaires que nécessaire.</p>'
+    var fin='<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+',</p><p>Le '+x.dateActe+',</p><p>en autant d\'exemplaires que nécessaire.</p>'
       +'<div class="st-sign"><div class="sg"><b>'+esc(gerant)+'</b>Le Gérant — Signature</div>'+signs+'</div></div>';
     return '<div class="st-doc">'+cover+'<div class="st-page">'+preambule+A.join('')+fin+'</div></div>';
   };
@@ -3171,7 +3187,7 @@ window.modalDemandeView=function(id){
   /* ---------- CESSION D'ACTIONS / DE PARTS (d'après modèle fourni) ---------- */
   window.cessionActionsHTML=function(d){
     var x=stDossData(d);var forme=x.forme;var des=motDes(forme);
-    var rcsVille=(x.ville&&x.ville!=='«ville»')?x.ville:(x.s.ville||'«ville RCS»');
+    var rcsVille=x.rcsVille;
     var siren=((x.c.siren||x.s.siren||'')+'').trim()||'«SIREN»';
     var repr=x.president||'«représentant légal»';
     return '<div class="st-doc"><div class="st-page">'
@@ -3187,7 +3203,7 @@ window.modalDemandeView=function(id){
       +'<p><b>Article 3 — Prix.</b> La présente cession est consentie et acceptée moyennant le prix de «montant en lettres» euros (« montant » €), que le cédant reconnaît avoir reçu du cessionnaire, dont quittance.</p>'
       +'<p><b>Article 4 — Agrément.</b> La présente cession a été autorisée par décision '+((forme==='SARL'||forme==='EURL'||forme==='SCI')?'collective des associés':'de la collectivité des associés')+' en date du «date», conformément aux statuts de la société.</p>'
       +'<p><b>Article 5 — Frais.</b> Les frais, droits et honoraires des présentes et tous ceux qui en seront la conséquence seront supportés par «le cessionnaire / la société».</p>'
-      +'<div class="st-fin"><p>Fait à '+esc((x.ville&&x.ville!=='«ville»')?x.ville:'«ville»')+', le '+dateJour()+',</p><p>en autant d\'originaux que de parties, plus un pour l\'enregistrement.</p>'
+      +'<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+',</p><p>en autant d\'originaux que de parties, plus un pour l\'enregistrement.</p>'
       +'<div class="st-sign"><div class="sg"><b>Le Cédant</b>Signature (précédée de « Bon pour cession »)</div><div class="sg"><b>Le Cessionnaire</b>Signature (précédée de « Bon pour acquisition »)</div></div></div>'
       +'</div></div>';
   };
@@ -3211,7 +3227,7 @@ window.modalDemandeView=function(id){
       +'<tr class="tot"><td class="al">TOTAL</td><td>'+(total||'«…»')+'</td><td></td><td></td></tr>'
       +'</tbody></table>'
       +'<p style="margin-top:14px">La présente feuille de présence, certifiée exacte et sincère, a été arrêtée à la somme de '+(total||'«…»')+' '+des+' représentées, sur un total de '+(total||'«…»')+' '+des+' composant le capital social.</p>'
-      +'<div class="st-fin"><p>Fait à '+esc((x.ville&&x.ville!=='«ville»')?x.ville:'«ville»')+', le «date»</p>'
+      +'<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+', le «date»</p>'
       +'<div class="st-sign"><div class="sg"><b>'+esc(x.president)+'</b>'+((forme==='SARL'||forme==='EURL'||forme==='SCI')?'Le Gérant':'Le Président')+' de séance — Signature</div><div class="sg"><b>Le Secrétaire</b>Signature</div></div></div>'
       +'</div></div>';
   };
@@ -3289,7 +3305,7 @@ window.modalDemandeView=function(id){
     var objet=((c.activites||[]).join(', ')||'').trim()||'«objet social — activités de la société»';
     var assoc=x.assoc.length?x.assoc:[{nom:''}];
     var totalParts=x.totalParts||0;var nbParts=totalParts>0?totalParts:100;
-    var nominal=Math.round(x.nominal)||10;var gerant=x.president;var annee=new Date().getFullYear();var jour=new Date().getDate();
+    var nominal=Math.round(x.nominal)||10;var gerant=x.president;var annee=x.annee;var jour=new Date().getDate();
     var cover='<div class="st-cover"><div class="st-c1">STATUTS</div>'
       +'<div class="st-c2">SOCIÉTÉ À RESPONSABILITÉ LIMITÉE</div>'
       +'<div class="st-c3">'+esc(denom)+'</div><div class="st-c4">au capital de '+capN+' euros</div>'
@@ -3336,7 +3352,7 @@ window.modalDemandeView=function(id){
     A.push(art('ARTICLE 24 — Reprise des engagements',['Les présents statuts emportent reprise par la société, dès son immatriculation, des engagements souscrits pour son compte pendant la période de formation.']));
     A.push(art('ARTICLE 25 — Formalités · Pouvoirs',['Tous pouvoirs sont donnés au porteur d\'un original ou d\'une copie des présentes pour effectuer les formalités de publicité, de dépôt et d\'immatriculation.']));
     var signs=assoc.map(function(a){return '<div class="sg"><b>'+(esc((a.nom||'').trim())||'«associé»')+'</b>Associé — Signature</div>';}).join('');
-    var fin='<div class="st-fin"><p>Fait à '+esc(ville||'«ville»')+',</p><p>Le '+jour+' '+moisFr()+' '+annee+',</p><p>en autant d\'originaux que nécessaire.</p>'
+    var fin='<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+',</p><p>Le '+x.dateActe+',</p><p>en autant d\'originaux que nécessaire.</p>'
       +'<div class="st-sign"><div class="sg"><b>'+esc(gerant)+'</b>Le Gérant — Signature</div>'+signs+'</div></div>';
     return '<div class="st-doc">'+cover+'<div class="st-page">'+preambule+A.join('')+fin+'</div></div>';
   };
@@ -3348,7 +3364,7 @@ window.modalDemandeView=function(id){
     var siege=x.siege, ville=(x.ville&&x.ville!=='«ville»')?x.ville:'';
     var objet=((c.activites||[]).join(', ')||'').trim()||'«objet social — activités de la société»';
     var uni=x.assoc[0]||{nom:''};var nbParts=x.totalParts>0?x.totalParts:100;var nominal=Math.round(x.nominal)||10;
-    var gerant=x.president;var annee=new Date().getFullYear();var jour=new Date().getDate();
+    var gerant=x.president;var annee=x.annee;var jour=new Date().getDate();
     var cover='<div class="st-cover"><div class="st-c1">STATUTS</div>'
       +'<div class="st-c2">ENTREPRISE UNIPERSONNELLE À RESPONSABILITÉ LIMITÉE</div>'
       +'<div class="st-c3">'+esc(denom)+'</div><div class="st-c4">au capital de '+capN+' euros</div>'
@@ -3380,7 +3396,7 @@ window.modalDemandeView=function(id){
     A.push(art('ARTICLE 15 — Contestations',['Toutes contestations relatives aux affaires sociales seront soumises aux tribunaux compétents du lieu du siège social.']));
     A.push('<div class="st-titre">TITRE VII — CONSTITUTION</div>');
     A.push(art('ARTICLE 16 — Reprise des engagements · Formalités',['Les présents statuts emportent reprise par la société des engagements accomplis pour son compte avant l\'immatriculation. Tous pouvoirs sont donnés au porteur d\'un original des présentes pour effectuer les formalités de publicité et d\'immatriculation.']));
-    var fin='<div class="st-fin"><p>Fait à '+esc(ville||'«ville»')+',</p><p>Le '+jour+' '+moisFr()+' '+annee+'</p>'
+    var fin='<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+',</p><p>Le '+x.dateActe+'</p>'
       +'<div class="st-sign"><div class="sg"><b>'+esc(x.president)+'</b>L\'associé unique et Gérant — Signature</div></div></div>';
     return '<div class="st-doc">'+cover+'<div class="st-page">'+preambule+A.join('')+fin+'</div></div>';
   };
@@ -3391,7 +3407,7 @@ window.modalDemandeView=function(id){
     var qualite=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'la Gérance':'la Présidence';
     var qualiteSig=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'LA GÉRANCE':'LA PRÉSIDENCE';
     var objet=((x.c.activites||[]).join(', ')||'').trim()||'«activité de la société»';
-    var rcsVille=(x.ville&&x.ville!=='«ville»')?x.ville:(x.s.ville||'«ville»');
+    var rcsVille=x.rcsVille;
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-hdr"><b>'+esc(x.denom)+'</b>'
       +'<div class="sub">'+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
@@ -3416,7 +3432,7 @@ window.modalDemandeView=function(id){
     var qualite=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'Gérant':'Président';
     var conv=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'la Gérance':'la Présidence';
     var motAssoc=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'associés':'actionnaires';
-    var rcsVille=(x.ville&&x.ville!=='«ville»')?x.ville:(x.s.ville||'«ville»');
+    var rcsVille=x.rcsVille;
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-hdr"><b>'+esc(x.denom)+'</b>'
       +'<div class="sub">'+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
@@ -3433,7 +3449,7 @@ window.modalDemandeView=function(id){
       +'<p><b>TROISIÈME RÉSOLUTION :</b> «objet de la résolution». Cette résolution est adoptée à l\'unanimité.</p>'
       +'<p>L\'ordre du jour étant épuisé et personne ne demandant plus la parole, la séance est levée.</p>'
       +'<p>De tout ce que dessus, il a été dressé le présent procès-verbal, signé par le Président de séance.</p>'
-      +'<div class="st-fin" style="margin-top:22px"><p>Fait à '+esc((x.ville&&x.ville!=='«ville»')?x.ville:'«ville»')+', le '+dateJour()+'</p>'
+      +'<div class="st-fin" style="margin-top:22px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
       +'<div class="st-sign"><div class="sg"><b>'+esc(x.president)+'</b>Le '+qualite+' — Signature</div></div></div>'
       +'</div></div>';
   };
@@ -3476,7 +3492,7 @@ window.modalDemandeView=function(id){
       +'<p style="margin-top:12px"><b>Déclare :</b></p>'
       +'<p>fixer le siège social de la société susvisée à mon domicile personnel situé au '+esc(domicile)+', et y exercer une activité, aucune disposition législative ou stipulation contraire ne s\'y opposant, conformément à l\'article L.123-11-1 du Code de commerce.</p>'
       +'<p style="margin-top:10px">La présente déclaration est établie et produite en vue de l\'immatriculation ou de l\'inscription modificative de la société susvisée au Registre du Commerce et des Sociétés de '+esc(greffe)+'.</p>'
-      +'<div class="st-fin" style="margin-top:30px"><p>Fait à '+esc(ville||'«ville»')+', le '+dateJour()+'</p>'
+      +'<div class="st-fin" style="margin-top:30px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
       +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+esc(x.president)+'</b>Le '+qualite+' — Signature</div></div></div>'
       +'</div></div>';
   };
@@ -3508,7 +3524,7 @@ window.modalDemandeView=function(id){
     var nat=ex.nationalite||dcl.nationalite||'';
     var adrPerso=ex.adresse||dcl.adresse||c.adresse||'';
     var piece=((ex.typePiece||'')+(ex.numPiece?(' · n° '+ex.numPiece):'')).trim();
-    var pere=((dcl.pereNom||c.pereNom||'')+'').trim();var mere=((dcl.mereNom||c.mereNom||'')+'').trim();
+    var pere=(x.pere||((dcl.pereNom||c.pereNom||'')+'')).trim();var mere=(x.mere||((dcl.mereNom||c.mereNom||'')+'')).trim();
     var filiation=(pere||mere)?((pere||'—')+' et '+(mere||'—')):'';
     /* associés */
     var assoc=(x.assoc||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
@@ -3863,6 +3879,7 @@ window.modalDemandeView=function(id){
   function cli(d){return clientById((d.clientIds||[])[0])||{};}
   function edI(id,grp,key,val){return '<input class="de-i" value="'+esc(val==null?'':val)+'" oninput="espEdSet(\''+id+'\',\''+grp+'\',\''+key+'\',this.value)">';}
   function edA(id,i,key,val){return '<input class="de-i" value="'+esc(val==null?'':val)+'" oninput="espEdAssoc(\''+id+'\','+i+',\''+key+'\',this.value)">';}
+  function edD(id,key,val){return '<input class="de-i" value="'+esc(val==null?'':val)+'" placeholder="auto" oninput="espEdSet(\''+id+'\',\'dv\',\''+key+'\',this.value)">';}
 
   function espEdSideHTML(d){
     var c=cli(d);var ex=(d.verif&&d.verif.extract)||{};
@@ -3883,12 +3900,22 @@ window.modalDemandeView=function(id){
       +'<div class="de-row2"><div><label class="de-l">Pays de naissance</label>'+edI(d.id,'ex','paysNaissance',ex.paysNaissance)+'</div><div><label class="de-l">Nationalité</label>'+edI(d.id,'ex','nationalite',ex.nationalite)+'</div></div>'
       +'<label class="de-l">Adresse personnelle</label>'+edI(d.id,'ex','adresse',ex.adresse)
       +'<div class="de-row2"><div><label class="de-l">Type de pièce</label>'+edI(d.id,'ex','typePiece',ex.typePiece)+'</div><div><label class="de-l">N° de la pièce</label>'+edI(d.id,'ex','numPiece',ex.numPiece)+'</div></div>'
+      +'<div class="de-row2"><div><label class="de-l">Nom du père</label>'+edD(d.id,'pereNom',(c.docVars||{}).pereNom)+'</div><div><label class="de-l">Nom de la mère</label>'+edD(d.id,'mereNom',(c.docVars||{}).mereNom)+'</div></div>'
+      +'</div>';
+    var dv=c.docVars||{};
+    var men='<div class="de-grp"><div class="de-grp-h">Titres &amp; montants</div>'
+      +'<div class="de-row2"><div><label class="de-l">Valeur nominale (€)</label>'+edD(d.id,'nominal',dv.nominal)+'</div><div><label class="de-l">Nombre de parts / actions</label>'+edD(d.id,'nbTitres',dv.nbTitres)+'</div></div>'
+      +'<div class="de-note2">Vide = calculé (capital ÷ total des parts).</div></div>'
+      +'<div class="de-grp"><div class="de-grp-h">Dates &amp; mentions légales</div>'
+      +'<label class="de-l">Date de l\'acte (« Fait à … le »)</label>'+edD(d.id,'dateActe',dv.dateActe)
+      +'<div class="de-row2"><div><label class="de-l">Ville de signature</label>'+edD(d.id,'villeSignature',dv.villeSignature)+'</div><div><label class="de-l">Année du 1er exercice</label>'+edD(d.id,'anneeExo',dv.anneeExo)+'</div></div>'
+      +'<label class="de-l">RCS / Greffe (ville)</label>'+edD(d.id,'rcsVille',dv.rcsVille)
       +'</div>';
     var assoc=(c.associes||[]).map(function(a,i){return '<div class="de-assoc"><button class="de-ax" title="Retirer" onclick="espEdAssocDel(\''+d.id+'\','+i+')">✕</button>'
       +'<label class="de-l">Associé '+(i+1)+' — Nom Prénom</label>'+edA(d.id,i,'nom',a.nom)
       +'<div class="de-row2"><div><label class="de-l">Apport (€)</label>'+edA(d.id,i,'apport',a.apport)+'</div><div><label class="de-l">Parts / actions</label>'+edA(d.id,i,'parts',a.parts)+'</div></div></div>';}).join('');
     var asg='<div class="de-grp"><div class="de-grp-h">Associés &amp; répartition</div>'+assoc+'<button class="de-add" onclick="espEdAssocAdd(\''+d.id+'\')">+ Ajouter un associé</button></div>';
-    return soc+dir+asg;
+    return soc+dir+men+asg;
   }
   function espEdDocs(){
     var list=(typeof ESP_DOCS!=='undefined'?ESP_DOCS.slice():[]);
@@ -3925,7 +3952,9 @@ window.modalDemandeView=function(id){
   window.espEdRefresh=function(id){clearTimeout(window.__edT);window.__edT=setTimeout(function(){var pv=document.getElementById('de-preview');if(!pv)return;var d=espDoss().find(function(x){return x.id===id;});if(!d)return;pv.innerHTML=espEdPreviewHTML(d);espEdFit();},220);};
   window.espEdSet=function(id,grp,key,val){
     var d=espDoss().find(function(x){return x.id===id;});if(!d)return;var c=cli(d);
-    if(grp==='c'){
+    if(grp==='dv'){
+      c.docVars=c.docVars||{};c.docVars[key]=val;
+    } else if(grp==='c'){
       if(key==='capital')c.capital=parseInt((''+val).replace(/[^0-9]/g,''),10)||0;
       else if(key==='activites')c.activites=(''+val).split(/[,;\/]+/).map(function(s){return s.trim();}).filter(Boolean);
       else if(key==='forme')c.forme=(''+val).toUpperCase();
@@ -3971,6 +4000,7 @@ window.modalDemandeView=function(id){
 .de-ax{position:absolute;top:6px;right:6px;border:0;background:transparent;color:#b0442f;cursor:pointer;font-size:15px;line-height:1}
 .de-add{width:100%;border:1px dashed var(--line-2,#d9ccb2);background:transparent;color:var(--ink-2,#5b5040);padding:9px;border-radius:8px;cursor:pointer;font-weight:600;font-size:12.5px}
 .de-add:hover{border-color:var(--accent,#8a6d3b);color:var(--accent,#8a6d3b)}
+.de-note2{font-size:10.5px;color:var(--ink-3,#8a7d69);margin-top:4px;font-style:italic}
 .de-preview{overflow:auto;min-height:0;height:100%;background:var(--paper-desk,#e7ded0);padding:22px;min-width:0}
 @media(max-width:860px){.de-body{grid-template-columns:1fr;grid-template-rows:auto 1fr}.de-side{border-right:0;border-bottom:1px solid var(--line,#e0d8c6);max-height:42vh}}
 @media print{.a4-doc{transform:none!important}}
