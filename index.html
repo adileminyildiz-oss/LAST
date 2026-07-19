@@ -1555,6 +1555,10 @@ function stLettres(n){n=Math.round(Number(n)||0);if(!n)return'zéro';var U=['','
   if(reste)parts.push(c3(reste));
   var t=parts.join(' ').trim();return t.charAt(0).toUpperCase()+t.slice(1);}
 function stAdrPerso(ex){ex=ex||{};var a=((ex.adresse||'')+'').trim();var cp=((ex.cpPerso||'')+'').trim();var v=((ex.villePerso||'')+'').trim().toUpperCase();var suf=(cp||v)?(', '+(cp?cp+' ':'')+v).replace(/\s+$/,''):'';return a?(a+suf):'';}
+/* Date de l'acte au format jj/mm/aaaa (barres automatiques) */
+function stDateSlash(v){var MO=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];function p2(n){n=String(parseInt(n,10)||0);return n.length<2?('0'+n):n;}var s=((v==null?'':v)+'').trim();if(!s){var t=new Date();return p2(t.getDate())+'/'+p2(t.getMonth()+1)+'/'+t.getFullYear();}var low=s.toLowerCase(),moi=0;for(var i=0;i<12;i++){if(low.indexOf(MO[i])>=0){moi=i+1;break;}}var nums=(s.match(/\d+/g)||[]);if(moi){var jj=nums[0]||'',an=(nums[1]||'');if(an.length===2)an='20'+an;if(jj)return p2(jj)+'/'+p2(moi)+'/'+(an||(''+new Date().getFullYear()));return s;}if(nums.length>=3){var an3=nums[2];if(an3.length===2)an3='20'+an3;return p2(nums[0])+'/'+p2(nums[1])+'/'+an3;}var d=s.replace(/\D/g,'');if(d.length>=8)return d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4,8);if(d.length===6)return d.slice(0,2)+'/'+d.slice(2,4)+'/20'+d.slice(4,6);return s;}
+/* Remplace les « … » restants (trous non renseignés) par une ligne à compléter, sans les guillemets */
+function stCleanHoles(html){return (''+html).replace(/«[^«»]{0,80}»/g,function(){return '<span class="doc-fill"></span>';});}
 function stCivil(a,ph){var nom=esc((a&&a.nom||'').trim())||'«nom prénom»';var civ=(a&&a.civilite)?esc(a.civilite):'M.';
   var naiss=(a&&a.naissance)?esc(a.naissance):'«…»';var lieu=(a&&a.lieuNaissance)?esc(a.lieuNaissance):'«lieu»';
   var pays=(a&&a.pays)?esc(a.pays):'«pays»';var nat=(a&&a.nationalite)?esc(a.nationalite):'«…»';
@@ -1573,16 +1577,21 @@ function stDossData(d){
   var nbActions=totalParts>0?totalParts:(nominal>0?Math.round(cap/nominal):0);
   if(dv.nbTitres!=null&&(''+dv.nbTitres).trim()!=='')nbActions=parseInt((''+dv.nbTitres).replace(/[^0-9]/g,''),10)||nbActions;
   var ex=(d.verif&&d.verif.extract)||{};
+  // La barre latérale (dirigeant) a tous les droits : son nom/prénom remplace celui attribué.
+  var exFull=((ex.prenom||'')+' '+(ex.nom||'')).trim();
   var presName0=((c.president||(assoc[0]&&assoc[0].nom))||'').trim();
-  if(ex&&(ex.nom||ex.dateNaissance||ex.adresse)){assoc=assoc.map(function(a){
-    if((''+(a.nom||'')).trim()!==presName0)return a;
-    var nm=a.nom;if(ex.prenom||ex.nom)nm=((ex.prenom||'')+' '+(ex.nom||'')).trim()||a.nom;
-    return Object.assign({},a,{nom:nm,civilite:ex.civilite||a.civilite,naissance:ex.dateNaissance||a.naissance,lieuNaissance:ex.lieuNaissance||a.lieuNaissance,pays:ex.paysNaissance||a.pays,nationalite:ex.nationalite||a.nationalite,adresse:stAdrPerso(ex)||a.adresse});
-  });}
+  var presIdx=assoc.map(function(a){return (''+(a.nom||'')).trim();}).indexOf(presName0);
+  if(presIdx<0)presIdx=0;
+  if(ex&&(exFull||ex.dateNaissance||ex.adresse||ex.civilite||ex.nationalite)){
+    var a0=assoc[presIdx]||{};
+    assoc[presIdx]=Object.assign({},a0,{nom:exFull||a0.nom,civilite:ex.civilite||a0.civilite,naissance:ex.dateNaissance||a0.naissance,lieuNaissance:ex.lieuNaissance||a0.lieuNaissance,pays:ex.paysNaissance||a0.pays,nationalite:ex.nationalite||a0.nationalite,adresse:stAdrPerso(ex)||a0.adresse});
+  }
+  var presDisplay=exFull||((c.president||(assoc[presIdx]&&assoc[presIdx].nom)||'')+'').trim();
   var _M=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
   var _now=new Date();
-  var dateActe=((dv.dateActe||'')+'').trim()||(_now.getDate()+' '+_M[_now.getMonth()]+' '+_now.getFullYear());
+  var dateActe=stDateSlash(dv.dateActe);
   var annee=((dv.anneeExo||'')+'').trim()||(''+_now.getFullYear());
+  var finExo=((dv.finExo||'')+'').trim()||('31 décembre '+annee);
   var villeB=((c.ville||s.ville||'')+'').trim();
   var villeSignature=((dv.villeSignature||'')+'').trim()||villeB||'«ville»';
   var rcsVille=((dv.rcsVille||'')+'').trim()||villeB||((s.ville||'')+'').trim()||'«ville RCS»';
@@ -1596,9 +1605,9 @@ function stDossData(d){
     siege:((ex.siege||c.siege||c.adresse||'')+'').trim()||'«adresse du siège»',
     cp:cp,villeMaj:villeMaj,siegeComplet:siegeComplet,
     ville:((c.ville||s.ville||'')+'').trim()||'«ville»',
-    dateActe:dateActe,annee:annee,villeSignature:villeSignature,rcsVille:rcsVille,
+    dateActe:dateActe,annee:annee,finExo:finExo,villeSignature:villeSignature,rcsVille:rcsVille,
     pere:((dv.pereNom||'')+'').trim(),mere:((dv.mereNom||'')+'').trim(),
-    president:((c.president||(assoc[0]&&assoc[0].nom)||'')+'').trim()||'«Président»'};
+    president:presDisplay||'«Président»'};
 }
 function souscripteursHTML(d){
   var x=stDossData(d);
@@ -1697,16 +1706,18 @@ function statutsSasHTML(d){
   var objet=((c.activites||[]).join(', ')||'').trim()||'«objet social — activités de la société»';
   var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
   if(!assoc.length)assoc=[{nom:''}];
-  var _ex=(d.verif&&d.verif.extract)||{};var _pn=((c.president||(assoc[0]&&assoc[0].nom))||'').trim();
-  if(_ex&&(_ex.nom||_ex.dateNaissance||_ex.adresse)){assoc=assoc.map(function(a){if((''+(a.nom||'')).trim()!==_pn)return a;var nm=a.nom;if(_ex.prenom||_ex.nom)nm=((_ex.prenom||'')+' '+(_ex.nom||'')).trim()||a.nom;return Object.assign({},a,{nom:nm,civilite:_ex.civilite||a.civilite,naissance:_ex.dateNaissance||a.naissance,lieuNaissance:_ex.lieuNaissance||a.lieuNaissance,pays:_ex.paysNaissance||a.pays,nationalite:_ex.nationalite||a.nationalite,adresse:stAdrPerso(_ex)||a.adresse});});}
+  var _ex=(d.verif&&d.verif.extract)||{};var _exFull=((_ex.prenom||'')+' '+(_ex.nom||'')).trim();var _pn=((c.president||(assoc[0]&&assoc[0].nom))||'').trim();
+  var _pi=assoc.map(function(a){return (''+(a.nom||'')).trim();}).indexOf(_pn);if(_pi<0)_pi=0;
+  if(_ex&&(_exFull||_ex.dateNaissance||_ex.adresse||_ex.civilite||_ex.nationalite)){var _a0=assoc[_pi]||{};assoc[_pi]=Object.assign({},_a0,{nom:_exFull||_a0.nom,civilite:_ex.civilite||_a0.civilite,naissance:_ex.dateNaissance||_a0.naissance,lieuNaissance:_ex.lieuNaissance||_a0.lieuNaissance,pays:_ex.paysNaissance||_a0.pays,nationalite:_ex.nationalite||_a0.nationalite,adresse:stAdrPerso(_ex)||_a0.adresse});}
   var _dv=(c.docVars||{});
   var totalParts=assoc.reduce(function(n,a){return n+(Number(a.parts)||0);},0);
   var nominal=(totalParts>0&&cap>0)?(cap/totalParts):100;
   if(_dv.nominal!=null&&(''+_dv.nominal).trim()!=='')nominal=Number((''+_dv.nominal).replace(/[^0-9.]/g,''))||nominal;
   var nbActions=totalParts>0?totalParts:(nominal>0?Math.round(cap/nominal):0);
   if(_dv.nbTitres!=null&&(''+_dv.nbTitres).trim()!=='')nbActions=parseInt((''+_dv.nbTitres).replace(/[^0-9]/g,''),10)||nbActions;
-  var president=((c.president||(assoc[0]&&assoc[0].nom)||'')+'').trim()||'«Président»';
+  var president=_exFull||((c.president||(assoc[_pi]&&assoc[_pi].nom)||'')+'').trim()||'«Président»';
   var annee=((_dv.anneeExo||'')+'').trim()||(''+new Date().getFullYear());
+  var _finExo=((_dv.finExo||'')+'').trim()||('31 décembre '+annee);
   var A=[];
   // Page de couverture
   var cover='<div class="st-cover">'
@@ -1817,7 +1828,7 @@ function statutsSasHTML(d){
   A.push('<div class="st-titre">TITRE VI — EXERCICE SOCIAL · COMPTES ANNUELS · AFFECTATION DES RÉSULTATS</div>');
   A.push(art('ARTICLE 23 — Exercice social',
     ['L\'exercice social commence le 1er janvier et se termine le 31 décembre de chaque année.',
-     'Par exception, le premier exercice social sera clos le 31 décembre '+annee+'.']));
+     'Par exception, le premier exercice social sera clos le '+_finExo+'.']));
   A.push(art('ARTICLE 24 — Établissement et approbation des comptes annuels',
     ['Le Président établit les comptes annuels de l\'exercice. Dans les six mois de la clôture de l\'exercice, les associés doivent statuer par décision collective sur les comptes annuels, au vu du rapport de gestion et des rapports du ou des Commissaires aux comptes.']));
   A.push(art('ARTICLE 25 — Affectation et répartition des résultats',
@@ -1849,7 +1860,7 @@ function statutsSasHTML(d){
   var jour=new Date().getDate();
   var signs=assoc.map(function(a){return '<div class="sg"><b>'+(esc((a.nom||'').trim())||'«associé»')+'</b>Signature</div>';}).join('');
   var _villeSig=((_dv.villeSignature||'')+'').trim()||ville;
-  var _dateActe=((_dv.dateActe||'')+'').trim()||(jour+' '+moisNom+' '+annee);
+  var _dateActe=stDateSlash(_dv.dateActe);
   var fin='<div class="st-fin"><p>Fait à '+esc(_villeSig)+',</p><p>Le '+_dateActe+',</p>'
     +'<p>en autant d\'originaux que nécessaire, dont un exemplaire pour l\'enregistrement et deux exemplaires pour le dépôt au greffe du tribunal de commerce.</p>'
     +'<div class="st-sign">'+signs+'</div></div>';
@@ -2066,7 +2077,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=32;
+var LAST_VER=33;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3044,7 +3055,7 @@ window.modalDemandeView=function(id){
        'Les décisions collectives prises en assemblée sont constatées par des procès-verbaux signés par le Président et le secrétaire et établis sur un registre spécial, ou sur des feuillets mobiles numérotés.']));
     A.push(art('ARTICLE 17 — EXERCICE SOCIAL',
       ['Chaque exercice social a une durée d\'une année, qui commence le premier janvier et finit le trente et un décembre.',
-       'Par exception, le premier exercice commencera le jour de l\'immatriculation de la Société au Registre du commerce et des sociétés et se terminera le 31 décembre '+annee+'.']));
+       'Par exception, le premier exercice commencera le jour de l\'immatriculation de la Société au Registre du commerce et des sociétés et se terminera le '+x.finExo+'.']));
     A.push(art('ARTICLE 18 — INVENTAIRE · COMPTES ANNUELS',
       ['Il est tenu une comptabilité régulière des opérations sociales, conformément à la loi et aux usages du commerce. À la clôture de chaque exercice, le Président dresse l\'inventaire des divers éléments de l\'actif et du passif existant à cette date, ainsi que le bilan, le compte de résultat et l\'annexe.',
        'Dans les six mois de la clôture de l\'exercice, l\'actionnaire doit statuer sur les comptes annuels, au vu du rapport de gestion et des rapports du Commissaire aux Comptes (éventuellement).']));
@@ -3146,7 +3157,7 @@ window.modalDemandeView=function(id){
     A.push('<div class="st-titre">TITRE CINQUIÈME — EXERCICE SOCIAL · COMPTES · AFFECTATION DES BÉNÉFICES</div>');
     A.push(art('ARTICLE 21 — Exercice social',
       ['Chaque exercice social a une durée d\'une année qui commence le 1er janvier et finit le 31 décembre.',
-       'Par exception, le premier exercice social comprendra le temps à courir depuis l\'immatriculation de la Société jusqu\'au 31 décembre '+annee+'.']));
+       'Par exception, le premier exercice social comprendra le temps à courir depuis l\'immatriculation de la Société jusqu\'au '+x.finExo+'.']));
     A.push(art('ARTICLE 22 — Comptes',
       ['À la clôture de chaque exercice, il est dressé par les soins de la gérance un inventaire de l\'actif et du passif de la société, un compte d\'exploitation générale, un compte de pertes et profits et un bilan.',
        'Les associés sont réunis dans les six mois de la clôture de l\'exercice pour statuer sur les comptes de l\'exercice et l\'affectation des résultats.']));
@@ -3356,7 +3367,7 @@ window.modalDemandeView=function(id){
     A.push(art('ARTICLE 17 — Décisions ordinaires',['Les décisions ordinaires sont celles qui ne concernent ni l\'agrément de nouveaux associés, ni la modification des statuts. Elles sont adoptées par un ou plusieurs associés représentant plus de la moitié des parts sociales.']));
     A.push(art('ARTICLE 18 — Décisions extraordinaires',['Les décisions extraordinaires, emportant modification des statuts, sont adoptées par les associés représentant au moins les trois quarts des parts sociales, sauf les exceptions prévues par la loi.']));
     A.push('<div class="st-titre">TITRE V — EXERCICE SOCIAL · COMPTES · RÉSULTATS</div>');
-    A.push(art('ARTICLE 19 — Exercice social',['Chaque exercice social a une durée d\'une année qui commence le 1er janvier et finit le 31 décembre.','Par exception, le premier exercice social sera clos le 31 décembre '+annee+'.']));
+    A.push(art('ARTICLE 19 — Exercice social',['Chaque exercice social a une durée d\'une année qui commence le 1er janvier et finit le 31 décembre.','Par exception, le premier exercice social sera clos le '+x.finExo+'.']));
     A.push(art('ARTICLE 20 — Comptes annuels · Affectation du résultat',['À la clôture de chaque exercice, la gérance établit l\'inventaire, les comptes annuels et le rapport de gestion. Les associés statuent sur les comptes de l\'exercice dans les six mois de la clôture. Le bénéfice distribuable est réparti entre les associés proportionnellement au nombre de parts détenues, ou affecté à toute réserve, selon la décision collective.']));
     A.push('<div class="st-titre">TITRE VI — DISSOLUTION · LIQUIDATION · CONTESTATIONS</div>');
     A.push(art('ARTICLE 21 — Dissolution · Liquidation',['La société est dissoute dans les cas prévus par la loi ou par décision collective extraordinaire des associés. La collectivité des associés nomme un ou plusieurs liquidateurs. Le produit net de la liquidation est employé au remboursement du capital, le surplus étant réparti entre les associés proportionnellement au nombre de parts.']));
@@ -3403,7 +3414,7 @@ window.modalDemandeView=function(id){
     A.push('<div class="st-titre">TITRE IV — DÉCISIONS DE L\'ASSOCIÉ UNIQUE</div>');
     A.push(art('ARTICLE 11 — Décisions de l\'associé unique',['L\'associé unique exerce les pouvoirs dévolus par la loi à l\'assemblée des associés. Ses décisions sont répertoriées dans un registre. En cas de pluralité d\'associés, les décisions collectives sont prises dans les conditions prévues par la loi pour les SARL.']));
     A.push('<div class="st-titre">TITRE V — EXERCICE SOCIAL · COMPTES · RÉSULTATS</div>');
-    A.push(art('ARTICLE 12 — Exercice social',['Chaque exercice social a une durée d\'une année, du 1er janvier au 31 décembre. Par exception, le premier exercice sera clos le 31 décembre '+annee+'.']));
+    A.push(art('ARTICLE 12 — Exercice social',['Chaque exercice social a une durée d\'une année, du 1er janvier au 31 décembre. Par exception, le premier exercice sera clos le '+x.finExo+'.']));
     A.push(art('ARTICLE 13 — Comptes · Affectation du résultat',['La gérance établit les comptes annuels et le rapport de gestion. L\'associé unique approuve les comptes dans les six mois de la clôture et décide de l\'affectation du résultat.']));
     A.push('<div class="st-titre">TITRE VI — DISSOLUTION · LIQUIDATION · CONTESTATIONS</div>');
     A.push(art('ARTICLE 14 — Dissolution · Liquidation',['La société est dissoute dans les cas prévus par la loi ou par décision de l\'associé unique. Lorsque l\'associé unique est une personne morale, la dissolution entraîne la transmission universelle du patrimoine à l\'associé unique, sans liquidation, conformément à l\'article 1844-5 du Code civil.']));
@@ -3800,9 +3811,10 @@ window.modalDemandeView=function(id){
 (function(){
   window.a4Paginate=function(html){
     try{
+      if(typeof stCleanHoles==='function')html=stCleanHoles(html);
       var MM=3.7795, marg=20, pageH=297;
       var contentWpx=(210-2*marg)*MM;
-      var contentHpx=(pageH-2*marg)*MM;
+      var contentHpx=(pageH-2*marg)*MM-6;
       var tmp=document.createElement('div');tmp.innerHTML=html;
       var root=tmp.firstElementChild;if(!root)return html;
       var wrap=(root.className.split(/\s+/).filter(function(c){return c==='st-doc'||c==='ft-doc'||c==='dg-page';})[0])||'st-doc';
@@ -3871,6 +3883,8 @@ window.modalDemandeView=function(id){
 </script>
 <style id="a4-pages-css">
 .doc-gen .a4-doc{display:flex;flex-direction:column;align-items:center;gap:16px;background:transparent!important;box-shadow:none!important;width:210mm}
+.doc-fill{display:inline-block;min-width:120px;border-bottom:1px dotted #7a6a45;height:1em;vertical-align:baseline}
+@media print{.doc-fill{border-bottom:1px dotted #000}}
 .a4-page{width:210mm;height:297mm;box-sizing:border-box;background:#fff;position:relative;overflow:hidden;padding:20mm;box-shadow:0 8px 24px rgba(60,45,20,.28);border-radius:2px}
 .a4-page.a4-tall{height:auto;min-height:297mm;overflow:visible}
 .a4-page.a4-cover{padding:0}
@@ -3921,8 +3935,9 @@ window.modalDemandeView=function(id){
       +'<div class="de-row2"><div><label class="de-l">Valeur nominale (€)</label>'+edD(d.id,'nominal',dv.nominal)+'</div><div><label class="de-l">Nombre de parts / actions</label>'+edD(d.id,'nbTitres',dv.nbTitres)+'</div></div>'
       +'<div class="de-note2">Vide = calculé (capital ÷ total des parts).</div></div>'
       +'<div class="de-grp"><div class="de-grp-h">Dates &amp; mentions légales</div>'
-      +'<label class="de-l">Date de l\'acte (« Fait à … le »)</label>'+edD(d.id,'dateActe',dv.dateActe)
+      +'<label class="de-l">Date de l\'acte (« Fait à … le »)</label><input class="de-i" inputmode="numeric" placeholder="jj/mm/aaaa" value="'+esc(dv.dateActe?stDateSlash(dv.dateActe):'')+'" oninput="espEdDateInput(\''+d.id+'\',this)">'
       +'<div class="de-row2"><div><label class="de-l">Ville de signature</label>'+edD(d.id,'villeSignature',dv.villeSignature)+'</div><div><label class="de-l">Année du 1er exercice</label>'+edD(d.id,'anneeExo',dv.anneeExo)+'</div></div>'
+      +'<label class="de-l">Fin du 1er exercice social (clôture)</label>'+edD(d.id,'finExo',dv.finExo)
       +'<label class="de-l">RCS / Greffe (ville)</label>'+edD(d.id,'rcsVille',dv.rcsVille)
       +'</div>';
     var assoc=(c.associes||[]).map(function(a,i){return '<div class="de-assoc"><button class="de-ax" title="Retirer" onclick="espEdAssocDel(\''+d.id+'\','+i+')">✕</button>'
@@ -3963,6 +3978,7 @@ window.modalDemandeView=function(id){
   window.espEdOpen=function(id,k){window.__edDoc=k||window.__edDoc||'statuts';espEdRender(id);};
   window.espEdClose=function(){var o=document.getElementById('doc-editor');if(o)o.classList.remove('show');};
   window.espEdDoc=function(id,k){window.__edDoc=k;espEdRender(id);};
+  window.espEdDateInput=function(id,el){var d=(el.value||'').replace(/\D/g,'').slice(0,8);var out=d;if(d.length>4)out=d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4);else if(d.length>2)out=d.slice(0,2)+'/'+d.slice(2);el.value=out;espEdSet(id,'dv','dateActe',out);};
   window.espEdRefresh=function(id){clearTimeout(window.__edT);window.__edT=setTimeout(function(){var pv=document.getElementById('de-preview');if(!pv)return;var d=espDoss().find(function(x){return x.id===id;});if(!d)return;pv.innerHTML=espEdPreviewHTML(d);espEdFit();},220);};
   window.espEdSet=function(id,grp,key,val){
     var d=espDoss().find(function(x){return x.id===id;});if(!d)return;var c=cli(d);
