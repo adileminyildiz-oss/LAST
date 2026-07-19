@@ -2152,7 +2152,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=38;
+var LAST_VER=39;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2621,8 +2621,24 @@ function formTypeChange(id){var d=DB.demandes.find(function(x){return x.id===id;
  var suj=document.getElementById('ml-sujet');if(suj)suj.value='Questionnaire — '+(t?t.label:'')+' - AEM CONSEIL';
  var ta=document.getElementById('ml-corps');if(ta)ta.value=formTexte(d,k);
 }
-function formParse(text){text=(''+text);var lines=text.split(/\r?\n/);var out={};var byNorm={};
+/* Source à parser : privilégie le HTML brut (tableau FormSubmit) s'il existe */
+function formSrc(d){if(!d)return '';var h=d.rawHtml||'';if(h&&/<t[dr]\b|<table\b/i.test(h))return h;return d.rawBody||d.message||h||'';}
+function formCellText(h){return (''+h).replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<br\s*\/?>/gi,' ').replace(/<[^>]+>/g,' ')
+ .replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&#(\d+);/g,function(_,n){return String.fromCharCode(+n);}).replace(/&[a-z]+;/gi,' ').replace(/\s+/g,' ').trim();}
+/* Parse le TABLEAU (HTML) d'un mail FormSubmit : gère 2 colonnes (label|valeur) ET lignes alternées (label puis valeur) */
+function formParseHtmlTable(html){var out={};var byNorm={};FORM_FIELDS.forEach(function(f){byNorm[formNorm(f.label)]=f.key;});
+ function keyOf(lab){lab=formNorm(lab);if(byNorm[lab])return byNorm[lab];for(var nk in byNorm){if(nk.length>4&&(lab.indexOf(nk)>=0||(lab.length>4&&nk.indexOf(lab)>=0)))return byNorm[nk];}return '';}
+ var reTr=/<tr[^>]*>([\s\S]*?)<\/tr>/gi,mr;
+ while((mr=reTr.exec(html))){var rc=[];var reTd=/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi,m2;while((m2=reTd.exec(mr[1])))rc.push(formCellText(m2[1]));
+   if(rc.length>=2){var k=keyOf(rc[0]);var v=rc.slice(1).join(' ').trim();if(k&&v&&!out[k])out[k]=v;}}
+ var cells=[];var reTd2=/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi,m3;while((m3=reTd2.exec(html)))cells.push(formCellText(m3[1]));
+ for(var i=0;i<cells.length;i++){var kk=keyOf(cells[i]);if(kk&&!out[kk]){for(var j=i+1;j<cells.length;j++){if(!cells[j])continue;if(keyOf(cells[j]))break;out[kk]=cells[j];break;}}}
+ return out;}
+function formParse(text){text=(''+text);var out={};var byNorm={};
  FORM_FIELDS.forEach(function(f){byNorm[formNorm(f.label)]=f.key;});
+ if(/<t[dr]\b|<table\b/i.test(text)){var ht=formParseHtmlTable(text);for(var hk in ht)if(!out[hk])out[hk]=ht[hk];}
+ var clean=(/<[a-z][\s\S]*>/i.test(text))?text.replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<\/(tr|div|p|li|h[1-6]|td|th)>/gi,'\n').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' '):text;
+ var lines=clean.split(/\r?\n/);
  lines.forEach(function(ln){var i=ln.indexOf(':');var j=ln.indexOf('：');if(j>=0&&(i<0||j<i))i=j;if(i<0)return;
    var lab=formNorm(ln.slice(0,i));var val=ln.slice(i+1).trim();if(!val||val==='.'||/^_+$/.test(val))return;
    var key=byNorm[lab];
@@ -2655,7 +2671,7 @@ function formParseAssocies(str){
  return out;
 }
 function formEnrichDossier(c,dos,d){
- var src=(d&&(d.rawBody||d.message))||'';var p=formParse(src);var any=false;
+ var src=formSrc(d);var p=formParse(src);var any=false;
  function set(o,k,v){if(v){o[k]=v;any=true;}}
  if(p.denomination)set(c,'denomination',p.denomination);
  if(p.nomCommercial)set(c,'nomCommercial',p.nomCommercial);
@@ -2759,6 +2775,14 @@ function formSubmitExtract(m){var body=(''+(m&&m.body||''));var out={fields:{}};
  out.tel=pick('telephone','tel','phone','portable','numero','mobile','numero de telephone');
  out.message=pick('message','votre message','demande','votre demande','projet','description','commentaire');
  out.type=pick('type de societe','forme juridique','formalite','type de formalite','objet','service','sujet','type de demande');
+ // Renfort : lecture du TABLEAU HTML (FormSubmit) via le parseur de formulaire
+ try{ if(typeof formParseHtmlTable==='function' && /<t[dr]\b|<table\b/i.test(body)){
+   var ht=formParseHtmlTable(body);
+   var htFull=(((ht.prenom||'')+' '+(ht.nom||'')).trim());
+   if((!out.nomComplet||/formsubmit/i.test(out.nomComplet))&&htFull)out.nomComplet=htFull;
+   if(!out.type&&ht.forme)out.type=ht.forme;
+   if(!out.type&&ht.denomination)out.type='Création '+(ht.forme||'');
+ } }catch(e){}
  var frn=(mailParseFrom(m.from)||{}).nom||'';
  if((!out.nomComplet||/formsubmit/i.test(out.nomComplet))&&frn&&!/formsubmit/i.test(frn))out.nomComplet=frn;
  return out;
@@ -2793,13 +2817,13 @@ window.demIngest=function(mails){
    if(existing){
      existing.thread=existing.thread||[{from:existing.clientNom,subject:existing.subject||existing.serviceSouhaite,date:existing.date,body:existing.message}];
      existing.thread.push({from:cliNom,subject:subj,date:dateISO,body:body});
-     existing.message=body;existing.date=dateISO;existing.__reponse=true;if(isFS)existing.rawBody=body;
+     existing.message=body;existing.date=dateISO;existing.__reponse=true;if(isFS){existing.rawBody=body;existing.rawHtml=(''+(m.body||'')).slice(0,20000);existing.__prerempli=false;}
      if(atts.length)existing.attachments=(existing.attachments||[]).concat(atts);
      fil++;
    } else {
      DB.demandes.unshift({id:uid('d'),clientNom:cliNom,clientEmail:cliEmail,clientTel:tel,
        canal:'Formulaire du site',subject:subj,serviceSouhaite:((''+objet).slice(0,80))||'À qualifier',
-       message:msg,rawBody:(isFS?body:''),date:dateISO,statut:'Nouveau',assigneA:'',docsRecus:atts.length>0,dossierId:'',msgKey:key,
+       message:msg,rawBody:(isFS?body:''),rawHtml:(isFS?(''+(m.body||'')).slice(0,20000):''),date:dateISO,statut:'Nouveau',assigneA:'',docsRecus:atts.length>0,dossierId:'',msgKey:key,
        attachments:atts,thread:[{from:cliNom,subject:subj,date:dateISO,body:msg}]});
      add++;
    }
@@ -3758,13 +3782,14 @@ window.modalDemandeView=function(id){
 (function(){
   function espFormRows(d){
     var dm=(typeof espDemandeDe==='function')?espDemandeDe(d):d;
-    var src=((dm&&(dm.rawBody||dm.message))||'');
+    var src=(typeof formSrc==='function')?formSrc(dm):((dm&&(dm.rawBody||dm.message))||'');
     if(!src||typeof formParse!=='function'||typeof FORM_FIELDS==='undefined')return [];
     var p=formParse(src);
     return FORM_FIELDS.filter(function(f){return p[f.key];}).map(function(f){return {l:f.label,v:p[f.key]};});
   }
   window.espMailCard=function(d){
     var dm=espDemandeDe(d);var c=clientById((d.clientIds||[])[0])||{};
+    try{ if(dm&&!d.__prerempli&&typeof formEnrichDossier==='function'){ var _src=(typeof formSrc==='function')?formSrc(dm):''; var _pp=_src?formParse(_src):{}; var _n=0; for(var _k in _pp){if(_k!=='message'&&_pp[_k])_n++;} if(_n>=2){ formEnrichDossier(c,d,dm); if(typeof save==='function')save(); } } }catch(_e){}
     var email=(dm&&dm.clientEmail)||c.email||'—';
     var canal=(dm&&dm.canal)||'—';
     var objet=dm?IA.objet(dm):'—';
@@ -3772,7 +3797,7 @@ window.modalDemandeView=function(id){
     var formRows=espFormRows(d);
     var clientMsg=((d.messageClient||'')+'').trim();
     if(!clientMsg&&dm)clientMsg=((dm.messageClient||'')+'').trim();
-    if(!clientMsg&&dm){try{var _pp=formParse(dm.rawBody||dm.message||'');if(_pp&&_pp.message)clientMsg=(''+_pp.message).trim();}catch(_e){}}
+    if(!clientMsg&&dm){try{var _pp=formParse(formSrc(dm));if(_pp&&_pp.message)clientMsg=(''+_pp.message).trim();}catch(_e){}}
     if(!clientMsg&&dm&&dm.thread&&dm.thread[0]&&!formRows.length)clientMsg=((dm.thread[0].body||'')+'').trim();
     if(!clientMsg&&!formRows.length){clientMsg=((dm&&dm.message)||'').trim();}
     var clientBlock='<div class="esp-mail"><div class="esp-mail-obj">📧 Mail du client</div><div class="esp-mail-body">'
