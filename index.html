@@ -1398,10 +1398,31 @@ function espMiniList(list,id){
     }).join('')
    +'</div></aside>';
 }
+function espDocLabel(k){var f=(typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).find(function(x){return x.k===k;});return f?f.l:(k==='fiche'?'Fiche technique':k);}
+function espDocsPretsCard(d){
+  var st=d.docState||{};
+  var keys=Object.keys(st).filter(function(k){return st[k]&&st[k].ts;});
+  if(!keys.length)return '';
+  keys.sort(function(a,b){return (st[b].editTs||st[b].ts)-(st[a].editTs||st[a].ts);});
+  function p2(n){n=''+n;return n.length<2?('0'+n):n;}
+  var rows=keys.map(function(k){
+    var s=st[k];var t=new Date(s.editTs||s.ts);
+    var dt=p2(t.getDate())+'/'+p2(t.getMonth()+1)+'/'+t.getFullYear();
+    var hh=p2(t.getHours())+':'+p2(t.getMinutes());
+    var done=!!s.done;
+    return '<div class="dpret-row'+(done?' done':'')+'">'
+      +'<span class="dpret-name">'+esc(espDocLabel(k))+'</span>'
+      +'<span class="tag '+(done?'ok':'blue')+'">'+(done?'Terminé':'valide')+'</span>'
+      +'<span class="dpret-when">Édité le '+dt+' à '+hh+'</span>'
+      +(done?'<span class="dpret-done">Terminé ✓</span>':'<button class="btn btn-sm" onclick="espDocTerminer(\''+d.id+'\',\''+k+'\')">Terminer</button>')
+      +'</div>';
+  }).join('');
+  return '<div class="card"><div class="card-h"><h2>Documents prêts</h2><span class="sub" style="margin-left:auto">'+keys.length+'</span></div><div class="card-b dpret-list">'+rows+'</div></div>';
+}
 function espPanel(d,list,id){
   return '<div class="esp-shell">'
    +espMiniList(list,id)
-   +'<div class="esp-main">'+espMailCard(d)+'</div>'
+   +'<div class="esp-main">'+espMailCard(d)+espDocsPretsCard(d)+'</div>'
    +'</div>';
 }
 function espStatutsCard(d){
@@ -2088,7 +2109,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=36;
+var LAST_VER=37;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3829,6 +3850,14 @@ window.modalDemandeView=function(id){
 .esp-mini-txt b{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .esp-mini-txt span{font-size:9.5px;color:var(--ink-3,#9c9078);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .esp-main{min-width:0;padding-top:14px}
+/* Documents prêts (par dossier) */
+.dpret-list{display:flex;flex-direction:column;gap:7px}
+.dpret-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line-soft,#f0e9da);border-radius:9px;background:var(--paper,#fffef9)}
+.dpret-row.done{opacity:.7}
+.dpret-name{font-weight:700;font-size:12.5px;color:var(--ink,#302c24)}
+.dpret-when{margin-left:auto;font-size:11px;color:var(--ink-3,#9c9078);white-space:nowrap}
+.dpret-done{font-size:11.5px;font-weight:700;color:#3f8f5b;white-space:nowrap}
+@media(max-width:640px){.dpret-row{flex-wrap:wrap}.dpret-when{margin-left:0;width:100%}}
 @media(max-width:860px){.esp-shell{grid-template-columns:1fr;margin:0}.esp-mini{position:static;min-height:0;border-right:0;border-bottom:1px solid var(--line-2,#e2d9c6)}.esp-main{padding-top:12px}.esp-mini-list{max-height:200px}}
 </style>
 
@@ -4001,9 +4030,11 @@ window.modalDemandeView=function(id){
     doc.style.transformOrigin='top left';doc.style.transform='scale('+s+')';
     dg.style.width=(nat*s)+'px';dg.style.height=(doc.offsetHeight*s)+'px';dg.style.margin='0 auto';
   }
-  window.espEdOpen=function(id,k){window.__edDoc=k||window.__edDoc||'statuts';espEdRender(id);};
+  window.espDocTouch=function(id,k){if(!k)return;var d=espDoss().find(function(x){return x.id===id;});if(!d)return;d.docState=d.docState||{};var s=d.docState[k]||{};if(!s.ts)s.ts=Date.now();s.editTs=Date.now();d.docState[k]=s;if(typeof save==='function')save();};
+  window.espDocTerminer=function(id,k){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;d.docState=d.docState||{};var s=d.docState[k]||{};if(!s.ts)s.ts=Date.now();s.done=true;s.doneTs=Date.now();d.docState[k]=s;if(typeof save==='function')save();if(typeof render==='function')render();};
+  window.espEdOpen=function(id,k){window.__edDoc=k||window.__edDoc||'statuts';espDocTouch(id,window.__edDoc);espEdRender(id);};
   window.espEdClose=function(){var o=document.getElementById('doc-editor');if(o)o.classList.remove('show');};
-  window.espEdDoc=function(id,k){window.__edDoc=k;espEdRender(id);};
+  window.espEdDoc=function(id,k){window.__edDoc=k;espDocTouch(id,k);espEdRender(id);};
   window.espEdDateInput=function(id,el){var d=(el.value||'').replace(/\D/g,'').slice(0,8);var out=d;if(d.length>4)out=d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4);else if(d.length>2)out=d.slice(0,2)+'/'+d.slice(2);el.value=out;espEdSet(id,'dv','dateActe',out);};
   window.espEdRefresh=function(id){clearTimeout(window.__edT);window.__edT=setTimeout(function(){var pv=document.getElementById('de-preview');if(!pv)return;var d=espDoss().find(function(x){return x.id===id;});if(!d)return;pv.innerHTML=espEdPreviewHTML(d);espEdFit();},220);};
   window.espEdSet=function(id,grp,key,val){
@@ -4021,13 +4052,13 @@ window.modalDemandeView=function(id){
       if(key==='prenom'||key==='nom'){var full=((ex.prenom||'')+' '+(ex.nom||'')).trim();if(full){var old=c.president;c.president=full;
         if(c.associes&&c.associes.length){var i=c.associes.map(function(a){return (''+(a.nom||'')).trim();}).indexOf((''+(old||'')).trim());if(i>=0)c.associes[i].nom=full;else c.associes[0].nom=full;}}}
     }
-    save();espEdRefresh(id);
+    save();espDocTouch(id,window.__edDoc);espEdRefresh(id);
   };
   window.espEdAssoc=function(id,i,key,val){
     var d=espDoss().find(function(x){return x.id===id;});if(!d)return;var c=cli(d);c.associes=c.associes||[];if(!c.associes[i])c.associes[i]={};
     if(key==='parts'||key==='apport')c.associes[i][key]=parseInt((''+val).replace(/[^0-9]/g,''),10)||0;
     else{var old=c.associes[i].nom;c.associes[i][key]=val;if(key==='nom'&&(''+(old||'')).trim()===(''+(c.president||'')).trim())c.president=val;}
-    save();espEdRefresh(id);
+    save();espDocTouch(id,window.__edDoc);espEdRefresh(id);
   };
   window.espEdAssocAdd=function(id){var d=espDoss().find(function(x){return x.id===id;});var c=cli(d);c.associes=c.associes||[];c.associes.push({nom:'',parts:0,apport:0});save();espEdRender(id);};
   window.espEdAssocDel=function(id,i){var d=espDoss().find(function(x){return x.id===id;});var c=cli(d);if(c.associes)c.associes.splice(i,1);save();espEdRender(id);};
