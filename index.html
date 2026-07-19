@@ -633,7 +633,6 @@ const PAGES=[
   {id:'demandes',lbl:'Demandes',ic:'inbox',sub:'Réception & qualification IA'},
   {id:'espace',lbl:'Traitement',ic:'espace',sub:'Travail & génération des dossiers'},
   {id:'clients',lbl:'Clients',ic:'users',sub:'Fiches & informations'},
-  {id:'services',lbl:'Prestations',ic:'tag',sub:'Catalogue des prestations'},
   {id:'facturation',lbl:'Facturation',ic:'card',sub:'Factures de vente'},
   {id:'devis',lbl:'Devis',ic:'quote',sub:'Devis automatiques',soon:1},
   {id:'marge',lbl:'Rentabilité',ic:'trend',sub:'Rentabilité par dossier',soon:1},
@@ -650,11 +649,11 @@ function buildNav(){
     `<div class="nav-lbl">Activité</div>`+
     PAGES.slice(0,2).map(p=>navBtn(p,nb)).join('')+
     `<div class="nav-lbl">Référentiel</div>`+
-    PAGES.slice(2,4).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(2,3).map(p=>navBtn(p,nb)).join('')+
     `<div class="nav-lbl">Facturation</div>`+
-    PAGES.slice(4,7).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(3,6).map(p=>navBtn(p,nb)).join('')+
     `<div class="nav-lbl">Système</div>`+
-    PAGES.slice(7).map(p=>navBtn(p,nb)).join('');
+    PAGES.slice(6).map(p=>navBtn(p,nb)).join('');
 }
 function navBtn(p,nb){
   const badge=p.id==='demandes'&&nb?`<span class="nav-badge">${nb}</span>`:'';
@@ -1161,10 +1160,10 @@ function delDossier(id){if(!confirm('Supprimer ce dossier ?'))return;const d=DB.
   save();closeModal();toast('Dossier supprimé');render();}
 
 /* ---------- SERVICES ---------- */
-function pageServices(){
+function prestationsBloc(){
   const fams={};DB.services.forEach(s=>{(fams[s.famille]=fams[s.famille]||[]).push(s);});
   const typeTag=t=>({forfait:'<span class="tag ok">Forfait</span>',debours:'<span class="tag warm">Débours</span>',commission:'<span class="tag blue">Commission</span>'}[t]||'');
-  return `<div style="display:flex;gap:10px;margin-bottom:10px"><button class="btn btn-pri" onclick="modalService()">${svg(IC.plus)}Ajouter</button><span class="tag blue">${DB.services.length} prestations</span><span class="tag mut">Prix indicatifs — modifiables</span></div>
+  return `<div style="display:flex;gap:10px;margin-bottom:10px;align-items:center;flex-wrap:wrap"><button class="btn btn-pri btn-sm" onclick="modalService()">${svg(IC.plus)}Ajouter</button><span class="tag blue">${DB.services.length} prestations</span><span class="tag mut">Prix indicatifs — modifiables</span></div>
   ${Object.keys(fams).map(f=>`<div class="section-t">${f}</div>
     <div class="card"><div class="card-b" style="padding:0"><table><thead><tr><th>Prestation</th><th>Type</th><th>Forfait</th><th>Débours</th><th></th></tr></thead><tbody>
     ${fams[f].map(s=>`<tr>
@@ -1172,8 +1171,9 @@ function pageServices(){
       <td>${s.type==='commission'?'<span class="tag mut">variable</span>':eur(s.prix)}</td>
       <td>${s.debours?eur(s.debours):'<span class="tsub">—</span>'}</td>
       <td><button class="btn btn-sm btn-ghost" onclick="modalService('${s.id}')">Modifier</button></td></tr>`).join('')}
-    </tbody></table></div></div>`).join('')}`;
+    </tbody></table></div></div>`).join('')||'<div class="empty">Aucune prestation.</div>'}`;
 }
+function pageServices(){return prestationsBloc();}
 function modalService(id){
   const s=id?DB.services.find(x=>x.id===id):{nom:'',famille:'Création',type:'forfait',prix:'',debours:''};
   const fams=['Création','Modification','Annuel','Rédaction','Propriété int.','Débours','Commission','Administratif'];
@@ -1236,6 +1236,8 @@ function pageParams(){
       </div><input type="file" id="imp" accept="application/json" style="display:none" onchange="importDB(this)">
     </div></div>
   </div>
+  <div class="card" style="margin-top:14px"><div class="card-h"><h2>Prestations</h2><span class="sub" style="margin-left:auto">Catalogue des prestations</span></div>
+    <div class="card-b">${prestationsBloc()}</div></div>
   <div class="flow-note" style="margin-top:8px">${svg(IC.gear)}<div>Prochains niveaux de la pyramide : <b>Devis auto</b>, <b>facturation & marge complète</b>, <b>signature + paiement</b>, <b>IA de réponse locale</b>, puis <b>stockage lourd, archivage 10 ans, multi-poste & mise en ligne</b>.</div></div>`;
 }
 function modalUser(){openModal('Nouveau collaborateur',`<label>Nom</label><input id="u-nom" placeholder="Prénom N.">
@@ -2247,7 +2249,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=45;
+var LAST_VER=46;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
