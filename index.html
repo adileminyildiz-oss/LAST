@@ -1728,7 +1728,7 @@ function stAdrPerso(ex){ex=ex||{};var a=((ex.adresse||'')+'').trim();var cp=((ex
 function stDateSlash(v){var MO=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];function p2(n){n=String(parseInt(n,10)||0);return n.length<2?('0'+n):n;}var s=((v==null?'':v)+'').trim();if(!s){var t=new Date();return p2(t.getDate())+'/'+p2(t.getMonth()+1)+'/'+t.getFullYear();}var low=s.toLowerCase(),moi=0;for(var i=0;i<12;i++){if(low.indexOf(MO[i])>=0){moi=i+1;break;}}var nums=(s.match(/\d+/g)||[]);if(moi){var jj=nums[0]||'',an=(nums[1]||'');if(an.length===2)an='20'+an;if(jj)return p2(jj)+'/'+p2(moi)+'/'+(an||(''+new Date().getFullYear()));return s;}if(nums.length>=3){var an3=nums[2];if(an3.length===2)an3='20'+an3;return p2(nums[0])+'/'+p2(nums[1])+'/'+an3;}var d=s.replace(/\D/g,'');if(d.length>=8)return d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4,8);if(d.length===6)return d.slice(0,2)+'/'+d.slice(2,4)+'/20'+d.slice(4,6);return s;}
 /* Remplace les « … » restants (trous non renseignés) par une ligne à compléter, sans les guillemets */
 /* Placeholder = guillemets SERRÉS «X» (sans espace interne). Les vraies citations « X » (avec espaces) sont conservées. */
-function stCleanHoles(html){return (''+html).replace(/«(?!\s)[^«»]{0,80}(?<!\s)»|«»/g,function(){return '<span class="doc-fill"></span>';});}
+function stCleanHoles(html){return (''+html).replace(/«(?!\s)([^«»]{0,80})(?<!\s)»|«»/g,function(m,inner){var h=(inner||'').replace(/\s+/g,' ').trim();return '<span class="doc-fill" title="À compléter">'+(h?esc(h):'')+'</span>';});}
 function stCivil(a,ph){var nom=esc((a&&a.nom||'').trim())||'«nom prénom»';var civ=(a&&a.civilite)?esc(a.civilite):'M.';
   var naiss=(a&&a.naissance)?esc(a.naissance):'«…»';var lieu=(a&&a.lieuNaissance)?esc(a.lieuNaissance):'«lieu»';
   var pays=(a&&a.pays)?esc(a.pays):'«pays»';var nat=(a&&a.nationalite)?esc(a.nationalite):'«…»';
@@ -2247,7 +2247,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=44;
+var LAST_VER=45;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4152,8 +4152,9 @@ window.modalDemandeView=function(id){
 </script>
 <style id="a4-pages-css">
 .doc-gen .a4-doc{display:flex;flex-direction:column;align-items:center;gap:16px;background:transparent!important;box-shadow:none!important;width:210mm}
-.doc-fill{display:inline-block;min-width:120px;border-bottom:1px dotted #7a6a45;height:1em;vertical-align:baseline}
-@media print{.doc-fill{border-bottom:1px dotted #000}}
+.doc-fill{display:inline-block;min-width:80px;border-bottom:1px dotted #9a8a63;color:#a99a7c;font-style:italic;font-size:.95em;padding:0 3px;vertical-align:baseline}
+.doc-fill:empty{min-width:120px}
+@media print{.doc-fill{border-bottom:1px dotted #555;color:#6a6250}}
 .a4-page{width:210mm;height:297mm;box-sizing:border-box;background:#fff;position:relative;overflow:hidden;padding:20mm;box-shadow:0 8px 24px rgba(60,45,20,.28);border-radius:2px}
 .a4-page.a4-tall{height:auto;min-height:297mm;overflow:visible}
 .a4-page.a4-cover{padding:0}
