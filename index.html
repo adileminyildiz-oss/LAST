@@ -1585,10 +1585,15 @@ function stDossData(d){
   var villeB=((c.ville||s.ville||'')+'').trim();
   var villeSignature=((dv.villeSignature||'')+'').trim()||villeB||'«ville»';
   var rcsVille=((dv.rcsVille||'')+'').trim()||villeB||((s.ville||'')+'').trim()||'«ville RCS»';
+  var cp=((c.cp||'')+'').trim();
+  var villeMaj=(villeB||'').toUpperCase();
+  var siegeRue=((ex.siege||c.siege||c.adresse||'')+'').trim();
+  var siegeComplet=siegeRue?(siegeRue+((cp||villeMaj)?(', '+(cp?cp+' ':'')+villeMaj):'')):'«adresse du siège social»';
   return {s:s,c:c,assoc:assoc,totalParts:totalParts,cap:cap,nominal:nominal,nbActions:nbActions,
     denom:((c.denomination||d.denomination||'')+'').trim().toUpperCase()||'«DÉNOMINATION SOCIALE»',
     forme:(c.forme||d.forme||'SAS'),
     siege:((ex.siege||c.siege||c.adresse||'')+'').trim()||'«adresse du siège»',
+    cp:cp,villeMaj:villeMaj,siegeComplet:siegeComplet,
     ville:((c.ville||s.ville||'')+'').trim()||'«ville»',
     dateActe:dateActe,annee:annee,villeSignature:villeSignature,rcsVille:rcsVille,
     pere:((dv.pereNom||'')+'').trim(),mere:((dv.mereNom||'')+'').trim(),
@@ -1613,7 +1618,7 @@ function souscripteursHTML(d){
   return '<div class="st-doc"><div class="st-page">'
     +'<div class="st-hdr"><b>'+esc(x.denom)+'</b>'
     +'<div class="sub">'+esc(formeTxt)+' au capital de '+capN+' euros — RCS de '+esc(rcsVille)+'</div>'
-    +'<div class="sub">Siège social : '+esc(x.siege)+(x.ville?(' '+esc(x.ville)):'')+'</div></div>'
+    +'<div class="sub">Siège social : '+esc(x.siegeComplet)+'</div></div>'
     +'<div class="st-titre">État des souscriptions et des versements</div>'
     +'<table class="st-tbl"><thead><tr>'
     +'<th>N°</th><th>Associé (nom, prénom, adresse ou dénomination, forme, capital, siège, RCS)</th>'
@@ -1669,7 +1674,7 @@ function dncHTML(d){
     +'<p style="margin-top:16px">Je soussigné <b>'+nom+'</b></p>'
     +'<p>né le '+naiss+'</p><p>à '+lieu+pays+'</p><p>de nationalité '+nat+'</p><p>demeurant à '+adr+'</p>'
     +'<p style="margin-top:10px">'+filiation+'</p>'
-    +'<p style="margin-top:10px">agissant en qualité de '+qualite+' de la Société '+esc(x.denom)+' dont le siège social est à '+esc(x.siege)+(x.ville&&x.ville!=='«ville»'?(' '+esc(x.ville)):'')+'.</p>'
+    +'<p style="margin-top:10px">agissant en qualité de '+qualite+' de la Société '+esc(x.denom)+' dont le siège social est à '+esc(x.siegeComplet)+'.</p>'
     +'<p style="margin-top:10px">En conformité des prescriptions de l\'article 20 de l\'arrêté du 24 décembre 1975 et du paragraphe 2-3 de l\'Instruction de même date, relatifs au RCS ainsi que de l\'article 17 de l\'arrêté du 24 septembre 1984 pris à la suite du décret du 31 mai 1984 ;</p>'
     +'<p>En connaissance des sanctions prévues à l\'article 2 de l\'ordonnance modifiée n° 58-1352 du 27 décembre 1958 réprimant certaines infractions en matière de Registre du commerce ;</p>'
     +'<p style="margin-top:10px"><b>Certifie et déclare sur l\'honneur</b> n\'avoir fait l\'objet d\'aucune condamnation pénale, ni de sanction civile ou administrative de nature à m\'interdire de gérer, d\'administrer ou de diriger une personne morale, ou d\'exercer une activité commerciale.</p>'
@@ -1686,6 +1691,8 @@ function statutsSasHTML(d){
   var cap=Number(c.capital)||0;var capN=cap?stNum(cap):'«…»';var capL=cap?stLettres(cap):'«…»';
   var siege=(((d.verif&&d.verif.extract&&d.verif.extract.siege)||c.siege||c.siegeAdresse||c.adresse||'')+'').trim()||'«adresse du siège social»';
   var ville=((c.ville||s.ville||'')+'').trim()||'«ville»';
+  var _cp=((c.cp||'')+'').trim();var _villeMaj=(ville!=='«ville»'?ville:'').toUpperCase();
+  var siegeComplet=siege+((_cp||_villeMaj)?(', '+(_cp?_cp+' ':'')+_villeMaj):'');
   var objet=((c.activites||[]).join(', ')||'').trim()||'«objet social — activités de la société»';
   var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
   if(!assoc.length)assoc=[{nom:''}];
@@ -1706,7 +1713,7 @@ function statutsSasHTML(d){
     +'<div class="st-c2">SOCIÉTÉ PAR ACTIONS SIMPLIFIÉE</div>'
     +'<div class="st-c3">'+esc(denom)+'</div>'
     +'<div class="st-c4">au capital de '+capN+' Euros</div>'
-    +'<div class="st-c4">Siège social : '+esc(siege)+'</div></div>';
+    +'<div class="st-c4">Siège social : '+esc(siegeComplet)+'</div></div>';
   // Préambule
   var soussignes=assoc.map(function(a){return '<p>'+stCivil(a)+'</p>';}).join('');
   var preambule='<p><b>Les soussignés :</b></p>'+soussignes
@@ -1722,7 +1729,7 @@ function statutsSasHTML(d){
     +(nomCom?('<p>Nom commercial : '+esc(nomCom)+'</p>'):'')
     +'<p>Sur tous les actes et documents émanant de la Société, la dénomination sociale doit être précédée ou suivie immédiatement des mots «Société par actions simplifiée» ou des initiales «S.A.S.» et de l\'énonciation du capital social.</p>');
   A.push(art('ARTICLE 3 — Siège social',
-    ['Le siège social est fixé à '+esc(siege)+'.',
+    ['Le siège social est fixé à '+esc(siegeComplet)+'.',
      'Il ne peut être transféré que par décision collective des associés.']));
   A.push(art('ARTICLE 4 — Objet',
     ['La Société a pour objet directement ou indirectement, tant en France qu\'à l\'étranger :',
@@ -2054,7 +2061,7 @@ function lastGate(){
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
 if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=28;
+var LAST_VER=29;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2976,7 +2983,7 @@ window.modalDemandeView=function(id){
       +'<div class="st-c2">SOCIÉTÉ PAR ACTIONS SIMPLIFIÉE UNIPERSONNELLE</div>'
       +'<div class="st-c3">'+esc(denom)+'</div>'
       +'<div class="st-c4">au capital de '+capN+' euros</div>'
-      +'<div class="st-c4">Siège social : '+esc(siege)+(ville?(', '+esc(ville)):'')+'</div></div>';
+      +'<div class="st-c4">Siège social : '+esc(x.siegeComplet)+'</div></div>';
     var preambule='<p><b>La soussignée :</b></p><p>'+stCivil(uni)+'</p>'
       +'<p>établit ainsi qu\'il suit les statuts d\'une société par actions simplifiée unipersonnelle.</p>';
     var A=[];
@@ -2988,7 +2995,7 @@ window.modalDemandeView=function(id){
     A.push('<div class="st-art">ARTICLE 3 — DÉNOMINATION</div><p>La dénomination sociale est : « '+esc(denom)+' ».</p>'
       +'<p>Dans tous les actes et documents émanant de la Société et destinés aux tiers, la dénomination sera précédée ou suivie immédiatement des mots écrits lisiblement "Société par actions simplifiée" ou des initiales "S.A.S.U" et de l\'énonciation du montant du capital social.</p>');
     A.push(art('ARTICLE 4 — SIÈGE SOCIAL',
-      ['Le siège social est fixé '+esc(siege)+(ville?(', '+esc(ville)):'')+'.',
+      ['Le siège social est fixé '+esc(x.siegeComplet)+'.',
        'Il peut être transféré en tout endroit par décision du Président qui est habilité à modifier les statuts en conséquence.']));
     A.push(art('ARTICLE 5 — DURÉE',
       ['La durée de la Société est fixée à quatre-vingt-dix-neuf années à compter de la date de son immatriculation au Registre du commerce et des sociétés, sauf les cas de dissolution anticipée ou de prorogation.']));
@@ -3067,7 +3074,7 @@ window.modalDemandeView=function(id){
     var cover='<div class="st-cover"><div class="st-c1">'+esc(denom)+'</div>'
       +'<div class="st-c2">Société Civile Immobilière</div>'
       +'<div class="st-c4">au capital de '+capN+' euros</div>'
-      +'<div class="st-c4">Siège social : '+esc(siege)+(ville?(', '+esc(ville)):'')+'</div>'
+      +'<div class="st-c4">Siège social : '+esc(x.siegeComplet)+'</div>'
       +'<div class="st-c4">RCS : en cours d\'attribution</div></div>';
     var soussignes=assoc.map(function(a){return '<p>- '+stCivil(a)+'</p>';}).join('');
     var preambule='<p><b>ENTRE LES SOUSSIGNÉS :</b></p>'+soussignes
@@ -3082,7 +3089,7 @@ window.modalDemandeView=function(id){
     A.push('<div class="st-art">ARTICLE 3 — Dénomination</div><p>La Société prend pour dénomination : « '+esc(denom)+' ».</p>'
       +'<p>Dans tous les actes et documents émanant de la Société et destinés aux tiers, la dénomination doit être précédée ou suivie, de manière lisible, une fois au moins des mots « Société civile » suivie de l\'indication du capital social.</p>');
     A.push(art('ARTICLE 4 — Siège social',
-      ['Le siège social est fixé au '+esc(siege)+(ville?(', '+esc(ville)):'')+'.',
+      ['Le siège social est fixé au '+esc(x.siegeComplet)+'.',
        'Il ne pourra être fixé partout ailleurs que par décision extraordinaire des associés représentant au moins deux tiers du capital social.']));
     A.push(art('ARTICLE 5 — Durée',
       ['La durée de la Société est fixée à QUATRE-VINGT-DIX-NEUF ans à compter de son immatriculation au registre du commerce et des sociétés, sauf cas de dissolution anticipée ou de prorogation.',
@@ -3196,7 +3203,7 @@ window.modalDemandeView=function(id){
       +'<p><b>ENTRE LES SOUSSIGNÉS :</b></p>'
       +'<p><b>Le(s) cédant(s) :</b> «Civilité Nom Prénom du cédant», né(e) le «…» à «…», de nationalité «…», demeurant au «adresse du cédant» ;</p>'
       +'<p><b>Le(s) cessionnaire(s) :</b> «Civilité Nom Prénom du cessionnaire», né(e) le «…» à «…», de nationalité «…», demeurant au «adresse du cessionnaire» ;</p>'
-      +'<p>concernant la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros, dont le siège social est situé '+esc(x.siege)+(x.ville&&x.ville!=='«ville»'?(' '+esc(x.ville)):'')+', immatriculée au RCS de '+esc(rcsVille)+' sous le numéro '+esc(siren)+', représentée par '+esc(repr)+'.</p>'
+      +'<p>concernant la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros, dont le siège social est situé '+esc(x.siegeComplet)+', immatriculée au RCS de '+esc(rcsVille)+' sous le numéro '+esc(siren)+', représentée par '+esc(repr)+'.</p>'
       +'<p style="margin-top:6px"><b>IL A ÉTÉ CONVENU CE QUI SUIT :</b></p>'
       +'<p><b>Article 1 — Cession.</b> Le cédant cède et transporte, sous les garanties ordinaires et de droit, au cessionnaire qui accepte, «nombre» '+des+' sur les «total» '+des+' qu\'il possède dans ladite société '+esc(x.denom)+'.</p>'
       +'<p><b>Article 2 — Propriété · Jouissance.</b> Le cessionnaire devient propriétaire des '+des+' cédées avec effet à compter du «date d\'effet». Il est subrogé dans tous les droits et obligations attachés aux '+des+' cédées.</p>'
@@ -3219,7 +3226,7 @@ window.modalDemandeView=function(id){
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-hdr"><b>'+esc(x.denom)+'</b>'
       +'<div class="sub">'+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
-      +'<div class="sub">Siège social : '+esc(x.siege)+(x.ville&&x.ville!=='«ville»'?(' '+esc(x.ville)):'')+'</div></div>'
+      +'<div class="sub">Siège social : '+esc(x.siegeComplet)+'</div></div>'
       +'<div class="st-titre">FEUILLE DE PRÉSENCE</div>'
       +'<p style="text-align:center;margin:-4px 0 12px">Assemblée générale du «date de l\'assemblée» — «heure» — «lieu de l\'assemblée»</p>'
       +'<table class="st-tbl"><thead><tr><th class="al">Associé (nom, prénom ou dénomination)</th><th>Nombre de '+des+'</th><th>Présence</th><th>Signature</th></tr></thead><tbody>'
@@ -3274,7 +3281,7 @@ window.modalDemandeView=function(id){
       +'<div class="st-hdr"><b>'+esc(x.denom)+'</b>'
       +'<div class="sub">'+esc(stFormeLabel(forme))+'</div>'
       +'<div class="sub">Au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
-      +'<div class="sub">Siège social : '+esc(x.siege)+(ville!=='«ville»'?(' '+esc(ville)):'')+'</div>'
+      +'<div class="sub">Siège social : '+esc(x.siegeComplet)+'</div>'
       +'<div class="sub">RCS : en cours d\'immatriculation</div></div>'
       +'<div class="st-titre">ÉTAT DES LIEUX ANTÉRIEURS</div>'
       +'<p style="margin-top:18px">Je soussigné(e) <b>'+esc(x.president)+'</b>, en qualité de '+qualite+' de la '+esc(forme)+' '+esc(x.denom)+',</p>'
@@ -3309,7 +3316,7 @@ window.modalDemandeView=function(id){
     var cover='<div class="st-cover"><div class="st-c1">STATUTS</div>'
       +'<div class="st-c2">SOCIÉTÉ À RESPONSABILITÉ LIMITÉE</div>'
       +'<div class="st-c3">'+esc(denom)+'</div><div class="st-c4">au capital de '+capN+' euros</div>'
-      +'<div class="st-c4">Siège social : '+esc(siege)+(ville?(', '+esc(ville)):'')+'</div></div>';
+      +'<div class="st-c4">Siège social : '+esc(x.siegeComplet)+'</div></div>';
     var soussignes=assoc.map(function(a){return '<p>- '+stCivil(a)+'</p>';}).join('');
     var preambule='<p><b>Les soussignés :</b></p>'+soussignes
       +'<p>ont établi ainsi qu\'il suit les statuts de la société à responsabilité limitée devant exister entre eux et toute autre personne qui viendrait ultérieurement à acquérir la qualité d\'associé.</p>';
@@ -3319,7 +3326,7 @@ window.modalDemandeView=function(id){
     A.push(art('ARTICLE 2 — Objet social',['La société a pour objet, en France et à l\'étranger : '+esc(objet)+'.','Toutes opérations industrielles, commerciales et financières, mobilières et immobilières se rattachant directement ou indirectement à l\'objet sus-indiqué ou à tous autres objets similaires ou connexes, de nature à favoriser la finalité de la société, son extension ou son développement.']));
     A.push('<div class="st-art">ARTICLE 3 — Dénomination sociale</div><p>La dénomination de la société est : « '+esc(denom)+' ».</p>'
       +'<p>Dans tous les actes et documents émanant de la société et destinés aux tiers, la dénomination doit être précédée ou suivie immédiatement des mots « société à responsabilité limitée » ou des initiales « S.A.R.L. » et de l\'énonciation du montant du capital social.</p>');
-    A.push(art('ARTICLE 4 — Siège social',['Le siège social est fixé au '+esc(siege)+(ville?(', '+esc(ville)):'')+'.','Il peut être transféré en tout autre lieu par décision collective des associés.']));
+    A.push(art('ARTICLE 4 — Siège social',['Le siège social est fixé au '+esc(x.siegeComplet)+'.','Il peut être transféré en tout autre lieu par décision collective des associés.']));
     A.push(art('ARTICLE 5 — Durée',['La durée de la société est fixée à quatre-vingt-dix-neuf années à compter de son immatriculation au registre du commerce et des sociétés, sauf cas de dissolution anticipée ou de prorogation.']));
     A.push('<div class="st-titre">TITRE II — APPORTS · CAPITAL SOCIAL · PARTS SOCIALES</div>');
     var apports=assoc.map(function(a){var p=Number(a.parts)||0;var m=(nominal&&p)?stNum(nominal*p):'«…»';return '<p>- '+(esc((a.nom||'').trim())||'«associé»')+', une somme en numéraire de '+m+' euros ;</p>';}).join('');
@@ -3368,7 +3375,7 @@ window.modalDemandeView=function(id){
     var cover='<div class="st-cover"><div class="st-c1">STATUTS</div>'
       +'<div class="st-c2">ENTREPRISE UNIPERSONNELLE À RESPONSABILITÉ LIMITÉE</div>'
       +'<div class="st-c3">'+esc(denom)+'</div><div class="st-c4">au capital de '+capN+' euros</div>'
-      +'<div class="st-c4">Siège social : '+esc(siege)+(ville?(', '+esc(ville)):'')+'</div></div>';
+      +'<div class="st-c4">Siège social : '+esc(x.siegeComplet)+'</div></div>';
     var preambule='<p><b>Le soussigné :</b></p><p>'+stCivil(uni)+'</p>'
       +'<p>a établi ainsi qu\'il suit les statuts d\'une entreprise unipersonnelle à responsabilité limitée.</p>';
     var A=[];
@@ -3377,7 +3384,7 @@ window.modalDemandeView=function(id){
     A.push(art('ARTICLE 2 — Objet social',['La société a pour objet, en France et à l\'étranger : '+esc(objet)+'.','ainsi que toutes opérations industrielles, commerciales et financières, mobilières et immobilières pouvant se rattacher directement ou indirectement à l\'objet social et à tous objets similaires ou connexes.']));
     A.push('<div class="st-art">ARTICLE 3 — Dénomination sociale</div><p>La dénomination de la société est : « '+esc(denom)+' ».</p>'
       +'<p>Dans tous les actes et documents émanant de la société, la dénomination sociale doit être précédée ou suivie des mots « entreprise unipersonnelle à responsabilité limitée » ou des initiales « E.U.R.L. » et de l\'énonciation du capital social.</p>');
-    A.push(art('ARTICLE 4 — Siège social',['Le siège social est fixé au '+esc(siege)+(ville?(', '+esc(ville)):'')+'. Il peut être transféré par décision de l\'associé unique.']));
+    A.push(art('ARTICLE 4 — Siège social',['Le siège social est fixé au '+esc(x.siegeComplet)+'. Il peut être transféré par décision de l\'associé unique.']));
     A.push(art('ARTICLE 5 — Durée',['La durée de la société est fixée à quatre-vingt-dix-neuf années à compter de son immatriculation au registre du commerce et des sociétés, sauf dissolution anticipée ou prorogation.']));
     A.push('<div class="st-titre">TITRE II — APPORTS · CAPITAL SOCIAL · PARTS SOCIALES</div>');
     A.push('<div class="st-art">ARTICLE 6 — Apports</div><p>L\'associé unique apporte à la société une somme en numéraire de '+capL+' euros ('+capN+' euros), intégralement libérée.</p>');
@@ -3411,7 +3418,7 @@ window.modalDemandeView=function(id){
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-hdr"><b>'+esc(x.denom)+'</b>'
       +'<div class="sub">'+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
-      +'<div class="sub">Siège social : '+esc(x.siege)+(x.ville&&x.ville!=='«ville»'?(' '+esc(x.ville)):'')+' — RCS de '+esc(rcsVille)+'</div></div>'
+      +'<div class="sub">Siège social : '+esc(x.siegeComplet)+' — RCS de '+esc(rcsVille)+'</div></div>'
       +'<div class="st-titre">RAPPORT DE GESTION</div>'
       +'<p style="text-align:center;margin:-4px 0 14px">Assemblée générale ordinaire annuelle du «date de l\'assemblée» (Exercice clos le «date de clôture»)</p>'
       +'<p>Mesdames, Messieurs,</p>'
@@ -3436,7 +3443,7 @@ window.modalDemandeView=function(id){
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-hdr"><b>'+esc(x.denom)+'</b>'
       +'<div class="sub">'+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
-      +'<div class="sub">Siège social : '+esc(x.siege)+(x.ville&&x.ville!=='«ville»'?(' '+esc(x.ville)):'')+' — RCS de '+esc(rcsVille)+'</div></div>'
+      +'<div class="sub">Siège social : '+esc(x.siegeComplet)+' — RCS de '+esc(rcsVille)+'</div></div>'
       +'<div class="st-titre">PROCÈS-VERBAL DE L\'ASSEMBLÉE GÉNÉRALE «ORDINAIRE / EXTRAORDINAIRE»</div>'
       +'<p style="text-align:center;margin:-4px 0 14px">En date du «date de l\'assemblée»</p>'
       +'<p>L\'an «…», le «date», les '+motAssoc+' de la société '+esc(x.denom)+' se sont réunis en assemblée générale «ordinaire / extraordinaire» au siège social, sur convocation de '+conv+'.</p>'
@@ -3488,7 +3495,7 @@ window.modalDemandeView=function(id){
       +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(domiciliation du siège social au domicile du '+qualite+')</p>'
       +'<p style="margin-top:10px">Je soussigné, <b>'+esc(x.president)+'</b>, demeurant '+esc(domicile)+', '+qualite+' de la société ci-après référencée :</p>'
       +'<p style="margin-top:8px">Dénomination sociale : <b>'+esc(x.denom)+'</b></p>'
-      +'<p>Siège social : '+esc(x.siege)+(ville?(' '+esc(ville)):'')+'</p>'
+      +'<p>Siège social : '+esc(x.siegeComplet)+'</p>'
       +'<p style="margin-top:12px"><b>Déclare :</b></p>'
       +'<p>fixer le siège social de la société susvisée à mon domicile personnel situé au '+esc(domicile)+', et y exercer une activité, aucune disposition législative ou stipulation contraire ne s\'y opposant, conformément à l\'article L.123-11-1 du Code de commerce.</p>'
       +'<p style="margin-top:10px">La présente déclaration est établie et produite en vue de l\'immatriculation ou de l\'inscription modificative de la société susvisée au Registre du Commerce et des Sociétés de '+esc(greffe)+'.</p>'
