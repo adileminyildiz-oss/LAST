@@ -1387,10 +1387,21 @@ function espPiecesCard(d){
    +ESP_PIECES.map(function(pc){return espPieceRow(d,pc);}).join('')
    +banner+'</div></div>';
 }
+function espMiniList(list,id){
+  return '<aside class="esp-mini"><div class="esp-mini-h">Dossiers<span class="esp-mini-n">'+list.length+'</span></div>'
+   +'<div class="esp-mini-list">'
+   +list.map(function(x){var c=statColor(x.statut);
+      return '<button class="esp-mini-item'+(x.id===id?' on':'')+'" onclick="state.espaceDossier=\''+x.id+'\';render()">'
+        +'<span class="esp-mini-dot" style="background:'+c+'"></span>'
+        +'<span class="esp-mini-txt"><b>'+esc(dossierClients(x))+'</b><span>'+esc(x.ref)+'</span></span>'
+        +'</button>';
+    }).join('')
+   +'</div></aside>';
+}
 function espPanel(d,list,id){
-  return '<div class="grid esp-top" style="align-items:start">'
-   +espMailCard(d)
-   +espDlist(list,id)
+  return '<div class="esp-shell">'
+   +espMiniList(list,id)
+   +'<div class="esp-main">'+espMailCard(d)+'</div>'
    +'</div>';
 }
 function espStatutsCard(d){
@@ -2077,7 +2088,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=34;
+var LAST_VER=35;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3804,6 +3815,21 @@ window.modalDemandeView=function(id){
 .esp-form-tbl td.l{color:var(--ink-3,#8a7d69);width:44%;font-weight:600}
 .esp-form-tbl td.v{color:var(--ink,#2a2117);white-space:pre-wrap}
 .esp-formmail{background:var(--card,#fffdf8);border:1px solid var(--line-soft,#e8e0d0);border-radius:8px;padding:8px 10px}
+/* Mini barre latérale des dossiers (sous-dossiers), juste après la barre latérale principale */
+.esp-shell{display:grid;grid-template-columns:216px minmax(0,1fr);gap:16px;align-items:start}
+.esp-mini{position:sticky;top:8px;background:var(--card,#fffdf7);border:1px solid var(--line-2,#e2d9c6);border-radius:11px;overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 96px)}
+.esp-mini-h{padding:11px 13px;font-weight:700;font-size:11px;letter-spacing:1.1px;text-transform:uppercase;color:var(--ink-3,#9c9078);border-bottom:1px solid var(--line-2,#e2d9c6);display:flex;align-items:center;gap:8px}
+.esp-mini-n{margin-left:auto;font-size:10.5px;font-weight:700;color:var(--ink-2,#6f6656);background:var(--paper-2,#f4eee2);border:1px solid var(--line,#eae1d0);border-radius:20px;padding:1px 8px;text-transform:none;letter-spacing:0}
+.esp-mini-list{overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:2px}
+.esp-mini-item{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:1px solid transparent;border-radius:8px;padding:8px 9px;cursor:pointer;color:var(--ink,#302c24);font:inherit;transition:background .12s}
+.esp-mini-item:hover{background:rgba(95,75,35,.06)}
+.esp-mini-item.on{background:#ece1c8;border-color:#ddd0b0}
+.esp-mini-dot{width:8px;height:8px;border-radius:50%;flex:none}
+.esp-mini-txt{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.esp-mini-txt b{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.esp-mini-txt span{font-size:10px;color:var(--ink-3,#9c9078);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.esp-main{min-width:0}
+@media(max-width:860px){.esp-shell{grid-template-columns:1fr}.esp-mini{position:static;max-height:none;flex-direction:column}.esp-mini-list{max-height:230px}}
 </style>
 
 <script id="a4-pages-mod">
