@@ -2152,7 +2152,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=39;
+var LAST_VER=40;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2633,7 +2633,16 @@ function formParseHtmlTable(html){var out={};var byNorm={};FORM_FIELDS.forEach(f
    if(rc.length>=2){var k=keyOf(rc[0]);var v=rc.slice(1).join(' ').trim();if(k&&v&&!out[k])out[k]=v;}}
  var cells=[];var reTd2=/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi,m3;while((m3=reTd2.exec(html)))cells.push(formCellText(m3[1]));
  for(var i=0;i<cells.length;i++){var kk=keyOf(cells[i]);if(kk&&!out[kk]){for(var j=i+1;j<cells.length;j++){if(!cells[j])continue;if(keyOf(cells[j]))break;out[kk]=cells[j];break;}}}
+ if(out.situation&&!/mari|celib|célib|pacs|divorc|veuf|veuve|union|concubin/i.test(out.situation))delete out.situation;
  return out;}
+/* Toutes les lignes du tableau, libellés d'origine conservés (affichage fidèle) */
+function formRawPairs(html){html=(''+html);var pairs=[],seen={},single=[];
+ function push(l,v){l=(''+l).trim();v=(''+v).replace(/\s+/g,' ').trim();if(!l||!v)return;var ln=formNorm(l);if(!ln||ln==='name'||ln==='value'||ln==='champ'||ln==='valeur'||ln==='field')return;if(seen[ln])return;seen[ln]=1;pairs.push({l:l,v:v});}
+ var reTr=/<tr[^>]*>([\s\S]*?)<\/tr>/gi,mr;
+ while((mr=reTr.exec(html))){var rc=[];var reTd=/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi,m2;while((m2=reTd.exec(mr[1])))rc.push(formCellText(m2[1]));
+   if(rc.length>=2)push(rc[0],rc.slice(1).join(' '));else if(rc.length===1&&rc[0])single.push(rc[0]);}
+ if(!pairs.length&&single.length>=2){for(var i=0;i+1<single.length;i+=2)push(single[i],single[i+1]);}
+ return pairs;}
 function formParse(text){text=(''+text);var out={};var byNorm={};
  FORM_FIELDS.forEach(function(f){byNorm[formNorm(f.label)]=f.key;});
  if(/<t[dr]\b|<table\b/i.test(text)){var ht=formParseHtmlTable(text);for(var hk in ht)if(!out[hk])out[hk]=ht[hk];}
@@ -3783,7 +3792,9 @@ window.modalDemandeView=function(id){
   function espFormRows(d){
     var dm=(typeof espDemandeDe==='function')?espDemandeDe(d):d;
     var src=(typeof formSrc==='function')?formSrc(dm):((dm&&(dm.rawBody||dm.message))||'');
-    if(!src||typeof formParse!=='function'||typeof FORM_FIELDS==='undefined')return [];
+    if(!src)return [];
+    if(/<t[dr]\b|<table\b/i.test(src)&&typeof formRawPairs==='function'){var rp=formRawPairs(src);if(rp.length)return rp;}
+    if(typeof formParse!=='function'||typeof FORM_FIELDS==='undefined')return [];
     var p=formParse(src);
     return FORM_FIELDS.filter(function(f){return p[f.key];}).map(function(f){return {l:f.label,v:p[f.key]};});
   }
