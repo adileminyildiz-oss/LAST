@@ -1417,8 +1417,51 @@ function espDocsPretsCard(d){
       +(done?'<span class="dpret-done">Terminé ✓</span>':'<button class="btn btn-sm" onclick="espDocTerminer(\''+d.id+'\',\''+k+'\')">Terminer</button>')
       +'</div>';
   }).join('');
-  return '<div class="card"><div class="card-h"><h2>Documents prêts</h2><span class="sub" style="margin-left:auto">'+keys.length+'</span></div><div class="card-b dpret-list">'+rows+'</div></div>';
+  var bar='';
+  if(espTousPrets(d)){
+    bar='<div class="dpret-actions"><div class="dpret-ready">Tous les documents nécessaires à la création sont réunis.</div>'
+      +'<div class="dpret-btns">'
+      +'<button class="btn btn-pri btn-sm" onclick="espImprimerTout(\''+d.id+'\')">Imprimer</button>'
+      +'<button class="btn btn-sm" onclick="espTelechargerOuvrir(\''+d.id+'\')">Télécharger</button>'
+      +'<button class="btn btn-sm" onclick="espEnvoyerMail(\''+d.id+'\')">Envoie</button>'
+      +'</div></div>';
+  }
+  return '<div class="card"><div class="card-h"><h2>Documents prêts</h2><span class="sub" style="margin-left:auto">'+keys.length+'</span></div><div class="card-b dpret-list">'+rows+bar+'</div></div>';
 }
+function espDocsRequis(d){var L=(typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]);return L.filter(function(dc){return (typeof espDocReq==='function')?espDocReq(d,dc.k):true;});}
+function espTousPrets(d){var req=espDocsRequis(d);if(!req.length)return false;var st=d.docState||{};return req.every(function(dc){return st[dc.k]&&st[dc.k].ts;});}
+function espDocBody(d,dc){return (dc.k==='fiche')?ficheTechniqueHTML(d):espDocHTML(d,dc);}
+function espDocFileBase(d){var c=clientById((d.clientIds||[])[0])||{};return ((c.denomination||dossierClients(d)||'dossier')+'').replace(/[^\wÀ-ÿ \-]/g,'').replace(/\s+/g,'-');}
+function espImprimerTout(id){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;var docs=espDocsRequis(d);if(!docs.length)return;
+  if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();
+  var html=docs.map(function(dc){return a4Paginate(espDocBody(d,dc));}).join('');
+  var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}
+  pa.innerHTML='<div class="doc-gen">'+html+'</div>';setTimeout(function(){window.print();},140);}
+function espStandaloneHTML(title,inner){var css=Array.prototype.map.call(document.querySelectorAll('style'),function(s){return s.textContent;}).join('\n');
+  var SO='<'+'style>',SC='</'+'style>';
+  return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>'+esc(title)+'</title>'+SO+css+SC
+   +SO+'html,body{background:#fff;margin:0;padding:14px}.doc-gen .a4-doc{gap:12px}.a4-page{box-shadow:none!important;margin:0 auto!important}@media print{.a4-page{page-break-after:always}}'+SC
+   +'</head><body><div class="doc-gen">'+inner+'</div></body></html>';}
+function espDlFile(name,html){try{var blob=new Blob([html],{type:'text/html;charset=utf-8'});var u=URL.createObjectURL(blob);var a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(u);a.remove();},600);}catch(e){if(typeof toast==='function')toast('Téléchargement impossible');}}
+function espTelechargerDossier(id){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;var docs=espDocsRequis(d);var inner=docs.map(function(dc){return a4Paginate(espDocBody(d,dc));}).join('');
+  espDlFile('Dossier-'+espDocFileBase(d)+'.html',espStandaloneHTML('Dossier — '+dossierClients(d),inner));espDlClose();}
+function espTelechargerDoc(id,k){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;var dc=espDocsRequis(d).find(function(x){return x.k===k;})||{k:k,l:k};var inner=a4Paginate(espDocBody(d,dc));
+  var base=(''+dc.l).replace(/[^\wÀ-ÿ \-]/g,'').replace(/\s+/g,'-');
+  espDlFile(base+'-'+espDocFileBase(d)+'.html',espStandaloneHTML(dc.l+' — '+dossierClients(d),inner));espDlClose();}
+function espDlClose(){var o=document.getElementById('esp-dl-ov');if(o)o.remove();}
+function espDlBox(inner){espDlClose();var o=document.createElement('div');o.id='esp-dl-ov';o.className='edl-ov';o.onclick=function(e){if(e.target===o)espDlClose();};o.innerHTML='<div class="edl-box"><button class="edl-x" onclick="espDlClose()" aria-label="Fermer">✕</button>'+inner+'</div>';document.body.appendChild(o);}
+function espTelechargerOuvrir(id){espDlBox('<div class="edl-t">Télécharger</div><div class="edl-msg">Que souhaitez-vous télécharger ?</div>'
+   +'<div class="edl-choices"><button class="btn btn-pri" onclick="espTelechargerDossier(\''+id+'\')">Dossier complet</button>'
+   +'<button class="btn" onclick="espTelechargerListe(\''+id+'\')">Document unique</button></div>');}
+function espTelechargerListe(id){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;var docs=espDocsRequis(d);
+  var items=docs.map(function(dc){return '<button class="edl-item" onclick="espTelechargerDoc(\''+id+'\',\''+dc.k+'\')">'+esc(dc.l)+'</button>';}).join('');
+  espDlBox('<div class="edl-t">Document unique</div><div class="edl-msg">Choisissez le document à télécharger.</div><div class="edl-list">'+items+'</div>');}
+function espEnvoyerMail(id){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;var c=clientById((d.clientIds||[])[0])||{};var to=(c.email||'').trim();
+  var societe=((c.denomination||dossierClients(d))+'').trim();
+  var liste=espDocsRequis(d).map(function(dc){return '- '+dc.l;}).join('\n');
+  var subj='Documents de création — '+societe;
+  var body='Bonjour,\n\nVeuillez trouver les documents relatifs à la création de votre société '+societe+' :\n'+liste+'\n\nMerci de nous retourner les exemplaires signés.\n\nCordialement,\nAEM CONSEIL';
+  window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);}
 function espPanel(d,list,id){
   return '<div class="esp-shell">'
    +espMiniList(list,id)
@@ -2109,7 +2152,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=37;
+var LAST_VER=38;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3858,6 +3901,20 @@ window.modalDemandeView=function(id){
 .dpret-when{margin-left:auto;font-size:11px;color:var(--ink-3,#9c9078);white-space:nowrap}
 .dpret-done{font-size:11.5px;font-weight:700;color:#3f8f5b;white-space:nowrap}
 @media(max-width:640px){.dpret-row{flex-wrap:wrap}.dpret-when{margin-left:0;width:100%}}
+.dpret-actions{margin-top:4px;padding-top:12px;border-top:1px dashed var(--line-2,#e2d9c6);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.dpret-ready{font-size:12px;color:#3f8f5b;font-weight:600}
+.dpret-btns{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+/* Modale de téléchargement (léger, fond flouté) */
+.edl-ov{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(30,25,15,.26);backdrop-filter:blur(6px) saturate(1.04);-webkit-backdrop-filter:blur(6px) saturate(1.04)}
+.edl-box{position:relative;background:var(--card,#fffdf7);border:1px solid var(--line-2,#e2d9c6);border-radius:14px;box-shadow:0 24px 64px rgba(40,30,10,.34);padding:20px 22px 22px;max-width:380px;width:calc(100% - 40px)}
+.edl-t{font-weight:700;font-size:15px;color:var(--ink,#302c24);margin-bottom:3px}
+.edl-msg{font-size:12.5px;color:var(--ink-2,#6f6656);margin-bottom:15px}
+.edl-choices{display:flex;gap:10px}
+.edl-choices .btn{flex:1;justify-content:center}
+.edl-x{position:absolute;top:9px;right:11px;background:none;border:0;font-size:15px;line-height:1;cursor:pointer;color:var(--ink-3,#9c9078)}
+.edl-list{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto}
+.edl-item{text-align:left;background:var(--paper,#fffef9);border:1px solid var(--line-soft,#f0e9da);border-radius:8px;padding:10px 12px;cursor:pointer;font:inherit;font-size:12.5px;color:var(--ink,#302c24);transition:background .12s}
+.edl-item:hover{background:var(--paper-2,#f8f3e8);border-color:#cbbc93}
 @media(max-width:860px){.esp-shell{grid-template-columns:1fr;margin:0}.esp-mini{position:static;min-height:0;border-right:0;border-bottom:1px solid var(--line-2,#e2d9c6)}.esp-main{padding-top:12px}.esp-mini-list{max-height:200px}}
 </style>
 
