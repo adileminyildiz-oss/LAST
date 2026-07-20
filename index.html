@@ -806,7 +806,7 @@ function tableDemandes(list,tab){
    +list.map(function(d){var u=userById(d.assigneA);var p=IA.pieces(d);
       var ptag=p.complet?'<span class="tag ok">Dossier complet</span>':(p.flou?'<span class="tag warm">Précisions à obtenir</span>':'<span class="tag mut">Pièces à demander</span>');
       return '<tr onclick="modalDemandeView(\''+d.id+'\')" style="cursor:pointer">'
-        +'<td><div class="tname">'+esc(d.clientNom)+'</div><div class="tsub">'+esc(d.canal)+' · '+frDate(d.date)+'</div></td>'
+        +'<td><div class="tname">'+esc(demBestName(d))+'</div><div class="tsub">'+esc(d.canal)+' · '+frDate(d.date)+'</div></td>'
         +'<td><span class="tag blue">'+esc(IA.objet(d))+'</span></td>'
         +'<td class="hide-sm">'+ptag+'</td>'
         +'<td class="hide-sm">'+(u?'<span class="tag"><span class="av" style="width:18px;height:18px;font-size:8px;background:'+u.couleur+'">'+initials(u.nom)+'</span> '+u.nom+'</span>':'<span class="tag mut">Non assigné</span>')+'</td>'
@@ -2234,20 +2234,31 @@ function ensureData(){
 /* boot */
 /* ===== Accès protégé (mot de passe) ===== */
 var LAST_PWD_HASH='afab4393905b6a733139713689265cb550f4749024a49723e675a772a7c85a64';
+/* Extraction robuste du nom réel d'un mail FormSubmit (essaie HTML, texte, *nom*, « nom  valeur ») */
+function mailExtractName(d){if(!d)return '';var cands=[d.rawHtml,d.rawBody,d.message,(d.thread&&d.thread[0]&&d.thread[0].body)];
+  for(var i=0;i<cands.length;i++){var body=cands[i];if(!body)continue;
+    try{var fx=formSubmitExtract({body:body,from:''});if(fx&&fx.nomComplet&&!/formsubmit/i.test(fx.nomComplet)&&fx.nomComplet.trim().length>=2)return fx.nomComplet.trim();}catch(e){}
+    var flat=(''+body).replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' ');
+    var m=flat.match(/\*\s*nom\s*\*\s*([^\n*]{2,60}?)\s*(?=\*|submitted|sponsor|$)/i)
+        ||flat.match(/(?:^|\s)nom(?:\s+et\s+prenom|\s+complet)?\s*[:\-]?\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\- ]{1,50}?)\s*(?=email|e-mail|mail|telephone|tel|phone|message|adresse|submitted|$)/i);
+    if(m&&m[1]){var nm=m[1].replace(/\s+/g,' ').trim();if(nm&&!/^(value|name|formsubmit)$/i.test(nm)&&!/formsubmit/i.test(nm))return nm;}}
+  return '';}
+/* Meilleur nom d'affichage (temps réel, sans dépendre d'une migration persistée) */
+function demBestName(d){if(!d)return 'Expéditeur';var n=(''+(d.clientNom||'')).trim();if(n&&!/formsubmit/i.test(n))return n;var x=mailExtractName(d);return x||n||'Expéditeur';}
 /* Corrige le nom des demandes FormSubmit déjà reçues (nom générique « FormSubmit ») */
 function migrateFormSubmitNames(){try{var chg=false;(DB.demandes||[]).forEach(function(d){
-  var src=(d.rawBody||d.message||'');var isFS=/\*nom\*|submitted your form|formsubmit/i.test(src)||/formsubmit/i.test(d.clientNom||'');
-  if(!isFS)return;
-  if(d.clientNom&&!/formsubmit/i.test(d.clientNom)&&(''+d.clientNom).trim())return;
-  var fx=formSubmitExtract({body:(src||d.rawHtml||''),from:''});
-  if(fx.nomComplet&&!/formsubmit/i.test(fx.nomComplet)){
-    d.clientNom=fx.nomComplet;if(fx.email)d.clientEmail=fx.email;if(fx.tel)d.clientTel=fx.tel;chg=true;
-    if(d.dossierId){var dos=(DB.dossiers||[]).find(function(x){return x.id===d.dossierId;});
-      if(dos&&(dos.clientIds||[]).length){var c=clientById(dos.clientIds[0]);
-        if(c&&(/formsubmit/i.test(((c.prenom||'')+' '+(c.nom||''))) || !((c.prenom||'')+(c.nom||'')).trim())){
-          var parts=fx.nomComplet.split(/\s+/);c.prenom=parts[0]||'';c.nom=parts.slice(1).join(' ')||'';
-          if(fx.email&&(/formsubmit/i.test(c.email||'')||!c.email))c.email=fx.email;if(fx.tel&&!c.tel)c.tel=fx.tel;}}}
-  }});if(chg&&typeof save==='function')save();}catch(e){}}
+  var n=(''+(d.clientNom||'')).trim();if(n&&!/formsubmit/i.test(n))return;
+  var real=mailExtractName(d);if(!real)return;
+  d.clientNom=real;chg=true;
+  var fx={};try{fx=formSubmitExtract({body:(d.rawHtml||d.rawBody||d.message||''),from:''})||{};}catch(e){}
+  if(fx.email&&(/formsubmit/i.test(d.clientEmail||'')||!d.clientEmail))d.clientEmail=fx.email;
+  if(fx.tel&&!d.clientTel)d.clientTel=fx.tel;
+  if(d.dossierId){var dos=(DB.dossiers||[]).find(function(x){return x.id===d.dossierId;});
+    if(dos&&(dos.clientIds||[]).length){var c=clientById(dos.clientIds[0]);
+      if(c&&(/formsubmit/i.test(((c.prenom||'')+' '+(c.nom||'')))||!((c.prenom||'')+(c.nom||'')).trim())){
+        var parts=real.split(/\s+/);c.prenom=parts[0]||'';c.nom=parts.slice(1).join(' ')||'';
+        if(fx.email&&(/formsubmit/i.test(c.email||'')||!c.email))c.email=fx.email;if(fx.tel&&!c.tel)c.tel=fx.tel;}}}
+  });if(chg&&typeof save==='function')save();}catch(e){}}
 function lastBoot(){try{load();ensureData();migrateFormSubmitNames();}catch(e){}render();}
 async function _sha256(s){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0');}).join('');}
 async function lastGateTry(ev){if(ev&&ev.preventDefault)ev.preventDefault();
@@ -2294,7 +2305,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=53;
+var LAST_VER=54;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3946,15 +3957,18 @@ window.modalDemandeView=function(id){
   }
   window.espMailCard=function(d){
     var dm=espDemandeDe(d);var c=clientById((d.clientIds||[])[0])||{};
+    var nom=(dm?demBestName(dm):'')||dossierClients(d);
+    /* Corrige la fiche client si le nom est resté générique (FormSubmit) */
+    try{ if(dm&&nom&&!/formsubmit/i.test(nom)&&c&&(/formsubmit/i.test(((c.prenom||'')+' '+(c.nom||'')))||!((c.prenom||'')+(c.nom||'')).trim())){var _p=nom.split(/\s+/);c.prenom=_p[0]||'';c.nom=_p.slice(1).join(' ')||'';if(typeof save==='function')save();} }catch(_e){}
     var email=(dm&&dm.clientEmail)||c.email||'—';
     var canal=(dm&&dm.canal)||'—';
     var objet=dm?IA.objet(dm):'—';
     var du=espDuree(d);var fi=espFidelite(d);
     var mailView=dm?('<div class="esp-mail-view">'+mailFrame(dm)+'</div>')
       :'<div class="esp-mail"><div class="esp-mail-body"><i>Aucun mail lié à ce dossier (créé manuellement).</i></div></div>';
-    return '<div class="card esp-mailcard"><div class="card-h"><h2>Demande du client</h2><span class="sub" style="margin-left:auto">'+esc(dossierClients(d))+' · '+esc(d.ref)+'</span></div><div class="card-b">'
-     +'<div class="esp-from"><span class="av" style="background:linear-gradient(160deg,#4a4034,#2c271f)">'+initials(dossierClients(d))+'</span>'
-     +'<div><div class="tname">'+esc(dossierClients(d))+'</div><div class="tsub">'+esc(email)+' · '+esc(canal)+'</div></div></div>'
+    return '<div class="card esp-mailcard"><div class="card-h"><h2>Demande du client</h2><span class="sub" style="margin-left:auto">'+esc(nom)+' · '+esc(d.ref)+'</span></div><div class="card-b">'
+     +'<div class="esp-from"><span class="av" style="background:linear-gradient(160deg,#4a4034,#2c271f)">'+initials(nom)+'</span>'
+     +'<div><div class="tname">'+esc(nom)+'</div><div class="tsub">'+esc(email)+' · '+esc(canal)+'</div></div></div>'
      +'<div class="esp-mail-obj" style="margin:2px 0 8px">Objet : '+esc(objet)+'</div>'
      +mailView
      +'<div class="esp-notes"><span class="tag '+du.c+'">'+du.lbl+' · '+du.temps+'</span><span class="tag '+fi.c+'">'+fi.lbl+'</span></div>'
