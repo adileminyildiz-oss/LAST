@@ -2722,7 +2722,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=75;
+var LAST_VER=76;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3574,36 +3574,13 @@ function demAttRecuperer(id){var d=DB.demandes.find(function(x){return x.id===id
    (list||[]).forEach(function(fa){for(var i=0;i<atts.length;i++){var a=atts[i];if(a.msgId===mid&&!a.dataB64&&(a.name===fa.name||!a.name)){a.dataB64=fa.dataB64;a.type=fa.type;a.name=a.name||fa.name;break;}}});
    if(--pending===0){d.attachments=atts;save();toast('✅ Pièces jointes récupérées.');modalDemandeView(id);}
  });});}
+/* La « fiche technique » modale (mail brut FormSubmit) n'est plus jamais affichée :
+   on ouvre directement la vue détaillée en pleine page (Mail reçu + Traitement + Documents). */
 window.modalDemandeView=function(id){
  var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
- var p=IA.pieces(d);var t=demType(d);var atts=demAtt(d);
- var ptag=p.complet?'<span class="tag ok">Dossier complet</span>':(p.flou?'<span class="tag warm">Précisions à obtenir (appel conseillé)</span>':'<span class="tag mut">Pièces à demander</span>');
- var thread='';
- if(d.thread&&d.thread.length>1){thread='<label>Fil de discussion ('+d.thread.length+' messages)</label><div class="dem-thread">'
-   +d.thread.map(function(mm){return '<div class="dem-msg"><div class="dem-msg-h">'+esc(mm.from||'')+' · '+frDate(mm.date||'')+'</div><div class="dem-msg-b">'+esc((mm.body||'').slice(0,600))+'</div></div>';}).join('')+'</div>';}
- var attBlock='';
- if(atts.length){var needF=atts.some(function(a){return a.msgId&&!a.dataB64;});
-   attBlock='<label>Pièces jointes ('+atts.length+')</label><div class="dem-atts">'
-   +atts.map(function(a,i){return '<span class="dem-att">📎 '+esc(a.name||('pièce '+(i+1)))+(a.dataB64?(' <a href="data:'+(a.type||'application/octet-stream')+';base64,'+a.dataB64+'" download="'+esc(a.name||'piece')+'">⤓</a>'):'')+'</span>';}).join('')
-   +(needF?'<button class="btn btn-sm btn-pri" style="margin-left:4px" onclick="demAttRecuperer(\''+id+'\')">📥 Récupérer les fichiers</button>':'')+'</div>';}
- openModal('Fiche technique — '+esc(d.clientNom),
-   '<div class="chips" style="margin-bottom:12px">'+demTypeBadge(d)+'<span class="tag blue">Objet : '+esc(IA.objet(d))+'</span>'+ptag+'</div>'
-   +'<div class="grid g2" style="gap:10px">'
-   +'<div><label>Email</label><div class="hint">'+esc(d.clientEmail||'—')+'</div></div>'
-   +'<div><label>Téléphone</label><div class="hint">'+esc(d.clientTel||'—')+'</div></div>'
-   +'<div><label>Canal</label><div class="hint">'+esc(d.canal||'—')+'</div></div>'
-   +'<div><label>Reçue le</label><div class="hint">'+frDate(d.date)+'</div></div></div>'
-   +attBlock
-   +'<label>Message reçu</label><div class="hint" style="background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:11px;white-space:pre-wrap;max-height:220px;overflow:auto">'+esc(d.message||'—')+'</div>'
-   +thread
-   +'<label>Assigner à un collaborateur</label>'
-   +'<select id="dm-assign">'+['<option value="">— Non assigné —</option>'].concat(DB.users.map(function(u){return '<option value="'+u.id+'" '+(d.assigneA===u.id?'selected':'')+'>'+esc(u.nom)+(u.role==='admin'?' (admin)':'')+'</option>';})).join('')+'</select>'
-   +'<div class="hint" style="margin-top:6px;font-size:11px">Sans assignation, la demande reste dans « À traiter ».</div>',
-   '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
-   +'<button class="btn" onclick="assignDemande(\''+id+'\')">Assigner</button>'
-   +'<button class="btn" onclick="demDevis(\''+id+'\')">🧾 Devis</button>'
-   +'<button class="btn" onclick="demQuestionnaire(\''+id+'\')">📋 Questionnaire</button>'
-   +'<button class="btn btn-pri" onclick="demOuvrirDossier(\''+id+'\')">📂 Ouvrir le dossier</button>');
+ try{ if(typeof closeModal==='function') closeModal(); }catch(e){}
+ state.page='demandes'; state.demView=id;
+ render();
 };
 </script>
 <style id="dem-tower-mod">
