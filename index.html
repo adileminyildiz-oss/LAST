@@ -1151,7 +1151,9 @@ function listeDossiers(list){
     <td class="hide-sm">${assigneTag(d)}</td><td>${eur(dossierMontant(d))}</td></tr>`).join('')}
   </tbody></table>`:`<div class="empty">Aucun dossier.</div>`}</div></div>`;
 }
-const dossierClients=d=>d.clientIds.map(id=>{const c=clientById(id);return c?c.prenom+' '+c.nom:'?';}).join(', ')||'—';
+const dossierClients=d=>{var names=(d.clientIds||[]).map(function(id){var c=clientById(id);if(!c)return '';var nm=((c.prenom||'')+' '+(c.nom||'')).trim();return (nm&&!/formsubmit/i.test(nm))?nm:'';}).filter(Boolean);
+  if(!names.length){try{var dm=(typeof espDemandeDe==='function')?espDemandeDe(d):null;if(dm){var x=(typeof demBestName==='function')?demBestName(dm):'';if(x&&!/formsubmit/i.test(x))names.push(x);}}catch(e){}}
+  return names.join(', ')||'—';};
 const dossierMontant=d=>d.serviceIds.reduce((s,id)=>{const v=svcById(id);return s+(v?(+v.prix||0)+(+v.debours||0):0);},0);
 function assigneTag(d){const u=userById(d.assigneA);return u?`<span class="tag"><span class="av" style="width:18px;height:18px;font-size:8px;background:${u.couleur}">${initials(u.nom)}</span>${u.nom}</span>`:'<span class="tag mut">Non assigné</span>';}
 
@@ -2305,7 +2307,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=54;
+var LAST_VER=55;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
