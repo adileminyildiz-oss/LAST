@@ -809,7 +809,7 @@ function tableDemandes(list,tab){
         +'<td><span class="tag blue">'+esc(IA.objet(d))+'</span></td>'
         +'<td class="hide-sm">'+ptag+'</td>'
         +'<td class="hide-sm">'+(u?'<span class="tag"><span class="av" style="width:18px;height:18px;font-size:8px;background:'+u.couleur+'">'+initials(u.nom)+'</span> '+u.nom+'</span>':'<span class="tag mut">Non assigné</span>')+'</td>'
-        +'<td onclick="event.stopPropagation()"><button class="btn btn-sm btn-ghost" onclick="modalDemandeView(\''+d.id+'\')">Récapitulatif</button></td>'
+        +'<td onclick="event.stopPropagation()"><button class="btn btn-sm" onclick="demMailComplet(\''+d.id+'\')">Mail complet</button> <button class="btn btn-sm btn-ghost" onclick="modalDemandeView(\''+d.id+'\')">Récapitulatif</button></td>'
         +'</tr>';
     }).join('')
    +'</tbody></table>';
@@ -830,10 +830,34 @@ function modalDemandeView(id){
     +'<select id="dm-assign">'+['<option value="">— Non assigné —</option>'].concat(DB.users.map(function(u){return '<option value="'+u.id+'" '+(d.assigneA===u.id?'selected':'')+'>'+esc(u.nom)+(u.role==='admin'?' (admin)':'')+'</option>';})).join('')+'</select>'
     +'<div class="hint" style="margin-top:6px;font-size:11px">Sans assignation, la demande reste dans l\'onglet « À traiter ».</div>',
     '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+    +'<button class="btn" onclick="demMailComplet(\''+id+'\')">Mail complet</button>'
     +'<button class="btn" onclick="assignDemande(\''+id+'\')">Assigner</button>'
     +'<button class="btn" onclick="demDevis(\''+id+'\')">🧾 Devis</button>'
     +'<button class="btn" onclick="demQuestionnaire(\''+id+'\')">📋 Questionnaire</button>'
     +'<button class="btn btn-pri" onclick="demOuvrirDossier(\''+id+'\')">📂 Ouvrir le dossier</button>');
+}
+/* Espace « Mail reçu » : affiche le mail d'origine complet, sans déformation (iframe isolée) */
+function demMailComplet(id){
+  var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
+  var html=(d.rawHtml||'');var isHtml=!!(html&&/<[a-z][\s\S]*>/i.test(html));
+  var txt=(d.rawBody||d.message||'');
+  var from=esc((d.clientNom||'')+(d.clientEmail?(' <'+d.clientEmail+'>'):''));
+  var subj=esc(d.subject||d.serviceSouhaite||'(sans objet)');
+  var atts=(d.attachments||[]).map(function(a){return esc((a&&(a.name||a.nom))||a||'');}).filter(Boolean);
+  var meta='<div class="mailv-meta">'
+    +'<div class="mailv-row"><span class="mailv-l">De</span><span class="mailv-v">'+from+'</span></div>'
+    +'<div class="mailv-row"><span class="mailv-l">Objet</span><span class="mailv-v">'+subj+'</span></div>'
+    +'<div class="mailv-row"><span class="mailv-l">Reçu le</span><span class="mailv-v">'+frDate(d.date)+(d.canal?(' · '+esc(d.canal)):'')+'</span></div>'
+    +(atts.length?'<div class="mailv-row"><span class="mailv-l">Pièces</span><span class="mailv-v">'+atts.join(', ')+'</span></div>':'')
+    +'</div>';
+  openModal('Mail reçu — '+esc(d.clientNom||''),
+    meta+'<div class="mailv-frame-wrap"><iframe id="mailv-frame" class="mailv-frame" sandbox="allow-popups allow-popups-to-escape-sandbox"></iframe></div>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+    +'<button class="btn btn-pri" onclick="closeModal();demOuvrirDossier(\''+id+'\')">Ouvrir le dossier</button>');
+  setTimeout(function(){var f=document.getElementById('mailv-frame');if(!f)return;var SO='<'+'style>',SC='</'+'style>';
+    if(isHtml){f.srcdoc='<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+SO+'body{margin:0;padding:16px;font:14px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff}table{border-collapse:collapse;max-width:100%}img{max-width:100%;height:auto}a{color:#1a5fb4}'+SC+'</head><body>'+html+'</body></html>';}
+    else{f.srcdoc='<!doctype html><html><head><meta charset="utf-8">'+SO+'body{margin:0;padding:16px;font:13.5px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;color:#1a1a1a;background:#fff}'+SC+'</head><body>'+esc(txt||'(mail vide)')+'</body></html>';}
+  },30);
 }
 function modalDemandeMail(id){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
@@ -2249,7 +2273,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=50;
+var LAST_VER=51;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3916,6 +3940,7 @@ window.modalDemandeView=function(id){
      +'<div><div class="tname">'+esc(dossierClients(d))+'</div><div class="tsub">'+esc(email)+' · '+esc(canal)+'</div></div></div>'
      +'<div class="esp-mail-obj" style="margin:2px 0 6px">Objet : '+esc(objet)+'</div>'
      +clientBlock+formBlock
+     +(dm?'<div class="esp-fiche-row" style="margin-top:8px"><button class="btn btn-sm" onclick="demMailComplet(\''+dm.id+'\')">Voir le mail complet (original)</button></div>':'')
      +'<div class="esp-notes"><span class="tag '+du.c+'">⏱ '+du.lbl+' · '+du.temps+'</span><span class="tag '+fi.c+'">'+fi.lbl+'</span></div>'
      +'<div class="esp-fiche-row"><button class="btn btn-sm btn-pri" onclick="espEdOpen(\''+d.id+'\',\'statuts\')">✏️ Éditer les documents</button></div>'
      +'<div class="esp-fiche-row" style="margin-top:6px"><button class="btn btn-sm" onclick="espFicheTechnique(\''+d.id+'\')">📋 Fiche technique</button>'
@@ -4343,6 +4368,13 @@ window.modalDemandeView=function(id){
 .de-preview{overflow:auto;min-height:0;height:100%;background:var(--paper-desk,#e7ded0);padding:22px;min-width:0}
 @media(max-width:860px){.de-body{grid-template-columns:1fr;grid-template-rows:auto 1fr}.de-side{border-right:0;border-bottom:1px solid var(--line,#e0d8c6);max-height:42vh}}
 @media print{.a4-doc{transform:none!important}}
+/* Espace « Mail reçu » (affichage fidèle du mail d'origine) */
+.mailv-meta{display:flex;flex-direction:column;gap:6px;background:var(--paper,#fffef9);border:1px solid var(--line-soft,#f0e9da);border-radius:9px;padding:11px 13px;margin-bottom:12px}
+.mailv-row{display:flex;gap:10px;font-size:12.5px}
+.mailv-l{flex:none;width:70px;color:var(--ink-3,#9c9078);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.4px;padding-top:2px}
+.mailv-v{color:var(--ink,#302c24);word-break:break-word}
+.mailv-frame-wrap{border:1px solid var(--line-2,#e2d9c6);border-radius:10px;overflow:hidden;background:#fff}
+.mailv-frame{display:block;width:100%;height:60vh;min-height:340px;border:0;background:#fff}
 </style>
 
 <style id="harmonize-mod">
