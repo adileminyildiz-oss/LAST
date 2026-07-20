@@ -743,6 +743,7 @@ function demIngest(mails){DB.parametres=DB.parametres||{};DB.parametres.mailsImp
   (mails||[]).forEach(function(m){var fr=mailParseFrom(m.from);var key=((''+(m.id||'')).trim())||(fr.email+'|'+(m.subject||'')+'|'+(m.date||''));
     if(seen.indexOf(key)>=0){dup++;return;}
     if(typeof demIsFormSubmit==='function'&&!demIsFormSubmit(m)){seen.push(key);return;} /* Uniquement les mails de provenance FormSubmit */
+    if(typeof demEstSysteme==='function'&&demEstSysteme(m.subject,m.body,(fr&&fr.nom)||m.from)){seen.push(key);return;} /* accusé d'activation FormSubmit / bounce : ignoré */
     var dateISO=today();var dateTime='';try{if(m.date){var d=new Date(m.date);if(!isNaN(d.getTime())){dateISO=d.toISOString().slice(0,10);dateTime=d.toISOString();}}}catch(e){}
     var body=mailCleanBody(m.body)||(m.subject||'');
     DB.demandes.unshift({id:uid('d'),clientNom:fr.nom||fr.email||'Client',clientEmail:fr.email||'',clientTel:'',canal:'Formulaire du site',serviceSouhaite:((m.subject||'').slice(0,80))||'À qualifier',message:body,rawBody:body,rawHtml:(''+(m.body||'')).slice(0,20000),date:dateISO,dateTime:dateTime,statut:'Nouveau',assigneA:'',docsRecus:false,dossierId:'',msgKey:key});
@@ -2275,8 +2276,13 @@ function mailExtractName(d){if(!d)return '';var cands=[d.rawHtml,d.rawBody,d.mes
         ||flat.match(/(?:^|\s)nom(?:\s+et\s+prenom|\s+complet)?\s*[:\-]?\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\- ]{1,50}?)\s*(?=email|e-mail|mail|telephone|tel|phone|message|adresse|submitted|$)/i);
     if(m&&m[1]){var nm=m[1].replace(/\s+/g,' ').trim();if(nm&&!/^(value|name|formsubmit)$/i.test(nm)&&!/formsubmit/i.test(nm))return nm;}}
   return '';}
-/* Meilleur nom d'affichage (temps réel, sans dépendre d'une migration persistée) */
-function demBestName(d){if(!d)return 'Expéditeur';var n=(''+(d.clientNom||'')).trim();if(n&&!/formsubmit/i.test(n))return n;var x=mailExtractName(d);return x||n||'Expéditeur';}
+/* Meilleur nom d'affichage (temps réel, sans dépendre d'une migration persistée) — jamais « FormSubmit » */
+function demBestName(d){if(!d)return 'Expéditeur';
+  var n=(''+(d.clientNom||'')).trim();if(n&&!/formsubmit/i.test(n))return n;
+  var x=mailExtractName(d);if(x&&!/formsubmit/i.test(x))return x;
+  var em=(''+(d.clientEmail||'')).trim();
+  if(em&&!/formsubmit/i.test(em)){var lp=(em.split('@')[0]||'').replace(/[._\-+]+/g,' ').trim();if(lp)return lp.replace(/\b\w/g,function(c){return c.toUpperCase();});}
+  return 'Expéditeur';}
 /* Corrige le nom des demandes FormSubmit déjà reçues (nom générique « FormSubmit ») */
 function migrateFormSubmitNames(){try{var chg=false;(DB.demandes||[]).forEach(function(d){
   var n=(''+(d.clientNom||'')).trim();if(n&&!/formsubmit/i.test(n))return;
@@ -2291,17 +2297,29 @@ function migrateFormSubmitNames(){try{var chg=false;(DB.demandes||[]).forEach(fu
         var parts=real.split(/\s+/);c.prenom=parts[0]||'';c.nom=parts.slice(1).join(' ')||'';
         if(fx.email&&(/formsubmit/i.test(c.email||'')||!c.email))c.email=fx.email;if(fx.tel&&!c.tel)c.tel=fx.tel;}}}
   });if(chg&&typeof save==='function')save();}catch(e){}}
-/* Un mail provient-il de FormSubmit ? (les saisies internes manuelles sont conservées, ce ne sont pas des mails) */
+/* Mail système à écarter : accusé/activation FormSubmit, ou échec de distribution (bounce) */
+function demEstSysteme(subj,body,nom){
+  subj=(''+(subj||'')).toLowerCase();body=(''+(body||'')).toLowerCase();nom=(''+(nom||'')).toLowerCase();
+  if(/mailer-daemon|mail delivery subsystem|postmaster/.test(nom))return true;
+  if(/delivery status notification|undeliverable|delivery (has )?failed|failure notice|returned mail|mail delivery failed|non[- ]remise|échec de (la )?remise|address not found/.test(subj))return true;
+  if(/action required|activate formsubmit|please activate|activate your form|form activation|confirm your (e-?mail|form)/.test(subj))return true;
+  if(/activate formsubmit|confirm your email address to activate|click the link below to activate|to activate this form|please click the activation/.test(body))return true;
+  return false;
+}
+/* Une demande est-elle une VRAIE soumission client FormSubmit ? (saisies internes conservées ; systèmes/bounces exclus) */
 function demEstFormSubmit(d){
   if(!d)return false;
   if(d.canal==='Saisie interne')return true; /* dossier saisi manuellement : conservé */
+  var subj=(''+(d.subject||d.serviceSouhaite||''));
+  var body=(''+(d.rawHtml||'')+' '+(d.rawBody||'')+' '+(d.message||''));
+  if(demEstSysteme(subj,body,d.clientNom))return false; /* accusé d'activation FormSubmit, bounce… → retiré */
   if(d.canal==='Formulaire du site')return true;
-  var body=(''+(d.rawHtml||'')+' '+(d.rawBody||'')+' '+(d.message||'')+' '+(d.clientNom||''));
-  if(/formsubmit/i.test(body))return true;
-  if(/new submission from your form|nouvelle soumission|you've got a new submission|submitted from|via le formulaire|formulaire du site/i.test(body))return true;
+  var em=(''+(d.clientEmail||'')).toLowerCase();var nom=(''+(d.clientNom||'')).toLowerCase();
+  if(/formsubmit/i.test(body)||/formsubmit/.test(nom)||/formsubmit/.test(em))return true;
+  if(/new submission from your form|nouvelle soumission|you've got a new submission|submitted from|via le formulaire/i.test(body))return true;
   return false;
 }
-/* Retire toutes les demandes issues de mails qui ne proviennent pas de FormSubmit (saisies internes conservées) */
+/* Retire toutes les demandes issues de mails qui ne sont pas de vraies soumissions FormSubmit (saisies internes conservées) */
 function purgeNonFormSubmit(){try{
   if(!DB.demandes||!DB.demandes.length)return 0;
   var before=DB.demandes.length;
@@ -2356,7 +2374,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=58;
+var LAST_VER=59;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3015,6 +3033,7 @@ window.demIngest=function(mails){
    seen.push(key);
    var isFS=demIsFormSubmit(m);
    if(!isFS){noise++;return;} /* Uniquement les mails de provenance FormSubmit sont générés */
+   if(typeof demEstSysteme==='function'&&demEstSysteme(m.subject,m.body,(fr&&fr.nom)||m.from)){noise++;return;} /* accusé d'activation FormSubmit / bounce : ignoré */
    var dateISO=today();var dateTime='';try{if(m.date){var dd=new Date(m.date);if(!isNaN(dd.getTime())){dateISO=dd.toISOString().slice(0,10);dateTime=dd.toISOString();}}}catch(e){}
    var body=mailCleanBody(m.body)||(m.subject||'');
    var subj=(m.subject||'');
