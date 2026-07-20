@@ -819,14 +819,14 @@ function modalDemandeView(id){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
   var p=IA.pieces(d);
   var ptag=p.complet?'<span class="tag ok">Dossier complet</span>':(p.flou?'<span class="tag warm">Précisions à obtenir (appel conseillé)</span>':'<span class="tag mut">Pièces à demander</span>');
-  openModal('Fiche technique — '+esc(d.clientNom),
+  openModal('Fiche technique — '+esc((typeof demBestName==='function'?demBestName(d):'')||'Expéditeur'),
     '<div class="chips" style="margin-bottom:12px"><span class="tag blue">Objet : '+esc(IA.objet(d))+'</span>'+ptag+'</div>'
     +'<div class="grid g2" style="gap:10px">'
-    +'<div><label>Email</label><div class="hint">'+esc(d.clientEmail||'—')+'</div></div>'
-    +'<div><label>Téléphone</label><div class="hint">'+esc(d.clientTel||'—')+'</div></div>'
+    +'<div><label>Email</label><div class="hint">'+esc(mailEmail(d))+'</div></div>'
+    +'<div><label>Téléphone</label><div class="hint">'+esc(mailTel(d))+'</div></div>'
     +'<div><label>Canal</label><div class="hint">'+esc(d.canal||'—')+'</div></div>'
-    +'<div><label>Reçue le</label><div class="hint">'+frDate(d.date)+'</div></div></div>'
-    +'<label>Message reçu</label><div class="hint" style="background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:11px;white-space:pre-wrap">'+esc(d.message||'—')+'</div>'
+    +'<div><label>Reçue le</label><div class="hint">'+esc(mailDateHeure(d))+'</div></div></div>'
+    +'<label>Demande reçue</label><div class="hint" style="background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:11px;white-space:pre-wrap">'+esc(mailDemande(d))+'</div>'
     +'<label>Assigner à un collaborateur</label>'
     +'<select id="dm-assign">'+['<option value="">— Non assigné —</option>'].concat(DB.users.map(function(u){return '<option value="'+u.id+'" '+(d.assigneA===u.id?'selected':'')+'>'+esc(u.nom)+(u.role==='admin'?' (admin)':'')+'</option>';})).join('')+'</select>'
     +'<div class="hint" style="margin-top:6px;font-size:11px">Sans assignation, la demande reste dans l\'onglet « À traiter ».</div>',
@@ -837,34 +837,62 @@ function modalDemandeView(id){
     +'<button class="btn" onclick="demQuestionnaire(\''+id+'\')">📋 Questionnaire</button>'
     +'<button class="btn btn-pri" onclick="demOuvrirDossier(\''+id+'\')">📂 Ouvrir le dossier</button>');
 }
-/* Espace « Mail reçu » : affiche le mail d'origine complet, sans déformation (iframe isolée) */
+/* Espace « Mail reçu » : mail de provenance FormSubmit, présenté proprement (email, téléphone, demande, date + heure) — jamais l'écriture « FormSubmit ». */
 function demMailComplet(id){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
-  var html=(d.rawHtml||'');var isHtml=!!(html&&/<[a-z][\s\S]*>/i.test(html));
-  var txt=(d.rawBody||d.message||'');
-  var from=esc((d.clientNom||'')+(d.clientEmail?(' <'+d.clientEmail+'>'):''));
-  var subj=esc(d.subject||d.serviceSouhaite||'(sans objet)');
+  var nom=(typeof demBestName==='function'?demBestName(d):'')||'Expéditeur';
   var atts=(d.attachments||[]).map(function(a){return esc((a&&(a.name||a.nom))||a||'');}).filter(Boolean);
   var meta='<div class="mailv-meta">'
-    +'<div class="mailv-row"><span class="mailv-l">De</span><span class="mailv-v">'+from+'</span></div>'
-    +'<div class="mailv-row"><span class="mailv-l">Objet</span><span class="mailv-v">'+subj+'</span></div>'
-    +'<div class="mailv-row"><span class="mailv-l">Reçu le</span><span class="mailv-v">'+frDate(d.date)+(d.canal?(' · '+esc(d.canal)):'')+'</span></div>'
+    +'<div class="mailv-row"><span class="mailv-l">Expéditeur</span><span class="mailv-v">'+esc(nom)+'</span></div>'
+    +'<div class="mailv-row"><span class="mailv-l">Email</span><span class="mailv-v">'+esc(mailEmail(d))+'</span></div>'
+    +'<div class="mailv-row"><span class="mailv-l">Téléphone</span><span class="mailv-v">'+esc(mailTel(d))+'</span></div>'
+    +'<div class="mailv-row"><span class="mailv-l">Reçu le</span><span class="mailv-v">'+esc(mailDateHeure(d))+'</span></div>'
     +(atts.length?'<div class="mailv-row"><span class="mailv-l">Pièces</span><span class="mailv-v">'+atts.join(', ')+'</span></div>':'')
     +'</div>';
-  openModal('Mail reçu — '+esc(d.clientNom||''),
-    meta+'<div class="mailv-frame-wrap"><iframe id="mailv-frame" class="mailv-frame" sandbox="allow-popups allow-popups-to-escape-sandbox"></iframe></div>',
+  openModal('Mail reçu — '+esc(nom),
+    meta+mailFrame(d),
     '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
     +'<button class="btn btn-pri" onclick="closeModal();demOuvrirDossier(\''+id+'\')">Ouvrir le dossier</button>');
-  setTimeout(function(){var f=document.getElementById('mailv-frame');if(!f)return;var SO='<'+'style>',SC='</'+'style>';
-    if(isHtml){f.srcdoc='<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+SO+'body{margin:0;padding:16px;font:14px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff}table{border-collapse:collapse;max-width:100%}img{max-width:100%;height:auto}a{color:#1a5fb4}'+SC+'</head><body>'+html+'</body></html>';}
-    else{f.srcdoc='<!doctype html><html><head><meta charset="utf-8">'+SO+'body{margin:0;padding:16px;font:13.5px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;color:#1a1a1a;background:#fff}'+SC+'</head><body>'+esc(txt||'(mail vide)')+'</body></html>';}
-  },30);
 }
-/* Rendu fidèle d'un mail (HTML d'origine ou texte) pour l'affichage « comme sur le mail » */
+/* Rendu du mail reçu (provenance FormSubmit) — nettoyé : jamais l'écriture « FormSubmit ». */
 function mailAttrEsc(s){return (''+s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
-function mailSrcdoc(d){var html=(d.rawHtml||'');var isHtml=!!(html&&/<[a-z][\s\S]*>/i.test(html));var txt=(d.rawBody||d.message||'');var SO='<'+'style>',SC='</'+'style>';
-  if(isHtml)return '<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+SO+'body{margin:0;padding:16px;font:14px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff}table{border-collapse:collapse;max-width:100%}img{max-width:100%;height:auto}a{color:#1a5fb4}'+SC+'</head><body>'+html+'</body></html>';
-  return '<!doctype html><html><head><meta charset="utf-8">'+SO+'body{margin:0;padding:16px;font:13.5px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;color:#1a1a1a;background:#fff}'+SC+'</head><body>'+esc(txt||'(mail vide)')+'</body></html>';}
+/* Date + heure du mail (capturée à l'ingestion, sinon « submitted at » du corps, sinon date seule) */
+function mailDateHeure(d){
+  if(!d)return '';var dd=null;
+  if(d.dateTime){try{var x=new Date(d.dateTime);if(!isNaN(x.getTime()))dd=x;}catch(e){}}
+  if(!dd){var body=(''+(d.rawHtml||d.rawBody||d.message||'')).replace(/<[^>]+>/g,' ');
+    var m=body.match(/submitted\s+at[:\s]+([0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2})?)/i)||body.match(/([0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2})/);
+    if(m){try{var y=new Date(m[1].replace(' ','T'));if(!isNaN(y.getTime()))dd=y;}catch(e){}}}
+  if(dd){var hh=(''+dd.getHours()).padStart(2,'0'),mi=(''+dd.getMinutes()).padStart(2,'0');return frDate(dd.toISOString().slice(0,10))+' à '+hh+':'+mi;}
+  return frDate(d.date);
+}
+/* Demande écrite par le client (message), nettoyée des marqueurs et de la mention FormSubmit */
+function mailDemande(d){
+  if(!d)return '—';var msg=(''+(d.message||'')).trim();
+  if(/formsubmit/i.test(msg)||(msg.match(/\*/g)||[]).length>=3){
+    try{var fx=formSubmitExtract({body:(d.rawHtml||d.rawBody||msg),from:''});if(fx&&fx.message)msg=fx.message;}catch(e){}}
+  msg=msg.replace(/\*\s*[^*\n]{1,40}\s*\*/g,' ').replace(/formsubmit(\.co)?/gi,'').replace(/submitted\s+at[\s\S]*$/i,'').replace(/\bsponsor(ed)?\b[\s\S]*$/i,'').replace(/https?:\/\/\S+/g,'').replace(/[ \t]{2,}/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+  return msg||'—';
+}
+/* Adresse e-mail récupérée (jamais un e-mail FormSubmit) */
+function mailEmail(d){var e=(''+((d&&d.clientEmail)||'')).trim();if(!e||/formsubmit/i.test(e))return '—';return e;}
+function mailTel(d){var t=(''+((d&&d.clientTel)||'')).trim();return t||'—';}
+function mailSrcdoc(d){var SO='<'+'style>',SC='</'+'style>';
+  var e=function(s){return (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+  var nom=(typeof demBestName==='function'?demBestName(d):'')||'';
+  return '<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+SO
+    +'body{margin:0;padding:18px;font:14px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff}'
+    +'.hd{font:600 15px/1.3 inherit;margin:0 0 4px}.hd small{display:block;font:400 12px/1.4 inherit;color:#8a7f66;margin-top:2px}'
+    +'.rw{display:flex;gap:10px;margin:10px 0 0}.l{flex:0 0 96px;color:#7a6e58;font-weight:600}.v{flex:1;word-break:break-word}'
+    +'.dem{margin-top:6px;padding:12px 14px;background:#f7f4ee;border:1px solid #e7e0d2;border-radius:8px;white-space:pre-wrap}'
+    +'a{color:#1a5fb4}'+SC+'</head><body>'
+    +(nom?('<div class="hd">'+e(nom)+'<small>Demande reçue via le formulaire du site</small></div>'):'')
+    +'<div class="rw"><span class="l">Email</span><span class="v">'+e(mailEmail(d))+'</span></div>'
+    +'<div class="rw"><span class="l">Téléphone</span><span class="v">'+e(mailTel(d))+'</span></div>'
+    +'<div class="rw"><span class="l">Reçu le</span><span class="v">'+e(mailDateHeure(d))+'</span></div>'
+    +'<div class="rw"><span class="l">Demande</span><span class="v"></span></div>'
+    +'<div class="dem">'+e(mailDemande(d))+'</div>'
+    +'</body></html>';}
 function mailFrame(d){if(!d)return '';return '<div class="mailv-frame-wrap"><iframe class="mailv-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" srcdoc="'+mailAttrEsc(mailSrcdoc(d))+'"></iframe></div>';}
 function modalDemandeMail(id){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
@@ -2307,7 +2335,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=55;
+var LAST_VER=56;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2966,7 +2994,7 @@ window.demIngest=function(mails){
    seen.push(key);
    var isFS=demIsFormSubmit(m);
    if(!isFS&&demIsNoise(m.from,m.subject)){noise++;return;}
-   var dateISO=today();try{if(m.date){var dd=new Date(m.date);if(!isNaN(dd.getTime()))dateISO=dd.toISOString().slice(0,10);}}catch(e){}
+   var dateISO=today();var dateTime='';try{if(m.date){var dd=new Date(m.date);if(!isNaN(dd.getTime())){dateISO=dd.toISOString().slice(0,10);dateTime=dd.toISOString();}}}catch(e){}
    var body=mailCleanBody(m.body)||(m.subject||'');
    var subj=(m.subject||'');
    var atts=(m.att||m.attachments||[]).map(function(a){var o=(typeof a==='string')?{name:a}:Object.assign({},a);o.msgId=o.msgId||m.id;return o;});
@@ -2985,13 +3013,13 @@ window.demIngest=function(mails){
    if(existing){
      existing.thread=existing.thread||[{from:existing.clientNom,subject:existing.subject||existing.serviceSouhaite,date:existing.date,body:existing.message}];
      existing.thread.push({from:cliNom,subject:subj,date:dateISO,body:body});
-     existing.message=body;existing.date=dateISO;existing.__reponse=true;if(isFS){existing.rawBody=body;existing.rawHtml=(''+(m.body||'')).slice(0,20000);existing.__prerempli=false;}
+     existing.message=body;existing.date=dateISO;if(dateTime)existing.dateTime=dateTime;existing.__reponse=true;if(isFS){existing.rawBody=body;existing.rawHtml=(''+(m.body||'')).slice(0,20000);existing.__prerempli=false;}
      if(atts.length)existing.attachments=(existing.attachments||[]).concat(atts);
      fil++;
    } else {
      DB.demandes.unshift({id:uid('d'),clientNom:cliNom,clientEmail:cliEmail,clientTel:tel,
        canal:'Formulaire du site',subject:subj,serviceSouhaite:((''+objet).slice(0,80))||'À qualifier',
-       message:msg,rawBody:(isFS?body:''),rawHtml:(isFS?(''+(m.body||'')).slice(0,20000):''),date:dateISO,statut:'Nouveau',assigneA:'',docsRecus:atts.length>0,dossierId:'',msgKey:key,
+       message:msg,rawBody:(isFS?body:''),rawHtml:(isFS?(''+(m.body||'')).slice(0,20000):''),date:dateISO,dateTime:dateTime,statut:'Nouveau',assigneA:'',docsRecus:atts.length>0,dossierId:'',msgKey:key,
        attachments:atts,thread:[{from:cliNom,subject:subj,date:dateISO,body:msg}]});
      add++;
    }
