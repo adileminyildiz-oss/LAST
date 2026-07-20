@@ -1627,7 +1627,9 @@ function espDocLabel(k){var f=(typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).find(f
 function espDocsPretsCard(d){
   var st=d.docState||{};
   var keys=Object.keys(st).filter(function(k){return st[k]&&st[k].ts;});
-  if(!keys.length)return '';
+  /* On n'affiche QUE les documents complétés (toutes les cases remplies). Les documents en cours de modification n'apparaissent pas. */
+  keys=keys.filter(function(k){return espDocManques(d,k).length===0;});
+  if(!keys.length)return '<div class="card"><div class="card-h"><h2>Documents prêts</h2><span class="sub" style="margin-left:auto">0</span></div><div class="card-b"><div class="empty">Aucun document complété pour le moment. Complétez toutes les cases d\'un document dans l\'éditeur pour qu\'il apparaisse ici.</div></div></div>';
   keys.sort(function(a,b){return (st[b].editTs||st[b].ts)-(st[a].editTs||st[a].ts);});
   function p2(n){n=''+n;return n.length<2?('0'+n):n;}
   var rows=keys.map(function(k){
@@ -2465,7 +2467,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=63;
+var LAST_VER=64;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
