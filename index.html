@@ -918,11 +918,11 @@ function creerDossierDepuis(id){
   const ref='DOS-'+(DB.seq.dossier++);
   const dos={id:uid('do'),ref,clientIds:[c.id],serviceIds:[],statut:'Qualification',assigneA:d.assigneA,createdAt:today(),
     historique:[{d:today(),t:'Créé depuis la demande de '+d.clientNom}]};
-  try{ if(typeof formEnrichDossier==='function') formEnrichDossier(c,dos,d); }catch(e){}
+  /* Aucun pré-remplissage automatique : les documents se remplissent uniquement via la barre latérale de l'éditeur. */
   try{ if(d.attachments&&d.attachments.length) dos.attachments=(d.attachments||[]).slice(); }catch(e){}
   try{ dos.docs=dos.docs||{}; (typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).forEach(function(dc){ if(typeof espDocReq==='function'?espDocReq(dos,dc.k):!(dos.docsExclus&&dos.docsExclus[dc.k])) dos.docs[dc.k]={genere:true,date:today()}; }); }catch(e){}
   DB.dossiers.unshift(dos);d.dossierId=dos.id;
-  save();closeModal();toast('Dossier '+ref+' créé'+(dos.__prerempli?' · pré-rempli depuis le questionnaire':''));state.page='espace';state.espaceDossier=dos.id;render();
+  save();closeModal();toast('Dossier '+ref+' créé');state.page='espace';state.espaceDossier=dos.id;render();
 }
 function demOuvrirDossier(id){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
   if(d.dossierId&&DB.dossiers.find(function(x){return x.id===d.dossierId;})){closeModal();state.page='espace';state.espaceDossier=d.dossierId;toast('Dossier ouvert dans Traitement');render();return;}
@@ -2249,7 +2249,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=49;
+var LAST_VER=50;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3897,7 +3897,6 @@ window.modalDemandeView=function(id){
   }
   window.espMailCard=function(d){
     var dm=espDemandeDe(d);var c=clientById((d.clientIds||[])[0])||{};
-    try{ if(dm&&!d.__prerempli&&typeof formEnrichDossier==='function'){ var _src=(typeof formSrc==='function')?formSrc(dm):''; var _pp=_src?formParse(_src):{}; var _n=0; for(var _k in _pp){if(_k!=='message'&&_pp[_k])_n++;} if(_n>=2){ formEnrichDossier(c,d,dm); if(typeof save==='function')save(); } } }catch(_e){}
     var email=(dm&&dm.clientEmail)||c.email||'—';
     var canal=(dm&&dm.canal)||'—';
     var objet=dm?IA.objet(dm):'—';
