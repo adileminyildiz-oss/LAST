@@ -632,7 +632,6 @@ const nivTag=n=>`<span class="tag ${n==='chaud'?'hot':n==='tiède'?'warm':'mut'}
    ================================================================= */
 const PAGES=[
   {id:'demandes',lbl:'Demandes',ic:'inbox',sub:'Réception & qualification IA'},
-  {id:'mails',lbl:'Mails',ic:'mail',sub:'Boîte de réception'},
   {id:'espace',lbl:'Traitement',ic:'espace',sub:'Travail & génération des dossiers'},
   {id:'clients',lbl:'Clients',ic:'users',sub:'Fiches & informations'},
   {id:'facturation',lbl:'Facturation',ic:'card',sub:'Factures de vente'},
@@ -649,13 +648,13 @@ function buildNav(){
   const nb=DB.demandes.filter(d=>!d.dossierId&&d.statut!=='Clôturé').length;
   document.getElementById('nav').innerHTML=
     `<div class="nav-lbl">Activité</div>`+
-    PAGES.slice(0,3).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(0,2).map(p=>navBtn(p,nb)).join('')+
     `<div class="nav-lbl">Référentiel</div>`+
-    PAGES.slice(3,4).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(2,3).map(p=>navBtn(p,nb)).join('')+
     `<div class="nav-lbl">Facturation</div>`+
-    PAGES.slice(4,7).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(3,6).map(p=>navBtn(p,nb)).join('')+
     `<div class="nav-lbl">Système</div>`+
-    PAGES.slice(7).map(p=>navBtn(p,nb)).join('');
+    PAGES.slice(6).map(p=>navBtn(p,nb)).join('');
 }
 function navBtn(p,nb){
   const badge=p.id==='demandes'&&nb?`<span class="nav-badge">${nb}</span>`:'';
@@ -669,7 +668,7 @@ function render(){
   document.getElementById('ptitle').firstChild.textContent=p.lbl;
   document.getElementById('psub').textContent=p.sub;
   const V=document.getElementById('view');
-  V.innerHTML=({demandes:pageDemandes,mails:pageMails,clients:pageClientsEspace,espace:pageEspace,
+  V.innerHTML=({demandes:pageDemandes,clients:pageClientsEspace,espace:pageEspace,
     services:pageServices,devis:pageSoon,facturation:pageFacturation,marge:pageMarge,params:pageParams}[state.page]||pageDemandes)();
   wireCards();
 }
@@ -861,52 +860,12 @@ function demMailComplet(id){
     else{f.srcdoc='<!doctype html><html><head><meta charset="utf-8">'+SO+'body{margin:0;padding:16px;font:13.5px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;color:#1a1a1a;background:#fff}'+SC+'</head><body>'+esc(txt||'(mail vide)')+'</body></html>';}
   },30);
 }
-/* ===== Sous-module Mails : boîte de réception (liste + mail d'origine fidèle) ===== */
+/* Rendu fidèle d'un mail (HTML d'origine ou texte) pour l'affichage « comme sur le mail » */
 function mailAttrEsc(s){return (''+s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
 function mailSrcdoc(d){var html=(d.rawHtml||'');var isHtml=!!(html&&/<[a-z][\s\S]*>/i.test(html));var txt=(d.rawBody||d.message||'');var SO='<'+'style>',SC='</'+'style>';
   if(isHtml)return '<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+SO+'body{margin:0;padding:16px;font:14px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff}table{border-collapse:collapse;max-width:100%}img{max-width:100%;height:auto}a{color:#1a5fb4}'+SC+'</head><body>'+html+'</body></html>';
   return '<!doctype html><html><head><meta charset="utf-8">'+SO+'body{margin:0;padding:16px;font:13.5px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;color:#1a1a1a;background:#fff}'+SC+'</head><body>'+esc(txt||'(mail vide)')+'</body></html>';}
-function mailSnippet(d){var t=((d.rawBody||d.message||'')+'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();return t.slice(0,70);}
-function pageMails(){
-  var list=(DB.demandes||[]).slice().sort(function(a,b){return (''+(b.date||'')).localeCompare(''+(a.date||''));});
-  if(state.q)list=list.filter(function(d){return ((d.clientNom||'')+(d.clientEmail||'')+(d.subject||d.serviceSouhaite||'')+(d.rawBody||d.message||'')).toLowerCase().includes(state.q);});
-  var head='<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap"><span class="tag blue">'+(DB.demandes||[]).length+' mails</span><button class="btn btn-sm" onclick="demSyncMails(false)">Synchroniser la boîte</button></div>';
-  if(!list.length)return head+'<div class="card"><div class="card-b"><div class="empty">Aucun mail reçu. Configurez la synchronisation de la boîte dans « Demandes ».</div></div></div>';
-  var id=state.mailSel;if(!list.find(function(m){return m.id===id;}))id=list[0].id;
-  var m=list.find(function(x){return x.id===id;});
-  return head+'<div class="esp-shell">'+mailMiniList(list,id)+'<div class="esp-main">'+mailPane(m)+'</div></div>';
-}
-function mailMiniList(list,id){
-  return '<aside class="esp-mini"><div class="esp-mini-h">Boîte de réception<span class="esp-mini-n">'+list.length+'</span></div><div class="esp-mini-list">'
-   +list.map(function(d){var isFS=!!(d.rawHtml&&/<t[dr]\b|<table\b/i.test(d.rawHtml||''));
-     return '<button class="esp-mini-item mailit'+(d.id===id?' on':'')+'" onclick="mailSelect(\''+d.id+'\')">'
-       +'<span class="esp-mini-av">'+initials(d.clientNom||'?')+'</span>'
-       +'<span class="esp-mini-txt"><b>'+esc(d.clientNom||d.clientEmail||'Expéditeur')+'</b><span>'+esc((d.subject||d.serviceSouhaite||mailSnippet(d)||'(sans objet)'))+'</span></span>'
-       +'<span class="mailit-date">'+esc(frDate(d.date))+'</span>'
-       +'</button>';
-   }).join('')+'</div></aside>';
-}
-function mailSelect(id){state.mailSel=id;render();}
-function mailPane(d){
-  if(!d)return '<div class="card"><div class="card-b"><div class="empty">Sélectionnez un mail.</div></div></div>';
-  var from=esc((d.clientNom||'')+(d.clientEmail?(' <'+d.clientEmail+'>'):''));
-  var subj=esc(d.subject||d.serviceSouhaite||'(sans objet)');
-  var atts=(d.attachments||[]).map(function(a){return esc((a&&(a.name||a.nom))||a||'');}).filter(Boolean);
-  var meta='<div class="mailv-meta">'
-    +'<div class="mailv-row"><span class="mailv-l">De</span><span class="mailv-v">'+from+'</span></div>'
-    +'<div class="mailv-row"><span class="mailv-l">Objet</span><span class="mailv-v">'+subj+'</span></div>'
-    +'<div class="mailv-row"><span class="mailv-l">Reçu le</span><span class="mailv-v">'+frDate(d.date)+(d.canal?(' · '+esc(d.canal)):'')+'</span></div>'
-    +(atts.length?'<div class="mailv-row"><span class="mailv-l">Pièces</span><span class="mailv-v">'+atts.join(', ')+'</span></div>':'')
-    +'</div>';
-  var actions='<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
-    +(d.dossierId?'<button class="btn btn-sm btn-pri" onclick="mailOuvrirDossier(\''+d.id+'\')">Ouvrir le dossier</button>':'<button class="btn btn-sm btn-pri" onclick="demOuvrirDossier(\''+d.id+'\')">Créer / ouvrir le dossier</button>')
-    +'<button class="btn btn-sm" onclick="modalDemandeView(\''+d.id+'\')">Récapitulatif</button>'
-    +'<button class="btn btn-sm" onclick="demMailComplet(\''+d.id+'\')">Plein écran</button></div>';
-  return '<div class="card"><div class="card-h"><h2>'+esc(d.clientNom||'Mail')+'</h2><span class="sub" style="margin-left:auto">'+esc(frDate(d.date))+'</span></div>'
-    +'<div class="card-b">'+meta+actions
-    +'<div class="mailv-frame-wrap"><iframe class="mailv-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" srcdoc="'+mailAttrEsc(mailSrcdoc(d))+'"></iframe></div></div></div>';
-}
-function mailOuvrirDossier(id){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;if(d.dossierId){state.page='espace';state.espaceDossier=d.dossierId;render();}else demOuvrirDossier(id);}
+function mailFrame(d){if(!d)return '';return '<div class="mailv-frame-wrap"><iframe class="mailv-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" srcdoc="'+mailAttrEsc(mailSrcdoc(d))+'"></iframe></div>';}
 function modalDemandeMail(id){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
   var m=IA.mail(d);
@@ -2275,7 +2234,21 @@ function ensureData(){
 /* boot */
 /* ===== Accès protégé (mot de passe) ===== */
 var LAST_PWD_HASH='afab4393905b6a733139713689265cb550f4749024a49723e675a772a7c85a64';
-function lastBoot(){try{load();ensureData();}catch(e){}render();}
+/* Corrige le nom des demandes FormSubmit déjà reçues (nom générique « FormSubmit ») */
+function migrateFormSubmitNames(){try{var chg=false;(DB.demandes||[]).forEach(function(d){
+  var src=(d.rawBody||d.message||'');var isFS=/\*nom\*|submitted your form|formsubmit/i.test(src)||/formsubmit/i.test(d.clientNom||'');
+  if(!isFS)return;
+  if(d.clientNom&&!/formsubmit/i.test(d.clientNom)&&(''+d.clientNom).trim())return;
+  var fx=formSubmitExtract({body:(src||d.rawHtml||''),from:''});
+  if(fx.nomComplet&&!/formsubmit/i.test(fx.nomComplet)){
+    d.clientNom=fx.nomComplet;if(fx.email)d.clientEmail=fx.email;if(fx.tel)d.clientTel=fx.tel;chg=true;
+    if(d.dossierId){var dos=(DB.dossiers||[]).find(function(x){return x.id===d.dossierId;});
+      if(dos&&(dos.clientIds||[]).length){var c=clientById(dos.clientIds[0]);
+        if(c&&(/formsubmit/i.test(((c.prenom||'')+' '+(c.nom||''))) || !((c.prenom||'')+(c.nom||'')).trim())){
+          var parts=fx.nomComplet.split(/\s+/);c.prenom=parts[0]||'';c.nom=parts.slice(1).join(' ')||'';
+          if(fx.email&&(/formsubmit/i.test(c.email||'')||!c.email))c.email=fx.email;if(fx.tel&&!c.tel)c.tel=fx.tel;}}}
+  }});if(chg&&typeof save==='function')save();}catch(e){}}
+function lastBoot(){try{load();ensureData();migrateFormSubmitNames();}catch(e){}render();}
 async function _sha256(s){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0');}).join('');}
 async function lastGateTry(ev){if(ev&&ev.preventDefault)ev.preventDefault();
   var inp=document.getElementById('lg-pwd');var err=document.getElementById('lg-err');
@@ -2321,7 +2294,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=52;
+var LAST_VER=53;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2796,7 +2769,7 @@ function formCellText(h){return (''+h).replace(/<style[\s\S]*?<\/style>/gi,'').r
  .replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&#(\d+);/g,function(_,n){return String.fromCharCode(+n);}).replace(/&[a-z]+;/gi,' ').replace(/\s+/g,' ').trim();}
 /* Parse le TABLEAU (HTML) d'un mail FormSubmit : gère 2 colonnes (label|valeur) ET lignes alternées (label puis valeur) */
 function formParseHtmlTable(html){var out={};var byNorm={};FORM_FIELDS.forEach(function(f){byNorm[formNorm(f.label)]=f.key;});
- function keyOf(lab){lab=formNorm(lab);if(byNorm[lab])return byNorm[lab];for(var nk in byNorm){if(nk.length>4&&(lab.indexOf(nk)>=0||(lab.length>4&&nk.indexOf(lab)>=0)))return byNorm[nk];}return '';}
+ function keyOf(lab){lab=formNorm(lab);if(!lab)return '';if(byNorm[lab])return byNorm[lab];for(var nk in byNorm){if(nk===lab)return byNorm[nk];if(lab.length>=3&&nk.indexOf(lab+' ')===0)return byNorm[nk];if(nk.length>4&&(lab.indexOf(nk)>=0||(lab.length>4&&nk.indexOf(lab)>=0)))return byNorm[nk];}return '';}
  var reTr=/<tr[^>]*>([\s\S]*?)<\/tr>/gi,mr;
  while((mr=reTr.exec(html))){var rc=[];var reTd=/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi,m2;while((m2=reTd.exec(mr[1])))rc.push(formCellText(m2[1]));
    if(rc.length>=2){var k=keyOf(rc[0]);var v=rc.slice(1).join(' ').trim();if(k&&v&&!out[k])out[k]=v;}}
@@ -2943,6 +2916,10 @@ function demIsFormSubmit(m){var f=(''+(m&&m.from||'')).toLowerCase();var b=(''+(
  return /formsubmit/.test(f)||/formsubmit/.test(b)||/new submission from your form|nouvelle soumission|you've got a new submission|submitted from|via le formulaire/i.test(b)||/formulaire|form submission/i.test(s);}
 function fsNorm(s){return (''+s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();}
 function formSubmitExtract(m){var body=(''+(m&&m.body||''));var out={fields:{}};
+ /* Format FormSubmit texte : *nom* valeur *email* valeur *telephone* valeur *message* valeur … */
+ var flat=body.replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' ');
+ var star=/\*\s*([^*\n]{1,40}?)\s*\*\s*([\s\S]*?)(?=\s*\*\s*[^*\n]{1,40}?\s*\*|\bsubmitted at\b|\bsponsor\b|your friends|$)/gi,sm;
+ while((sm=star.exec(flat))){var k=fsNorm(sm[1]);var v=(sm[2]||'').replace(/\s+/g,' ').trim();if(k&&v&&v.length<=400&&!out.fields[k])out.fields[k]=v;}
  body.split(/\r?\n/).forEach(function(ln){var i=ln.indexOf(':');if(i<1)return;var lab=fsNorm(ln.slice(0,i));var val=ln.slice(i+1).trim();if(!val||val.length>400)return;if(!out.fields[lab])out.fields[lab]=val;});
  var F=out.fields;function pick(){for(var i=0;i<arguments.length;i++){if(F[arguments[i]])return F[arguments[i]];}return '';}
  out.nom=pick('nom','last name','nom de famille');
@@ -3973,27 +3950,25 @@ window.modalDemandeView=function(id){
     var canal=(dm&&dm.canal)||'—';
     var objet=dm?IA.objet(dm):'—';
     var du=espDuree(d);var fi=espFidelite(d);
-    var formRows=espFormRows(d);
-    var clientMsg=((d.messageClient||'')+'').trim();
-    if(!clientMsg&&dm)clientMsg=((dm.messageClient||'')+'').trim();
-    if(!clientMsg&&dm){try{var _pp=formParse(formSrc(dm));if(_pp&&_pp.message)clientMsg=(''+_pp.message).trim();}catch(_e){}}
-    if(!clientMsg&&dm&&dm.thread&&dm.thread[0]&&!formRows.length)clientMsg=((dm.thread[0].body||'')+'').trim();
-    if(!clientMsg&&!formRows.length){clientMsg=((dm&&dm.message)||'').trim();}
-    var clientBlock='<div class="esp-mail"><div class="esp-mail-obj">📧 Mail du client</div><div class="esp-mail-body">'
-      +(clientMsg?esc(clientMsg):'<i>Pas de message libre — voir les réponses du formulaire ci-dessous.</i>')+'</div></div>';
-    var formBlock=formRows.length?('<div class="esp-mail esp-formmail" style="margin-top:8px"><div class="esp-mail-obj">📋 Réponses du formulaire</div>'
-      +'<table class="esp-form-tbl">'+formRows.map(function(r){return '<tr><td class="l">'+esc(r.l)+'</td><td class="v">'+esc(r.v)+'</td></tr>';}).join('')+'</table></div>'):'';
+    var mailView=dm?('<div class="esp-mail-view">'+mailFrame(dm)+'</div>')
+      :'<div class="esp-mail"><div class="esp-mail-body"><i>Aucun mail lié à ce dossier (créé manuellement).</i></div></div>';
     return '<div class="card esp-mailcard"><div class="card-h"><h2>Demande du client</h2><span class="sub" style="margin-left:auto">'+esc(dossierClients(d))+' · '+esc(d.ref)+'</span></div><div class="card-b">'
      +'<div class="esp-from"><span class="av" style="background:linear-gradient(160deg,#4a4034,#2c271f)">'+initials(dossierClients(d))+'</span>'
      +'<div><div class="tname">'+esc(dossierClients(d))+'</div><div class="tsub">'+esc(email)+' · '+esc(canal)+'</div></div></div>'
-     +'<div class="esp-mail-obj" style="margin:2px 0 6px">Objet : '+esc(objet)+'</div>'
-     +clientBlock+formBlock
-     +(dm?'<div class="esp-fiche-row" style="margin-top:8px"><button class="btn btn-sm" onclick="demMailComplet(\''+dm.id+'\')">Voir le mail complet (original)</button></div>':'')
-     +'<div class="esp-notes"><span class="tag '+du.c+'">⏱ '+du.lbl+' · '+du.temps+'</span><span class="tag '+fi.c+'">'+fi.lbl+'</span></div>'
-     +'<div class="esp-fiche-row"><button class="btn btn-sm btn-pri" onclick="espEdOpen(\''+d.id+'\',\'statuts\')">✏️ Éditer les documents</button></div>'
-     +'<div class="esp-fiche-row" style="margin-top:6px"><button class="btn btn-sm" onclick="espFicheTechnique(\''+d.id+'\')">📋 Fiche technique</button>'
-     +'<button class="btn btn-sm" onclick="espDocsModal(\''+d.id+'\')">📄 Documents à produire</button></div>'
-     +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-sm" onclick="espFicheOpen(\''+d.id+'\')">✉ Mail au client</button><button class="btn btn-sm btn-ghost" onclick="espDevis(\''+d.id+'\')">🧾 Devis</button><button class="btn btn-sm btn-ghost" onclick="espFacture(\''+d.id+'\')">Facture</button><button class="btn btn-sm btn-ghost" onclick="modalDossier(\''+d.id+'\')">Éditer</button></div>'
+     +'<div class="esp-mail-obj" style="margin:2px 0 8px">Objet : '+esc(objet)+'</div>'
+     +mailView
+     +'<div class="esp-notes"><span class="tag '+du.c+'">'+du.lbl+' · '+du.temps+'</span><span class="tag '+fi.c+'">'+fi.lbl+'</span></div>'
+     +'<div class="esp-actbar">'
+     +'<button class="btn btn-pri esp-act-full" onclick="espEdOpen(\''+d.id+'\',\'statuts\')">Éditer les documents</button>'
+     +'<div class="esp-act-grid">'
+     +'<button class="btn" onclick="espFicheTechnique(\''+d.id+'\')">Fiche technique</button>'
+     +'<button class="btn" onclick="espDocsModal(\''+d.id+'\')">Documents à produire</button>'
+     +(dm?'<button class="btn" onclick="demMailComplet(\''+dm.id+'\')">Mail complet</button>':'')
+     +'<button class="btn" onclick="espFicheOpen(\''+d.id+'\')">Mail au client</button>'
+     +'<button class="btn" onclick="espDevis(\''+d.id+'\')">Devis</button>'
+     +'<button class="btn" onclick="espFacture(\''+d.id+'\')">Facture</button>'
+     +'<button class="btn" onclick="modalDossier(\''+d.id+'\')">Modifier la fiche</button>'
+     +'</div></div>'
      +'</div></div>';
   };
 
@@ -4423,9 +4398,14 @@ window.modalDemandeView=function(id){
 .mailv-v{color:var(--ink,#302c24);word-break:break-word}
 .mailv-frame-wrap{border:1px solid var(--line-2,#e2d9c6);border-radius:10px;overflow:hidden;background:#fff}
 .mailv-frame{display:block;width:100%;height:60vh;min-height:340px;border:0;background:#fff}
-.mailit{align-items:flex-start}
-.mailit-date{margin-left:auto;font-size:9.5px;color:var(--ink-3,#9c9078);white-space:nowrap;padding-top:2px}
-.mailit .esp-mini-txt span{white-space:normal;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+/* Carte « Demande du client » : mail fidèle + boutons harmonisés */
+.esp-mail-view{margin:2px 0 4px}
+.esp-mail-view .mailv-frame-wrap{border:1px solid var(--line-2,#e2d9c6);border-radius:10px}
+.esp-mail-view .mailv-frame{height:300px;min-height:220px}
+.esp-actbar{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.esp-act-full{width:100%;justify-content:center;padding:10px 14px;font-size:13px;font-weight:600}
+.esp-act-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.esp-act-grid .btn{width:100%;justify-content:center;padding:9px 12px;font-size:12.5px}
 </style>
 
 <style id="harmonize-mod">
