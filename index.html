@@ -486,6 +486,7 @@ const IC={
   trend:'<path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v5h-5"/>',
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.7-1l-.4-2.6h-4l-.4 2.6a7 7 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7 7 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6a7 7 0 0 0 .1-1z"/>',
   bolt:'<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>', plus:'<path d="M12 5v14M5 12h14"/>',
+  mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M3 6l9 7 9-7"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   check:'<path d="M20 6L9 17l-5-5"/>', euro:'<path d="M17 5a7 7 0 1 0 0 14M4 10h9M4 14h9"/>',
   idcard:'<rect x="2.5" y="5" width="19" height="14" rx="2"/><circle cx="8" cy="11" r="2.1"/><path d="M5.3 16c.7-1.8 4.7-1.8 5.4 0"/><path d="M14 10.5h4.5M14 13.5h3"/>',
@@ -631,6 +632,7 @@ const nivTag=n=>`<span class="tag ${n==='chaud'?'hot':n==='tiède'?'warm':'mut'}
    ================================================================= */
 const PAGES=[
   {id:'demandes',lbl:'Demandes',ic:'inbox',sub:'Réception & qualification IA'},
+  {id:'mails',lbl:'Mails',ic:'mail',sub:'Boîte de réception'},
   {id:'espace',lbl:'Traitement',ic:'espace',sub:'Travail & génération des dossiers'},
   {id:'clients',lbl:'Clients',ic:'users',sub:'Fiches & informations'},
   {id:'facturation',lbl:'Facturation',ic:'card',sub:'Factures de vente'},
@@ -647,13 +649,13 @@ function buildNav(){
   const nb=DB.demandes.filter(d=>!d.dossierId&&d.statut!=='Clôturé').length;
   document.getElementById('nav').innerHTML=
     `<div class="nav-lbl">Activité</div>`+
-    PAGES.slice(0,2).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(0,3).map(p=>navBtn(p,nb)).join('')+
     `<div class="nav-lbl">Référentiel</div>`+
-    PAGES.slice(2,3).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(3,4).map(p=>navBtn(p,nb)).join('')+
     `<div class="nav-lbl">Facturation</div>`+
-    PAGES.slice(3,6).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(4,7).map(p=>navBtn(p,nb)).join('')+
     `<div class="nav-lbl">Système</div>`+
-    PAGES.slice(6).map(p=>navBtn(p,nb)).join('');
+    PAGES.slice(7).map(p=>navBtn(p,nb)).join('');
 }
 function navBtn(p,nb){
   const badge=p.id==='demandes'&&nb?`<span class="nav-badge">${nb}</span>`:'';
@@ -667,7 +669,7 @@ function render(){
   document.getElementById('ptitle').firstChild.textContent=p.lbl;
   document.getElementById('psub').textContent=p.sub;
   const V=document.getElementById('view');
-  V.innerHTML=({demandes:pageDemandes,clients:pageClientsEspace,espace:pageEspace,
+  V.innerHTML=({demandes:pageDemandes,mails:pageMails,clients:pageClientsEspace,espace:pageEspace,
     services:pageServices,devis:pageSoon,facturation:pageFacturation,marge:pageMarge,params:pageParams}[state.page]||pageDemandes)();
   wireCards();
 }
@@ -859,6 +861,52 @@ function demMailComplet(id){
     else{f.srcdoc='<!doctype html><html><head><meta charset="utf-8">'+SO+'body{margin:0;padding:16px;font:13.5px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;color:#1a1a1a;background:#fff}'+SC+'</head><body>'+esc(txt||'(mail vide)')+'</body></html>';}
   },30);
 }
+/* ===== Sous-module Mails : boîte de réception (liste + mail d'origine fidèle) ===== */
+function mailAttrEsc(s){return (''+s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
+function mailSrcdoc(d){var html=(d.rawHtml||'');var isHtml=!!(html&&/<[a-z][\s\S]*>/i.test(html));var txt=(d.rawBody||d.message||'');var SO='<'+'style>',SC='</'+'style>';
+  if(isHtml)return '<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+SO+'body{margin:0;padding:16px;font:14px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff}table{border-collapse:collapse;max-width:100%}img{max-width:100%;height:auto}a{color:#1a5fb4}'+SC+'</head><body>'+html+'</body></html>';
+  return '<!doctype html><html><head><meta charset="utf-8">'+SO+'body{margin:0;padding:16px;font:13.5px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;color:#1a1a1a;background:#fff}'+SC+'</head><body>'+esc(txt||'(mail vide)')+'</body></html>';}
+function mailSnippet(d){var t=((d.rawBody||d.message||'')+'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();return t.slice(0,70);}
+function pageMails(){
+  var list=(DB.demandes||[]).slice().sort(function(a,b){return (''+(b.date||'')).localeCompare(''+(a.date||''));});
+  if(state.q)list=list.filter(function(d){return ((d.clientNom||'')+(d.clientEmail||'')+(d.subject||d.serviceSouhaite||'')+(d.rawBody||d.message||'')).toLowerCase().includes(state.q);});
+  var head='<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap"><span class="tag blue">'+(DB.demandes||[]).length+' mails</span><button class="btn btn-sm" onclick="demSyncMails(false)">Synchroniser la boîte</button></div>';
+  if(!list.length)return head+'<div class="card"><div class="card-b"><div class="empty">Aucun mail reçu. Configurez la synchronisation de la boîte dans « Demandes ».</div></div></div>';
+  var id=state.mailSel;if(!list.find(function(m){return m.id===id;}))id=list[0].id;
+  var m=list.find(function(x){return x.id===id;});
+  return head+'<div class="esp-shell">'+mailMiniList(list,id)+'<div class="esp-main">'+mailPane(m)+'</div></div>';
+}
+function mailMiniList(list,id){
+  return '<aside class="esp-mini"><div class="esp-mini-h">Boîte de réception<span class="esp-mini-n">'+list.length+'</span></div><div class="esp-mini-list">'
+   +list.map(function(d){var isFS=!!(d.rawHtml&&/<t[dr]\b|<table\b/i.test(d.rawHtml||''));
+     return '<button class="esp-mini-item mailit'+(d.id===id?' on':'')+'" onclick="mailSelect(\''+d.id+'\')">'
+       +'<span class="esp-mini-av">'+initials(d.clientNom||'?')+'</span>'
+       +'<span class="esp-mini-txt"><b>'+esc(d.clientNom||d.clientEmail||'Expéditeur')+'</b><span>'+esc((d.subject||d.serviceSouhaite||mailSnippet(d)||'(sans objet)'))+'</span></span>'
+       +'<span class="mailit-date">'+esc(frDate(d.date))+'</span>'
+       +'</button>';
+   }).join('')+'</div></aside>';
+}
+function mailSelect(id){state.mailSel=id;render();}
+function mailPane(d){
+  if(!d)return '<div class="card"><div class="card-b"><div class="empty">Sélectionnez un mail.</div></div></div>';
+  var from=esc((d.clientNom||'')+(d.clientEmail?(' <'+d.clientEmail+'>'):''));
+  var subj=esc(d.subject||d.serviceSouhaite||'(sans objet)');
+  var atts=(d.attachments||[]).map(function(a){return esc((a&&(a.name||a.nom))||a||'');}).filter(Boolean);
+  var meta='<div class="mailv-meta">'
+    +'<div class="mailv-row"><span class="mailv-l">De</span><span class="mailv-v">'+from+'</span></div>'
+    +'<div class="mailv-row"><span class="mailv-l">Objet</span><span class="mailv-v">'+subj+'</span></div>'
+    +'<div class="mailv-row"><span class="mailv-l">Reçu le</span><span class="mailv-v">'+frDate(d.date)+(d.canal?(' · '+esc(d.canal)):'')+'</span></div>'
+    +(atts.length?'<div class="mailv-row"><span class="mailv-l">Pièces</span><span class="mailv-v">'+atts.join(', ')+'</span></div>':'')
+    +'</div>';
+  var actions='<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
+    +(d.dossierId?'<button class="btn btn-sm btn-pri" onclick="mailOuvrirDossier(\''+d.id+'\')">Ouvrir le dossier</button>':'<button class="btn btn-sm btn-pri" onclick="demOuvrirDossier(\''+d.id+'\')">Créer / ouvrir le dossier</button>')
+    +'<button class="btn btn-sm" onclick="modalDemandeView(\''+d.id+'\')">Récapitulatif</button>'
+    +'<button class="btn btn-sm" onclick="demMailComplet(\''+d.id+'\')">Plein écran</button></div>';
+  return '<div class="card"><div class="card-h"><h2>'+esc(d.clientNom||'Mail')+'</h2><span class="sub" style="margin-left:auto">'+esc(frDate(d.date))+'</span></div>'
+    +'<div class="card-b">'+meta+actions
+    +'<div class="mailv-frame-wrap"><iframe class="mailv-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" srcdoc="'+mailAttrEsc(mailSrcdoc(d))+'"></iframe></div></div></div>';
+}
+function mailOuvrirDossier(id){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;if(d.dossierId){state.page='espace';state.espaceDossier=d.dossierId;render();}else demOuvrirDossier(id);}
 function modalDemandeMail(id){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
   var m=IA.mail(d);
@@ -2273,7 +2321,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=51;
+var LAST_VER=52;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4375,6 +4423,9 @@ window.modalDemandeView=function(id){
 .mailv-v{color:var(--ink,#302c24);word-break:break-word}
 .mailv-frame-wrap{border:1px solid var(--line-2,#e2d9c6);border-radius:10px;overflow:hidden;background:#fff}
 .mailv-frame{display:block;width:100%;height:60vh;min-height:340px;border:0;background:#fff}
+.mailit{align-items:flex-start}
+.mailit-date{margin-left:auto;font-size:9.5px;color:var(--ink-3,#9c9078);white-space:nowrap;padding-top:2px}
+.mailit .esp-mini-txt span{white-space:normal;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
 </style>
 
 <style id="harmonize-mod">
