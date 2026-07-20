@@ -448,6 +448,11 @@ aside .nav-btn,aside .nav-lbl,aside .brand-sub,aside .brand h1,aside .brand smal
 aside .nav-btn.on{color:#000}
 aside .nav-btn:hover{color:#000}
 .userchip .av{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#5f5238,#3f372b)}
+.userchip-txt{flex:1;min-width:0}
+.userchip-out{flex:0 0 auto;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #e6dcc6;background:#fffdf8;color:#8a5a3a;border-radius:9px;cursor:pointer;transition:background .12s,color .12s,border-color .12s}
+.userchip-out svg{width:16px;height:16px}
+.userchip-out:hover{background:#f6eae2;color:#a23b3b;border-color:#e2c1b7}
+.userchip-out:active{transform:translateY(1px)}
 /* Vue demande : Mail & Documents symétriques (mêmes bords, même cadre) */
 .dem-view-grid{align-items:start}
 .dem-docs{border:1px solid var(--line-soft,#f0e9da);border-radius:var(--radius,14px);background:var(--card,#fffdf8);box-shadow:none;overflow:hidden}
@@ -470,7 +475,8 @@ aside .nav-btn:hover{color:#000}
     <div class="side-foot">
       <div class="userchip">
         <span class="av" id="me-av" style="background:linear-gradient(160deg,#4a4034,#2c271f)">A</span>
-        <div><b id="me-nom">Admin</b><span>Administrateur</span></div>
+        <div class="userchip-txt"><b id="me-nom">Admin</b><span>Administrateur</span></div>
+        <button class="userchip-out" title="Se déconnecter" aria-label="Se déconnecter" onclick="lastLogout()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
       </div>
     </div>
   </aside>
@@ -2709,6 +2715,11 @@ async function lastGateTry(ev){if(ev&&ev.preventDefault)ev.preventDefault();
   if(h===LAST_PWD_HASH){try{localStorage.setItem('last-gate-ok','1');}catch(e){}var g=document.getElementById('last-gate');if(g)g.remove();lastBoot();}
   else{if(err)err.style.display='block';inp.value='';inp.focus();}
   return false;}
+function lastLogout(){
+  if(!window.confirm('Se déconnecter de LAST ?'))return;
+  try{localStorage.removeItem('last-gate-ok');}catch(e){}
+  location.reload();
+}
 function lastGate(){
   var ok=false;try{ok=localStorage.getItem('last-gate-ok')==='1';}catch(e){}
   if(ok){lastBoot();return;}
@@ -2750,7 +2761,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=86;
+var LAST_VER=87;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
