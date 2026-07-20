@@ -2291,7 +2291,26 @@ function migrateFormSubmitNames(){try{var chg=false;(DB.demandes||[]).forEach(fu
         var parts=real.split(/\s+/);c.prenom=parts[0]||'';c.nom=parts.slice(1).join(' ')||'';
         if(fx.email&&(/formsubmit/i.test(c.email||'')||!c.email))c.email=fx.email;if(fx.tel&&!c.tel)c.tel=fx.tel;}}}
   });if(chg&&typeof save==='function')save();}catch(e){}}
-function lastBoot(){try{load();ensureData();migrateFormSubmitNames();}catch(e){}render();}
+/* Un mail provient-il de FormSubmit ? (les saisies internes manuelles sont conservées, ce ne sont pas des mails) */
+function demEstFormSubmit(d){
+  if(!d)return false;
+  if(d.canal==='Saisie interne')return true; /* dossier saisi manuellement : conservé */
+  if(d.canal==='Formulaire du site')return true;
+  var body=(''+(d.rawHtml||'')+' '+(d.rawBody||'')+' '+(d.message||'')+' '+(d.clientNom||''));
+  if(/formsubmit/i.test(body))return true;
+  if(/new submission from your form|nouvelle soumission|you've got a new submission|submitted from|via le formulaire|formulaire du site/i.test(body))return true;
+  return false;
+}
+/* Retire toutes les demandes issues de mails qui ne proviennent pas de FormSubmit (saisies internes conservées) */
+function purgeNonFormSubmit(){try{
+  if(!DB.demandes||!DB.demandes.length)return 0;
+  var before=DB.demandes.length;
+  DB.demandes=DB.demandes.filter(function(d){return demEstFormSubmit(d);});
+  var removed=before-DB.demandes.length;
+  if(removed>0&&typeof save==='function')save();
+  return removed;
+}catch(e){return 0;}}
+function lastBoot(){try{load();ensureData();migrateFormSubmitNames();purgeNonFormSubmit();}catch(e){}render();}
 async function _sha256(s){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0');}).join('');}
 async function lastGateTry(ev){if(ev&&ev.preventDefault)ev.preventDefault();
   var inp=document.getElementById('lg-pwd');var err=document.getElementById('lg-err');
@@ -2337,7 +2356,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=57;
+var LAST_VER=58;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
