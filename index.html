@@ -2024,6 +2024,8 @@ function statutsSasHTML(d){
   var _pi=assoc.map(function(a){return (''+(a.nom||'')).trim();}).indexOf(_pn);if(_pi<0)_pi=0;
   if(_ex&&(_exFull||_ex.dateNaissance||_ex.adresse||_ex.civilite||_ex.nationalite)){var _a0=assoc[_pi]||{};assoc[_pi]=Object.assign({},_a0,{nom:_exFull||_a0.nom,civilite:_ex.civilite||_a0.civilite,naissance:_ex.dateNaissance||_a0.naissance,lieuNaissance:_ex.lieuNaissance||_a0.lieuNaissance,pays:_ex.paysNaissance||_a0.pays,nationalite:_ex.nationalite||_a0.nationalite,adresse:stAdrPerso(_ex)||_a0.adresse});}
   var _dv=(c.docVars||{});
+  var _dureeN=parseInt(((_dv.duree||'')+'').replace(/\D/g,''),10)||99;var _dureeTxt=_dureeN+' ans';
+  var _clot=((_dv.clotureAnnuelle||'')+'').trim()||'31 décembre';
   var totalParts=assoc.reduce(function(n,a){return n+(Number(a.parts)||0);},0);
   var nominal=(totalParts>0&&cap>0)?(cap/totalParts):100;
   if(_dv.nominal!=null&&(''+_dv.nominal).trim()!=='')nominal=Number((''+_dv.nominal).replace(/[^0-9.]/g,''))||nominal;
@@ -2065,7 +2067,7 @@ function statutsSasHTML(d){
      'la participation, directe ou indirecte, de la Société dans toutes opérations financières, immobilières ou mobilières ou entreprises commerciales ou industrielles pouvant se rattacher à l\'objet social ou à tout objet similaire ou connexe ;',
      'toutes opérations quelconques contribuant à la réalisation de cet objet.']));
   A.push(art('ARTICLE 5 — Durée',
-    ['La Société, sauf prorogation ou dissolution anticipée, a une durée de 99 ans qui commencera à courir à compter du jour de son immatriculation au registre du commerce et des sociétés.',
+    ['La Société, sauf prorogation ou dissolution anticipée, a une durée de '+_dureeTxt+' qui commencera à courir à compter du jour de son immatriculation au registre du commerce et des sociétés.',
      'Les décisions de prorogation de la durée de la Société ou de dissolution anticipée sont prises par décision collective des associés.']));
   // TITRE II
   A.push('<div class="st-titre">TITRE II — APPORTS · CAPITAL SOCIAL · FORME DES ACTIONS · DROITS ET OBLIGATIONS ATTACHÉS AUX ACTIONS</div>');
@@ -2141,7 +2143,7 @@ function statutsSasHTML(d){
   // TITRE VI
   A.push('<div class="st-titre">TITRE VI — EXERCICE SOCIAL · COMPTES ANNUELS · AFFECTATION DES RÉSULTATS</div>');
   A.push(art('ARTICLE 23 — Exercice social',
-    ['L\'exercice social commence le 1er janvier et se termine le 31 décembre de chaque année.',
+    ['L\'exercice social commence le 1er janvier et se termine le '+_clot+' de chaque année.',
      'Par exception, le premier exercice social sera clos le '+_finExo+'.']));
   A.push(art('ARTICLE 24 — Établissement et approbation des comptes annuels',
     ['Le Président établit les comptes annuels de l\'exercice. Dans les six mois de la clôture de l\'exercice, les associés doivent statuer par décision collective sur les comptes annuels, au vu du rapport de gestion et des rapports du ou des Commissaires aux comptes.']));
@@ -2463,7 +2465,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=62;
+var LAST_VER=63;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4490,6 +4492,7 @@ window.modalDemandeView=function(id){
       +'<label class="de-l">Date de l\'acte (« Fait à … le »)</label><input class="de-i" inputmode="numeric" placeholder="jj/mm/aaaa" value="'+esc(dv.dateActe?stDateSlash(dv.dateActe):'')+'" oninput="espEdDateInput(\''+d.id+'\',this)">'
       +'<div class="de-row2"><div><label class="de-l">Ville de signature</label>'+edD(d.id,'villeSignature',dv.villeSignature)+'</div><div><label class="de-l">Année du 1er exercice</label>'+edD(d.id,'anneeExo',dv.anneeExo)+'</div></div>'
       +'<label class="de-l">Fin du 1er exercice social (clôture)</label>'+edD(d.id,'finExo',dv.finExo)
+      +'<div class="de-row2"><div><label class="de-l">Durée de la société (ans)</label>'+edD(d.id,'duree',dv.duree,'99')+'</div><div><label class="de-l">Clôture annuelle (ex. 31 décembre)</label>'+edD(d.id,'clotureAnnuelle',dv.clotureAnnuelle,'31 décembre')+'</div></div>'
       +'<label class="de-l">RCS / Greffe (ville)</label>'+edD(d.id,'rcsVille',dv.rcsVille)
       +'</div>';
     var assoc=(c.associes||[]).map(function(a,i){return '<div class="de-assoc"><button class="de-ax" title="Retirer" onclick="espEdAssocDel(\''+d.id+'\','+i+')">✕</button>'
