@@ -433,8 +433,8 @@ aside{background:linear-gradient(180deg,#f7f0e1 0%,#efe6d3 100%);border-right:1p
 .nav-btn.on::before{left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:linear-gradient(180deg,var(--espresso),#7a6a4c)}
 .nav-btn.on svg{opacity:1;color:var(--espresso)}
 /* Notification : compteur à traiter — pastille accent + halo pulsé */
-.nav-badge{margin-left:auto;min-width:20px;text-align:center;font:800 10px/1.6 ui-sans-serif,Arial;color:#fff;background:linear-gradient(135deg,#c56a48,#a5512f);border:0;border-radius:20px;padding:1px 7px;box-shadow:0 2px 8px rgba(165,81,47,.4);animation:navPulse 2.4s ease-in-out infinite}
-@keyframes navPulse{0%,100%{box-shadow:0 2px 8px rgba(165,81,47,.4)}50%{box-shadow:0 2px 14px rgba(165,81,47,.6)}}
+.nav-badge{margin-left:auto;min-width:20px;text-align:center;font:800 10px/1.6 ui-sans-serif,Arial;color:#fff;background:linear-gradient(135deg,#2b2620,#000);border:0;border-radius:20px;padding:1px 7px;box-shadow:0 2px 8px rgba(0,0,0,.4);animation:navPulse 2.4s ease-in-out infinite}
+@keyframes navPulse{0%,100%{box-shadow:0 2px 8px rgba(0,0,0,.4)}50%{box-shadow:0 2px 14px rgba(0,0,0,.6)}}
 @media(prefers-reduced-motion:reduce){.nav-badge{animation:none}}
 /* Notification : « bientôt » — chip discret ambre */
 .nav-soon{margin-left:auto;font:700 8.5px/1.6 ui-sans-serif,Arial;letter-spacing:.6px;text-transform:uppercase;color:#b07d2e;background:rgba(214,158,62,.16);border:1px solid rgba(214,158,62,.3);border-radius:20px;padding:1px 8px}
@@ -2741,7 +2741,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=80;
+var LAST_VER=81;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4931,7 +4931,7 @@ window.modalDemandeView=function(id){
       +'<div class="de-row2"><div><label class="de-l">Pays de naissance</label>'+edA(d.id,i,'pays',a.pays)+'</div><div><label class="de-l">Nationalité</label>'+edA(d.id,i,'nationalite',a.nationalite)+'</div></div>'
       +'</div>';}).join('');
     var asg='<div class="de-grp"><div class="de-grp-h">Associés &amp; répartition</div>'+assoc+'<button class="de-add" onclick="espEdAssocAdd(\''+d.id+'\')">+ Ajouter un associé</button></div>';
-    return soc+dir+men+asg;
+    return espEdDocSelectHTML(d)+soc+dir+men+asg+espEdDateBottomHTML(d);
   }
   /* Catégorie de chaque document : « creation » (à la constitution) ou « admin » (vie de la société, après création) */
   var DOC_CAT={statuts:'creation',souscripteurs:'creation',pouvoir:'creation',dnc:'creation',domiciliation:'creation',fiche:'creation',
@@ -4961,15 +4961,29 @@ window.modalDemandeView=function(id){
       +'<button class="de-cat'+(cat==='creation'?' on':'')+'" onclick="espEdCat(\''+d.id+'\',\'creation\')">Création<span class="de-cat-n">'+cnt.creation+'</span></button>'
       +'<button class="de-cat'+(cat==='admin'?' on':'')+'" onclick="espEdCat(\''+d.id+'\',\'admin\')">Admin<span class="de-cat-n">'+cnt.admin+'</span></button>'
       +'</div>';
-    var tabs=espEdDocs().map(function(dc){return '<button class="de-tab'+(dc.k===cur?' on':'')+'" onclick="espEdDoc(\''+d.id+'\',\''+dc.k+'\')">'+esc(dc.l)+'</button>';}).join('');
-    var dd=((d.docState&&d.docState[cur]&&d.docState[cur].dateDoc)||'');
     var z=Math.round((window.__edZoom||1)*100);
     return '<div class="de-head"><b>Éditeur — '+esc(dossierClients(d))+'</b>'+cats
       +'<div class="de-sp">'
-      +'<span class="de-datewrap"><label class="de-datelbl">Date du document</label><input class="de-datein" inputmode="numeric" placeholder="jj/mm/aaaa" value="'+esc(dd)+'" oninput="espEdDocDate(\''+d.id+'\',this)"></span>'
       +'<span class="de-zoom"><button class="de-zb" onclick="espEdZoom(-0.1)" title="Dézoomer">−</button><span class="de-zlbl" id="de-zlbl">'+z+'%</span><button class="de-zb" onclick="espEdZoom(0.1)" title="Zoomer">+</button><button class="de-zb de-zr" onclick="espEdZoom(0)" title="Réinitialiser">⟲</button></span>'
-      +'<button class="btn btn-sm btn-pri" onclick="espEdPrint()">🖨 Imprimer</button><button class="btn btn-sm" onclick="espEdClose()">✕ Fermer</button></div>'
-      +'<div class="de-docsel de-docsel-row">'+tabs+'</div></div>';
+      +'<button class="de-ico-btn de-ico-print" onclick="espEdPrint()" title="Imprimer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="13" width="12" height="9" rx="1"/></svg></button>'
+      +'<button class="de-ico-btn de-ico-close" onclick="espEdClose()" title="Fermer">✕</button></div></div>';
+  }
+  /* Sélecteur du document courant (un seul onglet déroulant), placé en haut de la barre latérale */
+  function espEdDocSelectHTML(d){
+    var cur=window.__edDoc||'statuts';
+    var docs=espEdDocs();
+    if(!docs.some(function(x){return x.k===cur;})&&docs.length){cur=docs[0].k;window.__edDoc=cur;}
+    var opts=docs.map(function(dc){return '<option value="'+dc.k+'"'+(dc.k===cur?' selected':'')+'>'+esc(dc.l)+'</option>';}).join('');
+    return '<div class="de-grp de-docpick"><div class="de-grp-h">Document à éditer</div>'
+      +'<select class="de-i de-docpick-sel" onchange="espEdDoc(\''+d.id+'\',this.value)">'+opts+'</select></div>';
+  }
+  /* Bloc « Date du document » en bas de la barre latérale (modifiable) */
+  function espEdDateBottomHTML(d){
+    var cur=window.__edDoc||'statuts';
+    var dd=((d.docState&&d.docState[cur]&&d.docState[cur].dateDoc)||'');
+    return '<div class="de-grp de-datebot"><div class="de-grp-h">Date du document</div>'
+      +'<input class="de-i" inputmode="numeric" placeholder="jj/mm/aaaa" value="'+esc(dd)+'" oninput="espEdDocDate(\''+d.id+'\',this)">'
+      +'<div class="de-note2">Apparaît en bas du document.</div></div>';
   }
   function espEdPreviewHTML(d){
     var k=window.__edDoc||'statuts';
@@ -5092,6 +5106,11 @@ window.modalDemandeView=function(id){
 .de-ax{position:absolute;top:6px;right:6px;border:0;background:transparent;color:#b0442f;cursor:pointer;font-size:15px;line-height:1}
 .de-add{width:100%;border:1px dashed var(--line-2,#d9ccb2);background:transparent;color:var(--ink-2,#5b5040);padding:9px;border-radius:8px;cursor:pointer;font-weight:600;font-size:12.5px}
 .de-add:hover{border-color:var(--accent,#8a6d3b);color:var(--accent,#8a6d3b)}
+.de-docpick{margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line,#e0d8c6)}
+.de-docpick-sel{font-weight:700;font-size:13.5px;color:var(--ink,#2a2117);border:1.5px solid var(--accent,#8a6d3b)!important;background:linear-gradient(180deg,#fffdf7,#f5eede)!important;cursor:pointer;padding:11px 12px!important;box-shadow:0 2px 6px rgba(90,70,35,.10)}
+.de-docpick-sel:focus{box-shadow:0 0 0 3px rgba(138,109,59,.18)}
+.de-datebot{margin-top:6px;margin-bottom:6px}
+.de-datebot .de-i{font-weight:600}
 .de-note2{font-size:10.5px;color:var(--ink-3,#8a7d69);margin-top:4px;font-style:italic}
 .de-preview{overflow:auto;min-height:0;height:100%;background:var(--paper-desk,#e7ded0);padding:22px;min-width:0}
 @media(max-width:860px){.de-body{grid-template-columns:1fr;grid-template-rows:auto 1fr}.de-side{border-right:0;border-bottom:1px solid var(--line,#e0d8c6);max-height:42vh}}
@@ -5155,12 +5174,19 @@ window.modalDemandeView=function(id){
 .de-mail-code{margin-left:auto;font:700 10px/1.4 ui-monospace,Menlo,Consolas,monospace;color:#6a5f47;background:rgba(122,110,88,.12);border:1px solid rgba(122,110,88,.28);border-radius:5px;padding:1px 5px}
 .de-mail-body{padding:0 10px 10px}
 .de-mail .mailv-frame{height:220px;min-height:180px}
-/* Contrôles éditeur : zoom + date du document */
-.de-zoom{display:inline-flex;align-items:center;gap:2px;background:var(--paper,#fffef9);border:1px solid var(--line,#e0d8c6);border-radius:9px;padding:2px}
-.de-zb{width:26px;height:26px;border:0;background:transparent;border-radius:7px;cursor:pointer;font-size:15px;color:var(--ink,#3a3222);line-height:1}
+/* Contrôles éditeur : zoom + imprimer + fermer — compacts & symétriques (même hauteur 32px) */
+.de-sp{margin-left:auto;display:flex;gap:7px;align-items:center}
+.de-zoom{display:inline-flex;align-items:center;gap:1px;height:32px;box-sizing:border-box;background:var(--paper,#fffef9);border:1px solid var(--line-2,#e2d9c6);border-radius:8px;padding:0 3px}
+.de-zb{width:22px;height:22px;border:0;background:transparent;border-radius:6px;cursor:pointer;font-size:13px;color:var(--ink,#3a3222);line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0}
 .de-zb:hover{background:#efe7d8}
-.de-zb.de-zr{font-size:13px}
-.de-zlbl{min-width:42px;text-align:center;font:600 11.5px/1 ui-sans-serif,Arial,sans-serif;color:var(--ink,#3a3222)}
+.de-zb.de-zr{font-size:11px}
+.de-zlbl{min-width:34px;text-align:center;font:700 10.5px/1 ui-sans-serif,Arial,sans-serif;color:var(--ink,#3a3222)}
+.de-ico-btn{width:32px;height:32px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line-2,#e2d9c6);background:var(--paper,#fffef9);color:var(--ink,#3a3222);border-radius:8px;cursor:pointer;font-size:14px;line-height:1;padding:0;transition:background .12s,border-color .12s,box-shadow .12s}
+.de-ico-btn:hover{background:#f3ecda;border-color:var(--accent,#8a6d3b);box-shadow:0 2px 6px rgba(90,70,35,.12)}
+.de-ico-btn:active{transform:translateY(1px)}
+.de-ico-btn svg{width:16px;height:16px;display:block}
+.de-ico-print{color:var(--accent,#8a6d3b)}
+.de-ico-close{font-size:13px}
 .de-datewrap{display:inline-flex;flex-direction:column;gap:2px}
 .de-datelbl{font:600 9px/1 ui-sans-serif,Arial;letter-spacing:.3px;text-transform:uppercase;color:#9c9078}
 .de-datein{width:110px;padding:5px 8px;border:1px solid var(--line,#e0d8c6);border-radius:8px;font-size:12px;background:var(--paper,#fffef9)}
