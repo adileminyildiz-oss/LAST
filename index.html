@@ -292,6 +292,9 @@ body[data-page="dash"] .grid.g2{margin-top:12px}
 .esp-fiche-row .btn{flex:1;justify-content:center;font-size:11px}
 .esp-verif-btn{width:100%;justify-content:center;margin-top:6px;font-size:11px}
 .dem-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.smtp-box{margin-top:12px;border:1px solid var(--line,#e0d8c6);background:#faf5ea;border-radius:9px;padding:10px 12px}
+.smtp-check{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;line-height:1.45;cursor:pointer}
+.smtp-check input{margin-top:2px;flex:0 0 auto}
 .dem-toolbar .dem-search{flex:1;margin-bottom:0}
 .dem-imp-btn{white-space:nowrap}
 #esp-verif{position:fixed;inset:0;z-index:100001;display:none;align-items:center;justify-content:center;background:rgba(40,30,10,.45);padding:16px}
@@ -783,13 +786,44 @@ function demIngest(mails){DB.parametres=DB.parametres||{};DB.parametres.mailsImp
     seen.push(key);add++;});
   return {add:add,dup:dup};}
 function demSyncCfg(){DB.parametres=DB.parametres||{};DB.parametres.mailSync=DB.parametres.mailSync||{url:'',key:''};return DB.parametres.mailSync;}
-function demSyncSave(){var c=demSyncCfg();var u=document.getElementById('dem-sync-url'),k=document.getElementById('dem-sync-key');if(u)c.url=(u.value||'').trim();if(k)c.key=(k.value||'').trim();save();closeModal();toast('Configuration enregistrée');demSyncMails(false);}
+function demSyncSave(){var c=demSyncCfg();var u=document.getElementById('dem-sync-url'),k=document.getElementById('dem-sync-key'),sm=document.getElementById('dem-sync-smtp');if(u)c.url=(u.value||'').trim();if(k)c.key=(k.value||'').trim();if(sm)c.smtp=sm.checked?'1':'';save();closeModal();toast('Configuration enregistrée'+(c.smtp==='1'?' — envoi direct SMTP activé':''));demSyncMails(false);}
 function demSyncConfig(){var c=demSyncCfg();
-  openModal('🔄 Boîte mail — synchronisation automatique',
+  openModal('🔄 Boîte mail — synchronisation & envoi SMTP',
     '<div class="hint" style="margin-bottom:10px">Renseigne l\'adresse du script Google (déployé sur <b>aemconseil.sas@gmail.com</b>) et la clé secrète. LAST récupère alors <b>automatiquement</b> les mails et les transforme en demandes — à l\'ouverture, toutes les 3 minutes, et via « 🔄 Synchroniser la boîte ».</div>'
     +'<label>URL du script (Web App …/exec)</label><input id="dem-sync-url" value="'+esc(c.url||'')+'" placeholder="https://script.google.com/macros/s/…/exec">'
-    +'<label style="margin-top:8px">Clé secrète (TOKEN du script)</label><input id="dem-sync-key" value="'+esc(c.key||'')+'" placeholder="identique au TOKEN du script">',
-    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-ghost" onclick="demSyncTest()">🔌 Tester la connexion</button><button class="btn btn-pri" onclick="demSyncSave()">💾 Enregistrer & synchroniser</button>');}
+    +'<label style="margin-top:8px">Clé secrète (TOKEN du script)</label><input id="dem-sync-key" value="'+esc(c.key||'')+'" placeholder="identique au TOKEN du script">'
+    +'<div class="smtp-box"><label class="smtp-check"><input type="checkbox" id="dem-sync-smtp" '+(c.smtp==='1'?'checked':'')+'> <b>Envoi direct SMTP</b> — les mails (documents, décisions, réponses) partent directement du serveur SMTP de Gmail (aemconseil.sas@gmail.com), sans ouvrir Gmail</label>'
+    +'<div class="hint" style="margin-top:6px;font-size:11px">Chaque envoi affiche d\'abord une fenêtre de vérification (destinataire, sujet, message) avant de partir. Le bouton « Ouvrir Gmail » reste disponible en repli.</div></div>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-ghost" onclick="demSmtpScript()">📜 Script Gmail (modèle)</button><button class="btn btn-ghost" onclick="demSyncTest()">🔌 Tester la connexion</button><button class="btn btn-ghost" onclick="demSmtpTest()">📤 Tester l\'envoi SMTP</button><button class="btn btn-pri" onclick="demSyncSave()">💾 Enregistrer & synchroniser</button>');}
+function demSmtpScriptCode(){
+  return ['var TOKEN=\'CHANGE-MOI\'; // même clé que dans LAST',
+  'function doGet(e){',
+  '  var p=(e&&e.parameter)||{};var out;',
+  '  if((p.key||\'\')!==TOKEN){out={error:\'unauthorized\'};}',
+  '  else if(p.action===\'send\'){',
+  '    try{GmailApp.sendEmail(p.to||\'\',p.subject||\'\',p.body||\'\',{name:\'AEM CONSEIL\'});out={sent:true};}',
+  '    catch(err){out={error:\'\'+err};}',
+  '  }else{',
+  '    var mails=[];',
+  '    GmailApp.search(\'in:inbox newer_than:30d\',0,50).forEach(function(t){',
+  '      t.getMessages().forEach(function(m){',
+  '        mails.push({id:m.getId(),from:m.getFrom(),subject:m.getSubject(),date:m.getDate().toISOString(),body:m.getPlainBody().slice(0,20000)});',
+  '      });',
+  '    });',
+  '    out={mails:mails,count:mails.length};',
+  '  }',
+  '  var json=JSON.stringify(out);',
+  '  if(p.callback){return ContentService.createTextOutput(p.callback+\'(\'+json+\')\').setMimeType(ContentService.MimeType.JAVASCRIPT);}',
+  '  return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);',
+  '}'].join('\n');
+}
+function demSmtpScript(){
+  openModal('📜 Script Gmail — lecture + envoi SMTP',
+    '<div class="hint" style="margin-bottom:10px">À coller dans <b>script.google.com</b> (connecté avec <b>aemconseil.sas@gmail.com</b>) → Déployer → <b>Application Web</b> (exécuter en tant que <b>moi</b>, accès « <b>Tout le monde</b> ») → copie l\'URL /exec dans LAST. Ce script gère la <b>lecture de la boîte</b> ET l\'<b>envoi direct SMTP</b> (action=send). Remplace CHANGE-MOI par ta clé secrète.</div>'
+    +'<textarea id="smtp-script-code" rows="16" readonly style="width:100%;font:11.5px/1.5 ui-monospace,Consolas,monospace;white-space:pre;overflow:auto">'+esc(demSmtpScriptCode())+'</textarea>',
+    '<button class="btn btn-ghost" onclick="demSyncConfig()">← Retour</button><button class="btn btn-pri" onclick="demSmtpScriptCopy()">📋 Copier le script</button>');
+}
+function demSmtpScriptCopy(){var t=document.getElementById('smtp-script-code');if(!t)return;t.select();try{navigator.clipboard.writeText(t.value).then(function(){toast('Script copié ✅');},function(){document.execCommand('copy');toast('Script copié ✅');});}catch(e){try{document.execCommand('copy');toast('Script copié ✅');}catch(_e){toast('Sélectionne et copie manuellement (Ctrl+C).');}}}
 function demSyncMails(silent){var c=demSyncCfg();if(!c.url){if(!silent)demSyncConfig();return;}
   if(window.__demSyncBusy)return;window.__demSyncBusy=true;
   if(!silent)toast('Synchronisation en cours…');
@@ -1031,7 +1065,7 @@ function demInstallerLogoSignature(){
   try{window.open('https://mail.google.com/mail/?authuser='+encodeURIComponent(AEM_MAIL)+'#settings/general','_blank','noopener');}catch(e){}
 }
 /* Ouvre directement la page de la messagerie (Gmail) avec le mail pré-rempli — depuis le compte AEM CONSEIL */
-function demOuvrirMessagerie(to,sujet,corps){
+function demOuvrirGmail(to,sujet,corps){
   var url='https://mail.google.com/mail/?view=cm&fs=1&tf=1'
     +'&authuser='+encodeURIComponent(AEM_MAIL)
     +'&to='+encodeURIComponent(to||'')
@@ -1039,6 +1073,29 @@ function demOuvrirMessagerie(to,sujet,corps){
     +'&body='+encodeURIComponent(corps||'');
   var w=window.open(url,'_blank','noopener');
   if(!w){ /* pop-up bloquée : repli sur le client mail par défaut */ window.location.href='mailto:'+encodeURIComponent(to||'')+'?subject='+encodeURIComponent(sujet||'')+'&body='+encodeURIComponent(corps||''); }
+}
+/* ===== Envoi direct SMTP (via la passerelle Gmail d'aemconseil.sas@gmail.com) ===== */
+function smtpActif(){var c=(typeof demSyncCfg==='function')?demSyncCfg():null;return !!(c&&c.url&&c.smtp==='1');}
+function demSmtpModal(to,sujet,corps){
+  openModal('📤 Envoi direct — SMTP (aemconseil.sas@gmail.com)',
+    '<div class="hint" style="margin-bottom:10px">Le message part <b>directement du serveur SMTP de Gmail</b> (compte aemconseil.sas@gmail.com) — sans ouvrir Gmail. Vérifie le destinataire et le contenu puis envoie.</div>'
+    +'<label>Destinataire</label><input id="ml-to" value="'+esc(to||'')+'" placeholder="client@email.fr">'
+    +'<label style="margin-top:8px">Sujet</label><input id="ml-sujet" value="'+esc(sujet||'')+'">'
+    +'<label style="margin-top:8px">Message</label><textarea id="ml-corps" rows="12" style="width:100%;font:inherit">'+esc(corps||'')+'</textarea>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>'
+    +'<button class="btn btn-ghost" onclick="demSmtpGmail()">Ouvrir Gmail</button>'
+    +'<button class="btn btn-pri" onclick="demQEnvoyerAuto()">📤 Envoyer maintenant</button>');
+}
+function demSmtpGmail(){var g=function(x){var e=document.getElementById(x);return e?(''+e.value):'';};var to=g('ml-to'),s=g('ml-sujet'),b=g('ml-corps');closeModal();demOuvrirGmail(to.trim(),s,b);}
+function demSmtpTest(){
+  var u=document.getElementById('dem-sync-url'),k=document.getElementById('dem-sync-key');
+  var c=demSyncCfg();if(u&&(u.value||'').trim())c.url=(u.value||'').trim();if(k&&(k.value||'').trim())c.key=(k.value||'').trim();
+  if(!c.url)return toast('Renseigne d\'abord l\'URL du script.');
+  demSendViaScript(AEM_MAIL,'Test SMTP — LAST','Ceci est un test d\'envoi direct SMTP depuis LAST (passerelle Gmail).\n\nSi tu reçois ce message, l\'envoi direct fonctionne. ✅');
+}
+function demOuvrirMessagerie(to,sujet,corps){
+  if(smtpActif()){demSmtpModal(to,sujet,corps);return;}
+  demOuvrirGmail(to,sujet,corps);
 }
 /* « Demander les documents » → ouvre directement la messagerie avec le mail pré-rempli */
 function demDemanderDocs(id){
@@ -2665,7 +2722,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=73;
+var LAST_VER=74;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
