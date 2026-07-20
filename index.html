@@ -641,7 +641,7 @@ const PAGES=[
 ];
 const state={page:'demandes',q:''};
 function toggleNav(o){document.getElementById('side').classList.toggle('open',o);document.getElementById('scrim').classList.toggle('show',o);}
-function go(p){state.page=p;toggleNav(false);render();window.scrollTo(0,0);}
+function go(p){state.page=p;state.demView='';toggleNav(false);render();window.scrollTo(0,0);}
 function onSearch(v){state.q=v.trim().toLowerCase();if(['clients','dossiers','demandes'].includes(state.page))render();}
 
 function buildNav(){
@@ -2374,7 +2374,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=59;
+var LAST_VER=60;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3069,6 +3069,7 @@ window.demIngest=function(mails){
 };
 
 window.pageDemandes=function(){
+ if(state.demView){var dv=DB.demandes.find(function(x){return x.id===state.demView;});if(dv)return demVueDetail(state.demView);state.demView='';}
  var tab=state.demTab||'nouveau';var q=(state.q||'').toLowerCase();
  var counts={nouveau:0,assigne:0,encours:0,finalise:0};
  DB.demandes.forEach(function(d){counts[demEtat(d)]++;});
@@ -3096,16 +3097,48 @@ window.tableDemandes=function(list,tab){
  return '<table class="dem-tbl"><thead><tr><th>Client</th><th>Objet (IA)</th><th>Type</th><th class="hide-sm">Pièces</th><th class="hide-sm">Assigné</th><th></th></tr></thead><tbody>'
   +list.map(function(d){var u=userById(d.assigneA);var t=demType(d);var atts=demAtt(d);
      var pcell=atts.length?('<span class="tag warm">📎 '+atts.length+'</span>'):(d.thread&&d.thread.length>1?('<span class="tag blue">💬 '+d.thread.length+'</span>'):'<span class="tag mut">—</span>');
-     return '<tr class="'+(t==='questionnaire'?'dem-row-q':'')+'" onclick="modalDemandeView(\''+d.id+'\')" style="cursor:pointer">'
-       +'<td><div class="tname">'+esc(d.clientNom)+'</div><div class="tsub">'+esc(d.clientEmail||d.canal)+' · '+frDate(d.date)+'</div></td>'
+     return '<tr class="'+(t==='questionnaire'?'dem-row-q':'')+'" onclick="demOuvrirVue(\''+d.id+'\')" style="cursor:pointer">'
+       +'<td><div class="tname">'+esc(demBestName(d))+'</div><div class="tsub">'+esc((d.clientEmail&&!/formsubmit/i.test(d.clientEmail))?d.clientEmail:(d.canal||'—'))+' · '+esc(mailDateHeure(d))+'</div></td>'
        +'<td><span class="tag blue">'+esc(IA.objet(d))+'</span></td>'
        +'<td>'+demTypeBadge(d)+'</td>'
        +'<td class="hide-sm">'+pcell+'</td>'
        +'<td class="hide-sm">'+(u?'<span class="tag"><span class="av" style="width:18px;height:18px;font-size:8px;background:'+u.couleur+'">'+initials(u.nom)+'</span> '+u.nom+'</span>':'<span class="tag mut">Non assigné</span>')+'</td>'
-       +'<td onclick="event.stopPropagation()"><button class="btn btn-sm '+(t==='questionnaire'?'btn-pri':'btn-ghost')+'" onclick="'+(t==='questionnaire'?'demOuvrirDossier':'modalDemandeView')+'(\''+d.id+'\')">'+(t==='questionnaire'?'📂 Ouvrir le dossier':'Récapitulatif')+'</button></td>'
+       +'<td onclick="event.stopPropagation()"><button class="btn btn-sm '+(t==='questionnaire'?'btn-pri':'btn-ghost')+'" onclick="'+(t==='questionnaire'?'demOuvrirDossier':'demOuvrirVue')+'(\''+d.id+'\')">'+(t==='questionnaire'?'📂 Ouvrir le dossier':'Ouvrir')+'</button></td>'
        +'</tr>';
    }).join('')
   +'</tbody></table>';
+};
+
+/* Ouverture d'un mail comme un sous-module (vue détaillée dans la page, avec retour) */
+window.demOuvrirVue=function(id){state.demView=id;render();window.scrollTo(0,0);};
+window.demFermerVue=function(){state.demView='';render();window.scrollTo(0,0);};
+window.demVueDetail=function(id){
+  var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return '';
+  var nom=(typeof demBestName==='function'?demBestName(d):'')||'Expéditeur';
+  var atts=(d.attachments||[]).map(function(a){return esc((a&&(a.name||a.nom))||a||'');}).filter(Boolean);
+  var assignSel='<select id="dm-assign">'+['<option value="">— Non assigné —</option>'].concat(DB.users.map(function(u){return '<option value="'+u.id+'" '+(d.assigneA===u.id?'selected':'')+'>'+esc(u.nom)+(u.role==='admin'?' (admin)':'')+'</option>';})).join('')+'</select>';
+  return '<div class="dem-view">'
+    +'<div class="dem-view-bar">'
+      +'<button class="btn btn-sm btn-ghost dem-back" onclick="demFermerVue()">← Retour aux demandes</button>'
+      +'<span class="dem-view-name">'+esc(nom)+'</span>'
+      +demTypeBadge(d)
+    +'</div>'
+    +'<div class="dem-view-grid">'
+      +'<div class="card"><div class="card-h"><h2>Mail reçu</h2><span class="sub" style="margin-left:auto">Objet : '+esc(IA.objet(d))+'</span></div><div class="card-b">'
+        +mailFrame(d)
+      +'</div></div>'
+      +'<div class="card"><div class="card-h"><h2>Traitement</h2></div><div class="card-b">'
+        +'<label>Assigner à un collaborateur</label>'+assignSel
+        +(atts.length?'<label style="margin-top:10px">Pièces jointes</label><div class="hint">'+atts.join(', ')+'</div>':'')
+        +'<div class="dem-view-acts">'
+          +'<button class="btn" onclick="assignDemande(\''+id+'\')">Assigner</button>'
+          +'<button class="btn" onclick="demDevis(\''+id+'\')">Devis</button>'
+          +'<button class="btn" onclick="demQuestionnaire(\''+id+'\')">Questionnaire</button>'
+          +'<button class="btn btn-pri" onclick="demOuvrirDossier(\''+id+'\')">Ouvrir le dossier</button>'
+        +'</div>'
+      +'</div></div>'
+    +'</div>'
+  +'</div>';
 };
 
 function demFetchAtts(mid,cb){var c=(typeof demSyncCfg==='function')?demSyncCfg():{};if(!c||!c.url){toast('Configure la boîte (⚙ Configurer la boîte).');cb([]);return;}
@@ -4490,6 +4523,14 @@ window.modalDemandeView=function(id){
 .esp-act-full{width:100%;justify-content:center;padding:10px 14px;font-size:13px;font-weight:600}
 .esp-act-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
 .esp-act-grid .btn{width:100%;justify-content:center;padding:9px 12px;font-size:12.5px}
+/* Vue « sous-module » d'un mail (ouverture depuis la liste des demandes) */
+.dem-view{display:flex;flex-direction:column;gap:14px}
+.dem-view-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.dem-view-name{font-weight:700;font-size:15px;color:var(--ink,#302c24)}
+.dem-view-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;align-items:start}
+@media(max-width:900px){.dem-view-grid{grid-template-columns:1fr}}
+.dem-view-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.dem-view-acts .btn{padding:9px 14px}
 </style>
 
 <style id="harmonize-mod">
