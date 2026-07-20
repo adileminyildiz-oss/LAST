@@ -943,6 +943,53 @@ function demDemanderDocs(id){
   window._mailAtt=[];setTimeout(mailAttRender,0);
 }
 function demDocsMailEnvoyer(id){var d=DB.demandes.find(function(x){return x.id===id;});if(d){d.docsMailSent=Date.now();if(typeof save==='function')save();}demMailEnvoyer();closeModal();render();}
+
+/* ===== Acceptation / Refus d'une demande (mail de prise en charge ou d'excuse) ===== */
+function demComposerDecision(id,titre,sujet,corps,dec){
+  var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
+  openModal(titre,
+    '<label>Destinataire</label><input id="ml-to" value="'+esc(d.clientEmail||'')+'">'
+    +'<label>Objet du mail</label><input id="ml-sujet" value="'+esc(sujet)+'">'
+    +'<label>Message</label><textarea id="ml-corps" style="min-height:240px">'+esc(corps)+'</textarea>'
+    +mailComposerExtra(),
+    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+    +'<button class="btn" onclick="demMailCopier()">Copier</button>'
+    +'<button class="btn '+(dec==='refuse'?'':'btn-pri')+'" onclick="demDecisionEnvoyer(\''+id+'\',\''+dec+'\')">✉ Générer l\'e-mail</button>');
+  window._mailAtt=[];setTimeout(mailAttRender,0);
+}
+function demAccepter(id){
+  var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
+  var nom=(typeof demBestName==='function'?demBestName(d):'')||'';var prenom=(nom.split(/\s+/)[0]||'').trim();
+  var sujet='Prise en charge de votre demande — AEM CONSEIL';
+  var corps='Bonjour'+(prenom?(' '+prenom):'')+',\n\n'
+   +'Nous vous confirmons la prise en charge de votre demande'+(d.code?(' (référence '+d.code+')'):'')+'.\n\n'
+   +'Votre dossier est désormais en cours de traitement par nos services. Nous reviendrons vers vous pour la suite des démarches et, le cas échéant, pour les documents nécessaires à leur réalisation.\n\n'
+   +'Nous restons à votre disposition pour toute question.\n\n'
+   +'Bien cordialement,\nAEM CONSEIL';
+  demComposerDecision(id,'Prise en charge — '+esc(nom||'client'),sujet,corps,'accepte');
+}
+function demRefuser(id){
+  var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
+  var nom=(typeof demBestName==='function'?demBestName(d):'')||'';var prenom=(nom.split(/\s+/)[0]||'').trim();
+  var sujet='Votre demande — AEM CONSEIL';
+  var corps='Bonjour'+(prenom?(' '+prenom):'')+',\n\n'
+   +'Nous vous remercions de l\'intérêt que vous portez à nos services et de votre demande'+(d.code?(' (référence '+d.code+')'):'')+'.\n\n'
+   +'Après étude, nous ne sommes malheureusement pas en mesure de traiter votre demande. Nous vous prions de bien vouloir nous en excuser.\n\n'
+   +'Nous restons naturellement à votre disposition et espérons pouvoir vous accompagner à l\'avenir.\n\n'
+   +'Bien cordialement,\nAEM CONSEIL';
+  demComposerDecision(id,'Non-traitement (excuses) — '+esc(nom||'client'),sujet,corps,'refuse');
+}
+function demDecisionEnvoyer(id,dec){
+  var d=DB.demandes.find(function(x){return x.id===id;});
+  if(d){d.decision=dec;d.decisionTs=Date.now();d.statut=(dec==='refuse')?'Refusé':'Accepté';if(typeof save==='function')save();}
+  demMailEnvoyer();closeModal();render();
+}
+function demDecisionBadge(d){
+  if(!d||!d.decision)return '';
+  return d.decision==='refuse'
+    ? '<span class="tag" style="background:rgba(190,60,60,.12);border-color:rgba(190,60,60,.35);color:#a23b3b">Refusée — excuses envoyées</span>'
+    : '<span class="tag ok">Prise en charge — client informé</span>';
+}
 /* Enregistrement d'un document reçu dans le dossier de la demande */
 function demDocsUpload(id,k,inp){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;var fl=inp.files;if(!fl||!fl.length)return;
@@ -2467,7 +2514,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=64;
+var LAST_VER=65;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2487,7 +2534,7 @@ window.addEventListener('focus',lastCheckUpdate);
 window.addEventListener('online',lastCheckUpdate);
 window.addEventListener('pageshow',function(e){ if(e.persisted) lastCheckUpdate(); });
 /* petit badge de version (bas gauche) */
-window.addEventListener('load',function(){try{var b=document.createElement('div');b.id='last-ver';b.textContent='LAST · v'+LAST_VER;b.style.cssText='position:fixed;left:10px;bottom:8px;z-index:90;font:600 10px/1 system-ui,sans-serif;color:#b7ab8b;background:rgba(60,55,43,.06);border:1px solid rgba(120,110,80,.18);padding:3px 7px;border-radius:20px;pointer-events:none;opacity:.75';document.body.appendChild(b);}catch(e){}});
+window.addEventListener('load',function(){try{var b=document.createElement('div');b.id='last-ver';b.textContent='LAST · v'+LAST_VER;b.style.cssText='position:fixed;right:10px;bottom:8px;z-index:90;font:600 10px/1 system-ui,sans-serif;color:#b7ab8b;background:rgba(60,55,43,.06);border:1px solid rgba(120,110,80,.18);padding:3px 7px;border-radius:20px;pointer-events:none;opacity:.75';document.body.appendChild(b);}catch(e){}});
 var _pwaPrompt=null;
 function pwaInstalled(){return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;}
 function pwaHideBanner(){var b=document.getElementById('pwa-install');if(b)b.remove();}
@@ -3216,13 +3263,16 @@ window.demVueDetail=function(id){
       +'<span class="dem-code">'+esc(demCode(d))+'</span>'
       +'<span class="dem-view-name">'+esc(nom)+'</span>'
       +demTypeBadge(d)
+      +demDecisionBadge(d)
     +'</div>'
     +'<div class="dem-view-grid">'
       +'<div class="card"><div class="card-h"><h2>Mail reçu</h2><span class="sub" style="margin-left:auto">Objet : '+esc(IA.objet(d))+'</span></div><div class="card-b">'
         +mailFrame(d)
       +'</div></div>'
       +'<div class="card"><div class="card-h"><h2>Traitement</h2></div><div class="card-b">'
-        +'<button class="btn btn-pri" style="width:100%;justify-content:center;margin-bottom:12px" onclick="demDemanderDocs(\''+id+'\')">✉ Demander les documents</button>'
+        +'<div class="dem-decide"><button class="btn btn-pri dem-accept" onclick="demAccepter(\''+id+'\')">✓ Accepter (prise en charge)</button>'
+        +'<button class="btn dem-refuse" onclick="demRefuser(\''+id+'\')">✕ Refuser (mail d\'excuse)</button></div>'
+        +'<button class="btn btn-pri" style="width:100%;justify-content:center;margin:12px 0" onclick="demDemanderDocs(\''+id+'\')">✉ Demander les documents</button>'
         +'<label>Assigner à un collaborateur</label>'+assignSel
         +(atts.length?'<label style="margin-top:10px">Pièces jointes</label><div class="hint">'+atts.join(', ')+'</div>':'')
         +'<div class="dem-view-acts">'
@@ -4629,6 +4679,12 @@ window.modalDemandeView=function(id){
 @media(max-width:900px){.dem-view-grid{grid-template-columns:1fr}}
 .dem-view-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .dem-view-acts .btn{padding:9px 14px}
+.dem-decide{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:520px){.dem-decide{grid-template-columns:1fr}}
+.dem-decide .btn{width:100%;justify-content:center;padding:10px 12px;font-weight:600}
+.dem-decide .dem-accept{background:#3f7d54;border-color:#356847;color:#fff}
+.dem-decide .dem-refuse{background:#fff;border:1px solid #d8c9b6;color:#a23b3b}
+.dem-decide .dem-refuse:hover{background:#faf1ee;border-color:#c9a}
 /* Section « Documents » du dossier (repliable, fermée par défaut) */
 .dem-docs{border:1px solid var(--line-2,#e2d9c6);border-radius:12px;background:var(--card,#fbf8f1);overflow:hidden}
 .dem-docs-sum{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:14px 18px;font-weight:700;font-size:14px;color:var(--ink,#302c24);user-select:none}
