@@ -2722,7 +2722,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=77;
+var LAST_VER=78;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3486,7 +3486,14 @@ window.pageDemandes=function(){
  if(q)list=list.filter(function(d){return (d.clientNom+' '+IA.objet(d)+' '+(d.serviceSouhaite||'')+' '+(d.message||'')+' '+demType(d)).toLowerCase().includes(q);});
  var tabs='<div class="dem-tabs">'+DEM_TABS.map(function(t){return '<button class="dem-tab '+(t[0]===tab?'on':'')+'" onclick="state.demTab=\''+t[0]+'\';render()">'+t[1]+' <span class="dem-c">'+counts[t[0]]+'</span></button>';}).join('')+'</div>';
  var search='<div class="dem-search">'+svg(IC.inbox)+'<input value="'+esc(state.q||'')+'" oninput="state.q=this.value.toLowerCase();render()" placeholder="Rechercher un client, un objet, un type…"></div>';
- return natBar+tabs+'<div class="dem-toolbar">'+search+'<button class="btn btn-sm dem-imp-btn" onclick="demSyncMails(false)">🔄 Synchroniser la boîte</button><button class="btn btn-sm dem-imp-btn" onclick="demSyncConfig()">⚙ Configurer la boîte</button><button class="btn btn-sm dem-imp-btn" onclick="demSaisieInterne()">➕ Saisir un dossier</button></div>'
+ var acts='<div class="dem-acts">'
+   +'<button class="btn btn-sm dem-imp-btn" onclick="demSyncMails(false)">🔄 Synchroniser</button>'
+   +'<button class="btn btn-sm dem-imp-btn" onclick="demSyncConfig()">⚙ Configurer</button>'
+   +'<button class="btn btn-sm dem-imp-btn dem-imp-pri" onclick="demSaisieInterne()">➕ Saisir un dossier</button></div>';
+ return '<div class="dem-head">'
+   +'<div class="dem-head-row">'+natBar+acts+'</div>'
+   +'<div class="dem-head-row">'+tabs+search+'</div>'
+   +'</div>'
   +'<div class="card"><div class="card-b" style="padding:0">'
   +(list.length?tableDemandes(list,tab):'<div class="empty">Aucune demande '+(nat==='tous'?'':('« '+demNatLabel(nat)+' » '))+'dans cet onglet.</div>')
   +'</div></div>';
@@ -3600,6 +3607,12 @@ window.modalDemandeView=function(id){
 };
 </script>
 <style id="dem-tower-mod">
+.dem-head{display:flex;flex-direction:column;gap:11px;margin-bottom:14px}
+.dem-head-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.dem-head .dem-nat,.dem-head .dem-tabs,.dem-head .dem-search{margin-bottom:0}
+.dem-head .dem-search{flex:0 1 360px;max-width:360px;min-width:220px}
+.dem-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dem-imp-pri{background:var(--accent,#7a6e58)!important;color:#fff!important;border-color:var(--accent,#7a6e58)!important}
 .dem-nat{display:inline-flex;gap:4px;padding:4px;background:var(--card,#fbf8f1);border:1px solid var(--line-2,#e2d9c6);border-radius:11px;margin-bottom:12px}
 .dem-nat-b{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;color:var(--ink-3,#8a7f6c);font:800 12.5px/1 inherit;padding:9px 16px;border-radius:8px;cursor:pointer;transition:background .15s,color .15s}
 .dem-nat-b:hover{color:var(--ink,#302c24)}
