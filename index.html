@@ -742,8 +742,10 @@ function demParseMails(text){text=(''+text);var t=text.trim();var out=[];
 function demIngest(mails){DB.parametres=DB.parametres||{};DB.parametres.mailsImportes=DB.parametres.mailsImportes||[];var seen=DB.parametres.mailsImportes;var add=0,dup=0;
   (mails||[]).forEach(function(m){var fr=mailParseFrom(m.from);var key=((''+(m.id||'')).trim())||(fr.email+'|'+(m.subject||'')+'|'+(m.date||''));
     if(seen.indexOf(key)>=0){dup++;return;}
-    var dateISO=today();try{if(m.date){var d=new Date(m.date);if(!isNaN(d.getTime()))dateISO=d.toISOString().slice(0,10);}}catch(e){}
-    DB.demandes.unshift({id:uid('d'),clientNom:fr.nom||fr.email||'Client',clientEmail:fr.email||'',clientTel:'',canal:'Mail · aemconseil.sas@gmail.com',serviceSouhaite:((m.subject||'').slice(0,80))||'À qualifier',message:mailCleanBody(m.body)||(m.subject||''),date:dateISO,statut:'Nouveau',assigneA:'',docsRecus:false,dossierId:'',msgKey:key});
+    if(typeof demIsFormSubmit==='function'&&!demIsFormSubmit(m)){seen.push(key);return;} /* Uniquement les mails de provenance FormSubmit */
+    var dateISO=today();var dateTime='';try{if(m.date){var d=new Date(m.date);if(!isNaN(d.getTime())){dateISO=d.toISOString().slice(0,10);dateTime=d.toISOString();}}}catch(e){}
+    var body=mailCleanBody(m.body)||(m.subject||'');
+    DB.demandes.unshift({id:uid('d'),clientNom:fr.nom||fr.email||'Client',clientEmail:fr.email||'',clientTel:'',canal:'Formulaire du site',serviceSouhaite:((m.subject||'').slice(0,80))||'À qualifier',message:body,rawBody:body,rawHtml:(''+(m.body||'')).slice(0,20000),date:dateISO,dateTime:dateTime,statut:'Nouveau',assigneA:'',docsRecus:false,dossierId:'',msgKey:key});
     seen.push(key);add++;});
   return {add:add,dup:dup};}
 function demSyncCfg(){DB.parametres=DB.parametres||{};DB.parametres.mailSync=DB.parametres.mailSync||{url:'',key:''};return DB.parametres.mailSync;}
@@ -2335,7 +2337,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=56;
+var LAST_VER=57;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -2993,7 +2995,7 @@ window.demIngest=function(mails){
    if(seen.indexOf(key)>=0){dup++;return;}
    seen.push(key);
    var isFS=demIsFormSubmit(m);
-   if(!isFS&&demIsNoise(m.from,m.subject)){noise++;return;}
+   if(!isFS){noise++;return;} /* Uniquement les mails de provenance FormSubmit sont générés */
    var dateISO=today();var dateTime='';try{if(m.date){var dd=new Date(m.date);if(!isNaN(dd.getTime())){dateISO=dd.toISOString().slice(0,10);dateTime=dd.toISOString();}}}catch(e){}
    var body=mailCleanBody(m.body)||(m.subject||'');
    var subj=(m.subject||'');
