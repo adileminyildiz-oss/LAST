@@ -917,7 +917,16 @@ var DOCS_CREATION=[
   {k:'cni',label:"Carte d'identité du Gérant"},
   {k:'justif',label:"Facture de Loyer ou Facture Mobile"}
 ];
-/* Rédige et génère le mail de demande des documents nécessaires au démarrage */
+/* Ouvre directement la page de la messagerie (Gmail) avec le mail pré-rempli */
+function demOuvrirMessagerie(to,sujet,corps){
+  var url='https://mail.google.com/mail/?view=cm&fs=1&tf=1'
+    +'&to='+encodeURIComponent(to||'')
+    +'&su='+encodeURIComponent(sujet||'')
+    +'&body='+encodeURIComponent(corps||'');
+  var w=window.open(url,'_blank','noopener');
+  if(!w){ /* pop-up bloquée : repli sur le client mail par défaut */ window.location.href='mailto:'+encodeURIComponent(to||'')+'?subject='+encodeURIComponent(sujet||'')+'&body='+encodeURIComponent(corps||''); }
+}
+/* « Demander les documents » → ouvre directement la messagerie avec le mail pré-rempli */
 function demDemanderDocs(id){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
   var nom=(typeof demBestName==='function'?demBestName(d):'')||'';
@@ -931,16 +940,8 @@ function demDemanderDocs(id){
    +'Vous pouvez répondre directement à cet e-mail en y joignant les documents (photo nette ou PDF).\n\n'
    +'Dès réception, nous lancerons les démarches de création de votre société.\n\n'
    +'Bien cordialement,\nAEM CONSEIL';
-  openModal('Demande de documents — '+esc(nom||'client'),
-    '<label>Destinataire</label><input id="ml-to" value="'+esc(d.clientEmail||'')+'">'
-    +'<label>Objet du mail</label><input id="ml-sujet" value="'+esc(sujet)+'">'
-    +'<label>Message</label><textarea id="ml-corps" style="min-height:250px">'+esc(corps)+'</textarea>'
-    +'<div class="hint" style="margin-top:6px;font-size:11px">Le client répondra en joignant ses documents. Vous pourrez ensuite les enregistrer dans la section « Documents » du dossier.</div>'
-    +mailComposerExtra(),
-    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
-    +'<button class="btn" onclick="demMailCopier()">Copier</button>'
-    +'<button class="btn btn-pri" onclick="demDocsMailEnvoyer(\''+id+'\')">✉ Générer l\'e-mail</button>');
-  window._mailAtt=[];setTimeout(mailAttRender,0);
+  demOuvrirMessagerie(d.clientEmail,sujet,corps);
+  d.docsMailSent=Date.now();if(typeof save==='function')save();render();
 }
 function demDocsMailEnvoyer(id){var d=DB.demandes.find(function(x){return x.id===id;});if(d){d.docsMailSent=Date.now();if(typeof save==='function')save();}demMailEnvoyer();closeModal();render();}
 
@@ -2514,7 +2515,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=66;
+var LAST_VER=67;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
