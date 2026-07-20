@@ -880,22 +880,71 @@ function mailDemande(d){
 /* Adresse e-mail récupérée (jamais un e-mail FormSubmit) */
 function mailEmail(d){var e=(''+((d&&d.clientEmail)||'')).trim();if(!e||/formsubmit/i.test(e))return '—';return e;}
 function mailTel(d){var t=(''+((d&&d.clientTel)||'')).trim();return t||'—';}
+/* Nettoie une réponse client (retire l'historique cité) */
+function mailReplyClean(s){s=(''+(s||'')).replace(/\r/g,'');
+  var cut=s.search(/\n\s*(le\s.+\sa\s.crit\s*:|on\s.+\swrote\s*:|-{2,}\s*message d.origine|_{5,}|de\s*:\s.+\n\s*envoy.\s*:)/i);
+  if(cut>0)s=s.slice(0,cut);
+  s=s.replace(/^>.*$/gm,'').replace(/formsubmit(\.co)?/gi,'').replace(/\n{3,}/g,'\n\n').trim();
+  return s||'(message vide)';}
 function mailSrcdoc(d){var SO='<'+'style>',SC='</'+'style>';
   var e=function(s){return (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
   var nom=(typeof demBestName==='function'?demBestName(d):'')||'';
-  return '<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+SO
-    +'body{margin:0;padding:18px;font:14px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff}'
-    +'.hd{font:600 15px/1.3 inherit;margin:0 0 4px}.hd small{display:block;font:400 12px/1.4 inherit;color:#8a7f66;margin-top:2px}'
-    +'.rw{display:flex;gap:10px;margin:10px 0 0}.l{flex:0 0 96px;color:#7a6e58;font-weight:600}.v{flex:1;word-break:break-word}'
-    +'.dem{margin-top:6px;padding:12px 14px;background:#f7f4ee;border:1px solid #e7e0d2;border-radius:8px;white-space:pre-wrap}'
-    +'a{color:#1a5fb4}'+SC+'</head><body>'
-    +(nom?('<div class="hd">'+e(nom)+'<small>Demande reçue via le formulaire du site</small></div>'):'')
-    +'<div class="rw"><span class="l">Email</span><span class="v">'+e(mailEmail(d))+'</span></div>'
-    +'<div class="rw"><span class="l">Téléphone</span><span class="v">'+e(mailTel(d))+'</span></div>'
-    +'<div class="rw"><span class="l">Reçu le</span><span class="v">'+e(mailDateHeure(d))+'</span></div>'
-    +'<div class="rw"><span class="l">Demande</span><span class="v"></span></div>'
-    +'<div class="dem">'+e(mailDemande(d))+'</div>'
-    +'</body></html>';}
+  var th=(d&&d.thread)||[];
+  var ini=(nom||'?').trim().split(/\s+/).map(function(w){return (w[0]||'');}).slice(0,2).join('').toUpperCase()||'?';
+  var css='*{box-sizing:border-box}body{margin:0;padding:20px;font:14px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#26211a;background:#fbf9f4}'
+    +'.card{background:#fff;border:1px solid #ece4d4;border-radius:14px;box-shadow:0 6px 22px rgba(90,70,35,.08);overflow:hidden}'
+    +'.top{display:flex;align-items:center;gap:13px;padding:16px 18px;background:linear-gradient(135deg,#f3ecdd,#efe6d2);border-bottom:1px solid #e7ddc9}'
+    +'.av{flex:0 0 46px;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#8a7a5c,#5f5238);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;letter-spacing:.5px}'
+    +'.top .nm{font-weight:700;font-size:16px;color:#2a2117}.top .sb{font-size:12px;color:#8a7f66;margin-top:1px}'
+    +'.info{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;padding:16px 18px}'
+    +'.it .k{font:700 9.5px/1 ui-sans-serif,Arial;text-transform:uppercase;letter-spacing:.5px;color:#a2916f}'
+    +'.it .val{font-size:13.5px;margin-top:4px;color:#2a2117;word-break:break-word}.it a{color:#1a5fb4;text-decoration:none}'
+    +'.dwrap{padding:0 18px 18px}.dlbl{font:700 9.5px/1 ui-sans-serif,Arial;text-transform:uppercase;letter-spacing:.5px;color:#a2916f;margin:0 0 7px}'
+    +'.dem{border-left:3px solid #c9b78f;background:#f7f3ea;padding:13px 15px;border-radius:0 9px 9px 0;white-space:pre-wrap;font-size:13.5px;line-height:1.65}'
+    +'.notif{display:flex;align-items:center;gap:8px;margin:0 0 14px;padding:10px 13px;background:#eaf5ec;border:1px solid #bfe0c7;border-radius:10px;color:#2f7d47;font-weight:600;font-size:12.5px}'
+    +'.notif .dot{width:9px;height:9px;border-radius:50%;background:#2f7d47;box-shadow:0 0 0 4px rgba(47,125,71,.15)}'
+    +'.msg{margin:0 0 11px;border:1px solid #ece4d4;border-radius:12px;background:#fff;overflow:hidden;box-shadow:0 2px 8px rgba(90,70,35,.05)}'
+    +'.msg.latest{border-color:#c9b78f;box-shadow:0 4px 14px rgba(120,100,60,.14)}'
+    +'.msg .mh,.msg summary{display:flex;align-items:center;gap:9px;padding:11px 14px;font-size:12.5px;background:#faf7f0}'
+    +'.msg summary{cursor:pointer;list-style:none;color:#5a4f3a}.msg summary::-webkit-details-marker{display:none}'
+    +'.msg summary::before{content:"▸";color:#a2916f;margin-right:2px}details[open]>summary::before{content:"▾"}'
+    +'.msg .av-s{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#9a8a6c,#6f6047);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px}'
+    +'.msg .mh b,.msg summary b{color:#2a2117}.msg .dt{color:#8a7f66;margin-left:2px}.msg .badge{margin-left:auto;font-size:10.5px;font-weight:700;color:#7a5c1e;background:#f2e5c8;border:1px solid #e2cf9d;border-radius:20px;padding:2px 9px}'
+    +'.msg .sub{margin-left:auto;font-size:11px;color:#a2916f;font-weight:400}'
+    +'.msg .mb{padding:13px 15px;white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.65}'
+    +'a{color:#1a5fb4}';
+  var head='<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+SO+css+SC+'</head><body>';
+  /* Un seul message → carte « fiche » soignée */
+  if(th.length<=1){
+    return head
+    +'<div class="card">'
+    +'<div class="top"><div class="av">'+e(ini)+'</div><div><div class="nm">'+e(nom||'Expéditeur')+'</div><div class="sb">Demande reçue via le formulaire du site</div></div></div>'
+    +'<div class="info">'
+    +'<div class="it"><div class="k">Email</div><div class="val"><a href="mailto:'+e(mailEmail(d))+'">'+e(mailEmail(d))+'</a></div></div>'
+    +'<div class="it"><div class="k">Téléphone</div><div class="val">'+e(mailTel(d))+'</div></div>'
+    +'<div class="it"><div class="k">Reçu le</div><div class="val">'+e(mailDateHeure(d))+'</div></div>'
+    +'</div>'
+    +'<div class="dwrap"><div class="dlbl">Demande</div><div class="dem">'+e(mailDemande(d))+'</div></div>'
+    +'</div>'
+    +'</body></html>';
+  }
+  /* Plusieurs messages → fil : dernier message ouvert en tête, messages précédents fermés (avec la date) */
+  var nRep=th.length-1;
+  var out=head+'<div class="notif"><span class="dot"></span>Nouvelle réponse du client — '+nRep+' réponse'+(nRep>1?'s':'')+' dans ce fil</div>';
+  for(var i=th.length-1;i>=0;i--){
+    var m=th[i]||{};var isOrig=(i===0);var isLatest=(i===th.length-1);
+    var from=isOrig?nom:((m.from&&!/formsubmit/i.test(m.from))?m.from:nom);
+    var fi=(from||'?').trim().split(/\s+/).map(function(w){return (w[0]||'');}).slice(0,2).join('').toUpperCase()||'?';
+    var when=isOrig?mailDateHeure(d):(m.date?frDate(m.date):'');
+    var bodyTxt=isOrig?mailDemande(d):mailReplyClean(m.body);
+    if(isLatest){
+      out+='<div class="msg latest"><div class="mh"><span class="av-s">'+e(fi)+'</span><b>'+e(from)+'</b><span class="dt">'+e(when)+'</span><span class="badge">Dernier message</span></div><div class="mb">'+e(bodyTxt)+'</div></div>';
+    } else {
+      out+='<details class="msg"'+(isOrig?'':' open')+'><summary><span class="av-s">'+e(fi)+'</span><b>'+e(from)+'</b><span class="dt">'+e(when)+'</span><span class="sub">'+(isOrig?'message initial':'')+'</span></summary><div class="mb">'+e(bodyTxt)+'</div></details>';
+    }
+  }
+  return out+'</body></html>';
+}
 function mailFrame(d){if(!d)return '';return '<div class="mailv-frame-wrap"><iframe class="mailv-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" srcdoc="'+mailAttrEsc(mailSrcdoc(d))+'"></iframe></div>';}
 function modalDemandeMail(id){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
@@ -917,9 +966,20 @@ var DOCS_CREATION=[
   {k:'cni',label:"Carte d'identité du Gérant"},
   {k:'justif',label:"Facture de Loyer ou Facture Mobile"}
 ];
-/* Ouvre directement la page de la messagerie (Gmail) avec le mail pré-rempli */
+/* Adresse d'envoi du cabinet (les mails partent de ce compte Gmail) */
+var AEM_MAIL='aemconseil.sas@gmail.com';
+/* Signature AEM CONSEIL ajoutée au bas de chaque mail */
+function mailSignature(){return '\n\n— \nAEM CONSEIL\nCréation & formalités d\'entreprise\naemconseil.eu';}
+/* Installe le logo AEM CONSEIL dans la signature Gmail (pour qu'il parte à CHAQUE mail) */
+function demInstallerLogoSignature(){
+  try{var a=document.createElement('a');a.href='data:image/png;base64,'+LOGO_AEM_B64;a.download='logo-aem-conseil.png';document.body.appendChild(a);a.click();a.remove();}catch(e){}
+  if(typeof toast==='function')toast('Logo téléchargé. Dans Gmail : ⚙ Paramètres → « Voir tous les paramètres » → Signature → insérez l\'image → le logo partira à chaque mail.');
+  try{window.open('https://mail.google.com/mail/?authuser='+encodeURIComponent(AEM_MAIL)+'#settings/general','_blank','noopener');}catch(e){}
+}
+/* Ouvre directement la page de la messagerie (Gmail) avec le mail pré-rempli — depuis le compte AEM CONSEIL */
 function demOuvrirMessagerie(to,sujet,corps){
   var url='https://mail.google.com/mail/?view=cm&fs=1&tf=1'
+    +'&authuser='+encodeURIComponent(AEM_MAIL)
     +'&to='+encodeURIComponent(to||'')
     +'&su='+encodeURIComponent(sujet||'')
     +'&body='+encodeURIComponent(corps||'');
@@ -939,24 +999,19 @@ function demDemanderDocs(id){
    +'  2. Justificatif de domicile : Facture de Loyer OU Facture Mobile (de moins de 3 mois)\n\n'
    +'Vous pouvez répondre directement à cet e-mail en y joignant les documents (photo nette ou PDF).\n\n'
    +'Dès réception, nous lancerons les démarches de création de votre société.\n\n'
-   +'Bien cordialement,\nAEM CONSEIL';
+   +'Bien cordialement,'+mailSignature();
   demOuvrirMessagerie(d.clientEmail,sujet,corps);
   d.docsMailSent=Date.now();if(typeof save==='function')save();render();
 }
 function demDocsMailEnvoyer(id){var d=DB.demandes.find(function(x){return x.id===id;});if(d){d.docsMailSent=Date.now();if(typeof save==='function')save();}demMailEnvoyer();closeModal();render();}
 
 /* ===== Acceptation / Refus d'une demande (mail de prise en charge ou d'excuse) ===== */
+/* Décision (accepter/refuser) → ouvre directement la messagerie AEM CONSEIL, mail pré-rempli */
 function demComposerDecision(id,titre,sujet,corps,dec){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
-  openModal(titre,
-    '<label>Destinataire</label><input id="ml-to" value="'+esc(d.clientEmail||'')+'">'
-    +'<label>Objet du mail</label><input id="ml-sujet" value="'+esc(sujet)+'">'
-    +'<label>Message</label><textarea id="ml-corps" style="min-height:240px">'+esc(corps)+'</textarea>'
-    +mailComposerExtra(),
-    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
-    +'<button class="btn" onclick="demMailCopier()">Copier</button>'
-    +'<button class="btn '+(dec==='refuse'?'':'btn-pri')+'" onclick="demDecisionEnvoyer(\''+id+'\',\''+dec+'\')">✉ Générer l\'e-mail</button>');
-  window._mailAtt=[];setTimeout(mailAttRender,0);
+  demOuvrirMessagerie(d.clientEmail,sujet,corps);
+  d.decision=dec;d.decisionTs=Date.now();d.statut=(dec==='refuse')?'Refusé':'Accepté';
+  if(typeof save==='function')save();render();
 }
 function demAccepter(id){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
@@ -966,7 +1021,7 @@ function demAccepter(id){
    +'Nous vous confirmons la prise en charge de votre demande'+(d.code?(' (référence '+d.code+')'):'')+'.\n\n'
    +'Votre dossier est désormais en cours de traitement par nos services. Nous reviendrons vers vous pour la suite des démarches et, le cas échéant, pour les documents nécessaires à leur réalisation.\n\n'
    +'Nous restons à votre disposition pour toute question.\n\n'
-   +'Bien cordialement,\nAEM CONSEIL';
+   +'Bien cordialement,'+mailSignature();
   demComposerDecision(id,'Prise en charge — '+esc(nom||'client'),sujet,corps,'accepte');
 }
 function demRefuser(id){
@@ -977,7 +1032,7 @@ function demRefuser(id){
    +'Nous vous remercions de l\'intérêt que vous portez à nos services et de votre demande'+(d.code?(' (référence '+d.code+')'):'')+'.\n\n'
    +'Après étude, nous ne sommes malheureusement pas en mesure de traiter votre demande. Nous vous prions de bien vouloir nous en excuser.\n\n'
    +'Nous restons naturellement à votre disposition et espérons pouvoir vous accompagner à l\'avenir.\n\n'
-   +'Bien cordialement,\nAEM CONSEIL';
+   +'Bien cordialement,'+mailSignature();
   demComposerDecision(id,'Non-traitement (excuses) — '+esc(nom||'client'),sujet,corps,'refuse');
 }
 function demDecisionEnvoyer(id,dec){
@@ -2515,7 +2570,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=67;
+var LAST_VER=68;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3273,7 +3328,8 @@ window.demVueDetail=function(id){
       +'<div class="card"><div class="card-h"><h2>Traitement</h2></div><div class="card-b">'
         +'<div class="dem-decide"><button class="btn btn-pri dem-accept" onclick="demAccepter(\''+id+'\')">✓ Accepter (prise en charge)</button>'
         +'<button class="btn dem-refuse" onclick="demRefuser(\''+id+'\')">✕ Refuser (mail d\'excuse)</button></div>'
-        +'<button class="btn btn-pri" style="width:100%;justify-content:center;margin:12px 0" onclick="demDemanderDocs(\''+id+'\')">✉ Demander les documents</button>'
+        +'<button class="btn btn-pri" style="width:100%;justify-content:center;margin:12px 0 6px" onclick="demDemanderDocs(\''+id+'\')">✉ Demander les documents</button>'
+        +'<button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-bottom:12px" onclick="demInstallerLogoSignature()">🖼 Ajouter le logo à ma signature Gmail</button>'
         +'<label>Assigner à un collaborateur</label>'+assignSel
         +(atts.length?'<label style="margin-top:10px">Pièces jointes</label><div class="hint">'+atts.join(', ')+'</div>':'')
         +'<div class="dem-view-acts">'
@@ -4228,12 +4284,9 @@ window.modalDemandeView=function(id){
      +'<button class="btn tr-primary" onclick="espEdOpen(\''+d.id+'\',\'statuts\')"><span class="tr-ic">✎</span><span>Éditer les documents</span></button>'
      +'<div class="tr-grid">'
      +'<button class="btn tr-b" onclick="espFicheTechnique(\''+d.id+'\')">Fiche technique</button>'
-     +'<button class="btn tr-b" onclick="espDocsModal(\''+d.id+'\')">Documents à produire</button>'
-     +(dm?'<button class="btn tr-b" onclick="demMailComplet(\''+dm.id+'\')">Mail complet</button>':'')
      +'<button class="btn tr-b" onclick="espFicheOpen(\''+d.id+'\')">Mail au client</button>'
      +'<button class="btn tr-b" onclick="espDevis(\''+d.id+'\')">Devis</button>'
      +'<button class="btn tr-b" onclick="espFacture(\''+d.id+'\')">Facture</button>'
-     +'<button class="btn tr-b" onclick="modalDossier(\''+d.id+'\')">Modifier la fiche</button>'
      +'</div></div></div>';
   };
   /* Rappel du mail reçu dans l'éditeur de documents (pour ne pas se tromper dans la formalité) */
@@ -4330,11 +4383,11 @@ window.modalDemandeView=function(id){
 .esp-form-tbl td.v{color:var(--ink,#2a2117);white-space:pre-wrap}
 .esp-formmail{background:var(--card,#fffdf8);border:1px solid var(--line-soft,#e8e0d0);border-radius:8px;padding:8px 10px}
 /* Prolongement de la barre latérale principale (liste des dossiers, discrète) */
-.esp-shell{display:grid;grid-template-columns:178px minmax(0,1fr);gap:20px;align-items:start;margin:-14px 0 0 -16px}
-.esp-mini{position:sticky;top:0;align-self:stretch;min-height:calc(100vh - 0px);background:var(--bg-side,#f6f0e4);border-right:1px solid var(--line-2,#e2d9c6);padding:12px 8px 14px;display:flex;flex-direction:column;gap:1px}
+.esp-shell{display:grid;grid-template-columns:178px minmax(0,1fr);gap:20px;align-items:start;margin:0 0 0 -16px}
+.esp-mini{position:sticky;top:52px;align-self:start;max-height:calc(100vh - 64px);background:var(--bg-side,#f6f0e4);border-right:1px solid var(--line-2,#e2d9c6);border-radius:0 10px 10px 0;padding:12px 8px 14px;display:flex;flex-direction:column;gap:1px}
 .esp-mini-h{font-size:8.5px;letter-spacing:1.2px;color:var(--ink-3,#9c9078);font-weight:700;text-transform:uppercase;padding:6px 8px 6px;display:flex;align-items:center;gap:6px}
 .esp-mini-n{margin-left:auto;font-size:9.5px;font-weight:700;color:var(--ink-3,#9c9078)}
-.esp-mini-list{overflow-y:auto;display:flex;flex-direction:column;gap:1px}
+.esp-mini-list{overflow-y:auto;min-height:0;flex:1;display:flex;flex-direction:column;gap:1px}
 .esp-mini-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:0;border-left:2px solid transparent;border-radius:6px;padding:7px 8px;cursor:pointer;color:var(--ink-2,#6f6656);font:inherit;transition:background .12s}
 .esp-mini-item:hover{background:rgba(95,75,35,.06);color:var(--ink,#302c24)}
 .esp-mini-item.on{background:rgba(95,75,35,.05);border-left-color:#b99a52;color:var(--ink,#302c24)}
