@@ -1135,23 +1135,37 @@ function demEnvoiDirect(to,sujet,corps){
   if(typeof smtpActif==='function'&&smtpActif()){ demSendViaScript(to,sujet,corps); return true; }
   demOuvrirGmail(to,sujet,corps); return false;
 }
+/* Envoi SILENCIEUX : passe par la passerelle Gmail (aemconseil.sas@gmail.com) sans ouvrir aucune page.
+   Renvoie true si l'envoi a pu être déclenché (script configuré), sinon false — n'ouvre jamais Gmail. */
+function demEnvoiSilencieux(to,sujet,corps){
+  to=(''+(to||'')).trim();
+  var c=(typeof demSyncCfg==='function')?demSyncCfg():null;
+  if(c&&c.url&&typeof demSendViaScript==='function'){ demSendViaScript(to,sujet,corps,null,{silent:true}); return true; }
+  return false;
+}
 function demComposerDecision(id,titre,sujet,corps,dec){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
   var _to=demReplyTo(d);
-  if(!_to&&typeof toast==="function")toast("Adresse e-mail du client introuvable — vérifiez la demande avant d'envoyer.");
-  var direct=demEnvoiDirect(_to,sujet,corps);
+  /* Envoi SILENCIEUX du mail au client (aucune page ne s'ouvre) via la passerelle Gmail. */
+  var direct=_to?demEnvoiSilencieux(_to,sujet,corps):false;
   d.decision=dec;d.decisionTs=Date.now();d.statut=(dec==='refuse')?'Refusé':'Accepté';
   if(dec==='refuse'){
     /* Refus : le dossier est archivé (retiré de la vue, restaurable) + mail d'excuse au client. */
     d.archived=true;d.archivedTs=Date.now();
     try{ if(typeof state!=='undefined'&&state&&state.demView===id)state.demView=''; }catch(e){}
-    if(typeof toast==='function')toast('Dossier refusé → archivé'+(_to?(direct?(' · mail d\'excuse envoyé à '+_to):(' · mail d\'excuse préparé pour '+_to)):''));
   } else {
-    /* Acceptation : mail de prise en charge (direct) + le dossier part dans Traitement en tant que dossier ouvert, sans changer de page. */
+    /* Acceptation : le dossier part dans Traitement (dossier ouvert), sans changer de page. */
     try{ if(!d.dossierId||!DB.dossiers.find(function(x){return x.id===d.dossierId;})) creerDossierDepuis(id,true); }catch(e){}
-    if(typeof toast==='function')toast('Prise en charge'+(_to?(direct?(' · mail envoyé à '+_to):(' · mail préparé pour '+_to)):'')+' · dossier ouvert dans Traitement');
   }
   if(typeof save==='function')save();render();
+  /* Message affiché 4 secondes — « Mail envoyé à <adresse du client> », sans ouvrir aucune page. */
+  if(typeof toast==='function'){
+    var _msg;
+    if(!_to)_msg='Adresse e-mail du client introuvable — mail non envoyé';
+    else if(direct)_msg='Mail envoyé à '+_to;
+    else _msg='Envoi direct non configuré (Demandes → Configurer la boîte) — mail non envoyé à '+_to;
+    toast(_msg,4000);
+  }
 }
 function demAccepter(id){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;
@@ -2585,7 +2599,7 @@ function pageSoon(){
 function openModal(t,b,f){document.getElementById('ov-t').innerHTML=t;document.getElementById('ov-b').innerHTML=b;
   document.getElementById('ov-f').innerHTML=f||'';document.getElementById('ov').classList.add('show');}
 function closeModal(){document.getElementById('ov').classList.remove('show');}
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>t.classList.remove('show'),2200);}
+function toast(m,dur){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>t.classList.remove('show'),dur||2200);}
 function exportDB(){const b=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');
   a.href=URL.createObjectURL(b);a.download='last-donnees-'+today()+'.json';a.click();}
 function importDB(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
@@ -2761,7 +2775,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=102;
+var LAST_VER=103;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3148,17 +3162,18 @@ lastGate();
 </script>
 <script>
 /* ============ Questionnaires de formalité (par mail) ============ */
-function demSendViaScript(to,subject,body,cbDone){
+function demSendViaScript(to,subject,body,cbDone,opts){
+ opts=opts||{};var silent=!!opts.silent;
  var c=(typeof demSyncCfg==='function')?demSyncCfg():{};
- if(!c||!c.url){toast('Configure d\'abord la boîte (Demandes → ⚙ Configurer la boîte).');return;}
+ if(!c||!c.url){if(!silent)toast('Configure d\'abord la boîte (Demandes → ⚙ Configurer la boîte).');return;}
  var base=c.url+(c.url.indexOf('?')>=0?'&':'?')+'action=send&key='+encodeURIComponent(c.key||'')
   +'&to='+encodeURIComponent(to)+'&subject='+encodeURIComponent(subject||'')+'&body='+encodeURIComponent(body||'');
- toast('Envoi en cours…');var settled=false;
+ if(!silent)toast('Envoi en cours…');var settled=false;
  function done(j){if(settled)return;settled=true;
-  if(!j){toast('Envoi impossible — vérifie le script (action « envoyer ») et son redéploiement.');return;}
-  if(j.error){toast(j.error==='unauthorized'?'Clé secrète incorrecte.':('Erreur : '+j.error));return;}
-  if(j.sent){toast('✅ Mail envoyé au client depuis aemconseil.sas@gmail.com.');closeModal();if(cbDone)cbDone();}
-  else toast('Envoi non confirmé — mets à jour le script (action « envoyer »).');}
+  if(!j){if(!silent)toast('Envoi impossible — vérifie le script (action « envoyer ») et son redéploiement.');return;}
+  if(j.error){if(!silent)toast(j.error==='unauthorized'?'Clé secrète incorrecte.':('Erreur : '+j.error));return;}
+  if(j.sent){if(!silent){toast('✅ Mail envoyé au client depuis aemconseil.sas@gmail.com.');closeModal();}if(cbDone)cbDone();}
+  else if(!silent)toast('Envoi non confirmé — mets à jour le script (action « envoyer »).');}
  try{fetch(base,{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var j=null;try{j=JSON.parse(t);}catch(e){}if(j)done(j);else demJsonp(base,done);}).catch(function(){demJsonp(base,done);});}
  catch(e){demJsonp(base,done);}
 }
