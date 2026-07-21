@@ -2855,7 +2855,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=106;
+var LAST_VER=107;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4688,7 +4688,47 @@ window.modalDemandeView=function(id){
      +'<button class="tr-b" onclick="espFicheOpen(\''+d.id+'\')">'+TR_IC.mail+'<span>Mail au client</span></button>'
      +'<button class="tr-b" onclick="espDevis(\''+d.id+'\')">'+TR_IC.devis+'<span>Devis</span></button>'
      +'<button class="tr-b" onclick="espFacture(\''+d.id+'\')">'+TR_IC.facture+'<span>Facture</span></button>'
+     +'<button class="tr-b" onclick="coutModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.6a3.5 3.5 0 1 0 .2 5M8 11h5M8 13.4h5"/></svg><span>Estimer le coût</span></button>'
      +'</div></div></div>';
+  };
+  /* ---------- Simulateur de coût (création / modification) — estimations indicatives 2024-2025 ---------- */
+  window.COUT_CREATION={'SASU':{annonce:138,greffe:37.45},'SAS':{annonce:197,greffe:37.45},'SARL':{annonce:147,greffe:37.45},'EURL':{annonce:123,greffe:37.45},'SCI':{annonce:189,greffe:66.88},'EI / Micro':{annonce:0,greffe:0}};
+  window.COUT_MODIF={'Transfert de siège':{annonce:110,greffe:192.01},'Changement de dirigeant':{annonce:106,greffe:192.01},'Changement de dénomination':{annonce:110,greffe:192.01},"Changement d'objet":{annonce:110,greffe:192.01},'Cession de parts':{annonce:0,greffe:192.01},'Augmentation de capital':{annonce:120,greffe:192.01},'Réduction de capital':{annonce:120,greffe:192.01},'Dissolution':{annonce:149,greffe:192.01},'Liquidation':{annonce:149,greffe:14.35}};
+  function coutMap(){return (document.getElementById('cout-nature')||{}).value==='modif'?window.COUT_MODIF:window.COUT_CREATION;}
+  window.coutTypeOptions=function(nature,sel){var m=nature==='modif'?window.COUT_MODIF:window.COUT_CREATION;return Object.keys(m).map(function(k){return '<option'+(k===sel?' selected':'')+'>'+esc(k)+'</option>';}).join('');};
+  window.coutNature=function(){var n=(document.getElementById('cout-nature')||{}).value||'creation';var ts=document.getElementById('cout-type');if(ts)ts.innerHTML=coutTypeOptions(n,'');var cw=document.getElementById('cout-capwrap');if(cw)cw.style.display=(n==='creation')?'':'none';coutCalc();};
+  window.coutCalc=function(){
+    var n=(document.getElementById('cout-nature')||{}).value||'creation';
+    var t=(document.getElementById('cout-type')||{}).value||'';
+    var m=coutMap();var row=m[t]||{annonce:0,greffe:0};
+    var hon=Math.max(0,parseFloat((document.getElementById('cout-hon')||{}).value)||0);
+    var cap=(n==='creation')?Math.max(0,parseFloat((document.getElementById('cout-cap')||{}).value)||0):0;
+    var honTVA=hon*0.2, annHT=row.annonce||0, annTVA=annHT*0.2, greffe=row.greffe||0;
+    var total=hon+honTVA+annHT+annTVA+greffe;
+    var E=function(x){return x.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';};
+    var res=document.getElementById('cout-res');if(!res)return;
+    res.innerHTML='<table style="width:100%;margin-top:6px"><tbody>'
+      +'<tr><td>Honoraires (votre service) HT</td><td style="text-align:right">'+E(hon)+'</td></tr>'
+      +'<tr><td>TVA 20 % sur honoraires</td><td style="text-align:right">'+E(honTVA)+'</td></tr>'
+      +'<tr><td>Annonce légale'+(annHT?' (HT '+E(annHT)+' + TVA)':'')+'</td><td style="text-align:right">'+E(annHT+annTVA)+'</td></tr>'
+      +'<tr><td>Frais de greffe / INPI (non soumis à TVA)</td><td style="text-align:right">'+E(greffe)+'</td></tr>'
+      +(cap?'<tr><td>Dépôt de capital</td><td style="text-align:right">'+E(cap)+'</td></tr>':'')
+      +'<tr style="font-weight:800;border-top:2px solid #e4dade"><td>Total estimé TTC'+(cap?' (hors capital)':'')+'</td><td style="text-align:right;color:#9f1239">'+E(total)+'</td></tr>'
+      +(cap?'<tr style="font-weight:800"><td>Total avec dépôt de capital</td><td style="text-align:right;color:#9f1239">'+E(total+cap)+'</td></tr>':'')
+      +'</tbody></table>';
+  };
+  window.coutModal=function(id){
+    var defType='SASU';
+    try{var d=espDoss().find(function(x){return x.id===id;});if(d){var c=clientById((d.clientIds||[])[0])||{};if(c.forme&&window.COUT_CREATION[c.forme])defType=c.forme;}}catch(_e){}
+    openModal('💶 Simulateur de coût',
+      '<div class="frow"><div><label>Nature de la formalité</label><select id="cout-nature" onchange="coutNature()"><option value="creation">Création de société</option><option value="modif">Modification</option></select></div>'
+      +'<div><label>Type</label><select id="cout-type" onchange="coutCalc()">'+coutTypeOptions('creation',defType)+'</select></div></div>'
+      +'<div class="frow"><div><label>Honoraires (votre service) HT €</label><input id="cout-hon" type="number" min="0" value="150" oninput="coutCalc()"></div>'
+      +'<div id="cout-capwrap"><label>Dépôt de capital € (souvent 0)</label><input id="cout-cap" type="number" min="0" value="0" oninput="coutCalc()"></div></div>'
+      +'<div id="cout-res"></div>'
+      +'<div class="hint" style="margin-top:8px">Estimations indicatives 2024-2025 : frais de greffe/INPI et annonces légales réglementées, variables selon la forme et le département. À ajuster selon le dossier réel.</div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+    setTimeout(coutCalc,0);
   };
   /* Archiver un dossier (retiré de la vue ; restaurable) */
   window.espArchiverDossier=function(id){
