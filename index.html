@@ -960,14 +960,27 @@ function mailEmail(d){var e=demReplyTo(d);return e||'—';}
 /* Vraie adresse du client ayant fait la demande (jamais submissions@formsubmit.co, ni AEM, ni bounce) */
 function demReplyTo(d){
   if(!d)return '';
-  var bad=/formsubmit\.co|aemconseil|no-?reply|noreply|mailer-daemon|postmaster|googlemail\.com/i;
-  var clean=function(x){var mm=(''+(x||'')).match(/[\w.+-]+@[\w-]+\.[\w.-]+/);return mm?mm[0].replace(/[.,;:]+$/,''):'';};
+  var bad=/formsubmit\.co|aemconseil|no-?reply|noreply|mailer-daemon|postmaster|googlemail\.com|@sentry|@example\./i;
+  var RX=/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g;
+  var clean=function(x){var mm=(''+(x||'')).match(RX);return mm?mm[0].replace(/[.,;:>)\]]+$/,''):'';};
+  /* 1) champ direct s'il contient déjà une vraie adresse (jamais FormSubmit / bounce) */
   var e=clean(d.clientEmail);
   if(e&&!bad.test(e))return e;
-  try{var fx=formSubmitExtract({body:(d.rawHtml||d.rawBody||d.message||''),from:''});var fe=fx?clean(fx.email):'';if(fe&&!bad.test(fe))return fe;}catch(_e){}
-  var body=(''+(d.rawHtml||'')+' '+(d.rawBody||'')+' '+(d.message||''));
-  var ms=body.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g)||[];
-  for(var i=0;i<ms.length;i++){if(!bad.test(ms[i]))return ms[i];}
+  /* 2) rassemble TOUS les textes : corps brut/HTML, message, objet, service, en-tête reply-to éventuel, fils */
+  var parts=[d.rawHtml,d.rawBody,d.message,d.subject,d.serviceSouhaite,d.replyTo,d.reply_to,d.headers&&d.headers.replyTo];
+  try{ (d.thread||[]).forEach(function(t){parts.push(t&&(t.body||t.rawHtml||t.message));}); }catch(_t){}
+  var src=parts.filter(Boolean).join('\n');
+  /* décodage entités HTML + désobfuscation ( [at] (at) « at »  /  [dot] (dot) « dot »  /  %40 ) */
+  src=src.replace(/&#0*64;|&#x0*40;/gi,'@').replace(/&#0*46;|&#x0*2e;/gi,'.')
+         .replace(/&amp;/gi,'&').replace(/&nbsp;/gi,' ').replace(/%40/gi,'@')
+         .replace(/\s*[\[(]\s*(?:at|arobase|chez)\s*[\])]\s*/gi,'@')
+         .replace(/\s*[\[(]\s*(?:dot|point)\s*[\])]\s*/gi,'.')
+         .replace(/\s+\bat\b\s+/gi,'@').replace(/\s+\bdot\b\s+/gi,'.');
+  /* 3) via FormSubmit (champ « email » étiqueté) en priorité */
+  try{var fx=formSubmitExtract({body:src,from:''});var fe=fx?clean(fx.email):'';if(fe&&!bad.test(fe))return fe;}catch(_e){}
+  /* 4) sinon, 1ʳᵉ adresse non-système trouvée dans l'ensemble des textes */
+  var ms=src.match(RX)||[];
+  for(var i=0;i<ms.length;i++){var a=ms[i].replace(/[.,;:>)\]]+$/,'');if(a&&!bad.test(a))return a;}
   return '';
 }
 /* Corrige l'adresse stockée des demandes dont clientEmail = FormSubmit (pour les envois) */
@@ -2805,7 +2818,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=104;
+var LAST_VER=105;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3670,6 +3683,8 @@ window.demVueDetail=function(id){
         +'<button class="btn dem-refuse" onclick="demRefuser(\''+id+'\')">✕ Refuser (mail d\'excuse)</button></div>'
         +'<button class="btn btn-pri" style="width:100%;justify-content:center;margin:12px 0 6px" onclick="demDemanderDocs(\''+id+'\')">✉ Demander les documents</button>'
         +'<button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-bottom:12px" onclick="demInstallerLogoSignature()">🖼 Ajouter le logo à ma signature Gmail</button>'
+        +'<label>E-mail du client '+(mailEmail(d)==='—'?'<span style="color:#be123c;font-weight:700">(introuvable — saisissez-le)</span>':'<span style="color:#3f7d54">(récupéré automatiquement)</span>')+'</label>'
+        +'<input id="dm-cliemail" type="email" value="'+esc(demReplyTo(d)||'')+'" placeholder="client@email.fr" oninput="demSetEmail(\''+id+'\',this.value)" style="width:100%;margin-bottom:12px'+(mailEmail(d)==='—'?';border-color:#e0a6b4;background:#fff1f4':'')+'">'
         +'<label>Assigner à un collaborateur</label>'+assignSel
         +(atts.length?'<label style="margin-top:10px">Pièces jointes</label><div class="hint">'+atts.join(', ')+'</div>':'')
         +'<div class="dem-view-acts">'
@@ -3684,6 +3699,8 @@ window.demVueDetail=function(id){
     +'</div>'
   +'</div>';
 };
+/* Saisie/correction manuelle de l'e-mail du client (filet si l'extraction échoue) — utilisé pour tous les envois. */
+window.demSetEmail=function(id,v){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;d.clientEmail=(''+v).trim();if(typeof save==='function')save();};
 
 function demFetchAtts(mid,cb){var c=(typeof demSyncCfg==='function')?demSyncCfg():{};if(!c||!c.url){toast('Configure la boîte (⚙ Configurer la boîte).');cb([]);return;}
  var base=c.url+(c.url.indexOf('?')>=0?'&':'?')+'action=attachments&key='+encodeURIComponent(c.key||'')+'&id='+encodeURIComponent(mid);
