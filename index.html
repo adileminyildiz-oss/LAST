@@ -1473,6 +1473,7 @@ function clOuvrirDossier(id){state.page='espace';state.espaceDossier=id;render()
 function modalClient(id){
   const c=id?DB.clients.find(x=>x.id===id):{prenom:'',nom:'',email:'',tel:'',adresse:'',parts:'',capital:'',activites:[],associes:[]};
   window._assoc=(c.associes||[]).map(a=>({...a}));if(!window._assoc.length)window._assoc=[{nom:'',parts:''}];
+  window._clSiret=(c.siret||c.siren)?{siret:c.siret||'',siren:c.siren||(c.siret?String(c.siret).replace(/\D/g,'').slice(0,9):'')}:null;
   const FORMES=['SAS','SASU','SARL','EURL','SCI','SA'];
   openModal(id?'Fiche client — '+esc(c.prenom+' '+c.nom):'Nouveau client',`
     <div class="frow"><div><label>Prénom</label><input id="cl-prenom" value="${esc(c.prenom)}"></div><div><label>Nom</label><input id="cl-nom" value="${esc(c.nom)}"></div></div>
@@ -1481,7 +1482,10 @@ function modalClient(id){
     <div class="frow"><div><label>Nombre de parts dans la société</label><input id="cl-parts" type="number" value="${esc(c.parts)}"></div>
       <div><label>Montant du dépôt de capital (€)</label><input id="cl-cap" type="number" value="${esc(c.capital)}"></div></div>
     <label>Activité(s) — séparées par des virgules</label><input id="cl-act" value="${esc((c.activites||[]).join(', '))}" placeholder="Conseil, Formation, Négoce…">
-    <div class="section-t" style="margin-top:14px">Société à créer (formalité)</div>
+    <div class="section-t" style="margin-top:14px">Société (formalité)</div>
+    <div class="frow"><div><label>SIRET / SIREN (société existante — vérification auto)</label><input id="cl-siret" value="${esc(c.siret||c.siren||'')}" placeholder="14 ou 9 chiffres" inputmode="numeric"></div>
+      <div style="display:flex;align-items:flex-end"><button type="button" class="btn btn-sm" style="width:100%;justify-content:center" onclick="clVerifSiret()">🔎 Vérifier &amp; pré-remplir</button></div></div>
+    <div id="cl-siret-msg" class="hint" style="margin:-4px 0 6px"></div>
     <div class="frow"><div><label>Dénomination sociale</label><input id="cl-denom" value="${esc(c.denomination||'')}" placeholder="Ex. KURUMSAL GROUPE"></div>
       <div><label>Forme</label><select id="cl-forme">${FORMES.map(f=>`<option ${(c.forme||'SAS')===f?'selected':''}>${f}</option>`).join('')}</select></div></div>
     <div class="frow"><div><label>Nom commercial (facultatif)</label><input id="cl-nomcom" value="${esc(c.nomCommercial||'')}"></div>
@@ -1528,12 +1532,45 @@ function saveClient(id){
     denomination:g('cl-denom')?g('cl-denom').value.trim():'',forme:g('cl-forme')?g('cl-forme').value:'SAS',
     nomCommercial:g('cl-nomcom')?g('cl-nomcom').value.trim():'',president:g('cl-pres')?g('cl-pres').value.trim():'',
     siege:g('cl-siege')?g('cl-siege').value.trim():'',ville:g('cl-ville')?g('cl-ville').value.trim():'',
+    siret:(function(){var e=g('cl-siret');var d=e?e.value.replace(/\D/g,''):'';return d.length>=14?d.slice(0,14):((window._clSiret&&window._clSiret.siret)||'');})(),
+    siren:(function(){var e=g('cl-siret');var d=e?e.value.replace(/\D/g,''):'';return (window._clSiret&&window._clSiret.siren)||d.slice(0,9)||'';})(),
     associes:window._assoc.filter(a=>a.nom.trim())};
   if(!obj.nom&&!obj.prenom)return toast('Nom requis');
   if(id){Object.assign(DB.clients.find(x=>x.id===id),obj);}else{DB.clients.push({id:uid('c'),createdAt:today(),...obj});}
   save();closeModal();toast('Fiche client enregistrée');render();
 }
 function delClient(id){if(!confirm('Supprimer cette fiche client ?'))return;DB.clients=DB.clients.filter(c=>c.id!==id);save();closeModal();toast('Client supprimé');render();}
+/* ---------- Vérification SIRET/SIREN (API publique gratuite recherche-entreprises.api.gouv.fr, sans clé) ---------- */
+var NJ_FORME={'5710':'SAS','5720':'SAS','5499':'SARL','5498':'EURL','6540':'SCI','6541':'SCI','6542':'SCI','5385':'SA','1000':'EI','5202':'SNC'};
+function siretVerify(query,ok,ko){
+  var digits=(''+(query||'')).replace(/\D/g,'');
+  var q=(digits.length>=9)?digits:(''+(query||'')).trim();
+  if(!q){if(ko)ko('Renseignez un SIRET, un SIREN ou un nom.');return;}
+  var url='https://recherche-entreprises.api.gouv.fr/search?q='+encodeURIComponent(q)+'&page=1&per_page=1';
+  fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+    var e=(j&&j.results&&j.results[0])||null;
+    if(!e){if(ko)ko('Aucune entreprise trouvée pour « '+q+' ».');return;}
+    var sg=e.siege||{};
+    var adr=[sg.numero_voie,sg.type_voie,sg.libelle_voie].filter(Boolean).join(' ').trim()||sg.adresse||sg.geo_adresse||'';
+    var dir=(e.dirigeants&&e.dirigeants[0])||null;
+    var dirNom=dir?(((dir.prenoms||dir.prenom||'')+' '+(dir.nom||dir.nom_naissance||'')).replace(/\s+/g,' ').trim()||dir.denomination||''):'';
+    ok({siren:e.siren||'',siret:sg.siret||'',denomination:e.nom_raison_sociale||e.nom_complet||'',
+        adresse:adr,cp:sg.code_postal||'',ville:sg.libelle_commune||'',
+        forme:NJ_FORME[(''+e.nature_juridique)]||'',dirigeant:dirNom,ape:e.activite_principale||''});
+  }).catch(function(){if(ko)ko('Vérification indisponible (réseau ou service INSEE).');});
+}
+function clVerifSiret(){
+  var inp=document.getElementById('cl-siret');if(!inp)return;
+  var msg=document.getElementById('cl-siret-msg');if(msg){msg.textContent='Vérification en cours…';msg.style.color='';}
+  siretVerify(inp.value,function(r){
+    var set=function(id,v){var e=document.getElementById(id);if(e&&v)e.value=v;};
+    set('cl-denom',r.denomination);set('cl-siege',r.adresse);set('cl-ville',r.ville);
+    if(r.forme){var f=document.getElementById('cl-forme');if(f){for(var i=0;i<f.options.length;i++){if(f.options[i].value===r.forme){f.selectedIndex=i;break;}}}}
+    var pres=document.getElementById('cl-pres');if(pres&&!pres.value&&r.dirigeant)pres.value=r.dirigeant;
+    window._clSiret={siret:r.siret||'',siren:r.siren||''};
+    if(msg){msg.innerHTML='✓ '+esc(r.denomination||'Entreprise trouvée')+(r.siren?(' · SIREN '+esc(r.siren)):'')+' — champs pré-remplis.';msg.style.color='#3f7d54';}
+  },function(err){if(msg){msg.textContent='✕ '+err;msg.style.color='#be123c';}});
+}
 
 /* ---------- DOSSIERS ---------- */
 function pageDossiers(){
@@ -2818,7 +2855,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=105;
+var LAST_VER=106;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
