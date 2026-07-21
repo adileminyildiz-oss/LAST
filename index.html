@@ -2855,7 +2855,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=108;
+var LAST_VER=109;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4689,7 +4689,55 @@ window.modalDemandeView=function(id){
      +'<button class="tr-b" onclick="espDevis(\''+d.id+'\')">'+TR_IC.devis+'<span>Devis</span></button>'
      +'<button class="tr-b" onclick="espFacture(\''+d.id+'\')">'+TR_IC.facture+'<span>Facture</span></button>'
      +'<button class="tr-b" onclick="coutModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.6a3.5 3.5 0 1 0 .2 5M8 11h5M8 13.4h5"/></svg><span>Estimer le coût</span></button>'
+     +'<button class="tr-b" onclick="annonceModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 8h3v9a2 2 0 0 1-2 2M8 9h6M8 12h6M8 15h4"/></svg><span>Annonce légale</span></button>'
      +'</div></div></div>';
+  };
+  /* ---------- Générateur d'annonce légale (création / modification) ---------- */
+  window.ANNONCE_TYPES=['Création','Transfert de siège','Changement de dirigeant','Changement de dénomination',"Changement d'objet",'Augmentation de capital','Dissolution'];
+  window.annonceTexte=function(type,x){
+    var cap=x.cap?stNum(x.cap)+' euros':'«capital» euros';
+    var head=x.denom+', '+x.formeLabel+' au capital de '+cap+', siège social : '+x.siegeComplet+', '+(x.siren?(x.siren+' RCS '+x.rcsVille):('RCS '+x.rcsVille))+'.';
+    var q=(x.forme==='SARL'||x.forme==='EURL'||x.forme==='SCI')?'Gérant':'Président';
+    switch(type){
+      case 'Transfert de siège':
+        return head+'\n\nAux termes d\'une décision en date du «date», il a été décidé de transférer le siège social de '+x.siegeComplet+' à «nouvelle adresse du siège» à compter du «date». Les statuts ont été modifiés en conséquence.\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
+      case 'Changement de dirigeant':
+        return head+'\n\nAux termes d\'une décision en date du «date», «Civilité Prénom NOM», demeurant «adresse», a été nommé(e) en qualité de '+q+' en remplacement de '+(x.president||'«ancien dirigeant»')+', à compter du «date».\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
+      case 'Changement de dénomination':
+        return head+'\n\nAux termes d\'une décision en date du «date», il a été décidé de modifier la dénomination sociale qui devient : «nouvelle dénomination», à compter du «date». Les statuts ont été modifiés en conséquence.\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
+      case "Changement d'objet":
+        return head+'\n\nAux termes d\'une décision en date du «date», il a été décidé de modifier l\'objet social qui devient : «nouvel objet social», à compter du «date». Les statuts ont été modifiés en conséquence.\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
+      case 'Augmentation de capital':
+        return head+'\n\nAux termes d\'une décision en date du «date», le capital social a été augmenté de «montant» euros pour être porté de '+cap+' à «nouveau capital» euros. Les statuts ont été modifiés en conséquence.\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
+      case 'Dissolution':
+        return head+'\n\nAux termes d\'une décision en date du «date», il a été décidé la dissolution anticipée de la société et sa mise en liquidation amiable. «Civilité Prénom NOM», demeurant «adresse», a été nommé(e) liquidateur. Le siège de liquidation est fixé à «adresse». Mention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
+      default: /* Création */
+        return 'AVIS DE CONSTITUTION\n\nAux termes d\'un acte sous seing privé en date du '+(x.dateActe||'«date»')+' à '+(x.ville||'«ville»')+', il a été constitué une société présentant les caractéristiques suivantes :\n\n'
+          +'Forme : '+x.formeLabel+'\nDénomination : '+x.denom+'\nSiège social : '+x.siegeComplet+'\nObjet social : '+(x.objet||'«objet social»')+'\nDurée : 99 ans à compter de son immatriculation au RCS\nCapital social : '+cap+'\n'+q+' : '+(x.president||'«'+q+'»')+(x.presAdr?(', demeurant '+x.presAdr):'')+'\n\nLa société sera immatriculée au Registre du commerce et des sociétés de '+x.rcsVille+'.\n\nPour avis, le '+q+'.';
+    }
+  };
+  window.annonceData=function(id){
+    var d=espDoss().find(function(x){return x.id===id;});var x={};
+    try{ x=stDossData(d)||{}; }catch(_e){}
+    var c=clientById((d.clientIds||[])[0])||{};
+    return {denom:(x.denom||c.denomination||'«dénomination»'),forme:(x.forme||c.forme||'SAS'),
+      formeLabel:stFormeLabel(x.forme||c.forme||'SAS'),cap:(x.cap||c.capital||0),
+      siegeComplet:(x.siegeComplet||c.siege||'«siège social»'),ville:(x.ville||c.ville||'«ville»'),
+      rcsVille:(x.rcsVille||c.ville||'«ville»'),siren:(c.siren||''),dateActe:(x.dateActe||''),
+      objet:((c.activites||[]).join(', ')||''),president:(x.president||c.president||''),
+      presAdr:(x.siege||c.adresse||'')};
+  };
+  window.annonceRefresh=function(){var t=(document.getElementById('ann-type')||{}).value||'Création';var x=window._annX||{};var ta=document.getElementById('ann-txt');if(ta)ta.value=annonceTexte(t,x);};
+  window.annonceCopier=function(){var ta=document.getElementById('ann-txt');if(!ta)return;ta.select();try{document.execCommand('copy');}catch(e){}try{navigator.clipboard&&navigator.clipboard.writeText(ta.value);}catch(e){}toast('Annonce copiée dans le presse-papiers.');};
+  window.annonceModal=function(id){
+    window._annX=annonceData(id);
+    openModal('📰 Générateur d\'annonce légale',
+      '<label>Type de formalité</label><select id="ann-type" onchange="annonceRefresh()">'+ANNONCE_TYPES.map(function(t){return '<option>'+esc(t)+'</option>';}).join('')+'</select>'
+      +'<label style="margin-top:10px">Texte de l\'annonce (modifiable — complétez les champs « … »)</label>'
+      +'<textarea id="ann-txt" rows="14" style="width:100%;font:12.5px/1.55 ui-monospace,Consolas,monospace"></textarea>'
+      +'<div class="hint" style="margin-top:6px">Modèle indicatif à adapter et à publier dans un support habilité (JAL / support de presse en ligne) du département du siège. Les mentions «…» sont à compléter.</div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="annonceCopier()">📋 Copier</button>');
+    setTimeout(annonceRefresh,0);
   };
   /* ---------- Simulateur de coût (création / modification) — estimations indicatives 2024-2025 ---------- */
   window.COUT_CREATION={'SASU':{annonce:138,greffe:37.45},'SAS':{annonce:197,greffe:37.45},'SARL':{annonce:147,greffe:37.45},'EURL':{annonce:123,greffe:37.45},'SCI':{annonce:189,greffe:66.88},'EI / Micro':{annonce:0,greffe:0}};
@@ -5691,7 +5739,7 @@ html,body,.app,main,.layout{background:#faf6f5!important}
 @media(min-width:861px){
   html,body{height:100%;overflow:hidden}
   .app{height:100vh;overflow:hidden}
-  main{height:100vh;overflow-y:auto;overscroll-behavior:contain}
+  main{height:100vh;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 }
 </style>
 
