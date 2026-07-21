@@ -2241,7 +2241,7 @@ function souscripteursHTML(d){
     +'</tbody></table>'
     +'<p style="margin-top:12px">Le présent état, qui constate la souscription de '+(x.nbActions||'«…»')+' ('+(x.nbActions?stLettres(x.nbActions):'«…»')+') actions de la société '+esc(x.denom)+', ainsi que le versement de la somme de '+totTxt+' correspondant au moins à la moitié du nominal desdites actions, est certifié exact, sincère et véritable par '+esc(x.president)+', associé fondateur et '+stQualite(x.forme)+'.</p>'
     +'<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+', le '+dateTxt+'</p>'
-    +'<div class="st-sign"><div class="sg"><b>Le '+stQualite(x.forme)+'</b>Signature</div></div></div>'
+    +'<div class="st-sign"><div class="sg"><b>'+esc(x.president)+'</b>Le '+stQualite(x.forme)+' — Signature</div></div></div>'
     +'</div></div>';
 }
 function pouvoirHTML(d){
@@ -2260,7 +2260,7 @@ function pouvoirHTML(d){
     +'<div class="st-titre" style="font-size:15px;margin-top:8px">POUVOIR</div>'
     +'<p style="margin-top:18px">Je soussigné '+esc(mandant)+' demeurant à '+esc(adrMandant)+', agissant en qualité de '+qualite+' de la Société '+esc(x.denom)+' en cours de constitution donne par les présentes pouvoirs à '+mandataire+' aux fins d\'effectuer toutes démarches relatives aux formalités d\'inscription au Registre du commerce et des sociétés, de signer tous documents à cet effet, et d\'une façon générale, de faire tout ce qui sera nécessaire pour l\'exécution des présentes.</p>'
     +'<div class="st-fin" style="margin-top:34px"><p>Fait à '+esc(villeFait)+',</p><p>Le '+dateTxt+'</p>'
-    +'<div class="st-sign" style="margin-top:30px"><div class="sg"><b>Le Mandant</b></div><div class="sg"><b>Le Mandataire</b></div></div></div>'
+    +'<div class="st-sign" style="margin-top:30px"><div class="sg"><b>'+esc(mandant)+'</b>Le Mandant — Signature</div><div class="sg"><b>'+repTit+'</b>Le Mandataire — Signature</div></div></div>'
     +'</div></div>';
 }
 function dncHTML(d){
@@ -2292,7 +2292,7 @@ function dncHTML(d){
     +'<p style="margin-top:10px">J\'ai pris connaissance des dispositions du texte ci-dessous — article 2 de l\'ordonnance n° 58-1352 du 27 décembre 1958 :</p>'
     +'<p style="font-style:italic">Quiconque donne, de mauvaise foi, des indications inexactes ou incomplètes en vue d\'une immatriculation, d\'une radiation ou d\'une mention complémentaire ou rectificative au Registre du commerce et des sociétés est puni d\'une amende de 76,22 à 3048,98 euros et d\'un emprisonnement de dix jours à six mois ou de l\'une de ces deux peines seulement.</p>'
     +'<div class="st-fin" style="margin-top:26px"><p>Fait à '+esc(villeFait)+'</p><p>Le '+dateTxt+'</p>'
-    +'<div class="st-sign" style="margin-top:24px"><div class="sg"><b>Signature</b></div></div></div>'
+    +'<div class="st-sign" style="margin-top:24px"><div class="sg"><b>'+nom+'</b>Signature</div></div></div>'
     +'</div></div>';
 }
 function statutsSasHTML(d){
@@ -2461,7 +2461,8 @@ function statutsSasHTML(d){
   // Clôture
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
   var jour=new Date().getDate();
-  var signs=assoc.map(function(a){return '<div class="sg"><b>'+(esc((a.nom||'').trim())||'«associé»')+'</b>Signature</div>';}).join('');
+  var _presTrim=(''+president).trim();
+  var signs=assoc.map(function(a){var an=(''+(a.nom||'')).trim();var role=(an&&an===_presTrim)?('Le '+stQualite(c.forme||d.forme||'SAS')+' — Signature'):'Associé — Signature';return '<div class="sg"><b>'+(esc(an)||'«associé»')+'</b>'+role+'</div>';}).join('');
   var _villeSig=((_dv.villeSignature||'')+'').trim()||ville;
   var _dateActe=stDateSlash(_dv.dateActe);
   var fin='<div class="st-fin"><p>Fait à '+esc(_villeSig)+',</p><p>Le '+_dateActe+',</p>'
@@ -2760,7 +2761,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=94;
+var LAST_VER=95;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
