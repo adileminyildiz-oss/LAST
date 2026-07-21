@@ -1349,13 +1349,43 @@ function pageClients(){
 /* ===== Module Clients : barre latérale (comme Traitement) + onglets Dirigeant / Salarié / État ===== */
 function clNom(c){return (((c.prenom||'')+' '+(c.nom||'')).trim())||c.denomination||'Client';}
 function pageClientsEspace(){
+  var mod=state.clModule||'clients';
+  var nbRef=DB.demandes.filter(function(d){return d.archived;}).length;
+  var modBar='<div class="cl-mod-tabs">'
+    +'<button class="cl-mod-tab'+(mod==='clients'?' on':'')+'" onclick="clSetModule(\'clients\')">Clients<span class="cl-mod-n">'+DB.clients.length+'</span></button>'
+    +'<button class="cl-mod-tab'+(mod==='refuses'?' on':'')+'" onclick="clSetModule(\'refuses\')">Refusés<span class="cl-mod-n">'+nbRef+'</span></button>'
+    +'</div>';
+  if(mod==='refuses')return modBar+clRefusesList();
   var list=DB.clients.slice();
   if(state.q)list=list.filter(function(c){return (clNom(c)+(c.email||'')+(c.denomination||'')+(c.activites||[]).join(' ')).toLowerCase().includes(state.q);});
-  var head='<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap"><span class="tag blue">'+DB.clients.length+' clients</span><button class="btn btn-sm btn-pri" onclick="modalClient(\'\')">+ Nouveau client</button></div>';
-  if(!list.length)return head+'<div class="card"><div class="card-b"><div class="empty">Aucun client. Les fiches sont créées automatiquement depuis les demandes, ou manuellement.</div></div></div>';
+  var head='<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap"><span class="tag">'+DB.clients.length+' clients</span><button class="btn btn-sm btn-pri" onclick="modalClient(\'\')">+ Nouveau client</button></div>';
+  if(!list.length)return modBar+head+'<div class="card"><div class="card-b"><div class="empty">Aucun client. Les fiches sont créées automatiquement depuis les demandes, ou manuellement.</div></div></div>';
   var id=state.clientSel;if(!list.find(function(c){return c.id===id;}))id=list[0].id;
   var c=DB.clients.find(function(x){return x.id===id;});
-  return head+'<div class="esp-shell">'+clMiniList(list,id)+'<div class="esp-main">'+clDetail(c)+'</div></div>';
+  return modBar+head+'<div class="esp-shell">'+clMiniList(list,id)+'<div class="esp-main">'+clDetail(c)+'</div></div>';
+}
+/* Onglet « Refusés » du module Client : demandes refusées (archivées), restaurables ou supprimables. */
+function clRefusesList(){
+  var arch=DB.demandes.filter(function(d){return d.archived;}).sort(function(a,b){return (b.archivedTs||0)-(a.archivedTs||0);});
+  var head='<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap"><span class="tag">'+arch.length+' client(s) refusé(s)</span></div>';
+  if(!arch.length)return head+'<div class="card"><div class="card-b"><div class="empty">Aucun client refusé. Les demandes que vous refusez apparaissent ici (retirées de la liste des demandes).</div></div></div>';
+  var rows=arch.map(function(d){
+    var nom=(typeof demBestName==='function'?demBestName(d):'')||d.clientNom||'Client';
+    var email=(d.clientEmail&&!/formsubmit/i.test(d.clientEmail))?d.clientEmail:'';
+    var dt=d.archivedTs?frDate(new Date(d.archivedTs).toISOString().slice(0,10)):'';
+    return '<tr><td><div class="tname">'+esc(nom)+'</div><div class="tsub">'+esc(email||d.canal||'—')+'</div></td>'
+      +'<td>'+esc(IA.objet(d))+'</td>'
+      +'<td><span class="tag" style="background:#fff1f4;border-color:#f3d7de;color:#9f1239">Refusé</span></td>'
+      +'<td>'+esc(dt)+'</td>'
+      +'<td style="text-align:right;white-space:nowrap"><button class="btn btn-sm" onclick="demDesarchiver(\''+d.id+'\')">↩ Restaurer</button> <button class="btn btn-sm" onclick="clRefuseSuppr(\''+d.id+'\')">🗑</button></td></tr>';
+  }).join('');
+  return head+'<div class="card"><div class="card-b" style="padding:0"><table class="dem-tbl"><thead><tr><th>Client</th><th>Objet</th><th>Statut</th><th>Refusé le</th><th style="text-align:right">Actions</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
+function clSetModule(m){state.clModule=m;render();}
+function clRefuseSuppr(id){
+  if(!confirm('Supprimer définitivement ce client refusé ? Cette action est irréversible.'))return;
+  var i=DB.demandes.findIndex(function(x){return x.id===id;});
+  if(i>=0){DB.demandes.splice(i,1);if(typeof save==='function')save();render();if(typeof toast==='function')toast('Client refusé supprimé.');}
 }
 function clMiniList(list,id){
   return '<aside class="esp-mini"><div class="esp-mini-h">Clients<span class="esp-mini-n">'+list.length+'</span></div><div class="esp-mini-list">'
@@ -2775,7 +2805,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=103;
+var LAST_VER=104;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3523,7 +3553,7 @@ window.demNature=function(d){
 window.demSetNature=function(id,n){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;d.nature=n;if(typeof save==='function')save();render();};
 function demNatLabel(n){return n==='admin'?'Administratif':'Création';}
 /* Dossiers refusés → archivés : consultation & restauration */
-window.demDesarchiver=function(id){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;d.archived=false;if(typeof save==='function')save();if(document.getElementById('ov'))demArchivesModal();render();};
+window.demDesarchiver=function(id){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;d.archived=false;d.decision=null;d.statut='Nouveau';if(typeof save==='function')save();var _ov=document.getElementById('ov');if(_ov&&_ov.classList.contains('show'))demArchivesModal();render();};
 window.demArchivesModal=function(){
   var arch=DB.demandes.filter(function(d){return d.archived;}).sort(function(a,b){return (b.archivedTs||0)-(a.archivedTs||0);});
   var body=arch.length?('<div class="dem-arch-list">'+arch.map(function(d){
@@ -3558,7 +3588,6 @@ window.pageDemandes=function(){
  var tabs='<div class="dem-tabs">'+DEM_TABS.map(function(t){return '<button class="dem-tab '+(t[0]===tab?'on':'')+'" onclick="state.demTab=\''+t[0]+'\';render()">'+t[1]+' <span class="dem-c">'+counts[t[0]]+'</span></button>';}).join('')+'</div>';
  var search='<div class="dem-search">'+svg(IC.inbox)+'<input value="'+esc(state.q||'')+'" oninput="state.q=this.value.toLowerCase();render()" placeholder="Rechercher un client, un objet, un type…"></div>';
  var acts='<div class="dem-acts">'
-   +(nbArch?'<button class="btn btn-sm dem-imp-btn" onclick="demArchivesModal()">🗄 Archivées <span class="dem-c">'+nbArch+'</span></button>':'')
    +'<button class="btn btn-sm dem-imp-btn" onclick="demSyncMails(false)">🔄 Synchroniser</button>'
    +'<button class="btn btn-sm dem-imp-btn" onclick="demSyncConfig()">⚙ Configurer</button>'
    +'<button class="btn btn-sm dem-imp-btn dem-imp-pri" onclick="demSaisieInterne()">➕ Saisir un dossier</button></div>';
@@ -5557,6 +5586,13 @@ html,body,.app,main,.layout{background:#faf6f5!important}
 .topbar{background:rgba(255,255,255,.92)!important;border-bottom:1px solid #efe4e6!important}
 .topbar .search input{background:#fff!important;border-color:#e7dbdd!important}
 .topbar .search input:focus{border-color:#e0a6b4!important}
+/* ---- Module Client : onglets Clients / Refusés ---- */
+.cl-mod-tabs{display:inline-flex;gap:4px;padding:4px;background:#fff;border:1px solid #e4dade;border-radius:11px;margin-bottom:14px}
+.cl-mod-tab{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;color:#8b8388;font:700 12.5px/1 inherit;padding:8px 15px;border-radius:8px;cursor:pointer;transition:background .15s,color .15s}
+.cl-mod-tab:hover{color:#241f1b}
+.cl-mod-tab.on{background:#5f0f22;color:#fff}
+.cl-mod-n{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:rgba(0,0,0,.08);color:#241f1b;font:700 10.5px/1 inherit}
+.cl-mod-tab.on .cl-mod-n{background:rgba(255,255,255,.22);color:#fff}
 </style>
 
 <script id="no-emoji-mod">
