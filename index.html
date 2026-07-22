@@ -2912,7 +2912,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=110;
+var LAST_VER=111;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4747,7 +4747,54 @@ window.modalDemandeView=function(id){
      +'<button class="tr-b" onclick="espFacture(\''+d.id+'\')">'+TR_IC.facture+'<span>Facture</span></button>'
      +'<button class="tr-b" onclick="coutModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.6a3.5 3.5 0 1 0 .2 5M8 11h5M8 13.4h5"/></svg><span>Estimer le coût</span></button>'
      +'<button class="tr-b" onclick="annonceModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 8h3v9a2 2 0 0 1-2 2M8 9h6M8 12h6M8 15h4"/></svg><span>Annonce légale</span></button>'
+     +'<button class="tr-b" onclick="acteModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span>Acte de modification</span></button>'
      +'</div></div></div>';
+  };
+  /* ---------- Actes de modification (procès-verbaux) ---------- */
+  window.ACTE_TYPES=['Transfert de siège','Changement de dirigeant','Cession de parts / actions','Changement de dénomination',"Changement d'objet",'Augmentation de capital','Dissolution'];
+  function acteQ(x){return (x.forme==='SARL'||x.forme==='EURL'||x.forme==='SCI')?'Gérant':'Président';}
+  function acteIntro(x){var cap=x.cap?stNum(x.cap)+' euros':'«capital» euros';
+    return x.denom+'\n'+x.formeLabel+' au capital de '+cap+'\nSiège social : '+x.siegeComplet+'\n'+(x.siren?(x.siren+' RCS '+x.rcsVille):('RCS '+x.rcsVille))+'\n\n'
+     +'PROCÈS-VERBAL DES DÉCISIONS DE L\'ASSOCIÉ UNIQUE / DE L\'ASSEMBLÉE GÉNÉRALE\n(à adapter selon la forme et le nombre d\'associés)\n\n'
+     +'L\'an «année», le «date», à «heure»,\n'
+     +'La collectivité des associés (ou l\'associé unique) de la société '+x.denom+', '+x.formeLabel+' au capital de '+cap+', dont le siège social est situé '+x.siegeComplet+', immatriculée au Registre du commerce et des sociétés de '+x.rcsVille+' sous le numéro '+(x.siren||'«SIREN»')+',\na pris les décisions suivantes :\n\n';}
+  function acteFin(x){var q=acteQ(x);
+    return '\nPOUVOIRS\nTous pouvoirs sont donnés au porteur d\'un original ou d\'une copie certifiée conforme des présentes à l\'effet d\'accomplir les formalités de publicité et de dépôt légales auprès du guichet unique (INPI).\n\n'
+     +'De tout ce que dessus, il a été dressé le présent procès-verbal.\n\nFait à '+x.rcsVille+', le «date».\n\nLe '+q+'\n'+(x.president||'«'+q+'»');}
+  window.acteTexte=function(type,x){var q=acteQ(x);
+    switch(type){
+      case 'Changement de dirigeant':
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Cessation de fonctions\nIl est mis fin aux fonctions de '+(x.president||'«ancien dirigeant»')+', '+q+', à compter du «date».\n\nDEUXIÈME DÉCISION — Nomination d\'un nouveau dirigeant\n«Civilité Prénom NOM», né(e) le «date» à «lieu», de nationalité «nationalité», demeurant «adresse», est nommé(e) '+q+' à compter du «date», pour une durée «indéterminée / …». Le nouveau '+q+' déclare accepter ses fonctions et n\'être frappé d\'aucune interdiction ni incompatibilité.\n\nTROISIÈME DÉCISION — Modification corrélative des statuts\nLes statuts sont modifiés en conséquence.\n'+acteFin(x);
+      case 'Cession de parts / actions':
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Agrément de la cession\nLa cession de «nombre» parts sociales / actions consentie par «Prénom NOM du cédant» au profit de «Prénom NOM du cessionnaire», moyennant le prix de «montant» euros, est agréée.\n\nDEUXIÈME DÉCISION — Modification de la répartition du capital\nLa répartition du capital social figurant dans les statuts est modifiée en conséquence.\n'+acteFin(x);
+      case 'Changement de dénomination':
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Changement de dénomination sociale\nLa dénomination sociale devient : « «nouvelle dénomination» », à compter du «date».\n\nDEUXIÈME DÉCISION — Modification des statuts\nL\'article «n°» des statuts est modifié en conséquence.\n'+acteFin(x);
+      case "Changement d'objet":
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Changement d\'objet social\nL\'objet social devient : « «nouvel objet social» », à compter du «date».\n\nDEUXIÈME DÉCISION — Modification des statuts\nL\'article «n°» des statuts est modifié en conséquence.\n'+acteFin(x);
+      case 'Augmentation de capital':
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Augmentation du capital social\nLe capital social est augmenté de «montant» euros par «apports en numéraire / incorporation de réserves», pour être porté de '+(x.cap?stNum(x.cap)+' euros':'«capital» euros')+' à «nouveau capital» euros.\n\nDEUXIÈME DÉCISION — Modification des statuts\nLes articles «capital» et «apports» des statuts sont modifiés en conséquence.\n'+acteFin(x);
+      case 'Dissolution':
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Dissolution anticipée\nIl est décidé la dissolution anticipée de la société à compter du «date» et sa mise en liquidation amiable.\n\nDEUXIÈME DÉCISION — Nomination du liquidateur\n«Civilité Prénom NOM», demeurant «adresse», est nommé(e) liquidateur, avec les pouvoirs les plus étendus.\n\nTROISIÈME DÉCISION — Siège de liquidation\nLe siège de la liquidation est fixé à «adresse».\n'+acteFin(x);
+      default: /* Transfert de siège */
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Transfert du siège social\nLe siège social est transféré de '+x.siegeComplet+' à « «nouvelle adresse du siège» » à compter du «date».\n\nDEUXIÈME DÉCISION — Modification corrélative des statuts\nL\'article «n°» des statuts (« Siège social ») est modifié en conséquence.\n'+acteFin(x);
+    }
+  };
+  window.acteRefresh=function(){var t=(document.getElementById('acte-type')||{}).value||ACTE_TYPES[0];var ta=document.getElementById('acte-txt');if(ta)ta.value=acteTexte(t,window._acteX||{});};
+  window.acteCopier=function(){var ta=document.getElementById('acte-txt');if(!ta)return;ta.select();try{document.execCommand('copy');}catch(e){}try{navigator.clipboard&&navigator.clipboard.writeText(ta.value);}catch(e){}toast('Acte copié dans le presse-papiers.');};
+  window.acteImprimer=function(){var ta=document.getElementById('acte-txt');if(!ta)return;
+    try{if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();}catch(e){}
+    var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}
+    pa.innerHTML='<div class="doc-gen"><div class="st-doc"><div class="st-page" style="white-space:pre-wrap;font-family:Georgia,\'Times New Roman\',serif;font-size:12px;line-height:1.6;padding:18mm 16mm">'+esc(ta.value)+'</div></div></div>';
+    setTimeout(function(){window.print();},150);};
+  window.acteModal=function(id){
+    window._acteX=annonceData(id);
+    openModal('📝 Acte de modification (procès-verbal)',
+      '<label>Type de formalité</label><select id="acte-type" onchange="acteRefresh()">'+ACTE_TYPES.map(function(t){return '<option>'+esc(t)+'</option>';}).join('')+'</select>'
+      +'<label style="margin-top:10px">Procès-verbal (modifiable — complétez les champs « … »)</label>'
+      +'<textarea id="acte-txt" rows="16" style="width:100%;font:12.5px/1.55 ui-monospace,Consolas,monospace"></textarea>'
+      +'<div class="hint" style="margin-top:6px">Modèle indicatif à adapter (forme, associé unique vs assemblée, quorum/majorité). Dépôt au guichet unique INPI. À faire relire pour les opérations sensibles (cession, capital).</div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn" onclick="acteImprimer()">🖨 Imprimer / PDF</button><button class="btn btn-pri" onclick="acteCopier()">📋 Copier</button>');
+    setTimeout(acteRefresh,0);
   };
   /* ---------- Générateur d'annonce légale (création / modification) ---------- */
   window.ANNONCE_TYPES=['Création','Transfert de siège','Changement de dirigeant','Changement de dénomination',"Changement d'objet",'Augmentation de capital','Dissolution'];
