@@ -1223,6 +1223,63 @@ function demDocsUpload(id,k,inp){
   };r.readAsDataURL(f);});inp.value='';
 }
 function demDocsSuppr(id,k,i){var d=DB.demandes.find(function(x){return x.id===id;});if(!d||!d.docs||!d.docs[k])return;d.docs[k].splice(i,1);if(typeof save==='function')save();render();}
+/* ---------- Checklist de pièces justificatives par formalité + suivi de réception ---------- */
+var PIECES_CREATION=[
+  {k:'cni',label:"Pièce d'identité du dirigeant (recto / verso)"},
+  {k:'domicile',label:"Justificatif de domicile du dirigeant (− 3 mois)"},
+  {k:'siege',label:"Justificatif du siège social (bail, domiciliation ou facture)"},
+  {k:'capital',label:"Attestation de dépôt de capital"},
+  {k:'assoc',label:"Pièce d'identité de chaque associé"}
+];
+var PIECES_MODIF={
+  siege:[{k:'pv',label:'PV / décision de transfert de siège'},{k:'siege',label:'Justificatif du nouveau siège'}],
+  dirigeant:[{k:'cni',label:"Pièce d'identité du nouveau dirigeant"},{k:'domicile',label:'Justificatif de domicile du nouveau dirigeant'},{k:'dnc',label:'Déclaration de non-condamnation'}],
+  cession:[{k:'acte',label:'Acte de cession de parts / actions signé'},{k:'cni',label:"Pièce d'identité du cessionnaire"}],
+  capital:[{k:'pv',label:'PV décidant la variation de capital'}],
+  denomination:[{k:'pv',label:'PV de changement de dénomination'}],
+  objet:[{k:'pv',label:"PV de changement d'objet social"}],
+  dissolution:[{k:'pvd',label:'PV de dissolution'},{k:'pvl',label:'Comptes de clôture / PV de liquidation'}]
+};
+function piecesEntity(id){return (DB.demandes||[]).find(function(x){return x.id===id;})||(DB.dossiers||[]).find(function(x){return x.id===id;});}
+function piecesRequises(d){
+  var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d;
+  var txt=(((dm&&dm.serviceSouhaite)||'')+' '+((dm&&dm.objet)||'')+' '+((typeof IA!=='undefined'&&IA.objet&&dm)?IA.objet(dm):'')).toLowerCase();
+  if(/transfert|si[èe]ge/.test(txt))return PIECES_MODIF.siege;
+  if(/g[ée]rant|dirigeant|pr[ée]sident/.test(txt))return PIECES_MODIF.dirigeant;
+  if(/cession|parts|actions/.test(txt))return PIECES_MODIF.cession;
+  if(/augmentation|r[ée]duction|capital/.test(txt))return PIECES_MODIF.capital;
+  if(/d[ée]nomination/.test(txt))return PIECES_MODIF.denomination;
+  if(/objet/.test(txt))return PIECES_MODIF.objet;
+  if(/dissolution|liquidation/.test(txt))return PIECES_MODIF.dissolution;
+  return PIECES_CREATION;
+}
+window.demPieceRecu=function(id,k,val){var e=piecesEntity(id);if(!e)return;e.piecesRecues=e.piecesRecues||{};if(val)e.piecesRecues[k]=true;else delete e.piecesRecues[k];if(typeof save==='function')save();render();};
+window.demPieceUpload=function(id,k,inp){var e=piecesEntity(id);if(!e)return;var fl=inp.files;if(!fl||!fl.length)return;e.docs=e.docs||{};e.docs[k]=e.docs[k]||[];var n=fl.length,done=0;
+  Array.prototype.forEach.call(fl,function(f){var r=new FileReader();r.onload=function(ev){e.docs[k].push({name:f.name,type:f.type||'application/octet-stream',dataUrl:''+ev.target.result,ts:Date.now()});done++;if(done===n){if(typeof save==='function')save();render();}};r.readAsDataURL(f);});inp.value='';};
+window.demPieceSuppr=function(id,k,i){var e=piecesEntity(id);if(!e||!e.docs||!e.docs[k])return;e.docs[k].splice(i,1);if(typeof save==='function')save();render();};
+window.espPiecesCard=function(d){
+  var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d;var eid=dm.id;
+  dm.docs=dm.docs||{};dm.piecesRecues=dm.piecesRecues||{};
+  var pieces=piecesRequises(d);
+  var recu=function(p){return ((dm.docs[p.k]||[]).length>0)||dm.piecesRecues[p.k]===true;};
+  var nb=pieces.filter(recu).length,total=pieces.length;
+  var pct=total?Math.round(nb/total*100):0;
+  var rows=pieces.map(function(p){
+    var files=dm.docs[p.k]||[];var ok=recu(p);
+    var flist=files.map(function(f,i){return '<div class="ddoc-file"><span class="ddoc-name">📄 '+esc(f.name)+'</span><span class="ddoc-acts"><a class="btn btn-sm btn-ghost" href="'+(f.dataUrl||'')+'" download="'+esc(f.name)+'">Télécharger</a><button class="btn btn-sm btn-ghost" onclick="demPieceSuppr(\''+eid+'\',\''+p.k+'\','+i+')" title="Retirer">✕</button></span></div>';}).join('');
+    return '<div class="pj-slot'+(ok?' pj-ok':'')+'">'
+      +'<label class="pj-head"><input type="checkbox" '+(ok?'checked':'')+' onchange="demPieceRecu(\''+eid+'\',\''+p.k+'\',this.checked)"> <b>'+esc(p.label)+'</b>'+(ok?'<span class="tag ok" style="margin-left:auto">Reçu</span>':'<span class="tag mut" style="margin-left:auto">En attente</span>')+'</label>'
+      +(flist?('<div class="pj-files">'+flist+'</div>'):'')
+      +'<label class="btn btn-sm btn-ghost pj-add">＋ Joindre un fichier<input type="file" multiple accept="image/*,application/pdf" style="display:none" onchange="demPieceUpload(\''+eid+'\',\''+p.k+'\',this)"></label>'
+      +'</div>';
+  }).join('');
+  var ask=(typeof demDemanderDocs==='function'&&(DB.demandes||[]).some(function(x){return x.id===eid;}))?('<button class="btn btn-sm" onclick="demDemanderDocs(\''+eid+'\')">✉ Demander les pièces au client</button>'):'';
+  return '<div class="card pj-card"><div class="card-h"><h2>Pièces justificatives</h2><span class="sub" style="margin-left:auto">'+nb+' / '+total+' reçues</span></div>'
+    +'<div class="card-b"><div class="pj-bar"><span style="width:'+pct+'%"></span></div>'
+    +'<div class="pj-list">'+rows+'</div>'
+    +(ask?'<div style="margin-top:10px">'+ask+'</div>':'')
+    +'</div></div>';
+};
 /* Aperçu d'un document (image en ligne, PDF en cadre) */
 function demDocsApercu(id,k,i){
   var d=DB.demandes.find(function(x){return x.id===id;});if(!d||!d.docs||!d.docs[k])return;var f=d.docs[k][i];if(!f)return;
@@ -2084,7 +2141,7 @@ function espEnvoyerMail(id){var d=espDoss().find(function(x){return x.id===id;})
 function espPanel(d,list,id){
   return '<div class="esp-shell">'
    +espMiniList(list,id)
-   +'<div class="esp-main">'+espMailCard(d)+espTraitementCard(d)+espDocsPretsCard(d)+'</div>'
+   +'<div class="esp-main">'+espMailCard(d)+espTraitementCard(d)+espPiecesCard(d)+espDocsPretsCard(d)+'</div>'
    +'</div>';
 }
 function espStatutsCard(d){
@@ -2855,7 +2912,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=109;
+var LAST_VER=110;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -5741,6 +5798,16 @@ html,body,.app,main,.layout{background:#faf6f5!important}
   .app{height:100vh;overflow:hidden}
   main{height:100vh;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 }
+/* ---- Checklist de pièces justificatives ---- */
+.pj-bar{height:7px;border-radius:6px;background:#f0e6e9;overflow:hidden;margin:2px 0 12px}
+.pj-bar>span{display:block;height:100%;background:linear-gradient(90deg,#be123c,#e11d48);transition:width .25s}
+.pj-list{display:flex;flex-direction:column;gap:9px}
+.pj-slot{border:1px solid #ece4e6;border-radius:11px;padding:10px 12px;background:#fff}
+.pj-slot.pj-ok{border-color:#c7ecd4;background:#f6fcf8}
+.pj-head{display:flex;align-items:center;gap:9px;font-size:12.5px;color:#241f1b;cursor:pointer;margin:0}
+.pj-head input{width:auto;flex:none;margin:0;accent-color:#3f7d54}
+.pj-files{margin:8px 0 0;display:flex;flex-direction:column;gap:5px}
+.pj-add{margin-top:8px;display:inline-flex}
 </style>
 
 <script id="no-emoji-mod">
