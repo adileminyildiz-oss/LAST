@@ -1779,8 +1779,63 @@ function pageParams(){
   </div>
   <div class="card" style="margin-top:14px"><div class="card-h"><h2>Prestations</h2><span class="sub" style="margin-left:auto">Catalogue des prestations</span></div>
     <div class="card-b">${prestationsBloc()}</div></div>
+  ${rgpdCard()}
   <div class="flow-note" style="margin-top:8px">${svg(IC.gear)}<div>Prochains niveaux de la pyramide : <b>Devis auto</b>, <b>facturation & marge complète</b>, <b>signature + paiement</b>, <b>IA de réponse locale</b>, puis <b>stockage lourd, archivage 10 ans, multi-poste & mise en ligne</b>.</div></div>`;
 }
+/* ---------- Conformité RGPD (minimisation, conservation, registre, information) ---------- */
+function rgpdStats(){var files=0,bytes=0;function scan(arr){(arr||[]).forEach(function(e){var docs=e.docs||{};Object.keys(docs).forEach(function(k){(docs[k]||[]).forEach(function(f){if(f&&f.dataUrl){files++;bytes+=f.dataUrl.length*0.75;}});});});}scan(DB.demandes);scan(DB.dossiers);return {files:files,mb:(bytes/1048576).toFixed(1)};}
+function rgpdMois(){return (DB.params&&DB.params.rgpdMois!=null)?DB.params.rgpdMois:6;}
+function rgpdCard(){var st=rgpdStats();
+  return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Conformité RGPD</h2><span class="sub" style="margin-left:auto">Protection des données</span></div>'
+   +'<div class="card-b"><p class="hint" style="margin-top:0">Vos dossiers contiennent des données personnelles sensibles (pièces d\'identité, justificatifs). Le RGPD impose de les <b>minimiser</b>, de les <b>sécuriser</b> et de ne les conserver que le temps nécessaire à la mission.</p>'
+   +'<div class="frow"><div><label>Conservation des pièces après finalisation (mois)</label><input type="number" min="0" value="'+esc(rgpdMois())+'" onchange="DB.params.rgpdMois=+this.value;save();toast(\'Enregistré\')"></div>'
+   +'<div style="display:flex;align-items:flex-end"><div class="tsub">Pièces stockées : <b>'+st.files+'</b> fichier(s) — ~'+st.mb+' Mo</div></div></div>'
+   +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'
+   +'<button class="btn btn-sm" onclick="rgpdRegistreModal()">📋 Registre des traitements</button>'
+   +'<button class="btn btn-sm" onclick="rgpdNoteModal()">ℹ️ Note d\'information client</button>'
+   +'<button class="btn btn-sm btn-danger" onclick="rgpdPurgeSensibles()">🗑 Purger les pièces des dossiers finalisés / archivés</button>'
+   +'</div></div></div>';
+}
+function rgpdPurgeSensibles(){
+  var targets=[];
+  (DB.demandes||[]).forEach(function(d){if(d.archived||(typeof demEtat==='function'&&demEtat(d)==='finalise'))targets.push(d);});
+  (DB.dossiers||[]).forEach(function(d){if(d.archived||/cl[ôo]tur/i.test(d.statut||''))targets.push(d);});
+  var count=0;targets.forEach(function(e){var docs=e.docs||{};Object.keys(docs).forEach(function(k){(docs[k]||[]).forEach(function(f){if(f&&f.dataUrl)count++;});});});
+  if(!count)return toast('Aucune pièce à purger dans les dossiers finalisés / archivés.');
+  if(!confirm('Purger définitivement '+count+' fichier(s) sensible(s) des dossiers finalisés / archivés ?\n\nLe suivi « reçu » est conservé ; seuls les fichiers sont supprimés (minimisation RGPD). Action irréversible.'))return;
+  targets.forEach(function(e){var docs=e.docs||{};Object.keys(docs).forEach(function(k){(docs[k]||[]).forEach(function(f){if(f&&f.dataUrl){f.dataUrl='';f.purged=true;f.purgedTs=Date.now();}});});});
+  save();toast(count+' pièce(s) sensible(s) purgée(s).');render();
+}
+function rgpdCabinet(){return (DB.params&&DB.params.cabinet)||'AEM CONSEIL';}
+function rgpdRegistreTxt(){var cab=rgpdCabinet();var m=rgpdMois();
+  return 'REGISTRE DES ACTIVITÉS DE TRAITEMENT — '+cab+'\n(article 30 du RGPD)\n\n'
+   +'Responsable du traitement : '+cab+'\nContact : aemconseil.sas@gmail.com\n\n'
+   +'1) Gestion des demandes et formalités d\'entreprise\n'
+   +'   Finalité : réalisation des formalités de création / modification de société pour le compte des clients.\n'
+   +'   Base légale : exécution du contrat (art. 6.1.b RGPD).\n'
+   +'   Personnes concernées : clients, dirigeants, associés.\n'
+   +'   Données : identité, coordonnées, pièces d\'identité, justificatifs de domicile, données de la société.\n'
+   +'   Destinataires : personnel habilité du cabinet ; greffe / INPI (guichet unique) ; support d\'annonces légales.\n'
+   +'   Durée de conservation : durée de la mission + '+m+' mois pour les pièces justificatives ; 10 ans pour les documents légaux et comptables.\n'
+   +'   Mesures de sécurité : accès restreint et authentifié, stockage local, purge des pièces sensibles après finalisation.\n\n'
+   +'2) Facturation\n'
+   +'   Finalité : établissement des devis et factures.\n'
+   +'   Base légale : obligation légale (comptabilité) et exécution du contrat.\n'
+   +'   Durée : 10 ans (obligation comptable).\n\n'
+   +'Les personnes concernées disposent d\'un droit d\'accès, de rectification, d\'effacement, de limitation et d\'opposition, ainsi que du droit de réclamation auprès de la CNIL.';
+}
+function rgpdNoteTxt(){var cab=rgpdCabinet();var m=rgpdMois();
+  return 'INFORMATION SUR LE TRAITEMENT DE VOS DONNÉES (RGPD)\n\n'
+   +cab+', responsable de traitement, collecte vos données (identité, coordonnées, pièces justificatives) afin de réaliser les formalités que vous nous confiez.\n\n'
+   +'Base légale : exécution du contrat.\n'
+   +'Destinataires : personnel habilité du cabinet, greffe / INPI, support d\'annonces légales.\n'
+   +'Durée de conservation : durée de la mission, puis '+m+' mois pour les pièces (10 ans pour les documents légaux et comptables).\n\n'
+   +'Vous disposez d\'un droit d\'accès, de rectification, d\'effacement, de limitation et d\'opposition, ainsi que du droit d\'introduire une réclamation auprès de la CNIL (www.cnil.fr).\n'
+   +'Pour exercer vos droits : aemconseil.sas@gmail.com.';
+}
+function rgpdCopyEl(elId,msg){var ta=document.getElementById(elId);if(!ta)return;ta.select();try{document.execCommand('copy');}catch(e){}try{navigator.clipboard&&navigator.clipboard.writeText(ta.value);}catch(e){}toast(msg||'Copié.');}
+function rgpdRegistreModal(){openModal('📋 Registre des traitements (RGPD)','<textarea id="rgpd-reg" rows="18" style="width:100%;font:12.5px/1.55 ui-monospace,Consolas,monospace">'+esc(rgpdRegistreTxt())+'</textarea><div class="hint" style="margin-top:6px">Document interne (art. 30 RGPD). À conserver et tenir à jour.</div>','<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="rgpdCopyEl(\'rgpd-reg\',\'Registre copié.\')">📋 Copier</button>');}
+function rgpdNoteModal(){openModal('ℹ️ Note d\'information client (RGPD)','<textarea id="rgpd-note" rows="14" style="width:100%;font:12.5px/1.55 ui-monospace,Consolas,monospace">'+esc(rgpdNoteTxt())+'</textarea><div class="hint" style="margin-top:6px">À remettre au client / publier sur votre site et joindre aux formulaires de collecte.</div>','<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="rgpdCopyEl(\'rgpd-note\',\'Note copiée.\')">📋 Copier</button>');}
 function modalUser(){openModal('Nouveau collaborateur',`<label>Nom</label><input id="u-nom" placeholder="Prénom N.">
   <label>Couleur</label><input id="u-col" type="color" value="#22b8cf" style="height:44px">`,
   `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-pri" onclick="saveUser()">Ajouter</button>`);}
@@ -2912,7 +2967,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=111;
+var LAST_VER=112;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
