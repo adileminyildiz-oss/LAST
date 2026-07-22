@@ -2967,7 +2967,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=112;
+var LAST_VER=113;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4803,8 +4803,66 @@ window.modalDemandeView=function(id){
      +'<button class="tr-b" onclick="coutModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.6a3.5 3.5 0 1 0 .2 5M8 11h5M8 13.4h5"/></svg><span>Estimer le coût</span></button>'
      +'<button class="tr-b" onclick="annonceModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 8h3v9a2 2 0 0 1-2 2M8 9h6M8 12h6M8 15h4"/></svg><span>Annonce légale</span></button>'
      +'<button class="tr-b" onclick="acteModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span>Acte de modification</span></button>'
+     +'<button class="tr-b" onclick="signModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-1 4-9 7-9s2 6 4 6 2-3 4-3M3 21h18"/></svg><span>Signature électronique</span></button>'
      +'</div></div></div>';
   };
+  /* ---------- Signature électronique simple (dessin + horodatage + empreinte SHA-256) ---------- */
+  function signPadInit(){
+    var c=document.getElementById('sign-pad');if(!c)return;var ctx=c.getContext('2d');
+    ctx.lineWidth=2.4;ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle='#0e1c3d';
+    var drawing=false,last=null,dirty=false;
+    function pos(e){var r=c.getBoundingClientRect();var t=(e.touches&&e.touches[0])||e;return {x:(t.clientX-r.left)*(c.width/r.width),y:(t.clientY-r.top)*(c.height/r.height)};}
+    c.addEventListener('pointerdown',function(e){drawing=true;last=pos(e);e.preventDefault();});
+    c.addEventListener('pointermove',function(e){if(!drawing)return;var p=pos(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p;dirty=true;e.preventDefault();});
+    window.addEventListener('pointerup',function(){drawing=false;});
+    window._signDirty=function(){return dirty;};
+    window._signClear=function(){ctx.clearRect(0,0,c.width,c.height);dirty=false;};
+  }
+  function signListHTML(id){var e=piecesEntity(id);var sigs=(e&&e.signatures)||[];if(!sigs.length)return '';
+    return '<div class="section-t" style="margin-top:14px">Signatures apposées ('+sigs.length+')</div>'+sigs.slice().reverse().map(function(s){return '<div class="ddoc-file"><span class="ddoc-name">✒️ '+esc(s.signer)+' — '+esc(s.doc)+' <span class="tsub">('+new Date(s.ts).toLocaleDateString('fr-FR')+')</span></span><button class="btn btn-sm btn-ghost" onclick="signVoir(\''+id+'\',\''+s.id+'\')">Voir le certificat</button></div>';}).join('');}
+  window.signModal=function(id){
+    var e=piecesEntity(id)||{};var x=(typeof annonceData==='function')?annonceData(id):{};
+    var _sn=(x.president&&x.president.indexOf('«')<0)?x.president:(e.clientNom||e.dirigeant||'');
+    openModal('✒️ Signature électronique',
+      '<label>Signataire</label><input id="sign-name" value="'+esc(_sn)+'" placeholder="Prénom NOM">'
+      +'<label style="margin-top:8px">Document / objet signé</label><input id="sign-doc" value="'+esc((x.denom&&x.denom.indexOf('«')<0?x.denom+' — ':'')+'Dossier '+(e.ref||''))+'" placeholder="Intitulé du document">'
+      +'<label style="margin-top:8px">Signature — dessinez ci-dessous (souris ou tactile)</label>'
+      +'<div class="sign-padwrap"><canvas id="sign-pad" width="620" height="180"></canvas></div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px"><button class="btn btn-sm btn-ghost" onclick="_signClear()">Effacer</button><span class="hint" style="margin:0">Signature électronique <b>simple</b> (eIDAS) : dessin + horodatage + empreinte SHA-256. Pour une signature <b>qualifiée</b> (à valeur probante renforcée), un prestataire agréé sera nécessaire.</span></div>'
+      +signListHTML(id),
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="signSaver(\''+id+'\')">✒️ Signer le document</button>');
+    setTimeout(signPadInit,30);
+  };
+  window.signSaver=function(id){
+    if(!window._signDirty||!window._signDirty())return toast('Veuillez d\'abord dessiner la signature.');
+    var name=((document.getElementById('sign-name')||{}).value||'').trim();
+    var doc=((document.getElementById('sign-doc')||{}).value||'').trim()||'Document';
+    if(!name)return toast('Nom du signataire requis.');
+    var img=document.getElementById('sign-pad').toDataURL('image/png');
+    var ts=Date.now();var payload=doc+'|'+name+'|'+ts+'|'+img;
+    var finalize=function(hash){var e=piecesEntity(id);if(!e)return;e.signatures=e.signatures||[];
+      var sig={id:'sig-'+ts,doc:doc,signer:name,ts:ts,hash:hash,img:img};
+      e.signatures.push(sig);if(typeof save==='function')save();toast('Document signé électroniquement.');closeModal();signCertificat(sig);};
+    try{crypto.subtle.digest('SHA-256',new TextEncoder().encode(payload)).then(function(buf){var h=Array.from(new Uint8Array(buf)).map(function(b){return('0'+b.toString(16)).slice(-2);}).join('');finalize(h);}).catch(function(){finalize('(empreinte indisponible)');});}
+    catch(e){finalize('(empreinte indisponible)');}
+  };
+  function signCertificat(sig){var dt=new Date(sig.ts);
+    openModal('✓ Certificat de signature',
+      '<div class="doc-gen"><div class="st-doc"><div class="st-page" style="text-align:center;padding:26px">'
+      +'<div style="font-weight:800;font-size:15px;letter-spacing:.5px">CERTIFICAT DE SIGNATURE ÉLECTRONIQUE</div>'
+      +'<img src="'+sig.img+'" alt="signature" style="max-width:300px;width:70%;margin:16px auto 4px;display:block">'
+      +'<div style="border-top:1px solid #999;width:70%;margin:0 auto 10px"></div>'
+      +'<div style="font-weight:700">'+esc(sig.signer)+'</div><div style="font-size:12px">'+esc(sig.doc)+'</div>'
+      +'<div style="margin-top:12px;font-size:11px;color:#555">Signé électroniquement le '+esc(dt.toLocaleString('fr-FR'))+'</div>'
+      +'<div style="font-size:10px;color:#777;word-break:break-all;margin-top:6px">Empreinte d\'intégrité SHA-256 :<br>'+esc(sig.hash)+'</div>'
+      +'<div style="font-size:10px;color:#777;margin-top:4px">Identifiant de signature : '+esc(sig.id)+'</div>'
+      +'<div style="font-size:9.5px;color:#999;margin-top:12px">Signature électronique simple (règlement eIDAS n° 910/2014). Ce certificat atteste l\'apposition de la signature et l\'intégrité du contenu à la date indiquée.</div>'
+      +'</div></div></div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="signImprimer()">🖨 Imprimer / PDF</button>');
+  }
+  window.signCertificat=signCertificat;
+  window.signVoir=function(id,sid){var e=piecesEntity(id);var s=((e&&e.signatures)||[]).find(function(x){return x.id===sid;});if(s)signCertificat(s);};
+  window.signImprimer=function(){var el=document.querySelector('#ov .doc-gen');if(!el)return;try{if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();}catch(e){}var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}pa.innerHTML=el.outerHTML;setTimeout(function(){window.print();},130);};
   /* ---------- Actes de modification (procès-verbaux) ---------- */
   window.ACTE_TYPES=['Transfert de siège','Changement de dirigeant','Cession de parts / actions','Changement de dénomination',"Changement d'objet",'Augmentation de capital','Dissolution'];
   function acteQ(x){return (x.forme==='SARL'||x.forme==='EURL'||x.forme==='SCI')?'Gérant':'Président';}
@@ -5910,6 +5968,9 @@ html,body,.app,main,.layout{background:#faf6f5!important}
 .pj-head input{width:auto;flex:none;margin:0;accent-color:#3f7d54}
 .pj-files{margin:8px 0 0;display:flex;flex-direction:column;gap:5px}
 .pj-add{margin-top:8px;display:inline-flex}
+/* ---- Signature électronique ---- */
+.sign-padwrap{border:1px dashed #d8b9c2;border-radius:10px;background:#fff;padding:4px;margin-top:4px}
+#sign-pad{width:100%;height:180px;touch-action:none;cursor:crosshair;display:block;border-radius:7px}
 </style>
 
 <script id="no-emoji-mod">
