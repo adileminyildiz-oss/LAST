@@ -2967,7 +2967,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=113;
+var LAST_VER=114;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4823,8 +4823,10 @@ window.modalDemandeView=function(id){
   window.signModal=function(id){
     var e=piecesEntity(id)||{};var x=(typeof annonceData==='function')?annonceData(id):{};
     var _sn=(x.president&&x.president.indexOf('«')<0)?x.president:(e.clientNom||e.dirigeant||'');
+    var _tel=e.clientTel||e.tel||e.telephone||'';
     openModal('✒️ Signature électronique',
       '<label>Signataire</label><input id="sign-name" value="'+esc(_sn)+'" placeholder="Prénom NOM">'
+      +'<label style="margin-top:8px">Numéro de téléphone du signataire</label><input id="sign-tel" type="tel" value="'+esc(_tel)+'" placeholder="06 12 34 56 78" autocomplete="tel">'
       +'<label style="margin-top:8px">Document / objet signé</label><input id="sign-doc" value="'+esc((x.denom&&x.denom.indexOf('«')<0?x.denom+' — ':'')+'Dossier '+(e.ref||''))+'" placeholder="Intitulé du document">'
       +'<label style="margin-top:8px">Signature — dessinez ci-dessous (souris ou tactile)</label>'
       +'<div class="sign-padwrap"><canvas id="sign-pad" width="620" height="180"></canvas></div>'
@@ -4836,12 +4838,16 @@ window.modalDemandeView=function(id){
   window.signSaver=function(id){
     if(!window._signDirty||!window._signDirty())return toast('Veuillez d\'abord dessiner la signature.');
     var name=((document.getElementById('sign-name')||{}).value||'').trim();
+    var tel=((document.getElementById('sign-tel')||{}).value||'').trim();
     var doc=((document.getElementById('sign-doc')||{}).value||'').trim()||'Document';
     if(!name)return toast('Nom du signataire requis.');
+    var _td=tel.replace(/[^0-9+]/g,'');
+    if(!_td)return toast('Numéro de téléphone du signataire requis.');
+    if(_td.replace(/\D/g,'').length<8)return toast('Numéro de téléphone invalide.');
     var img=document.getElementById('sign-pad').toDataURL('image/png');
-    var ts=Date.now();var payload=doc+'|'+name+'|'+ts+'|'+img;
+    var ts=Date.now();var payload=doc+'|'+name+'|'+tel+'|'+ts+'|'+img;
     var finalize=function(hash){var e=piecesEntity(id);if(!e)return;e.signatures=e.signatures||[];
-      var sig={id:'sig-'+ts,doc:doc,signer:name,ts:ts,hash:hash,img:img};
+      var sig={id:'sig-'+ts,doc:doc,signer:name,tel:tel,ts:ts,hash:hash,img:img};
       e.signatures.push(sig);if(typeof save==='function')save();toast('Document signé électroniquement.');closeModal();signCertificat(sig);};
     try{crypto.subtle.digest('SHA-256',new TextEncoder().encode(payload)).then(function(buf){var h=Array.from(new Uint8Array(buf)).map(function(b){return('0'+b.toString(16)).slice(-2);}).join('');finalize(h);}).catch(function(){finalize('(empreinte indisponible)');});}
     catch(e){finalize('(empreinte indisponible)');}
@@ -4852,7 +4858,9 @@ window.modalDemandeView=function(id){
       +'<div style="font-weight:800;font-size:15px;letter-spacing:.5px">CERTIFICAT DE SIGNATURE ÉLECTRONIQUE</div>'
       +'<img src="'+sig.img+'" alt="signature" style="max-width:300px;width:70%;margin:16px auto 4px;display:block">'
       +'<div style="border-top:1px solid #999;width:70%;margin:0 auto 10px"></div>'
-      +'<div style="font-weight:700">'+esc(sig.signer)+'</div><div style="font-size:12px">'+esc(sig.doc)+'</div>'
+      +'<div style="font-weight:700">'+esc(sig.signer)+'</div>'
+      +(sig.tel?'<div style="font-size:11.5px;color:#444">Tél. : '+esc(sig.tel)+'</div>':'')
+      +'<div style="font-size:12px">'+esc(sig.doc)+'</div>'
       +'<div style="margin-top:12px;font-size:11px;color:#555">Signé électroniquement le '+esc(dt.toLocaleString('fr-FR'))+'</div>'
       +'<div style="font-size:10px;color:#777;word-break:break-all;margin-top:6px">Empreinte d\'intégrité SHA-256 :<br>'+esc(sig.hash)+'</div>'
       +'<div style="font-size:10px;color:#777;margin-top:4px">Identifiant de signature : '+esc(sig.id)+'</div>'
