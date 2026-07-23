@@ -20,7 +20,9 @@
  * 5. Déployer une nouvelle version.
  *
  * Requête client (POST JSON) :
- *   { action:'yousign', key:'…', filename:'contrat.pdf', pdfB64:'…',
+ *   { action:'yousign', key:'…', filename:'contrat.pdf',
+ *     html:'<html>…</html>'  (converti en PDF côté serveur)
+ *       — ou pdfB64:'…' (PDF déjà encodé, prioritaire si présent),
  *     signerNom:'Jean', signerPrenom:'Dupont',
  *     signerEmail:'jean@ex.fr', signerTel:'+33…' }
  * Réponse : { signatureRequestId:'…', signerUrl:'https://…' }  ou { error:'…' }
@@ -37,9 +39,15 @@ function handleYousign(e) {
     // 1) Créer la demande de signature (niveau avancé)
     var sr = post(API + '/signature_requests', H, { name: 'Signature ' + (body.filename || 'document'), delivery_mode: 'none', timezone: 'Europe/Paris' });
     var srId = sr.id;
-    // 2) Uploader le document
+    // 2) Uploader le document — PDF fourni, sinon HTML converti en PDF côté serveur
     var boundary = '----aem' + Date.now();
-    var blob = Utilities.newBlob(Utilities.base64Decode(body.pdfB64 || ''), 'application/pdf', body.filename || 'document.pdf');
+    var blob;
+    if (body.pdfB64) {
+      blob = Utilities.newBlob(Utilities.base64Decode(body.pdfB64), 'application/pdf', body.filename || 'document.pdf');
+    } else {
+      blob = Utilities.newBlob(body.html || '<html><body>Document</body></html>', 'text/html', 'doc.html')
+               .getAs('application/pdf').setName(body.filename || 'document.pdf');
+    }
     var payload = Utilities.newBlob(
       '--' + boundary + '\r\nContent-Disposition: form-data; name="nature"\r\n\r\nsignable_document\r\n' +
       '--' + boundary + '\r\nContent-Disposition: form-data; name="file"; filename="' + (body.filename || 'doc.pdf') + '"\r\n' +

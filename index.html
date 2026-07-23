@@ -878,6 +878,47 @@ var SMS_PROXY_SRC=[
  "}",
  "function json(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }"
 ].join('\n');
+/* ---------- Signature QUALIFIÉE via prestataire agréé (Yousign) — proxy Apps Script ---------- */
+function ysCfg(){DB.parametres=DB.parametres||{};DB.parametres.yousign=DB.parametres.yousign||{enabled:false};return DB.parametres.yousign;}
+function ysActif(){var c=ysCfg();var s=demSyncCfg();return !!(c&&c.enabled&&s&&s.url);}
+function ysSave(){var c=ysCfg();var en=document.getElementById('ys-enabled');if(en)c.enabled=en.checked;save();toast('Configuration Yousign enregistrée'+(c.enabled?' — signature qualifiée activée':''));if(typeof render==='function')render();}
+function ysCfgCard(){var c=ysCfg();var s=demSyncCfg();var ok=!!(s&&s.url);
+ return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Signature qualifiée (Yousign)</h2><span class="sub" style="margin-left:auto">'+(c.enabled?'<span class="tag green">Activé</span>':'<span class="tag">Désactivé</span>')+'</span></div><div class="card-b">'
+  +'<p class="hint" style="margin:0 0 10px">Signature à valeur probante maximale (eIDAS <b>avancée/qualifiée</b>) via un prestataire agréé. Le document est envoyé au signataire, qui signe après authentification par SMS. La clé API Yousign reste <b>sur le serveur</b>.</p>'
+  +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="ys-enabled" '+(c.enabled?'checked':'')+' style="width:auto;flex:none;margin:0"> Activer la signature qualifiée Yousign</label>'
+  +(ok?'':'<p class="hint" style="margin:8px 0 0;color:#b45309">Le point d\'accès n\'est pas configuré — renseigne d\'abord l\'URL du script (Demandes → ⚙ Configurer la boîte).</p>')
+  +'<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn btn-sm btn-pri" onclick="ysSave()">Enregistrer</button><button class="btn btn-sm btn-ghost" onclick="ysProxyDoc()">Voir le code serveur (proxy)</button></div>'
+  +'</div></div>';}
+function ysProxyDoc(){openModal('Code serveur — proxy Yousign (Google Apps Script)',
+  '<p class="hint" style="margin:0 0 10px">Le code complet se trouve dans le fichier <b>yousign-proxy.gs</b> du projet. Collez-le dans le script Apps Script, renseignez <b>YOUSIGN_KEY</b> et <b>YOUSIGN_BASE</b> en Propriétés du script, ajoutez le routage <code>action=yousign</code> dans doPost/doGet, puis redéployez. Le client envoie le document (HTML) ; le serveur le convertit en PDF et crée la demande de signature.</p>'
+  +'<textarea readonly style="width:100%;height:240px;font-family:monospace;font-size:11px;white-space:pre" onclick="this.select()">'+esc(YS_PROXY_HINT)+'</textarea>',
+  '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');}
+var YS_PROXY_HINT=[
+ "// Routage à ajouter :",
+ "//   doPost(e): var b=JSON.parse(e.postData.contents||'{}');",
+ "//             if(b.action==='yousign') return handleYousign(e);",
+ "//   doGet(e):  if(e.parameter.action==='yousign_status') return handleYousignStatus(e);",
+ "//",
+ "// Propriétés du script : SECRET_KEY, YOUSIGN_KEY,",
+ "//   YOUSIGN_BASE = https://api-sandbox.yousign.app/v3 (test)",
+ "//                  https://api.yousign.app/v3          (production)",
+ "//",
+ "// handleYousign : convertit le HTML reçu en PDF",
+ "//   (Utilities.newBlob(html,'text/html').getAs('application/pdf')),",
+ "//   crée la Signature Request, ajoute le signataire (auth SMS),",
+ "//   active la demande et renvoie { signerUrl }.",
+ "//",
+ "// Code complet et commenté : fichier yousign-proxy.gs du projet."
+].join('\n');
+/* Envoi d'une demande de signature qualifiée : construit le document HTML et le transmet au proxy. */
+function signDocHtml(id,objet,signer){var e=piecesEntity(id)||{};
+ return '<html><head><meta charset="utf-8"><style>body{font-family:Georgia,serif;font-size:13px;color:#111;padding:40px;line-height:1.6}h1{font-size:16px;text-align:center;letter-spacing:.5px}</style></head><body>'
+  +'<h1>'+esc(objet||('Document — dossier '+(e.ref||'')))+'</h1>'
+  +'<p>Dossier : <b>'+esc(e.ref||'')+'</b> — '+esc(e.denom||e.clientNom||'')+'</p>'
+  +'<p>Signataire : <b>'+esc(signer||e.clientNom||'')+'</b></p>'
+  +'<p style="margin-top:24px">Le présent document est soumis à la signature électronique qualifiée du signataire désigné ci-dessus, via le prestataire agréé Yousign, après authentification par code SMS.</p>'
+  +'<p style="margin-top:60px">Signature :</p>'
+  +'</body></html>';}
 function demSyncConfig(){var c=demSyncCfg();
   openModal('🔄 Boîte mail — synchronisation & envoi SMTP',
     '<div class="hint" style="margin-bottom:10px">Renseigne l\'adresse du script Google (déployé sur <b>aemconseil.sas@gmail.com</b>) et la clé secrète. LAST récupère alors <b>automatiquement</b> les mails et les transforme en demandes — à l\'ouverture, toutes les 3 minutes, et via « 🔄 Synchroniser la boîte ».</div>'
@@ -1859,6 +1900,7 @@ function pageParams(){
   <div class="card" style="margin-top:14px"><div class="card-h"><h2>Prestations</h2><span class="sub" style="margin-left:auto">Catalogue des prestations</span></div>
     <div class="card-b">${prestationsBloc()}</div></div>
   ${smsCfgCard()}
+  ${ysCfgCard()}
   ${rgpdCard()}
   <div class="flow-note" style="margin-top:8px">${svg(IC.gear)}<div>Prochains niveaux de la pyramide : <b>Devis auto</b>, <b>facturation & marge complète</b>, <b>signature + paiement</b>, <b>IA de réponse locale</b>, puis <b>stockage lourd, archivage 10 ans, multi-poste & mise en ligne</b>.</div></div>`;
 }
@@ -3047,7 +3089,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=116;
+var LAST_VER=117;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4899,7 +4941,12 @@ window.modalDemandeView=function(id){
     window._signClear=function(){ctx.clearRect(0,0,c.width,c.height);dirty=false;};
   }
   function signListHTML(id){var e=piecesEntity(id);var sigs=(e&&e.signatures)||[];if(!sigs.length)return '';
-    return '<div class="section-t" style="margin-top:14px">Signatures apposées ('+sigs.length+')</div>'+sigs.slice().reverse().map(function(s){return '<div class="ddoc-file"><span class="ddoc-name">✒️ '+esc(s.signer)+' — '+esc(s.doc)+' <span class="tsub">('+new Date(s.ts).toLocaleDateString('fr-FR')+')</span></span><button class="btn btn-sm btn-ghost" onclick="signVoir(\''+id+'\',\''+s.id+'\')">Voir le certificat</button></div>';}).join('');}
+    return '<div class="section-t" style="margin-top:14px">Signatures apposées ('+sigs.length+')</div>'+sigs.slice().reverse().map(function(s){
+      if(s.type==='qualifiee'){var stTag=s.status==='signe'?'<span class="tag green">Signé</span>':'<span class="tag" style="border-color:#d9a441">En attente</span>';
+        return '<div class="ddoc-file"><span class="ddoc-name">🛡 '+esc(s.signer)+' — '+esc(s.doc)+' <span class="tsub">(qualifiée · Yousign)</span> '+stTag+'</span>'
+          +(s.signerUrl?'<button class="btn btn-sm btn-ghost" onclick="window.open(\''+esc(s.signerUrl)+'\',\'_blank\',\'noopener\')">Ouvrir le lien</button>':'')
+          +'<button class="btn btn-sm btn-ghost" onclick="signYsCheck(\''+id+'\',\''+s.id+'\')">Vérifier le statut</button></div>';}
+      return '<div class="ddoc-file"><span class="ddoc-name">✒️ '+esc(s.signer)+' — '+esc(s.doc)+' <span class="tsub">('+new Date(s.ts).toLocaleDateString('fr-FR')+')</span></span><button class="btn btn-sm btn-ghost" onclick="signVoir(\''+id+'\',\''+s.id+'\')">Voir le certificat</button></div>';}).join('');}
   window.signModal=function(id){
     var e=piecesEntity(id)||{};var x=(typeof annonceData==='function')?annonceData(id):{};
     var _sn=(x.president&&x.president.indexOf('«')<0)?x.president:(e.clientNom||e.dirigeant||'');
@@ -4914,13 +4961,54 @@ window.modalDemandeView=function(id){
       +'<label style="margin-top:8px">Document / objet signé</label><input id="sign-doc" value="'+esc((x.denom&&x.denom.indexOf('«')<0?x.denom+' — ':'')+'Dossier '+(e.ref||''))+'" placeholder="Intitulé du document">'
       +'<label style="margin-top:8px">Signature — dessinez ci-dessous (souris ou tactile)</label>'
       +'<div class="sign-padwrap"><canvas id="sign-pad" width="620" height="180"></canvas></div>'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px"><button class="btn btn-sm btn-ghost" onclick="_signClear()">Effacer</button><span class="hint" style="margin:0">Signature électronique <b>simple renforcée</b> (eIDAS) : vérification du numéro par code, dessin, horodatage, empreinte SHA-256. Pour une signature <b>qualifiée</b> (valeur probante maximale), un prestataire agréé reste nécessaire.</span></div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px"><button class="btn btn-sm btn-ghost" onclick="_signClear()">Effacer</button><span class="hint" style="margin:0">Signature électronique <b>simple renforcée</b> (eIDAS) : vérification du numéro par code, dessin, horodatage, empreinte SHA-256.</span></div>'
+      +((typeof ysActif==='function'&&ysActif())?'<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)"><div class="section-t" style="margin-top:0">Signature qualifiée (valeur probante maximale)</div><p class="hint" style="margin:0 0 8px">Envoyer le document au signataire pour une <b>signature qualifiée Yousign</b> (authentification par SMS). Nécessite l\'e-mail et le téléphone du signataire.</p><button class="btn btn-sm" type="button" onclick="signQualifiee(\''+id+'\')">Demander une signature qualifiée (Yousign)</button><div id="sign-ys-st" class="hint" style="margin:6px 0 0"></div></div>':'')
       +signListHTML(id),
       '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="signSaver(\''+id+'\')">✒️ Signer le document</button>');
     setTimeout(signPadInit,30);
   };
   function signTelNorm(t){return (''+(t||'')).replace(/[^0-9+]/g,'');}
   function signOtpStatus(txt,ok){var s=document.getElementById('sign-otp-st');if(s){s.innerHTML=txt;s.style.color=ok?'#3f7d54':'';}}
+  function signYsStatus(txt,ok){var s=document.getElementById('sign-ys-st');if(s){s.innerHTML=txt;s.style.color=ok?'#3f7d54':'';}}
+  window.signQualifiee=function(id){
+    var e=piecesEntity(id);if(!e)return;
+    if(typeof ysActif!=='function'||!ysActif())return toast('Activez la signature qualifiée dans Paramètres.');
+    var name=((document.getElementById('sign-name')||{}).value||'').trim()||e.clientNom||'';
+    var tel=signTelNorm((document.getElementById('sign-tel')||{}).value);
+    var doc=((document.getElementById('sign-doc')||{}).value||'').trim()||'Document';
+    var mail=(typeof demReplyTo==='function'?demReplyTo(e):'')||e.clientEmail||'';
+    if(!name)return toast('Nom du signataire requis.');
+    if(!mail)return toast('E-mail du signataire requis pour la signature qualifiée.');
+    if(!tel||tel.replace(/\D/g,'').length<8)return toast('Téléphone du signataire requis (authentification SMS).');
+    var parts=name.split(/\s+/);var prenom=parts.shift()||'';var nom=parts.join(' ')||prenom;
+    var s=(typeof demSyncCfg==='function')?demSyncCfg():{};
+    if(!s||!s.url)return toast('Configure d\'abord la boîte (Demandes → Configurer la boîte).');
+    signYsStatus('Envoi de la demande de signature qualifiée…');
+    var body={action:'yousign',key:s.key||'',filename:(doc||'document').replace(/[^\w\-]+/g,'_')+'.pdf',html:signDocHtml(id,doc,name),signerPrenom:prenom,signerNom:nom,signerEmail:mail,signerTel:tel};
+    fetch(s.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),cache:'no-store'})
+      .then(function(r){return r.text();}).then(function(t){var j=null;try{j=JSON.parse(t);}catch(x){}
+        if(j&&(j.signerUrl||j.signatureRequestId)){
+          e.signatures=e.signatures||[];
+          e.signatures.push({id:'ys-'+Date.now(),type:'qualifiee',provider:'yousign',doc:doc,signer:name,tel:tel,email:mail,srId:j.signatureRequestId||'',signerUrl:j.signerUrl||'',status:'en_attente',ts:Date.now()});
+          if(typeof save==='function')save();
+          if(j.signerUrl){try{window.open(j.signerUrl,'_blank','noopener');}catch(x){}}
+          signYsStatus('✓ Demande créée. Lien de signature '+(j.signerUrl?'ouvert et ':'')+'envoyé au signataire par Yousign.',true);
+          toast('Demande de signature qualifiée envoyée.');
+          var lst=document.querySelector('#ov');if(lst){/* rafraîchir la liste */signModalRefreshList(id);}
+        } else { signYsStatus('Échec : '+((j&&j.error)||'réponse invalide du serveur. Vérifiez le proxy Yousign.')); }
+      }).catch(function(){signYsStatus('Envoi impossible — vérifiez la connexion et le proxy Yousign.');});
+  };
+  function signModalRefreshList(id){var box=document.querySelector('#ov .modal-b');if(!box)return;/* léger : re-render via signVoir non nécessaire */}
+  window.signYsCheck=function(id,sid){var e=piecesEntity(id);if(!e)return;var sig=((e.signatures)||[]).find(function(x){return x.id===sid;});if(!sig)return;
+    var s=(typeof demSyncCfg==='function')?demSyncCfg():{};if(!s||!s.url)return toast('Boîte non configurée.');
+    toast('Vérification du statut…');
+    var url=s.url+(s.url.indexOf('?')>=0?'&':'?')+'action=yousign_status&key='+encodeURIComponent(s.key||'')+'&id='+encodeURIComponent(sig.srId||'');
+    fetch(url,{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var j=null;try{j=JSON.parse(t);}catch(x){}
+      var st=j&&j.status?j.status:'';
+      if(st==='done'||st==='completed'){sig.status='signe';if(typeof save==='function')save();toast('✓ Document signé (qualifié).');}
+      else if(st){sig.status=st;if(typeof save==='function')save();toast('Statut : '+st);}
+      else toast('Statut indisponible — vérifiez le proxy Yousign.');
+    }).catch(function(){toast('Vérification impossible.');});};
   window.signOtpReset=function(){window._signOtp=null;window._signOtpTel='';window._signOtpOk=false;window._signOtpCanal='';window._signOtpTs=0;var w=document.getElementById('sign-otp-wrap');if(w)w.style.display='none';signOtpStatus('');};
   function signOtpGen(id){var tel=signTelNorm((document.getElementById('sign-tel')||{}).value);
     if(!tel||tel.replace(/\D/g,'').length<8){toast('Numéro de téléphone invalide.');return null;}
