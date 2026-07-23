@@ -799,6 +799,85 @@ function demIngest(mails){DB.parametres=DB.parametres||{};DB.parametres.mailsImp
   return {add:add,dup:dup};}
 function demSyncCfg(){DB.parametres=DB.parametres||{};DB.parametres.mailSync=DB.parametres.mailSync||{url:'',key:''};return DB.parametres.mailSync;}
 function demSyncSave(){var c=demSyncCfg();var u=document.getElementById('dem-sync-url'),k=document.getElementById('dem-sync-key'),sm=document.getElementById('dem-sync-smtp');if(u)c.url=(u.value||'').trim();if(k)c.key=(k.value||'').trim();if(sm)c.smtp=sm.checked?'1':'';save();closeModal();toast('Configuration enregistrée'+(c.smtp==='1'?' — envoi direct SMTP activé':''));demSyncMails(false);}
+/* ---------- Envoi SMS automatique via prestataire (proxy Apps Script — clés côté serveur) ---------- */
+function smsCfg(){DB.parametres=DB.parametres||{};DB.parametres.smsSync=DB.parametres.smsSync||{enabled:false,from:'AEM CONSEIL',provider:'twilio'};return DB.parametres.smsSync;}
+function smsActif(){var c=smsCfg();var s=demSyncCfg();return !!(c&&c.enabled&&s&&s.url);}
+/* Appelle le proxy (même webapp que les mails) avec action=sms ; le prestataire (Twilio/Brevo…) et sa clé restent dans le script serveur. */
+function sendSmsViaScript(to,text,cb){var s=(typeof demSyncCfg==='function')?demSyncCfg():{};var c=smsCfg();
+ if(!s||!s.url){if(cb)cb({error:'no_endpoint'});return;}
+ var base=s.url+(s.url.indexOf('?')>=0?'&':'?')+'action=sms&key='+encodeURIComponent(s.key||'')
+  +'&to='+encodeURIComponent(to)+'&text='+encodeURIComponent(text||'')+'&from='+encodeURIComponent(c.from||'');
+ var settled=false;function done(j){if(settled)return;settled=true;if(cb)cb(j||{error:'no_response'});}
+ try{fetch(base,{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var j=null;try{j=JSON.parse(t);}catch(e){}if(j)done(j);else if(typeof demJsonp==='function')demJsonp(base,done);else done(null);}).catch(function(){if(typeof demJsonp==='function')demJsonp(base,done);else done(null);});}
+ catch(e){done(null);}
+}
+function smsTest(){var to=((document.getElementById('sms-test-to')||{}).value||'').trim();if(!to)return toast('Renseigne un numéro de test.');
+ toast('Envoi du SMS de test…');sendSmsViaScript(to,'AEM CONSEIL — SMS de test. Votre configuration fonctionne.',function(j){
+  if(j&&j.sent)toast('✅ SMS de test envoyé à '+to);
+  else if(j&&j.error==='no_endpoint')toast('Configure d\'abord la boîte (Demandes → Configurer la boîte).');
+  else if(j&&j.error==='unauthorized')toast('Clé secrète incorrecte (proxy).');
+  else if(j&&j.error)toast('Erreur prestataire : '+j.error);
+  else toast('Envoi non confirmé — vérifie le script (action « sms ») et les clés du prestataire.');});}
+function smsSave(){var c=smsCfg();var en=document.getElementById('sms-enabled'),fr=document.getElementById('sms-from'),pv=document.getElementById('sms-provider');
+ if(en)c.enabled=en.checked;if(fr)c.from=(fr.value||'').trim()||'AEM CONSEIL';if(pv)c.provider=pv.value;save();toast('Configuration SMS enregistrée'+(c.enabled?' — envoi automatique activé':''));if(typeof render==='function')render();}
+function smsCfgCard(){var c=smsCfg();var s=demSyncCfg();var ok=!!(s&&s.url);
+ return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Envoi SMS automatique (prestataire)</h2><span class="sub" style="margin-left:auto">'+(c.enabled?'<span class="tag green">Activé</span>':'<span class="tag">Désactivé</span>')+'</span></div><div class="card-b">'
+  +'<p class="hint" style="margin:0 0 10px">Envoi automatique du code de vérification (OTP) et des SMS aux clients via un prestataire agréé. Les clés du prestataire restent <b>sur le serveur</b> (script Google) et ne sont jamais exposées dans le navigateur.</p>'
+  +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="sms-enabled" '+(c.enabled?'checked':'')+' style="width:auto;flex:none;margin:0"> Activer l\'envoi SMS automatique</label>'
+  +'<div class="grid g2" style="margin-top:10px">'
+  +'<div><label>Prestataire</label><select id="sms-provider"><option value="twilio"'+(c.provider==='twilio'?' selected':'')+'>Twilio</option><option value="brevo"'+(c.provider==='brevo'?' selected':'')+'>Brevo (ex-Sendinblue)</option><option value="smsmode"'+(c.provider==='smsmode'?' selected':'')+'>smsmode</option><option value="ovh"'+(c.provider==='ovh'?' selected':'')+'>OVH SMS</option><option value="generic"'+(c.provider==='generic'?' selected':'')+'>Générique (HTTP)</option></select></div>'
+  +'<div><label>Expéditeur (nom, 11 car. max)</label><input id="sms-from" maxlength="11" value="'+esc(c.from||'AEM CONSEIL')+'" placeholder="AEM CONSEIL"></div>'
+  +'</div>'
+  +'<div class="section-t">Test</div>'
+  +'<div style="display:flex;gap:6px;align-items:stretch"><input id="sms-test-to" type="tel" placeholder="Numéro de test (+33…)" style="flex:1"><button class="btn btn-sm btn-ghost" type="button" onclick="smsTest()">Envoyer un SMS de test</button></div>'
+  +(ok?'':'<p class="hint" style="margin:8px 0 0;color:#b45309">Le point d\'accès n\'est pas configuré — renseigne d\'abord l\'URL du script (Demandes → ⚙ Configurer la boîte). Le SMS utilise le même script que les e-mails.</p>')
+  +'<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn btn-sm btn-pri" onclick="smsSave()">Enregistrer</button><button class="btn btn-sm btn-ghost" onclick="smsProxyDoc()">Voir le code serveur (proxy)</button></div>'
+  +'</div></div>';}
+function smsProxyDoc(){openModal('Code serveur — proxy SMS (Google Apps Script)',
+  '<p class="hint" style="margin:0 0 10px">Collez ce bloc dans le <b>même script Google Apps Script</b> que la boîte mail, renseignez vos clés dans <b>Propriétés du script</b>, puis redéployez. Le client appelle <code>action=sms</code> ; la clé du prestataire ne quitte jamais le serveur.</p>'
+  +'<textarea readonly style="width:100%;height:280px;font-family:monospace;font-size:11px;white-space:pre" onclick="this.select()">'+esc(SMS_PROXY_SRC)+'</textarea>',
+  '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="(function(){var t=document.querySelector(\'#ov textarea\');if(t){t.select();document.execCommand(\'copy\');toast(\'Code copié\');}})()">Copier</button>');}
+var SMS_PROXY_SRC=[
+ "// === Proxy SMS AEM — à coller dans le script Apps Script de la boîte ===",
+ "// Dans doGet(e), AVANT le reste, ajoutez le routage :",
+ "//   if (e.parameter.action === 'sms') return handleSms(e);",
+ "// Propriétés du script (Fichier ▸ Paramètres du projet ▸ Propriétés) :",
+ "//   SECRET_KEY (= la clé secrète du client)",
+ "//   Twilio  : TWILIO_SID, TWILIO_TOKEN, TWILIO_FROM (n° ou nom d'expéditeur)",
+ "//   Brevo   : BREVO_KEY",
+ "",
+ "function handleSms(e){",
+ "  var P = PropertiesService.getScriptProperties();",
+ "  if ((e.parameter.key||'') !== P.getProperty('SECRET_KEY'))",
+ "    return json({error:'unauthorized'});",
+ "  var to = (e.parameter.to||'').replace(/[^0-9+]/g,'');",
+ "  var text = e.parameter.text||'';",
+ "  var from = e.parameter.from || 'AEM CONSEIL';",
+ "  if (!to || !text) return json({error:'missing_params'});",
+ "  var provider = P.getProperty('SMS_PROVIDER') || 'twilio';",
+ "  try {",
+ "    if (provider === 'brevo') {",
+ "      var r = UrlFetchApp.fetch('https://api.brevo.com/v3/transactionalSMS/sms', {",
+ "        method:'post', contentType:'application/json', muteHttpExceptions:true,",
+ "        headers:{'api-key': P.getProperty('BREVO_KEY')},",
+ "        payload: JSON.stringify({sender: from.substring(0,11), recipient: to, content: text})",
+ "      });",
+ "      var ok = r.getResponseCode() < 300;",
+ "      return json(ok ? {sent:true} : {error:'brevo_'+r.getResponseCode()});",
+ "    }",
+ "    // Défaut : Twilio",
+ "    var sid = P.getProperty('TWILIO_SID'), tok = P.getProperty('TWILIO_TOKEN');",
+ "    var res = UrlFetchApp.fetch('https://api.twilio.com/2010-04-01/Accounts/'+sid+'/Messages.json', {",
+ "      method:'post', muteHttpExceptions:true,",
+ "      headers:{Authorization:'Basic '+Utilities.base64Encode(sid+':'+tok)},",
+ "      payload:{To: to, From: P.getProperty('TWILIO_FROM')||from, Body: text}",
+ "    });",
+ "    var okT = res.getResponseCode() < 300;",
+ "    return json(okT ? {sent:true} : {error:'twilio_'+res.getResponseCode()});",
+ "  } catch (err) { return json({error:String(err)}); }",
+ "}",
+ "function json(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }"
+].join('\n');
 function demSyncConfig(){var c=demSyncCfg();
   openModal('🔄 Boîte mail — synchronisation & envoi SMTP',
     '<div class="hint" style="margin-bottom:10px">Renseigne l\'adresse du script Google (déployé sur <b>aemconseil.sas@gmail.com</b>) et la clé secrète. LAST récupère alors <b>automatiquement</b> les mails et les transforme en demandes — à l\'ouverture, toutes les 3 minutes, et via « 🔄 Synchroniser la boîte ».</div>'
@@ -1779,6 +1858,7 @@ function pageParams(){
   </div>
   <div class="card" style="margin-top:14px"><div class="card-h"><h2>Prestations</h2><span class="sub" style="margin-left:auto">Catalogue des prestations</span></div>
     <div class="card-b">${prestationsBloc()}</div></div>
+  ${smsCfgCard()}
   ${rgpdCard()}
   <div class="flow-note" style="margin-top:8px">${svg(IC.gear)}<div>Prochains niveaux de la pyramide : <b>Devis auto</b>, <b>facturation & marge complète</b>, <b>signature + paiement</b>, <b>IA de réponse locale</b>, puis <b>stockage lourd, archivage 10 ans, multi-poste & mise en ligne</b>.</div></div>`;
 }
@@ -2967,7 +3047,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=115;
+var LAST_VER=116;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4850,10 +4930,21 @@ window.modalDemandeView=function(id){
     var i=document.getElementById('sign-otp');if(i){i.value='';setTimeout(function(){i.focus();},20);}
     return {tel:tel,code:code};}
   window.signOtpSend=function(id){var g=signOtpGen(id);if(!g)return;
+    var telAff=(document.getElementById('sign-tel')||{}).value;
     var msg='AEM CONSEIL - Votre code de signature : '+g.code+' (valable pour signer votre document).';
-    try{var a=document.createElement('a');a.href='sms:'+g.tel+'?body='+encodeURIComponent(msg);a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},100);}catch(e){}
     window._signOtpCanal='SMS';
-    signOtpStatus('Code envoyé par SMS au <b>'+esc((document.getElementById('sign-tel')||{}).value)+'</b>. Saisissez-le ci-dessus pour vérifier le numéro.');};
+    if(typeof smsActif==='function'&&smsActif()){
+      signOtpStatus('Envoi du code par SMS…');
+      sendSmsViaScript(g.tel,msg,function(j){
+        if(j&&j.sent)signOtpStatus('Code envoyé automatiquement par SMS au <b>'+esc(telAff)+'</b>. Saisissez-le ci-dessus.');
+        else{ /* repli : ouvre l\'app SMS du poste */
+          try{var a=document.createElement('a');a.href='sms:'+g.tel+'?body='+encodeURIComponent(msg);a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},100);}catch(e){}
+          signOtpStatus('Envoi automatique indisponible ('+esc((j&&j.error)||'?')+') — SMS ouvert sur ce poste. Saisissez le code reçu.');}
+      });
+    } else {
+      try{var a=document.createElement('a');a.href='sms:'+g.tel+'?body='+encodeURIComponent(msg);a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},100);}catch(e){}
+      signOtpStatus('Code envoyé par SMS au <b>'+esc(telAff)+'</b>. Saisissez-le ci-dessus pour vérifier le numéro. <span style="color:#888">(Envoi automatique : Paramètres → Envoi SMS)</span>');
+    }};
   window.signOtpEmail=function(id){var g=signOtpGen(id);if(!g)return;
     var e=piecesEntity(id)||{};var mail=(typeof demReplyTo==='function'?demReplyTo(e):'')||e.clientEmail||'';
     if(!mail){signOtpStatus('Aucune adresse e-mail client connue — utilisez l\'envoi par SMS.');return;}
