@@ -684,7 +684,7 @@ const PAGES=[
   {id:'clients',lbl:'Clients',ic:'users',sub:'Fiches & informations'},
   {id:'facturation',lbl:'Facturation',ic:'card',sub:'Factures de vente'},
   {id:'devis',lbl:'Devis',ic:'quote',sub:'Devis automatiques'},
-  {id:'marge',lbl:'Rentabilité',ic:'trend',sub:'Rentabilité par dossier',soon:1},
+  {id:'marge',lbl:'Rentabilité',ic:'trend',sub:'Rentabilité par dossier'},
   {id:'params',lbl:'Paramètres',ic:'gear',sub:'Équipe & réglages'}
 ];
 const state={page:'demandes',q:''};
@@ -1858,21 +1858,44 @@ function saveService(id){
 function delService(id){if(!confirm('Supprimer ce service ?'))return;DB.services=DB.services.filter(s=>s.id!==id);save();closeModal();toast('Service supprimé');render();}
 
 /* ---------- MARGE (aperçu) ---------- */
+function margeDossier(d){
+  var hon=0,deb=0,com=0;
+  (d.serviceIds||[]).forEach(function(id){var v=svcById(id);if(!v)return;
+    if(v.type==='debours')deb+=(+v.debours||0);
+    else if(v.type==='commission')com+=(+v.prix||0);
+    else hon+=(+v.prix||0);
+    if(v.type!=='debours')deb+=(+v.debours||0);
+  });
+  return {hon:hon,deb:deb,com:com,marge:hon+com,ca:hon+deb+com};
+}
 function pageMarge(){
-  const ca=DB.dossiers.reduce((s,d)=>s+d.serviceIds.reduce((a,id)=>{const v=svcById(id);return a+(v?+v.prix||0:0);},0),0);
-  const deb=DB.dossiers.reduce((s,d)=>s+d.serviceIds.reduce((a,id)=>{const v=svcById(id);return a+(v?+v.debours||0:0);},0),0);
-  return `<div class="flow-note">${svg(IC.trend)}<div><b>Aperçu de marge (indicatif)</b> — calcul complet au Niveau 4 (facturation vente + achats/débours + commissions). Ici : honoraires forfait vs débours refacturés sur les dossiers en cours.</div></div>
-  <div class="grid g3" style="margin-top:18px">
-    ${kpi('euro',eur(ca),'Honoraires (forfait)','ok')}
+  var rows=DB.dossiers.map(function(d){return {d:d,m:margeDossier(d)};});
+  var hon=rows.reduce(function(s,r){return s+r.m.hon;},0);
+  var deb=rows.reduce(function(s,r){return s+r.m.deb;},0);
+  var com=rows.reduce(function(s,r){return s+r.m.com;},0);
+  var marge=hon+com, caTot=hon+deb+com;
+  var fv=(DB.factures||[]).filter(function(f){return f.type==='client';});
+  var facture=fv.reduce(function(s,f){return s+(+f.ttc||0);},0);
+  var encaisse=fv.filter(function(f){return f.statut==='Payée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
+  var restedu=fv.filter(function(f){return f.statut==='Impayée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
+  var tauxMarge=caTot?Math.round((marge/caTot)*100):0;
+  return `<div class="flow-note">${svg(IC.trend)}<div><b>Rentabilité par dossier</b> — la <b>marge nette du cabinet</b> = honoraires (forfaits) + commissions. Les <b>débours</b> (greffe, INPI, annonces) sont refacturés à l'identique : neutres pour la marge.</div></div>
+  <div class="grid g4" style="margin-top:16px">
+    ${kpi('trend',eur(marge),'Marge nette (honoraires + commissions)','ok')}
+    ${kpi('euro',eur(hon),'Honoraires (forfaits)','blue')}
     ${kpi('card',eur(deb),'Débours refacturés','warm')}
-    ${kpi('trend',eur(ca),'Marge honoraires','blue')}
+    ${kpi('quote',eur(com),'Commissions','blue')}
   </div>
-  <div class="card" style="margin-top:8px"><div class="card-h"><h2>Marge par dossier</h2></div><div class="card-b" style="padding:0">
-  <table><thead><tr><th>Réf.</th><th>Client(s)</th><th>Honoraires</th><th>Débours</th><th>Marge</th></tr></thead><tbody>
-  ${DB.dossiers.map(d=>{const h=d.serviceIds.reduce((a,id)=>{const v=svcById(id);return a+(v?+v.prix||0:0);},0);
-    const b=d.serviceIds.reduce((a,id)=>{const v=svcById(id);return a+(v?+v.debours||0:0);},0);
-    return `<tr><td class="tname">${d.ref}</td><td>${esc(dossierClients(d))}</td><td>${eur(h)}</td><td>${eur(b)}</td><td><b style="color:var(--ok)">${eur(h)}</b></td></tr>`;}).join('')||'<tr><td colspan="5" class="empty">Aucun dossier.</td></tr>'}
-  </tbody></table></div></div>`;
+  <div class="grid g3" style="margin-top:14px">
+    ${kpi('card',eur(facture),'Facturé (ventes TTC)')}
+    ${kpi('euro',eur(encaisse),'Encaissé','ok')}
+    ${kpi('trend',eur(restedu),'Reste dû',restedu?'hot':'')}
+  </div>
+  <div class="card" style="margin-top:8px"><div class="card-h"><h2>Marge par dossier</h2><span class="sub" style="margin-left:auto">Taux de marge global : <b>${tauxMarge} %</b></span></div><div class="card-b" style="padding:0">
+  <table><thead><tr><th>Réf.</th><th>Client(s)</th><th class="hide-sm">Honoraires</th><th class="hide-sm">Débours</th><th class="hide-sm">Commissions</th><th>Marge nette</th><th>Taux</th></tr></thead><tbody>
+  ${rows.map(function(r){var m=r.m;var tx=m.ca?Math.round((m.marge/m.ca)*100):0;
+    return `<tr><td class="tname">${esc(r.d.ref)}</td><td>${esc(dossierClients(r.d))}</td><td class="hide-sm">${eur(m.hon)}</td><td class="hide-sm">${eur(m.deb)}</td><td class="hide-sm">${eur(m.com)}</td><td><b style="color:var(--ok)">${eur(m.marge)}</b></td><td><span class="tag ${tx>=50?'ok':tx>0?'warm':'mut'}">${tx} %</span></td></tr>`;}).join('')||'<tr><td colspan="7" class="empty">Aucun dossier.</td></tr>'}
+  </tbody>${rows.length?`<tfoot><tr style="font-weight:700;border-top:2px solid var(--line)"><td colspan="2">Total (${rows.length} dossier${rows.length>1?'s':''})</td><td class="hide-sm">${eur(hon)}</td><td class="hide-sm">${eur(deb)}</td><td class="hide-sm">${eur(com)}</td><td style="color:var(--ok)">${eur(marge)}</td><td>${tauxMarge} %</td></tr></tfoot>`:''}</table></div></div>`;
 }
 
 /* ---------- PARAMS ---------- */
@@ -3176,7 +3199,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=118;
+var LAST_VER=119;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
