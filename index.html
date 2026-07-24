@@ -2004,7 +2004,8 @@ function pageFacturation(){
     ${kpi('trend',eur(du),t==='client'?'Impayé':'Reste à payer',t==='client'?'hot':'')}
     ${kpi('inbox',aRelancer,'À relancer (échues)',aRelancer?'hot':'')}
   </div>
-  <div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-pri" onclick="${t==='client'?'fvOpen()':'factModal()'}">${svg(IC.plus)}Ajouter</button>
+  <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center"><button class="btn btn-pri" onclick="${t==='client'?'fvOpen()':'factModal()'}">${svg(IC.plus)}Ajouter</button>
+    ${t==='client'&&list.length?`<button class="btn btn-ghost btn-sm" onclick="exportFacturesCSV()">Exporter (CSV)</button>`:''}
     <span class="tag blue">${list.length} facture(s)</span></div>
   <div class="card"><div class="card-b" style="padding:0">
   ${list.length?`<table><thead><tr><th>N°</th><th>${t==='client'?'Client':'Fournisseur'}</th><th class="hide-sm">Date</th><th>HT</th><th class="hide-sm">TVA</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>
@@ -2899,7 +2900,8 @@ function pageDevis(){
     +kpi('trend',tauxConv+' %','Taux de transformation','ok')
     +kpi('inbox',enAttente.length,'En attente de réponse',enAttente.length?'warm':'')
     +'</div>'
-    +'<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"><button class="btn btn-pri" onclick="fvOpenDevis()">'+svg(IC.plus)+'Nouveau devis</button>'
+    +'<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center"><button class="btn btn-pri" onclick="fvOpenDevis()">'+svg(IC.plus)+'Nouveau devis</button>'
+    +(nb?'<button class="btn btn-ghost btn-sm" onclick="exportDevisCSV()">Exporter (CSV)</button>':'')
     +'<span class="tag blue">'+nb+' devis</span>'+(trans.length?'<span class="tag green">'+trans.length+' transformé(s)</span>':'')+'</div>'
     +'<div class="card"><div class="card-b" style="padding:0">'
     +(nb?'<table><thead><tr><th>N°</th><th>Client</th><th class="hide-sm">Date</th><th class="hide-sm">Validité</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>'
@@ -3065,6 +3067,29 @@ function closeModal(){document.getElementById('ov').classList.remove('show');}
 function toast(m,dur){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>t.classList.remove('show'),dur||2200);}
 function exportDB(){const b=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');
   a.href=URL.createObjectURL(b);a.download='last-donnees-'+today()+'.json';a.click();}
+/* ---------- Export CSV (journal des ventes / devis / clients) ---------- */
+function csvCell(v){v=(v==null?'':''+v);if(/[";\n]/.test(v))v='"'+v.replace(/"/g,'""')+'"';return v;}
+function downloadCSV(filename,rows){
+  var txt='\uFEFF'+rows.map(function(r){return r.map(csvCell).join(';');}).join('\r\n');
+  var b=new Blob([txt],{type:'text/csv;charset=utf-8'});var u=URL.createObjectURL(b);
+  var a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(u);a.remove();},600);
+  if(typeof toast==='function')toast('Export CSV téléchargé');
+}
+function exportFacturesCSV(){
+  var list=(DB.factures||[]).filter(function(f){return f.type==='client';}).sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+  var rows=[['N°','Client','Date','Échéance','HT','TVA','TTC','Statut','Relances']];
+  list.forEach(function(f){rows.push([f.num,f.tiers,f.date||'',f.ech||'',(+f.ht||0).toFixed(2),(+f.tva||0).toFixed(2),(+f.ttc||0).toFixed(2),f.statut||'',(f.relances||[]).length]);});
+  var tHT=list.reduce(function(s,f){return s+(+f.ht||0);},0),tTVA=list.reduce(function(s,f){return s+(+f.tva||0);},0),tTTC=list.reduce(function(s,f){return s+(+f.ttc||0);},0);
+  rows.push(['','','','TOTAL',tHT.toFixed(2),tTVA.toFixed(2),tTTC.toFixed(2),'','']);
+  downloadCSV('journal-ventes-'+today()+'.csv',rows);
+}
+function exportDevisCSV(){
+  var list=(DB.devis||[]).slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+  var rows=[['N°','Client','Date','Validité','HT','TVA','TTC','Statut','Facture','Relances']];
+  list.forEach(function(d){rows.push([d.num,d.tiers,d.date||'',d.ech||'',(+d.ht||0).toFixed(2),(+d.tva||0).toFixed(2),(+d.ttc||0).toFixed(2),d.statut||'',d.factureNum||'',(d.relances||[]).length]);});
+  downloadCSV('devis-'+today()+'.csv',rows);
+}
 function importDB(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
   r.onload=e=>{try{DB=JSON.parse(e.target.result);save();toast('Données importées');render();}catch(_e){toast('Fichier invalide');}};r.readAsText(f);}
 
@@ -3238,7 +3263,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=120;
+var LAST_VER=121;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
