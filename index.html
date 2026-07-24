@@ -683,7 +683,7 @@ const PAGES=[
   {id:'espace',lbl:'Traitement',ic:'espace',sub:'Travail & génération des dossiers'},
   {id:'clients',lbl:'Clients',ic:'users',sub:'Fiches & informations'},
   {id:'facturation',lbl:'Facturation',ic:'card',sub:'Factures de vente'},
-  {id:'devis',lbl:'Devis',ic:'quote',sub:'Devis automatiques',soon:1},
+  {id:'devis',lbl:'Devis',ic:'quote',sub:'Devis automatiques'},
   {id:'marge',lbl:'Rentabilité',ic:'trend',sub:'Rentabilité par dossier',soon:1},
   {id:'params',lbl:'Paramètres',ic:'gear',sub:'Équipe & réglages'}
 ];
@@ -717,7 +717,7 @@ function render(){
   document.getElementById('psub').textContent=p.sub;
   const V=document.getElementById('view');
   V.innerHTML=({demandes:pageDemandes,clients:pageClientsEspace,espace:pageEspace,
-    services:pageServices,devis:pageSoon,facturation:pageFacturation,marge:pageMarge,params:pageParams}[state.page]||pageDemandes)();
+    services:pageServices,devis:pageDevis,facturation:pageFacturation,marge:pageMarge,params:pageParams}[state.page]||pageDemandes)();
   wireCards();
 }
 
@@ -2850,6 +2850,93 @@ function fvFitView(){var w=document.querySelector('#ov .fv-view-scroll');if(!w)r
 function fvPrint(id){var f=(DB.factures||[]).find(function(x){return x.id===id;});if(f&&f.doc&&typeof FactureVente!=='undefined'&&FactureVente.imprimerDoc)FactureVente.imprimerDoc(f.doc);}
 function factStatutSave(id){var f=(DB.factures||[]).find(function(x){return x.id===id;});if(!f)return;var el=document.getElementById('fa-statut');if(el)f.statut=el.value;save();closeModal();toast('Statut mis à jour');render();}
 
+/* ---------- DEVIS (établissement, suivi, transformation en facture) ---------- */
+function devisStatColor(s){return s==='Accepté'?'#3f7d54':s==='Refusé'?'#c0392b':s==='Transformé'?'#8e44ad':s==='Expiré'?'#b45309':'#5a6b8c';}
+function devisExpire(d){if(!d.ech)return false;if(d.statut==='Transformé'||d.statut==='Accepté')return false;return d.ech<today();}
+function fvOpenDevis(){
+  if(typeof FactureVente==='undefined')return toast('Module devis indisponible');
+  window._devisClientNom='';
+  FactureVente.ouvrir({societe:fvSociete(),clients:fvClients(),services:(DB.services||[]),numero:fvNextNumDevis(),initial:{type:'devis'},onCreer:fvOnCreerDevis});
+}
+function pageDevis(){
+  var list=(DB.devis||[]).slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+  list.forEach(function(d){if(devisExpire(d)&&d.statut==='Émis')d.statut='Expiré';});
+  var nb=list.length;
+  var totTTC=list.reduce(function(s,d){return s+(+d.ttc||0);},0);
+  var acc=list.filter(function(d){return d.statut==='Accepté';});
+  var trans=list.filter(function(d){return d.statut==='Transformé';});
+  var enAttente=list.filter(function(d){return d.statut==='Émis';});
+  var base=acc.length+trans.length+list.filter(function(d){return d.statut==='Refusé';}).length;
+  var tauxConv=base?Math.round((trans.length/base)*100):0;
+  return '<div class="grid g3" style="margin-bottom:14px">'
+    +kpi('quote',eur(totTTC),'Total devis (TTC)','blue')
+    +kpi('trend',tauxConv+' %','Taux de transformation','ok')
+    +kpi('inbox',enAttente.length,'En attente de réponse',enAttente.length?'warm':'')
+    +'</div>'
+    +'<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"><button class="btn btn-pri" onclick="fvOpenDevis()">'+svg(IC.plus)+'Nouveau devis</button>'
+    +'<span class="tag blue">'+nb+' devis</span>'+(trans.length?'<span class="tag green">'+trans.length+' transformé(s)</span>':'')+'</div>'
+    +'<div class="card"><div class="card-b" style="padding:0">'
+    +(nb?'<table><thead><tr><th>N°</th><th>Client</th><th class="hide-sm">Date</th><th class="hide-sm">Validité</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>'
+      +list.map(function(d){return '<tr onclick="devisView(\''+d.id+'\')" style="cursor:pointer">'
+        +'<td class="tname">'+esc(d.num)+'</td><td>'+esc(d.tiers)+'</td>'
+        +'<td class="hide-sm">'+frDate(d.date)+'</td><td class="hide-sm">'+(d.ech?frDate(d.ech):'—')+'</td>'
+        +'<td>'+eur(d.ttc)+'</td>'
+        +'<td><span class="pill-stat" style="color:'+devisStatColor(d.statut)+';border-color:'+devisStatColor(d.statut)+'55;background:'+devisStatColor(d.statut)+'18">'+esc(d.statut)+'</span></td>'
+        +'<td onclick="event.stopPropagation()"><button class="btn btn-sm btn-ghost" onclick="devisView(\''+d.id+'\')">Ouvrir</button></td></tr>';}).join('')
+      +'</tbody></table>'
+      :'<div class="empty">Aucun devis. Créez-en un avec « Nouveau devis ».</div>')
+    +'</div></div>';
+}
+function devisView(id){
+  var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;
+  if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();
+  var html=(d.doc&&typeof FactureVente!=='undefined'&&FactureVente.docHTML)?FactureVente.docHTML(d.doc):'<div class="hint" style="padding:14px">Aperçu indisponible.</div>';
+  var transformed=d.statut==='Transformé';
+  var actions='';
+  if(!transformed){
+    actions='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
+      +'<button class="btn btn-sm '+(d.statut==='Accepté'?'btn-pri':'btn-ghost')+'" onclick="devisSetStatut(\''+id+'\',\'Accepté\')">Marquer accepté</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="devisSetStatut(\''+id+'\',\'Refusé\')">Refusé</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="devisEnvoyer(\''+id+'\')">Envoyer au client</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="devisPrint(\''+id+'\')">Imprimer / PDF</button>'
+      +'</div>';
+  } else {
+    actions='<p class="hint" style="margin:10px 0 0;color:#8e44ad">Devis transformé en facture'+(d.factureNum?' <b>'+esc(d.factureNum)+'</b>':'')+'.</p>';
+  }
+  openModal('Devis '+esc(d.num),
+    '<div class="fv-view-scroll"><div class="inv">'+html+'</div></div>'+actions,
+    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+    +(transformed?'':'<button class="btn btn-danger" onclick="devisDel(\''+id+'\')">Supprimer</button>'
+      +'<button class="btn btn-pri" onclick="devisTransformer(\''+id+'\')">Transformer en facture</button>'));
+  setTimeout(fvFitView,40);
+}
+function devisSetStatut(id,st){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;d.statut=st;save();toast('Devis '+st.toLowerCase());devisView(id);}
+function devisDel(id){yc('Supprimer ce devis ?',function(){DB.devis=(DB.devis||[]).filter(function(x){return x.id!==id;});save();closeModal();toast('Devis supprimé');render();});}
+function devisPrint(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(d&&d.doc&&typeof FactureVente!=='undefined'&&FactureVente.imprimerDoc)FactureVente.imprimerDoc(d.doc);}
+function devisEnvoyer(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;
+  var mail=(d.doc&&d.doc.clientEmail)||'';
+  var sujet='AEM CONSEIL — Devis '+d.num;
+  var corps='Bonjour,\n\nVeuillez trouver votre devis '+d.num+' d\'un montant de '+eur(d.ttc)+' TTC'+(d.ech?(', valable jusqu\'au '+frDate(d.ech)):'')+'.\n\nNous restons à votre disposition.\n\nAEM CONSEIL';
+  if(mail&&typeof demEnvoiSilencieux==='function'&&demEnvoiSilencieux(mail,sujet,corps)){toast('Devis envoyé à '+mail);}
+  else{window.location.href='mailto:'+encodeURIComponent(mail)+'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);}
+}
+function devisTransformer(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;
+  yc('Transformer ce devis en facture de vente ?',function(){
+    if(!DB.factures)DB.factures=[];
+    var num=fvNextNum();
+    var fdoc=d.doc?JSON.parse(JSON.stringify(d.doc)):null;
+    if(fdoc){fdoc.type='facture';fdoc.numero=num;fdoc.date=today();}
+    DB.factures.unshift({id:uid('fa'),type:'client',num:num,tiers:d.tiers,date:today(),ech:d.ech,
+      ht:d.ht,tva:d.tva,ttc:d.ttc,taux:(d.doc&&d.doc.lignes&&d.doc.lignes[0]?+d.doc.lignes[0].taux:20),
+      statut:'Émise',doc:fdoc,devisId:d.id,createdAt:today()});
+    DB.seq=DB.seq||{};DB.seq.factVente=(DB.seq.factVente||1)+1;
+    d.statut='Transformé';d.factureNum=num;
+    save();closeModal();toast('Facture '+num+' créée depuis le devis');state.page='facturation';render();
+  });
+}
+/* helper de confirmation (compat) */
+function yc(msg,ok){if(typeof confirm==='function'){if(confirm(msg))ok();}else ok();}
+
 /* ---------- TIERS (Clients & Fournisseurs) ---------- */
 function pageTiers(){
   const t=state.tiersTab||'clients';
@@ -3089,7 +3176,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=117;
+var LAST_VER=118;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
