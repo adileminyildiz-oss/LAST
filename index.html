@@ -1672,9 +1672,27 @@ function clSalAdd(id){var c=clientById(id);if(!c)return;var g=function(x){var e=
   c.salaries=c.salaries||[];c.salaries.push({nom:nom,poste:g('sal-poste'),contrat:(document.getElementById('sal-contrat')||{}).value||'CDI',debut:g('sal-debut'),salaire:g('sal-salaire')});
   save();render();toast('Salarié ajouté');}
 function clSalDel(id,i){var c=clientById(id);if(!c||!c.salaries)return;c.salaries.splice(i,1);save();render();}
+function clFacturation(c){
+  var nom=((c.prenom||'')+' '+(c.nom||'')).trim();
+  var devis=(DB.devis||[]).filter(function(d){return d.tiers===nom;});
+  var facs=(DB.factures||[]).filter(function(f){return f.type==='client'&&f.tiers===nom;});
+  if(!devis.length&&!facs.length)return '';
+  var caFact=facs.reduce(function(s,f){return s+(+f.ttc||0);},0);
+  var enc=facs.filter(function(f){return f.statut==='Payée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
+  var imp=facs.filter(function(f){return f.statut==='Impayée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
+  var h='<div class="cl-sec" style="margin-top:16px">Facturation & devis</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<span class="tag blue">Facturé : '+eur(caFact)+'</span><span class="tag ok">Encaissé : '+eur(enc)+'</span>'
+    +(imp?'<span class="tag hot">Impayé : '+eur(imp)+'</span>':'')+'</div>';
+  if(facs.length)h+='<table class="cl-tbl"><thead><tr><th>Facture</th><th>Date</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>'
+    +facs.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');}).map(function(f){return '<tr><td>'+esc(f.num)+'</td><td>'+(f.date?frDate(f.date):'—')+'</td><td>'+eur(f.ttc)+'</td><td>'+esc(f.statut||'')+'</td><td><button class="btn btn-sm btn-ghost" onclick="closeModal();setTimeout(function(){fvView(\''+f.id+'\');},20)">Ouvrir</button></td></tr>';}).join('')+'</tbody></table>';
+  if(devis.length)h+='<table class="cl-tbl" style="margin-top:8px"><thead><tr><th>Devis</th><th>Date</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>'
+    +devis.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');}).map(function(d){return '<tr><td>'+esc(d.num)+'</td><td>'+(d.date?frDate(d.date):'—')+'</td><td>'+eur(d.ttc)+'</td><td>'+esc(d.statut||'')+'</td><td><button class="btn btn-sm btn-ghost" onclick="closeModal();setTimeout(function(){devisView(\''+d.id+'\');},20)">Ouvrir</button></td></tr>';}).join('')+'</tbody></table>';
+  return h;
+}
 function clTabEtat(c){
   var doss=DB.dossiers.filter(function(d){return d.clientIds.includes(c.id);});
-  if(!doss.length)return '<div class="empty" style="padding:12px">Aucun dossier ouvert pour ce client.</div>';
+  if(!doss.length)return '<div class="empty" style="padding:12px">Aucun dossier ouvert pour ce client.</div>'+clFacturation(c);
   return '<div class="cl-sec">Dossiers & avancement</div>'+doss.map(function(d){
     var req=(typeof espDocsRequis==='function')?espDocsRequis(d):[];var st=d.docState||{};
     var prets=req.filter(function(dc){return st[dc.k]&&st[dc.k].ts;}).length;
@@ -1684,7 +1702,7 @@ function clTabEtat(c){
     return '<div class="cl-etat-row"><div class="cl-etat-top"><b>'+esc(d.ref)+'</b> <span class="tag '+cls+'">'+lbl+'</span> <span class="tag mut">'+esc(d.statut||'—')+'</span></div>'
       +'<div class="cl-etat-meta">Documents : '+complets+'/'+(req.length||0)+' complets · '+prets+' préparé(s)</div>'
       +'<button class="btn btn-sm" onclick="clOuvrirDossier(\''+d.id+'\')">Ouvrir le dossier</button></div>';
-  }).join('');
+  }).join('')+clFacturation(c);
 }
 function clOuvrirDossier(id){state.page='espace';state.espaceDossier=id;render();}
 function modalClient(id){
@@ -3303,7 +3321,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=122;
+var LAST_VER=123;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
