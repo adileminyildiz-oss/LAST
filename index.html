@@ -1996,11 +1996,13 @@ function pageFacturation(){
   const list=(DB.factures||[]).filter(f=>f.type===t).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const totTVA=list.reduce((s,f)=>s+(+f.tva||0),0), totTTC=list.reduce((s,f)=>s+(+f.ttc||0),0);
   const du=list.filter(f=>f.statut==='Impayée'||f.statut==='À payer').reduce((s,f)=>s+(+f.ttc||0),0);
+  const aRelancer=list.filter(f=>f.statut==='Impayée'&&relanceEnRetard(f)).length;
   return `
-  <div class="grid g3" style="margin-bottom:14px">
+  <div class="grid g4" style="margin-bottom:14px">
     ${kpi('card',eur(totTTC),'Total TTC — '+(t==='client'?'ventes':'achats'))}
     ${kpi('euro',eur(totTVA),'TVA')}
     ${kpi('trend',eur(du),t==='client'?'Impayé':'Reste à payer',t==='client'?'hot':'')}
+    ${kpi('inbox',aRelancer,'À relancer (échues)',aRelancer?'hot':'')}
   </div>
   <div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-pri" onclick="${t==='client'?'fvOpen()':'factModal()'}">${svg(IC.plus)}Ajouter</button>
     <span class="tag blue">${list.length} facture(s)</span></div>
@@ -2009,8 +2011,8 @@ function pageFacturation(){
   ${list.map(f=>`<tr onclick="${t==='client'?"fvView('"+f.id+"')":"factModal('"+f.id+"')"}" style="cursor:pointer">
     <td class="tname">${esc(f.num)}</td><td>${esc(f.tiers)}</td><td class="hide-sm">${frDate(f.date)}</td>
     <td>${eur(f.ht)}</td><td class="hide-sm">${eur(f.tva)}</td><td>${eur(f.ttc)}</td>
-    <td><span class="pill-stat" style="color:${factStatColor(f.statut)};border-color:${factStatColor(f.statut)}55;background:${factStatColor(f.statut)}18">${esc(f.statut)}</span></td>
-    <td onclick="event.stopPropagation()"><button class="btn btn-sm btn-ghost" onclick="${t==='client'?"fvView('"+f.id+"')":"factModal('"+f.id+"')"}">Ouvrir</button></td></tr>`).join('')}
+    <td><span class="pill-stat" style="color:${factStatColor(f.statut)};border-color:${factStatColor(f.statut)}55;background:${factStatColor(f.statut)}18">${esc(f.statut)}</span>${(f.statut==='Impayée'&&relanceEnRetard(f))?' <span class="tag hot" style="font-size:9px">échue</span>':''}${(f.relances&&f.relances.length)?' <span class="tsub">'+f.relances.length+'×</span>':''}</td>
+    <td onclick="event.stopPropagation()">${(t==='client'&&f.statut==='Impayée')?"<button class=\"btn btn-sm btn-ghost\" onclick=\"factRelancer('"+f.id+"')\">Relancer</button> ":''}<button class="btn btn-sm btn-ghost" onclick="${t==='client'?"fvView('"+f.id+"')":"factModal('"+f.id+"')"}">Ouvrir</button></td></tr>`).join('')}
   </tbody></table>`:`<div class="empty">Aucune facture ${t==='client'?'client (ventes)':'fournisseur (achats/débours)'}. Ajoutez-en une.</div>`}
   </div></div>`;
 }
@@ -2865,6 +2867,7 @@ function fvView(id){
     +'<label>Statut</label><select id="fa-statut">'+['Émise','Payée','Impayée'].map(function(s){return '<option '+(f.statut===s?'selected':'')+'>'+s+'</option>';}).join('')+'</select>',
     '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
     +'<button class="btn btn-danger" onclick="factDel(\''+id+'\')">Supprimer</button>'
+    +(f.statut==='Impayée'?'<button class="btn btn-ghost" onclick="factRelancer(\''+id+'\')">Relancer'+((f.relances&&f.relances.length)?' ('+f.relances.length+')':'')+'</button>':'')
     +'<button class="btn" onclick="fvPrint(\''+id+'\')">Imprimer</button>'
     +'<button class="btn btn-pri" onclick="factStatutSave(\''+id+'\')">Enregistrer</button>');
   setTimeout(fvFitView,40);
@@ -2904,7 +2907,7 @@ function pageDevis(){
         +'<td class="tname">'+esc(d.num)+'</td><td>'+esc(d.tiers)+'</td>'
         +'<td class="hide-sm">'+frDate(d.date)+'</td><td class="hide-sm">'+(d.ech?frDate(d.ech):'—')+'</td>'
         +'<td>'+eur(d.ttc)+'</td>'
-        +'<td><span class="pill-stat" style="color:'+devisStatColor(d.statut)+';border-color:'+devisStatColor(d.statut)+'55;background:'+devisStatColor(d.statut)+'18">'+esc(d.statut)+'</span></td>'
+        +'<td><span class="pill-stat" style="color:'+devisStatColor(d.statut)+';border-color:'+devisStatColor(d.statut)+'55;background:'+devisStatColor(d.statut)+'18">'+esc(d.statut)+'</span>'+((d.relances&&d.relances.length)?' <span class="tsub">'+d.relances.length+'× relancé</span>':'')+'</td>'
         +'<td onclick="event.stopPropagation()"><button class="btn btn-sm btn-ghost" onclick="devisView(\''+d.id+'\')">Ouvrir</button></td></tr>';}).join('')
       +'</tbody></table>'
       :'<div class="empty">Aucun devis. Créez-en un avec « Nouveau devis ».</div>')
@@ -2921,6 +2924,7 @@ function devisView(id){
       +'<button class="btn btn-sm '+(d.statut==='Accepté'?'btn-pri':'btn-ghost')+'" onclick="devisSetStatut(\''+id+'\',\'Accepté\')">Marquer accepté</button>'
       +'<button class="btn btn-sm btn-ghost" onclick="devisSetStatut(\''+id+'\',\'Refusé\')">Refusé</button>'
       +'<button class="btn btn-sm btn-ghost" onclick="devisEnvoyer(\''+id+'\')">Envoyer au client</button>'
+      +((d.statut==='Émis'||d.statut==='Expiré')?'<button class="btn btn-sm btn-ghost" onclick="devisRelancer(\''+id+'\')">Relancer'+((d.relances&&d.relances.length)?' ('+d.relances.length+')':'')+'</button>':'')
       +'<button class="btn btn-sm btn-ghost" onclick="devisPrint(\''+id+'\')">Imprimer / PDF</button>'
       +'</div>';
   } else {
@@ -2959,6 +2963,41 @@ function devisTransformer(id){var d=(DB.devis||[]).find(function(x){return x.id=
 }
 /* helper de confirmation (compat) */
 function yc(msg,ok){if(typeof confirm==='function'){if(confirm(msg))ok();}else ok();}
+
+/* ---------- RELANCES (devis en attente & factures impayées) ---------- */
+function docClientEmail(o){
+  if(o&&o.doc&&o.doc.clientEmail)return o.doc.clientEmail;
+  var nom=(o&&o.tiers)||'';var c=(DB.clients||[]).find(function(x){return ((x.prenom+' '+x.nom).trim()===nom)||x.nom===nom;});
+  return c?(c.email||''):'';
+}
+function relanceEnRetard(o){if(!o||!o.ech)return false;return o.ech<today();}
+function relanceInfo(o){var r=(o&&o.relances)||[];return {n:r.length,last:r.length?r[r.length-1].ts:''};}
+function factRelancer(id){var f=(DB.factures||[]).find(function(x){return x.id===id;});if(!f)return;
+  var mail=docClientEmail(f);if(!mail)return toast('Aucune adresse e-mail — renseignez la fiche client.');
+  var retard=relanceEnRetard(f);var info=relanceInfo(f);
+  var sujet='AEM CONSEIL — '+(info.n?'Relance n°'+(info.n+1)+' — ':'')+'Facture '+f.num+(retard?' (échue)':'');
+  var corps='Bonjour,\n\nSauf erreur de notre part, la facture '+f.num+' d\'un montant de '+eur(f.ttc)+' TTC'
+    +(f.ech?(', échue le '+frDate(f.ech)):'')+' demeure impayée à ce jour.\n\n'
+    +'Nous vous remercions de bien vouloir procéder à son règlement dans les meilleurs délais.\n\nCordialement,\nAEM CONSEIL';
+  var sent=(typeof demEnvoiSilencieux==='function')&&demEnvoiSilencieux(mail,sujet,corps);
+  f.relances=f.relances||[];f.relances.push({ts:Date.now(),canal:sent?'email':'mailto'});save();
+  if(sent){toast('Relance envoyée à '+mail);}
+  else{window.location.href='mailto:'+encodeURIComponent(mail)+'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);}
+  if(document.getElementById('ov')&&document.getElementById('ov').classList.contains('show'))fvView(id);else render();
+}
+function devisRelancer(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;
+  var mail=docClientEmail(d);if(!mail)return toast('Aucune adresse e-mail — renseignez la fiche client.');
+  var info=relanceInfo(d);
+  var sujet='AEM CONSEIL — '+(info.n?'Relance n°'+(info.n+1)+' — ':'')+'Devis '+d.num;
+  var corps='Bonjour,\n\nNous revenons vers vous concernant le devis '+d.num+' d\'un montant de '+eur(d.ttc)+' TTC'
+    +(d.ech?(', valable jusqu\'au '+frDate(d.ech)):'')+'.\n\n'
+    +'N\'hésitez pas à nous faire part de votre décision ou de vos questions.\n\nCordialement,\nAEM CONSEIL';
+  var sent=(typeof demEnvoiSilencieux==='function')&&demEnvoiSilencieux(mail,sujet,corps);
+  d.relances=d.relances||[];d.relances.push({ts:Date.now(),canal:sent?'email':'mailto'});save();
+  if(sent){toast('Relance envoyée à '+mail);}
+  else{window.location.href='mailto:'+encodeURIComponent(mail)+'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);}
+  if(document.getElementById('ov')&&document.getElementById('ov').classList.contains('show'))devisView(id);else render();
+}
 
 /* ---------- TIERS (Clients & Fournisseurs) ---------- */
 function pageTiers(){
@@ -3199,7 +3238,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=119;
+var LAST_VER=120;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
