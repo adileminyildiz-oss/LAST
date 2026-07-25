@@ -3212,12 +3212,16 @@ function fvOpenDevis(){
   FactureVente.ouvrir({societe:fvSociete(),clients:fvClients(),services:(DB.services||[]),numero:fvNextNumDevis(),initial:{type:'devis'},onCreer:fvOnCreerDevis});
 }
 function devisSetFilter(v){state.devisFilter=v;render();}
+function devisSort(col){var s=state.devisSort||{col:'date',dir:-1};if(s.col===col){s.dir=-s.dir;}else{s.col=col;s.dir=(col==='date'||col==='ech'||col==='ttc')?-1:1;}state.devisSort=s;render();}
 function pageDevis(){
   var all=(DB.devis||[]).slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
   all.forEach(function(d){if(devisExpire(d)&&d.statut==='Émis')d.statut='Expiré';});
   var fil=state.devisFilter||'tous';
   var dmatch=function(d,k){return k==='tous'?true:(k==='emis'?d.statut==='Émis':k==='acceptes'?d.statut==='Accepté':k==='transformes'?d.statut==='Transformé':k==='refuses'?(d.statut==='Refusé'||d.statut==='Expiré'):true);};
-  var list=all.filter(function(d){return dmatch(d,fil);});
+  var dso=state.devisSort||{col:'date',dir:-1};
+  var dacc={num:function(d){return d.num||'';},tiers:function(d){return d.tiers||'';},date:function(d){return d.date||'';},ech:function(d){return d.ech||'';},ttc:function(d){return +d.ttc||0;},statut:function(d){return d.statut||'';}};
+  var list=all.filter(function(d){return dmatch(d,fil);}).slice().sort(function(a,b){var va=dacc[dso.col]?dacc[dso.col](a):'',vb=dacc[dso.col]?dacc[dso.col](b):'';var c=(typeof va==='number')?(va-vb):(''+va).localeCompare(''+vb);return c*dso.dir;});
+  var dfh=function(col,label,cls){return '<th'+(cls?' class="'+cls+'"':'')+' style="cursor:pointer;user-select:none;white-space:nowrap" onclick="devisSort(\''+col+'\')">'+label+(dso.col===col?(dso.dir>0?' ▲':' ▼'):'')+'</th>';};
   var dcnt=function(k){return all.filter(function(d){return dmatch(d,k);}).length;};
   var dchip=function(k,lbl){return '<button class="fchip'+(fil===k?' on':'')+'" onclick="devisSetFilter(\''+k+'\')">'+lbl+' <span class="fchip-n">'+dcnt(k)+'</span></button>';};
   var dfiltres='<div class="fchips">'+dchip('tous','Tous')+dchip('emis','En attente')+dchip('acceptes','Acceptés')+dchip('transformes','Transformés')+dchip('refuses','Refusés/Expirés')+'</div>';
@@ -3238,7 +3242,7 @@ function pageDevis(){
     +'<span class="tag blue">'+nb+(fil!=='tous'?'/'+all.length:'')+' devis</span>'+(trans.length?'<span class="tag green">'+trans.length+' transformé(s)</span>':'')+'</div>'
     +(all.length?dfiltres:'')
     +'<div class="card"><div class="card-b" style="padding:0">'
-    +(nb?'<table><thead><tr><th>N°</th><th>Client</th><th class="hide-sm">Date</th><th class="hide-sm">Validité</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>'
+    +(nb?'<table><thead><tr>'+dfh('num','N°')+dfh('tiers','Client')+dfh('date','Date','hide-sm')+dfh('ech','Validité','hide-sm')+dfh('ttc','TTC')+dfh('statut','Statut')+'<th></th></tr></thead><tbody>'
       +list.map(function(d){return '<tr onclick="devisView(\''+d.id+'\')" style="cursor:pointer">'
         +'<td class="tname">'+esc(d.num)+'</td><td>'+esc(d.tiers)+'</td>'
         +'<td class="hide-sm">'+frDate(d.date)+'</td><td class="hide-sm">'+(d.ech?frDate(d.ech):'—')+'</td>'
@@ -3622,7 +3626,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=138;
+var LAST_VER=139;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
