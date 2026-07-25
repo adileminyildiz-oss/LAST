@@ -3486,7 +3486,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=129;
+var LAST_VER=130;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -5330,7 +5330,58 @@ window.modalDemandeView=function(id){
      +'<button class="tr-b" onclick="annonceModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 8h3v9a2 2 0 0 1-2 2M8 9h6M8 12h6M8 15h4"/></svg><span>Annonce légale</span></button>'
      +'<button class="tr-b" onclick="acteModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span>Acte de modification</span></button>'
      +'<button class="tr-b" onclick="signModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-1 4-9 7-9s2 6 4 6 2-3 4-3M3 21h18"/></svg><span>Signature électronique</span></button>'
+     +'<button class="tr-b" onclick="espSuiviClient(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M21 12a9 9 0 1 1-6.2-8.5"/></svg><span>Fiche de suivi (client)</span></button>'
      +'</div></div></div>';
+  };
+  window.espSuiviClient=function(id){
+    var d=(DB.dossiers||[]).find(function(x){return x.id===id;})||piecesEntity(id);if(!d)return;
+    var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d;dm.docs=dm.docs||{};dm.piecesRecues=dm.piecesRecues||{};
+    var recu=function(k){return ((dm.docs[k]||[]).length>0)||dm.piecesRecues[k]===true;};
+    var pieces=(typeof piecesRequises==='function')?piecesRequises(d):[];
+    var got=pieces.filter(function(p){return recu(p.k);}).length;
+    var prets=(typeof espTousPrets==='function')&&espTousPrets(d);
+    var x=(typeof annonceData==='function')?annonceData(id):{};
+    var soc=(x.denom&&x.denom.indexOf('«')<0)?x.denom:((d.denom)||(typeof dossierClients==='function'?dossierClients(d):'')||'');
+    var formalite=(dm.serviceSouhaite||dm.service||d.service||'Formalité');
+    var statut,scls;
+    if(prets){statut='Documents prêts — dépôt en cours';scls='ok';}
+    else if(pieces.length&&got===pieces.length){statut='Pièces complètes — préparation des documents';scls='blue';}
+    else if(got>0){statut='En cours — '+got+'/'+pieces.length+' pièce(s) reçue(s)';scls='warm';}
+    else {statut='À démarrer — en attente de vos pièces';scls='warm';}
+    var now=new Date();
+    var rows=pieces.map(function(p){var ok=recu(p.k);
+      return '<tr><td style="text-align:center;width:26px">'+(ok?'✓':'○')+'</td><td>'+esc(p.label)+'</td><td style="text-align:right;color:'+(ok?'#3f7d54':'#b45309')+'">'+(ok?'Reçue':'En attente')+'</td></tr>';}).join('');
+    openModal('Fiche de suivi — '+esc(d.ref||''),
+      '<div class="doc-gen"><div class="st-doc"><div class="st-page" style="padding:26px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-weight:800;font-size:14px;letter-spacing:.5px">SUIVI DE VOTRE DOSSIER</div><div style="font-size:11px;color:#666;margin-top:2px">'+esc((DB.params&&DB.params.cabinet)||'AEM CONSEIL')+'</div></div><div style="font-size:11px;color:#666;text-align:right">Réf. '+esc(d.ref||'')+'<br>'+esc(now.toLocaleDateString('fr-FR'))+'</div></div>'
+      +'<hr style="border:none;border-top:1px solid #ddd;margin:14px 0">'
+      +'<table style="width:100%;font-size:12px;border-collapse:collapse"><tbody>'
+      +'<tr><td style="padding:3px 0;color:#666;width:130px">Société / client</td><td style="font-weight:600">'+esc(soc||'—')+'</td></tr>'
+      +'<tr><td style="padding:3px 0;color:#666">Formalité</td><td>'+esc(formalite)+'</td></tr>'
+      +'<tr><td style="padding:3px 0;color:#666">Statut</td><td><b>'+esc(statut)+'</b></td></tr>'
+      +'</tbody></table>'
+      +'<div style="font-weight:700;font-size:12px;margin:16px 0 6px">Pièces à fournir</div>'
+      +(pieces.length?('<table style="width:100%;font-size:11.5px;border-collapse:collapse">'+rows+'</table>'):'<div style="font-size:11.5px;color:#777">Aucune pièce spécifique requise.</div>')
+      +'<div style="font-size:10px;color:#888;margin-top:18px">Ce document récapitule l\'avancement de votre dossier auprès de '+esc((DB.params&&DB.params.cabinet)||'AEM CONSEIL')+'. Pour toute question, contactez votre conseiller.</div>'
+      +'</div></div></div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+      +(dm.clientEmail||d.clientEmail?'<button class="btn btn-ghost" onclick="espSuiviEnvoyer(\''+id+'\')">Envoyer au client</button>':'')
+      +'<button class="btn btn-pri" onclick="signImprimer()">Imprimer / PDF</button>');
+  };
+  window.espSuiviEnvoyer=function(id){
+    var d=(DB.dossiers||[]).find(function(x){return x.id===id;})||piecesEntity(id);if(!d)return;
+    var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d;
+    var mail=(dm&&dm.clientEmail)||d.clientEmail||'';if(!mail)return toast('Aucune adresse e-mail client.');
+    var pieces=(typeof piecesRequises==='function')?piecesRequises(d):[];
+    dm.docs=dm.docs||{};dm.piecesRecues=dm.piecesRecues||{};
+    var manque=pieces.filter(function(p){return !(((dm.docs[p.k]||[]).length>0)||dm.piecesRecues[p.k]===true);});
+    var cab=(DB.params&&DB.params.cabinet)||'AEM CONSEIL';
+    var corps='Bonjour,\n\nVoici le suivi de votre dossier '+(d.ref||'')+' ('+((dm.serviceSouhaite||'formalité'))+').\n\n'
+      +(manque.length?('Pièces encore attendues :\n'+manque.map(function(p){return '- '+p.label;}).join('\n')):'Toutes les pièces ont été reçues, votre dossier est en cours de traitement.')
+      +'\n\nCordialement,\n'+cab;
+    var sent=(typeof demEnvoiSilencieux==='function')&&demEnvoiSilencieux(mail,cab+' — Suivi de votre dossier '+(d.ref||''),corps);
+    if(typeof logAudit==='function')logAudit('Suivi envoyé au client',(d.ref||'')+' — '+mail);if(typeof save==='function')save();
+    if(sent)toast('Suivi envoyé à '+mail);else{window.location.href='mailto:'+encodeURIComponent(mail)+'?subject='+encodeURIComponent(cab+' — Suivi de votre dossier')+'&body='+encodeURIComponent(corps);}
   };
   /* ---------- Signature électronique simple (dessin + horodatage + empreinte SHA-256) ---------- */
   function signPadInit(){
