@@ -99,6 +99,8 @@ kbd{display:inline-block;min-width:16px;text-align:center;padding:2px 6px;font:6
 .fchip.on{background:linear-gradient(180deg,#be123c,#9f1239);color:#fff;border-color:#9f1239}
 .fchip-n{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:9px;background:rgba(0,0,0,.08);color:inherit;font-size:10px}
 .fchip.on .fchip-n{background:rgba(255,255,255,.25)}
+.integ-row{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid #f0e8ea}
+.integ-row:first-child{border-top:0}
 .dash-alert{display:flex;align-items:center;gap:11px;margin-bottom:14px;padding:11px 14px;border-radius:11px;background:linear-gradient(90deg,#fff1f4,#fde8ec);border:1px solid #f3c6d1}
 .dash-alert .da-ic{flex:none;width:24px;height:24px;border-radius:50%;background:#be123c;color:#fff;font:800 14px/24px ui-sans-serif,Arial;text-align:center}
 .dash-alert .da-txt{flex:1;font-size:12.5px;color:#7a1330}
@@ -981,6 +983,32 @@ var SMS_PROXY_SRC=[
 /* ---------- Signature QUALIFIÉE via prestataire agréé (Yousign) — proxy Apps Script ---------- */
 function ysCfg(){DB.parametres=DB.parametres||{};DB.parametres.yousign=DB.parametres.yousign||{enabled:false};return DB.parametres.yousign;}
 function ysActif(){var c=ysCfg();var s=demSyncCfg();return !!(c&&c.enabled&&s&&s.url);}
+/* ---------- Tableau de bord des intégrations / prestataires ---------- */
+function integBadge(state){return state==='actif'?'<span class="tag ok">Actif</span>':state==='pret'?'<span class="tag" style="border-color:#d9a441;color:#a06a12">À activer</span>':'<span class="tag mut">Non configuré</span>';}
+function integStatusCard(){
+  var s=demSyncCfg();var endpointOk=!!(s&&s.url);
+  var sc=smsCfg(),yc=ysCfg();
+  var rows=[
+    {nom:'Serveur (Google Apps Script)',desc:'Point d\'accès commun — e-mails, SMS, signature',state:endpointOk?'actif':'nc',act:'<button class="btn btn-sm btn-ghost" onclick="demSyncConfig()">Configurer</button><button class="btn btn-sm btn-ghost" onclick="srvHealthTest()">Tester la connexion</button>'},
+    {nom:'E-mails (envoi automatique)',desc:'Relances, devis, attestations, suivi',state:endpointOk?'actif':'nc',act:'<button class="btn btn-sm btn-ghost" onclick="demSyncConfig()">Configurer</button>'},
+    {nom:'SMS (Twilio / Brevo)',desc:'Code de vérification (OTP) & notifications',state:smsActif()?'actif':(sc&&sc.enabled?'pret':'nc'),act:'<button class="btn btn-sm btn-ghost" onclick="document.getElementById(\'sms-enabled\')&&document.getElementById(\'sms-enabled\').scrollIntoView({behavior:\'smooth\'})">Réglages ci-dessous</button>'},
+    {nom:'Signature qualifiée (Yousign)',desc:'Signature eIDAS avancée / qualifiée',state:ysActif()?'actif':(yc&&yc.enabled?'pret':'nc'),act:'<button class="btn btn-sm btn-ghost" onclick="ysProxyDoc()">Code serveur</button>'}
+  ];
+  var body=rows.map(function(r){return '<div class="integ-row"><div style="flex:1;min-width:0"><b style="font-size:12.5px">'+esc(r.nom)+'</b><div class="tsub">'+esc(r.desc)+'</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+integBadge(r.state)+r.act+'</div></div>';}).join('');
+  return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Intégrations & prestataires</h2><span class="sub" style="margin-left:auto">Branchements externes</span></div><div class="card-b">'
+    +'<p class="hint" style="margin:0 0 10px">État des services externes. Les clés des prestataires restent sur le serveur (jamais dans le navigateur). Chaque branchement nécessite un compte chez le prestataire.</p>'
+    +body+'</div></div>';
+}
+function srvHealthTest(){var s=demSyncCfg();if(!s||!s.url)return toast('Renseignez d\'abord l\'URL du serveur (Configurer).');
+  toast('Test de connexion…');
+  var url=s.url+(s.url.indexOf('?')>=0?'&':'?')+'action=health';
+  var done=false;var fin=function(ok){if(done)return;done=true;toast(ok?'✓ Serveur joignable.':'Serveur injoignable — vérifiez l\'URL et le déploiement.');};
+  try{var ctrl=new AbortController();setTimeout(function(){try{ctrl.abort();}catch(e){}},8000);
+    fetch(url,{cache:'no-store',signal:ctrl.signal}).then(function(r){return r.text();}).then(function(){fin(true);}).catch(function(){
+      try{var img=new Image();img.onload=function(){fin(true);};img.onerror=function(){fin(false);};img.src=url+'&_='+Date.now();setTimeout(function(){fin(false);},8000);}catch(e){fin(false);}
+    });
+  }catch(e){fin(false);}
+}
 function ysSave(){var c=ysCfg();var en=document.getElementById('ys-enabled');if(en)c.enabled=en.checked;save();toast('Configuration Yousign enregistrée'+(c.enabled?' — signature qualifiée activée':''));if(typeof render==='function')render();}
 function ysCfgCard(){var c=ysCfg();var s=demSyncCfg();var ok=!!(s&&s.url);
  return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Signature qualifiée (Yousign)</h2><span class="sub" style="margin-left:auto">'+(c.enabled?'<span class="tag green">Activé</span>':'<span class="tag">Désactivé</span>')+'</span></div><div class="card-b">'
@@ -2129,6 +2157,7 @@ function pageParams(){
   ${societeCard()}
   ${mailTplCard()}
   ${auditCard()}
+  ${integStatusCard()}
   ${smsCfgCard()}
   ${ysCfgCard()}
   ${rgpdCard()}
@@ -3639,7 +3668,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=142;
+var LAST_VER=143;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
