@@ -992,7 +992,8 @@ function integStatusCard(){
     {nom:'Serveur (Google Apps Script)',desc:'Point d\'accès commun — e-mails, SMS, signature',state:endpointOk?'actif':'nc',act:'<button class="btn btn-sm btn-ghost" onclick="demSyncConfig()">Configurer</button><button class="btn btn-sm btn-ghost" onclick="srvHealthTest()">Tester la connexion</button>'},
     {nom:'E-mails (envoi automatique)',desc:'Relances, devis, attestations, suivi',state:endpointOk?'actif':'nc',act:'<button class="btn btn-sm btn-ghost" onclick="demSyncConfig()">Configurer</button>'},
     {nom:'SMS (Twilio / Brevo)',desc:'Code de vérification (OTP) & notifications',state:smsActif()?'actif':(sc&&sc.enabled?'pret':'nc'),act:'<button class="btn btn-sm btn-ghost" onclick="document.getElementById(\'sms-enabled\')&&document.getElementById(\'sms-enabled\').scrollIntoView({behavior:\'smooth\'})">Réglages ci-dessous</button>'},
-    {nom:'Signature qualifiée (Yousign)',desc:'Signature eIDAS avancée / qualifiée',state:ysActif()?'actif':(yc&&yc.enabled?'pret':'nc'),act:'<button class="btn btn-sm btn-ghost" onclick="ysProxyDoc()">Code serveur</button>'}
+    {nom:'Signature qualifiée (Yousign)',desc:'Signature eIDAS avancée / qualifiée',state:ysActif()?'actif':(yc&&yc.enabled?'pret':'nc'),act:'<button class="btn btn-sm btn-ghost" onclick="ysProxyDoc()">Code serveur</button>'},
+    {nom:'Guichet unique (INPI)',desc:'Dépôt dématérialisé des formalités',state:inpiActif()?'actif':(inpiCfg()&&inpiCfg().enabled?'pret':'nc'),act:'<button class="btn btn-sm btn-ghost" onclick="inpiProxyDoc()">Code serveur</button>'}
   ];
   var body=rows.map(function(r){return '<div class="integ-row"><div style="flex:1;min-width:0"><b style="font-size:12.5px">'+esc(r.nom)+'</b><div class="tsub">'+esc(r.desc)+'</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+integBadge(r.state)+r.act+'</div></div>';}).join('');
   return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Intégrations & prestataires</h2><span class="sub" style="margin-left:auto">Branchements externes</span></div><div class="card-b">'
@@ -1038,6 +1039,85 @@ var YS_PROXY_HINT=[
  "//",
  "// Code complet et commenté : fichier yousign-proxy.gs du projet."
 ].join('\n');
+/* ---------- Guichet unique INPI (dépôt des formalités) ---------- */
+function inpiCfg(){DB.parametres=DB.parametres||{};DB.parametres.inpi=DB.parametres.inpi||{enabled:false};return DB.parametres.inpi;}
+function inpiActif(){var c=inpiCfg();var s=demSyncCfg();return !!(c&&c.enabled&&s&&s.url);}
+function inpiSave(){var c=inpiCfg();var en=document.getElementById('inpi-enabled');if(en)c.enabled=en.checked;save();toast('Configuration INPI enregistrée'+(c.enabled?' — dépôt au Guichet unique activé':''));if(typeof render==='function')render();}
+function inpiCfgCard(){var c=inpiCfg();var s=demSyncCfg();var ok=!!(s&&s.url);
+ return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Guichet unique (INPI)</h2><span class="sub" style="margin-left:auto">'+(c.enabled?'<span class="tag green">Activé</span>':'<span class="tag">Désactivé</span>')+'</span></div><div class="card-b">'
+  +'<p class="hint" style="margin:0 0 10px">Dépôt dématérialisé des formalités (création, modification, cessation) auprès du <b>Guichet unique des formalités</b> géré par l\'INPI. Les identifiants API restent <b>sur le serveur</b>. Nécessite un compte et l\'habilitation API INPI.</p>'
+  +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="inpi-enabled" '+(c.enabled?'checked':'')+' style="width:auto;flex:none;margin:0"> Activer le dépôt au Guichet unique</label>'
+  +(ok?'':'<p class="hint" style="margin:8px 0 0;color:#b45309">Le point d\'accès n\'est pas configuré — renseigne d\'abord l\'URL du script (Demandes → ⚙ Configurer la boîte).</p>')
+  +'<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn btn-sm btn-pri" onclick="inpiSave()">Enregistrer</button><button class="btn btn-sm btn-ghost" onclick="inpiProxyDoc()">Voir le code serveur (proxy)</button></div>'
+  +'</div></div>';}
+function inpiProxyDoc(){openModal('Code serveur — proxy Guichet unique (INPI)',
+  '<p class="hint" style="margin:0 0 10px">Le code se trouve dans le fichier <b>inpi-proxy.gs</b> du projet. Collez-le dans le script Apps Script, renseignez les identifiants API INPI en Propriétés du script, ajoutez le routage <code>action=inpi</code>, puis redéployez. Le client envoie les données de la formalité ; le serveur authentifie et dépose le dossier au Guichet unique.</p>'
+  +'<textarea readonly style="width:100%;height:240px;font-family:monospace;font-size:11px;white-space:pre" onclick="this.select()">'+esc(INPI_PROXY_HINT)+'</textarea>',
+  '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');}
+var INPI_PROXY_HINT=[
+ "// Routage à ajouter :",
+ "//   doPost(e): var b=JSON.parse(e.postData.contents||'{}');",
+ "//             if(b.action==='inpi') return handleInpiDepot(e);",
+ "//   doGet(e):  if(e.parameter.action==='inpi_status') return handleInpiStatus(e);",
+ "//",
+ "// Propriétés du script (habilitation API INPI requise) :",
+ "//   SECRET_KEY, INPI_USER, INPI_PASSWORD  (ou INPI_TOKEN),",
+ "//   INPI_BASE = https://registre-national-entreprises.inpi.fr/api  (à confirmer selon l'habilitation)",
+ "//",
+ "// handleInpiDepot :",
+ "//   1) s'authentifier auprès de l'API INPI (récupérer un jeton),",
+ "//   2) transmettre la formalité (payload reçu : type, société, dirigeant, adresse, pièces),",
+ "//   3) renvoyer { reference, status } du dépôt.",
+ "//",
+ "// Code complet et commenté : fichier inpi-proxy.gs du projet.",
+ "// NB : l'accès API du Guichet unique nécessite une habilitation INPI."
+].join('\n');
+/* Construit un payload représentatif de la formalité pour le dépôt INPI. */
+function inpiPayload(id){
+  var d=(DB.dossiers||[]).find(function(x){return x.id===id;})||piecesEntity(id)||{};
+  var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d;
+  var x=(typeof annonceData==='function')?annonceData(id):{};
+  var soc=DB.societe||{};
+  var pieces=(typeof piecesRequises==='function')?piecesRequises(d):[];
+  dm.docs=dm.docs||{};dm.piecesRecues=dm.piecesRecues||{};
+  var pick=function(a,b){return (a&&(''+a).indexOf('«')<0)?a:(b||'');};
+  return {
+    reference:d.ref||'',
+    typeFormalite:(dm.serviceSouhaite||dm.service||d.service||''),
+    societe:{denomination:pick(x.denom,d.denom),forme:pick(x.forme,d.forme),siren:pick(x.siren,d.siren),adresse:pick(x.adresse,d.siege),ville:pick(x.ville,d.ville)},
+    dirigeant:pick(x.president,d.president),
+    pieces:pieces.map(function(p){return {code:p.k,libelle:p.label,fournie:(((dm.docs[p.k]||[]).length>0)||dm.piecesRecues[p.k]===true)};}),
+    mandataire:{cabinet:(DB.params&&DB.params.cabinet)||'AEM CONSEIL',siret:soc.siret||''}
+  };
+}
+function espDepotInpi(id){
+  var d=(DB.dossiers||[]).find(function(x){return x.id===id;})||piecesEntity(id);if(!d)return;
+  var payload=inpiPayload(id);
+  var pieces=payload.pieces||[];var manque=pieces.filter(function(p){return !p.fournie;});
+  var recap='<div style="font-size:12.5px;line-height:1.7">'
+    +'<div><b>Formalité :</b> '+esc(payload.typeFormalite||'—')+'</div>'
+    +'<div><b>Société :</b> '+esc(payload.societe.denomination||'—')+' '+(payload.societe.forme?('('+esc(payload.societe.forme)+')'):'')+'</div>'
+    +'<div><b>Dirigeant :</b> '+esc(payload.dirigeant||'—')+'</div>'
+    +'<div style="margin-top:6px"><b>Pièces :</b> '+(pieces.length-manque.length)+'/'+pieces.length+' fournies'+(manque.length?(' — manquantes : '+manque.map(function(p){return esc(p.libelle);}).join(', ')):'')+'</div>'
+    +'</div>';
+  var actif=(typeof inpiActif==='function')&&inpiActif();
+  var body='<div class="hint" style="margin:0 0 10px">'+(actif?'Vérifiez les données puis déposez la formalité au Guichet unique (INPI).':'Le dépôt au Guichet unique n\'est pas activé (Paramètres → Guichet unique). Voici le récapitulatif préparé.')+'</div>'+recap;
+  if(manque.length)body+='<div class="hint" style="margin-top:8px;color:#b45309">Attention : certaines pièces manquent. Le dépôt pourrait être rejeté.</div>';
+  openModal('Dépôt au Guichet unique — '+esc(payload.reference),body,
+    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+    +(actif?'<button class="btn btn-pri" onclick="inpiDeposer(\''+id+'\')">Déposer au Guichet unique</button>':''));
+}
+function inpiDeposer(id){
+  var s=(typeof demSyncCfg==='function')?demSyncCfg():{};if(!s||!s.url)return toast('Serveur non configuré.');
+  var d=(DB.dossiers||[]).find(function(x){return x.id===id;})||piecesEntity(id);if(!d)return;
+  var payload=inpiPayload(id);payload.action='inpi';payload.key=s.key||'';
+  toast('Dépôt en cours…');
+  fetch(s.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),cache:'no-store'})
+    .then(function(r){return r.text();}).then(function(t){var j=null;try{j=JSON.parse(t);}catch(x){}
+      if(j&&(j.reference||j.status)){d.inpi={reference:j.reference||'',status:j.status||'déposé',ts:Date.now()};if(typeof logAudit==='function')logAudit('Dépôt Guichet unique',(d.ref||'')+' → '+(j.reference||j.status||'ok'));if(typeof save==='function')save();closeModal();toast('Formalité déposée'+(j.reference?(' — réf. '+j.reference):'')+'.');if(typeof render==='function')render();}
+      else toast('Échec du dépôt : '+((j&&j.error)||'réponse invalide du serveur.'));
+    }).catch(function(){toast('Dépôt impossible — vérifiez la connexion et le proxy INPI.');});
+}
 /* Envoi d'une demande de signature qualifiée : construit le document HTML et le transmet au proxy. */
 function signDocHtml(id,objet,signer){var e=piecesEntity(id)||{};
  return '<html><head><meta charset="utf-8"><style>body{font-family:Georgia,serif;font-size:13px;color:#111;padding:40px;line-height:1.6}h1{font-size:16px;text-align:center;letter-spacing:.5px}</style></head><body>'
@@ -2160,6 +2240,7 @@ function pageParams(){
   ${integStatusCard()}
   ${smsCfgCard()}
   ${ysCfgCard()}
+  ${inpiCfgCard()}
   ${rgpdCard()}
   <div class="flow-note" style="margin-top:8px">${svg(IC.gear)}<div>Prochains niveaux de la pyramide : <b>Devis auto</b>, <b>facturation & marge complète</b>, <b>signature + paiement</b>, <b>IA de réponse locale</b>, puis <b>stockage lourd, archivage 10 ans, multi-poste & mise en ligne</b>.</div></div>`;
 }
@@ -3668,7 +3749,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=143;
+var LAST_VER=144;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -5514,6 +5595,7 @@ window.modalDemandeView=function(id){
      +'<button class="tr-b" onclick="signModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-1 4-9 7-9s2 6 4 6 2-3 4-3M3 21h18"/></svg><span>Signature électronique</span></button>'
      +'<button class="tr-b" onclick="espSuiviClient(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M21 12a9 9 0 1 1-6.2-8.5"/></svg><span>Fiche de suivi (client)</span></button>'
      +'<button class="tr-b" onclick="espAttestation(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2"/><path d="M9 3a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M8 12h8M8 16h5"/><circle cx="16.5" cy="16.5" r="2.2"/></svg><span>Attestation</span></button>'
+     +'<button class="tr-b" onclick="espDepotInpi(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3h11l5 5v13H4z"/><path d="M15 3v5h5M8 13h8M8 17h8"/></svg><span>Guichet unique (INPI)</span></button>'
      +'</div></div></div>';
   };
   window.espSuiviClient=function(id){
