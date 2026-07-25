@@ -1086,6 +1086,16 @@ function pageDash(){
       +'</tbody></table>';
   } else out+='<div class="empty">Aucune facture échue à relancer. 👍</div>';
   out+='</div></div>';
+  // Échéancier — échéances à venir (45 jours)
+  var ech=echeancierAVenir(45);
+  out+='<div class="card" style="margin-top:16px"><div class="card-h"><h2>Échéances à venir</h2><span class="sub" style="margin-left:auto">45 prochains jours · '+ech.length+'</span></div><div class="card-b" style="padding:0">';
+  if(ech.length){
+    out+='<table><thead><tr><th>Échéance</th><th>Type</th><th>Objet</th><th class="hide-sm">Client</th><th>TTC</th><th>Délai</th></tr></thead><tbody>'
+      +ech.slice(0,10).map(function(e){var cls=e.jours<=7?'hot':(e.jours<=15?'warm':'blue');
+        return '<tr style="cursor:pointer" onclick="'+(e.kind==='facture'?'fvView':'devisView')+'(\''+e.id+'\')"><td class="tname">'+frDate(e.date)+'</td><td><span class="tag '+(e.kind==='facture'?'blue':'mut')+'">'+(e.kind==='facture'?'Facture':'Devis')+'</span></td><td>'+esc(e.num)+'</td><td class="hide-sm">'+esc(e.tiers)+'</td><td>'+eur(e.ttc)+'</td><td><span class="tag '+cls+'">dans '+e.jours+' j</span></td></tr>';}).join('')
+      +'</tbody></table>';
+  } else out+='<div class="empty">Aucune échéance dans les 45 prochains jours.</div>';
+  out+='</div></div>';
   // Activité récente
   var recDem=(DB.demandes||[]).slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'');}).slice(0,5);
   out+='<div class="card" style="margin-top:16px"><div class="card-h"><h2>Dernières demandes</h2><span class="sub" style="margin-left:auto"><button class="btn btn-sm btn-ghost" onclick="go(\'demandes\')">Tout voir</button></span></div><div class="card-b" style="padding:0">';
@@ -3203,6 +3213,11 @@ function docClientEmail(o){
   return c?(c.email||''):'';
 }
 function relanceEnRetard(o){if(!o||!o.ech)return false;return o.ech<today();}
+function joursAvant(iso){try{var d=new Date(iso+'T00:00:00');var n=new Date();n.setHours(0,0,0,0);return Math.round((d-n)/86400000);}catch(x){return null;}}
+function echeancierAVenir(nbJours){nbJours=nbJours||45;var out=[];
+  (DB.factures||[]).forEach(function(f){if(f.type!=='client')return;if(f.avoir)return;if(f.statut!=='Impayée'&&f.statut!=='Émise')return;if(!f.ech)return;var j=joursAvant(f.ech);if(j==null||j<0||j>nbJours)return;out.push({kind:'facture',id:f.id,num:f.num,tiers:f.tiers,ttc:f.ttc,date:f.ech,jours:j});});
+  (DB.devis||[]).forEach(function(d){if(d.statut!=='Émis')return;if(!d.ech)return;var j=joursAvant(d.ech);if(j==null||j<0||j>nbJours)return;out.push({kind:'devis',id:d.id,num:d.num,tiers:d.tiers,ttc:d.ttc,date:d.ech,jours:j});});
+  out.sort(function(a,b){return a.jours-b.jours;});return out;}
 function relanceInfo(o){var r=(o&&o.relances)||[];return {n:r.length,last:r.length?r[r.length-1].ts:''};}
 function factRelancer(id){var f=(DB.factures||[]).find(function(x){return x.id===id;});if(!f)return;
   var mail=docClientEmail(f);if(!mail)return toast('Aucune adresse e-mail — renseignez la fiche client.');
@@ -3504,7 +3519,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=131;
+var LAST_VER=132;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
