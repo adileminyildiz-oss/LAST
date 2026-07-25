@@ -2210,12 +2210,16 @@ function factAvoir(id){var f=(DB.factures||[]).find(function(x){return x.id===id
 }
 function factNum(t){DB.seq=DB.seq||{};const k=t==='client'?'factVente':'factAchat';const n=DB.seq[k]||1;DB.seq[k]=n+1;return (t==='client'?'FV-':'FA-')+(2600+n);}
 function factSetFilter(v){state.factFilter=v;render();}
+function factSort(col){var s=state.factSort||{col:'date',dir:-1};if(s.col===col){s.dir=-s.dir;}else{s.col=col;s.dir=(col==='date'||col==='ht'||col==='tva'||col==='ttc')?-1:1;}state.factSort=s;render();}
 function pageFacturation(){
   const t='client';
-  const all=(DB.factures||[]).filter(f=>f.type===t).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const all=(DB.factures||[]).filter(f=>f.type===t);
   const fil=state.factFilter||'tous';
   const match=(f)=>fil==='tous'?true:(fil==='emises'?f.statut==='Émise':fil==='impayees'?f.statut==='Impayée':fil==='payees'?f.statut==='Payée':fil==='avoirs'?!!f.avoir:true);
-  const list=all.filter(match);
+  const so=state.factSort||{col:'date',dir:-1};
+  const acc={num:f=>f.num||'',tiers:f=>f.tiers||'',date:f=>f.date||'',ht:f=>+f.ht||0,tva:f=>+f.tva||0,ttc:f=>+f.ttc||0,statut:f=>f.statut||''};
+  const fh=(col,label,cls)=>`<th${cls?' class="'+cls+'"':''} style="cursor:pointer;user-select:none;white-space:nowrap" onclick="factSort('${col}')">${label}${so.col===col?(so.dir>0?' ▲':' ▼'):''}</th>`;
+  const list=all.filter(match).slice().sort((a,b)=>{var va=acc[so.col]?acc[so.col](a):'',vb=acc[so.col]?acc[so.col](b):'';var c=(typeof va==='number')?(va-vb):(''+va).localeCompare(''+vb);return c*so.dir;});
   const cnt=(k)=>all.filter(f=>k==='tous'?true:(k==='emises'?f.statut==='Émise':k==='impayees'?f.statut==='Impayée':k==='payees'?f.statut==='Payée':k==='avoirs'?!!f.avoir:true)).length;
   const chip=(k,lbl)=>`<button class="fchip${fil===k?' on':''}" onclick="factSetFilter('${k}')">${lbl} <span class="fchip-n">${cnt(k)}</span></button>`;
   const filtres=`<div class="fchips">${chip('tous','Toutes')}${chip('emises','Émises')}${chip('impayees','Impayées')}${chip('payees','Payées')}${chip('avoirs','Avoirs')}</div>`;
@@ -2235,7 +2239,7 @@ function pageFacturation(){
     <span class="tag blue">${list.length}${fil!=='tous'?'/'+all.length:''} facture(s)</span></div>
   ${all.length?filtres:''}
   <div class="card"><div class="card-b" style="padding:0">
-  ${list.length?`<table><thead><tr><th>N°</th><th>${t==='client'?'Client':'Fournisseur'}</th><th class="hide-sm">Date</th><th>HT</th><th class="hide-sm">TVA</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>
+  ${list.length?`<table><thead><tr>${fh('num','N°')}${fh('tiers',t==='client'?'Client':'Fournisseur')}${fh('date','Date','hide-sm')}${fh('ht','HT')}${fh('tva','TVA','hide-sm')}${fh('ttc','TTC')}${fh('statut','Statut')}<th></th></tr></thead><tbody>
   ${list.map(f=>`<tr onclick="${t==='client'?"fvView('"+f.id+"')":"factModal('"+f.id+"')"}" style="cursor:pointer">
     <td class="tname">${esc(f.num)}</td><td>${esc(f.tiers)}</td><td class="hide-sm">${frDate(f.date)}</td>
     <td>${eur(f.ht)}</td><td class="hide-sm">${eur(f.tva)}</td><td>${eur(f.ttc)}</td>
@@ -3618,7 +3622,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=137;
+var LAST_VER=138;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
