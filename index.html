@@ -2040,6 +2040,7 @@ function pageParams(){
   </div>
   <div class="card" style="margin-top:14px"><div class="card-h"><h2>Prestations</h2><span class="sub" style="margin-left:auto">Catalogue des prestations</span></div>
     <div class="card-b">${prestationsBloc()}</div></div>
+  ${societeCard()}
   ${smsCfgCard()}
   ${ysCfgCard()}
   ${rgpdCard()}
@@ -2947,7 +2948,29 @@ function espStatut(id,dir){var d=espDoss().find(function(x){return x.id===id;});
 function espFacture(id){var d=espDoss().find(function(x){return x.id===id;});var cid=(d.clientIds||[])[0];if(typeof FactureVente==='undefined')return toast('Module facture indisponible');FactureVente.ouvrir({societe:fvSociete(),clients:fvClients(),numero:fvNextNum(),initial:{clientId:cid},onCreer:fvOnCreer});}
 
 /* ---------- Facture de vente (via module FactureVente) ---------- */
-function fvSociete(){var s=DB.societe||{};return {raison:s.raison||'AEM CONSEIL',formeJur:s.formeJur||'SAS',siren:s.siren||'',siret:s.siret||'',adresse:s.adresse||'',cp:s.cp||'',ville:s.ville||'',iban:s.iban||'',bic:s.bic||'',banqueBenef:s.banqueBenef||s.raison||'AEM CONSEIL',tvaCondition:s.tvaCondition||'Sur les encaissements',fraisRecouvrement:(s.fraisRecouvrement!=null?s.fraisRecouvrement:40)};}
+function societeCard(){var s=DB.societe||{};
+  function f(id,lbl,val,ph){return '<div><label>'+lbl+'</label><input id="'+id+'" value="'+esc(val||'')+'"'+(ph?' placeholder="'+esc(ph)+'"':'')+'></div>';}
+  return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Société émettrice</h2><span class="sub" style="margin-left:auto">Mentions légales des factures & devis</span></div><div class="card-b">'
+    +'<p class="hint" style="margin:0 0 10px">Ces informations figurent en pied de vos factures et devis (obligations légales : identification de l\'émetteur, SIRET, TVA intracommunautaire, capital, RCS).</p>'
+    +'<div class="frow">'+f('so-raison','Dénomination',s.raison,'AEM CONSEIL')+f('so-forme','Forme juridique',s.formeJur,'SAS')+'</div>'
+    +'<div class="frow">'+f('so-capital','Capital social (€)',s.capital,'1000')+f('so-ape','Code APE / NAF',s.codeAPE||s.ape,'7022Z')+'</div>'
+    +'<div class="frow">'+f('so-siren','SIREN',s.siren,'9 chiffres')+f('so-siret','SIRET',s.siret,'14 chiffres')+'</div>'
+    +'<div class="frow">'+f('so-tva','N° TVA intracommunautaire',s.tvaIntra,'FR..')+f('so-rcs','RCS (ville)',s.rcsVille||s.ville,'Paris')+'</div>'
+    +'<label>Adresse du siège</label><input id="so-adr" value="'+esc(s.adresse||'')+'">'
+    +'<div class="frow">'+f('so-cp','Code postal',s.cp)+f('so-ville','Ville',s.ville)+'</div>'
+    +'<div class="section-t">Coordonnées bancaires (RIB affiché sur les factures)</div>'
+    +'<div class="frow">'+f('so-benef','Bénéficiaire',s.banqueBenef||s.raison)+f('so-bic','BIC',s.bic)+'</div>'
+    +'<label>IBAN</label><input id="so-iban" value="'+esc(s.iban||'')+'">'
+    +'<div style="margin-top:12px"><button class="btn btn-sm btn-pri" onclick="societeSave()">Enregistrer</button></div>'
+    +'</div></div>';
+}
+function societeSave(){DB.societe=DB.societe||{};var g=function(x){var e=document.getElementById(x);return e?(''+e.value).trim():'';};
+  var s=DB.societe;s.raison=g('so-raison')||'AEM CONSEIL';s.formeJur=g('so-forme')||'SAS';s.capital=g('so-capital');s.codeAPE=g('so-ape');
+  s.siren=g('so-siren');s.siret=g('so-siret');s.tvaIntra=g('so-tva');s.rcsVille=g('so-rcs');s.adresse=g('so-adr');s.cp=g('so-cp');s.ville=g('so-ville');
+  s.banqueBenef=g('so-benef')||s.raison;s.bic=g('so-bic');s.iban=g('so-iban');
+  save();toast('Société enregistrée');render();
+}
+function fvSociete(){var s=DB.societe||{};return {raison:s.raison||'AEM CONSEIL',formeJur:s.formeJur||'SAS',siren:s.siren||'',siret:s.siret||'',tvaIntra:s.tvaIntra||'',capital:s.capital||'',codeAPE:s.codeAPE||s.ape||'',rcsVille:s.rcsVille||s.ville||'',adresse:s.adresse||'',cp:s.cp||'',ville:s.ville||'',iban:s.iban||'',bic:s.bic||'',banqueBenef:s.banqueBenef||s.raison||'AEM CONSEIL',tvaCondition:s.tvaCondition||'Sur les encaissements',fraisRecouvrement:(s.fraisRecouvrement!=null?s.fraisRecouvrement:40)};}
 function fvClients(){return (DB.clients||[]).map(function(c){return {id:c.id,nom:(c.prenom+' '+c.nom).trim(),adresse:c.adresse||'',cp:c.cp||'',ville:c.ville||'',email:c.email||'',siret:c.siret||''};});}
 function fvNextNum(){DB.seq=DB.seq||{};return 'FV-'+(2600+(DB.seq.factVente||1));}
 function fvNextNumDevis(){DB.seq=DB.seq||{};return 'DEV-'+(1000+(DB.seq.devis||1));}
@@ -3395,7 +3418,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=125;
+var LAST_VER=126;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3517,7 +3540,7 @@ lastGate();
   }
 
   function docHTML(d){
-    var s = CFG && CFG.societe || {};
+    var s = Object.assign({}, (typeof fvSociete==='function'?fvSociete():{}), (CFG && CFG.societe) || {});
     var c = (CFG && CFG.clients || []).find(function(x){ return x.id === d.clientId; });
     var titre = d.type==='devis' ? 'Devis' : (d.type==='avoir' ? 'Avoir' : 'Facture');
     var lignes = (d.lignes || []).filter(function(l){ return (l.desc!=null && String(l.desc).trim()!=='') || r2((+l.qte||0)*(+l.pu||0))!==0; });
@@ -3555,11 +3578,18 @@ lastGate();
       +   'Type de transaction : '+esc(d.moyen||'Virement')+'<br>Conditions de paiement de la TVA : '+esc(s.tvaCondition||'Sur les encaissements')+'<br>'
       +   (d.conditions ? 'Conditions de paiement : '+esc(d.conditions)+'<br>' : '')
       +   ((+d.escompte>0) ? 'Escompte pour paiement anticipé : '+d.escompte+' %'+(d.escompteDelai?(' (sous '+d.escompteDelai+' jours)'):'')+'<br>' : 'Pas d\'escompte accordé pour le paiement anticipé.<br>')
+      +   ((+tva===0 && d.type!=='avoir') ? 'TVA non applicable, art. 293 B du CGI.<br>' : '')
       +   'En cas de non-paiement à la date d\'échéance, des pénalités calculées à trois fois le taux d\'intérêt légal seront appliquées.<br>'
       +   'Tout retard de paiement entraînera une indemnité forfaitaire pour frais de recouvrement de '+frais+' €.'
       + '</div>'
       + (d.showPay!==false ? ('<div class="inv-pay"><div class="lbl">Détails du paiement (RIB)</div><div class="kv"><span>Nom du bénéficiaire</span><span>'+esc(s.banqueBenef||s.raison||'—')+'</span><span>BIC</span><span>'+esc(s.bic||'—')+'</span><span>IBAN</span><span>'+esc(s.iban||'—')+'</span><span>Référence</span><span>'+esc(d.numero)+'</span></div></div>') : '')
-      + '<div class="inv-foot-line">'+esc(s.raison||'—')+', '+esc(s.formeJur||'SAS')+(s.siren?(' — SIREN : '+esc(s.siren)):'')+'</div>'
+      + '<div class="inv-foot-line">'+esc(s.raison||'—')+', '+esc(s.formeJur||'SAS')
+        +(s.capital?(' au capital de '+esc(s.capital)+' €'):'')
+        +(s.siret?(' — SIRET : '+esc(s.siret)):(s.siren?(' — SIREN : '+esc(s.siren)):''))
+        +(s.codeAPE?(' — APE '+esc(s.codeAPE)):'')
+        +(s.tvaIntra?(' — TVA intracom. : '+esc(s.tvaIntra)):'')
+        +(s.rcsVille?(' — RCS '+esc(s.rcsVille)):'')
+        +'</div>'
       + '</div>';
   }
 
