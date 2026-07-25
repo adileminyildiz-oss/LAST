@@ -92,6 +92,10 @@ main{min-width:0;display:flex;flex-direction:column}
 .gs-main{flex:1;min-width:0}.gs-main b{font-size:12.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gs-main .gs-sub{font-size:10.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gs-empty{padding:14px 12px;font-size:12px;color:var(--ink-3);text-align:center}
+.dash-alert{display:flex;align-items:center;gap:11px;margin-bottom:14px;padding:11px 14px;border-radius:11px;background:linear-gradient(90deg,#fff1f4,#fde8ec);border:1px solid #f3c6d1}
+.dash-alert .da-ic{flex:none;width:24px;height:24px;border-radius:50%;background:#be123c;color:#fff;font:800 14px/24px ui-sans-serif,Arial;text-align:center}
+.dash-alert .da-txt{flex:1;font-size:12.5px;color:#7a1330}
+.dash-alert .da-txt b{color:#9f1239}
 .content{padding:14px 16px 56px;max-width:1120px;width:100%}
 
 /* ============ CARTES FORMELLES ============ */
@@ -733,20 +737,26 @@ function gsGo(type,id){
 }
 document.addEventListener('click',function(e){var s=e.target.closest&&e.target.closest('.search');if(!s)gsClose();});
 
+function navBadgeCount(id){
+  if(id==='demandes')return DB.demandes.filter(d=>!d.dossierId&&d.statut!=='Clôturé'&&!d.archived).length;
+  if(id==='facturation')return (DB.factures||[]).filter(f=>f.type==='client'&&f.statut==='Impayée'&&relanceEnRetard(f)).length;
+  return 0;
+}
 function buildNav(){
-  const nb=DB.demandes.filter(d=>!d.dossierId&&d.statut!=='Clôturé').length;
   document.getElementById('nav').innerHTML=
     `<div class="nav-lbl">Activité</div>`+
-    PAGES.slice(0,2).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(0,3).map(p=>navBtn(p)).join('')+
     `<div class="nav-lbl">Référentiel</div>`+
-    PAGES.slice(2,3).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(3,4).map(p=>navBtn(p)).join('')+
     `<div class="nav-lbl">Facturation</div>`+
-    PAGES.slice(3,6).map(p=>navBtn(p,nb)).join('')+
+    PAGES.slice(4,7).map(p=>navBtn(p)).join('')+
     `<div class="nav-lbl">Système</div>`+
-    PAGES.slice(6).map(p=>navBtn(p,nb)).join('');
+    PAGES.slice(7).map(p=>navBtn(p)).join('');
 }
-function navBtn(p,nb){
-  const badge=p.id==='demandes'&&nb?`<span class="nav-badge" title="${nb} demande(s) à traiter">${nb}</span>`:'';
+function navBtn(p){
+  const n=navBadgeCount(p.id);
+  const ttl=p.id==='facturation'?`${n} facture(s) à relancer`:`${n} demande(s) à traiter`;
+  const badge=n?`<span class="nav-badge" title="${ttl}">${n}</span>`:'';
   const soon=p.soon?`<span class="nav-soon">bientôt</span>`:'';
   return `<button class="nav-btn ${state.page===p.id?'on':''}" onclick="go('${p.id}')">${svg(IC[p.ic])}<span class="nav-btn-lbl">${p.lbl}</span>${badge||soon}</button>`;
 }
@@ -1045,6 +1055,9 @@ function pageDash(){
   var greet=(function(){var h=new Date().getHours();return h<12?'Bonjour':h<18?'Bon après-midi':'Bonsoir';})();
   var cab=(DB.params&&DB.params.cabinet)||'AEM CONSEIL';
   var out='<div class="flow-note" style="margin-bottom:14px">'+svg(IC.dash)+'<div><b>'+greet+'</b> — voici l\'activité de <b>'+esc(cab)+'</b> en un coup d\'œil.</div></div>';
+  if(echues.length){var mtEch=echues.reduce(function(s,f){return s+(+f.ttc||0);},0);
+    out+='<div class="dash-alert"><span class="da-ic">!</span><div class="da-txt"><b>'+echues.length+' facture'+(echues.length>1?'s':'')+' échue'+(echues.length>1?'s':'')+'</b> — '+eur(mtEch)+' à recouvrer.</div>'
+      +'<button class="btn btn-sm btn-pri" onclick="relancerToutesEchues()">Tout relancer</button></div>';}
   out+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
     +'<button class="btn btn-pri btn-sm" onclick="fvOpenDevis()">'+svg(IC.plus)+'Nouveau devis</button>'
     +'<button class="btn btn-sm" onclick="fvOpen()">'+svg(IC.plus)+'Nouvelle facture</button>'
@@ -3092,6 +3105,20 @@ function factRelancer(id){var f=(DB.factures||[]).find(function(x){return x.id==
   else{window.location.href='mailto:'+encodeURIComponent(mail)+'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);}
   if(document.getElementById('ov')&&document.getElementById('ov').classList.contains('show'))fvView(id);else render();
 }
+function relancerToutesEchues(){
+  var echues=(DB.factures||[]).filter(function(f){return f.type==='client'&&f.statut==='Impayée'&&relanceEnRetard(f);});
+  if(!echues.length)return toast('Aucune facture échue.');
+  yc('Envoyer une relance aux '+echues.length+' client(s) concerné(s) ?',function(){
+    var ok=0,ko=0;
+    echues.forEach(function(f){var mail=docClientEmail(f);
+      if(mail&&typeof demEnvoiSilencieux==='function'&&demEnvoiSilencieux(mail,'AEM CONSEIL — Relance facture '+f.num,'Bonjour,\n\nLa facture '+f.num+' d\'un montant de '+eur(f.ttc)+' TTC'+(f.ech?(', échue le '+frDate(f.ech)):'')+' demeure impayée. Merci de procéder à son règlement.\n\nCordialement,\nAEM CONSEIL')){
+        f.relances=f.relances||[];f.relances.push({ts:Date.now(),canal:'email'});ok++;
+      } else ko++;
+    });
+    save();render();
+    toast(ok+' relance(s) envoyée(s)'+(ko?(' · '+ko+' sans e-mail'):''));
+  });
+}
 function devisRelancer(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;
   var mail=docClientEmail(d);if(!mail)return toast('Aucune adresse e-mail — renseignez la fiche client.');
   var info=relanceInfo(d);
@@ -3368,7 +3395,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=124;
+var LAST_VER=125;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
