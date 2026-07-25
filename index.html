@@ -2183,6 +2183,7 @@ function pageFacturation(){
   </div>
   <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center"><button class="btn btn-pri" onclick="${t==='client'?'fvOpen()':'factModal()'}">${svg(IC.plus)}Ajouter</button>
     ${t==='client'&&list.length?`<button class="btn btn-ghost btn-sm" onclick="exportFacturesCSV()">Exporter (CSV)</button>`:''}
+    ${t==='client'&&list.filter(f=>f.doc).length?`<button class="btn btn-ghost btn-sm" onclick="factImprimerLot()">Imprimer le lot (PDF)</button>`:''}
     <span class="tag blue">${list.length} facture(s)</span></div>
   <div class="card"><div class="card-b" style="padding:0">
   ${list.length?`<table><thead><tr><th>N°</th><th>${t==='client'?'Client':'Fournisseur'}</th><th class="hide-sm">Date</th><th>HT</th><th class="hide-sm">TVA</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>
@@ -3137,6 +3138,16 @@ function fvView(id){
 }
 function fvFitView(){var w=document.querySelector('#ov .fv-view-scroll');if(!w)return;var page=w.querySelector('.inv-page');if(!page)return;var s=Math.min(1,(w.clientWidth-4)/794);page.style.transformOrigin='top left';page.style.transform='scale('+s+')';w.style.height=(page.offsetHeight*s+14)+'px';}
 function fvPrint(id){var f=(DB.factures||[]).find(function(x){return x.id===id;});if(f&&f.doc&&typeof FactureVente!=='undefined'&&FactureVente.imprimerDoc)FactureVente.imprimerDoc(f.doc);}
+function factImprimerLot(){
+  var list=(DB.factures||[]).filter(function(f){return f.type==='client'&&f.doc;}).sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+  if(!list.length)return toast('Aucune facture imprimable.');
+  if(typeof FactureVente==='undefined'||!FactureVente.docHTML)return toast('Module facture indisponible.');
+  if(FactureVente.injectCSS)FactureVente.injectCSS();
+  var html=list.map(function(f){return '<div class="inv" style="page-break-after:always;break-after:page">'+FactureVente.docHTML(f.doc)+'</div>';}).join('');
+  var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}
+  pa.innerHTML=html;if(typeof logAudit==='function')logAudit('Impression lot factures',list.length+' facture(s)');
+  toast('Préparation de '+list.length+' facture(s)…');setTimeout(function(){window.print();},160);
+}
 function factStatutSave(id){var f=(DB.factures||[]).find(function(x){return x.id===id;});if(!f)return;var el=document.getElementById('fa-statut');if(el)f.statut=el.value;save();closeModal();toast('Statut mis à jour');render();}
 
 /* ---------- DEVIS (établissement, suivi, transformation en facture) ---------- */
@@ -3550,7 +3561,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=134;
+var LAST_VER=135;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
