@@ -3639,7 +3639,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=141;
+var LAST_VER=142;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -5484,6 +5484,7 @@ window.modalDemandeView=function(id){
      +'<button class="tr-b" onclick="acteModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span>Acte de modification</span></button>'
      +'<button class="tr-b" onclick="signModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-1 4-9 7-9s2 6 4 6 2-3 4-3M3 21h18"/></svg><span>Signature électronique</span></button>'
      +'<button class="tr-b" onclick="espSuiviClient(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M21 12a9 9 0 1 1-6.2-8.5"/></svg><span>Fiche de suivi (client)</span></button>'
+     +'<button class="tr-b" onclick="espAttestation(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2"/><path d="M9 3a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M8 12h8M8 16h5"/><circle cx="16.5" cy="16.5" r="2.2"/></svg><span>Attestation</span></button>'
      +'</div></div></div>';
   };
   window.espSuiviClient=function(id){
@@ -5535,6 +5536,58 @@ window.modalDemandeView=function(id){
     var sent=(typeof demEnvoiSilencieux==='function')&&demEnvoiSilencieux(mail,cab+' — Suivi de votre dossier '+(d.ref||''),corps);
     if(typeof logAudit==='function')logAudit('Suivi envoyé au client',(d.ref||'')+' — '+mail);if(typeof save==='function')save();
     if(sent)toast('Suivi envoyé à '+mail);else{window.location.href='mailto:'+encodeURIComponent(mail)+'?subject='+encodeURIComponent(cab+' — Suivi de votre dossier')+'&body='+encodeURIComponent(corps);}
+  };
+  /* ---------- Attestation de dossier (prise en charge / suivi / dépôt) ---------- */
+  var ATT_TYPES=[{k:'prise',lbl:'Prise en charge du dossier'},{k:'suivi',lbl:'Suivi & avancement'},{k:'depot',lbl:'Dépôt de la formalité effectué'}];
+  function attData(id){
+    var d=(DB.dossiers||[]).find(function(x){return x.id===id;})||piecesEntity(id)||{};
+    var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d;
+    var x=(typeof annonceData==='function')?annonceData(id):{};
+    var cab=(DB.params&&DB.params.cabinet)||'AEM CONSEIL';
+    var soc=(x.denom&&x.denom.indexOf('«')<0)?x.denom:((d.denom)||(typeof dossierClients==='function'?dossierClients(d):'')||'');
+    var sign=((DB.societe&&DB.societe.dirigeant)||(typeof auditUser==='function'?auditUser():'')||cab);
+    var ville=(DB.societe&&DB.societe.ville)||'';
+    return {d:d,ref:d.ref||'',cab:cab,soc:soc||'—',sign:sign,ville:ville,formalite:(dm.serviceSouhaite||dm.service||d.service||'formalité'),mail:(dm&&dm.clientEmail)||d.clientEmail||''};
+  }
+  function attCorps(id,type){var a=attData(id);
+    var intro='Je soussigné(e) '+esc(a.sign)+', agissant pour le compte du cabinet '+esc(a.cab)+',';
+    var body;
+    if(type==='depot')body='atteste que la formalité « '+esc(a.formalite)+' » relative à '+esc(a.soc)+' (dossier '+esc(a.ref)+') a été déposée auprès des organismes compétents (greffe du tribunal de commerce / Guichet unique des formalités).';
+    else if(type==='suivi')body='atteste que le dossier '+esc(a.ref)+', relatif à « '+esc(a.formalite)+' » pour '+esc(a.soc)+', est en cours de traitement au sein de notre cabinet.';
+    else body='atteste que le dossier '+esc(a.ref)+', relatif à « '+esc(a.formalite)+' » pour '+esc(a.soc)+', est pris en charge par notre cabinet et fait l\'objet d\'un traitement en cours.';
+    return intro+' '+body;
+  }
+  function attDocHTML(id,type){var a=attData(id);var now=new Date();var t=(ATT_TYPES.find(function(x){return x.k===type;})||ATT_TYPES[0]);
+    return '<div class="doc-gen"><div class="st-doc"><div class="st-page" style="padding:30px 34px">'
+      +'<div style="font-weight:800;font-size:13px">'+esc(a.cab)+'</div>'
+      +(a.ville?'<div style="font-size:11px;color:#666">'+esc(a.ville)+'</div>':'')
+      +'<hr style="border:none;border-top:1px solid #ddd;margin:14px 0">'
+      +'<div style="text-align:center;font-weight:800;font-size:15px;letter-spacing:1px;text-decoration:underline;margin:8px 0 4px">ATTESTATION</div>'
+      +'<div style="text-align:center;font-size:12px;color:#555;margin-bottom:22px">'+esc(t.lbl)+'</div>'
+      +'<p style="font-size:13px;line-height:1.7;text-align:justify">'+attCorps(id,type)+'</p>'
+      +'<p style="font-size:13px;line-height:1.7;margin-top:14px">La présente attestation est délivrée pour servir et valoir ce que de droit.</p>'
+      +'<div style="margin-top:40px;display:flex;justify-content:space-between;align-items:flex-end">'
+      +'<div style="font-size:12px">Fait à '+esc(a.ville||'…………')+',<br>le '+esc(now.toLocaleDateString('fr-FR'))+'.</div>'
+      +'<div style="text-align:center;font-size:12px"><div style="margin-bottom:34px">Signature &amp; cachet</div><div style="border-top:1px solid #999;padding-top:4px;min-width:180px"><b>'+esc(a.sign)+'</b><br>'+esc(a.cab)+'</div></div>'
+      +'</div></div></div></div>';
+  }
+  window.espAttestation=function(id){
+    var cur=window.__attType||'prise';var a=attData(id);
+    var sel='<label>Type d\'attestation</label><select id="att-type" onchange="attMaj(\''+id+'\')">'+ATT_TYPES.map(function(t){return '<option value="'+t.k+'"'+(t.k===cur?' selected':'')+'>'+esc(t.lbl)+'</option>';}).join('')+'</select>';
+    openModal('Attestation — '+esc(a.ref),
+      sel+'<div id="att-prev" style="margin-top:10px">'+attDocHTML(id,cur)+'</div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+      +(a.mail?'<button class="btn btn-ghost" onclick="attEnvoyer(\''+id+'\')">Envoyer au client</button>':'')
+      +'<button class="btn btn-pri" onclick="signImprimer()">Imprimer / PDF</button>');
+    setTimeout(fvFitView,30);
+  };
+  window.attMaj=function(id){var ty=(document.getElementById('att-type')||{}).value||'prise';window.__attType=ty;var w=document.getElementById('att-prev');if(w)w.innerHTML=attDocHTML(id,ty);};
+  window.attEnvoyer=function(id){var a=attData(id);if(!a.mail)return toast('Aucune adresse e-mail client.');
+    var ty=window.__attType||'prise';var t=(ATT_TYPES.find(function(x){return x.k===ty;})||ATT_TYPES[0]);
+    var corps='Bonjour,\n\nVeuillez trouver ci-joint l\'attestation ('+t.lbl.toLowerCase()+') relative à votre dossier '+a.ref+'.\n\n'+attCorps(id,ty).replace(/<[^>]+>/g,'')+'\n\nCordialement,\n'+a.cab;
+    var sent=(typeof demEnvoiSilencieux==='function')&&demEnvoiSilencieux(a.mail,a.cab+' — Attestation dossier '+a.ref,corps);
+    if(typeof logAudit==='function')logAudit('Attestation envoyée',a.ref+' ('+t.lbl+') — '+a.mail);if(typeof save==='function')save();
+    if(sent)toast('Attestation envoyée à '+a.mail);else{window.location.href='mailto:'+encodeURIComponent(a.mail)+'?subject='+encodeURIComponent(a.cab+' — Attestation dossier '+a.ref)+'&body='+encodeURIComponent(corps);}
   };
   /* ---------- Signature électronique simple (dessin + horodatage + empreinte SHA-256) ---------- */
   function signPadInit(){
