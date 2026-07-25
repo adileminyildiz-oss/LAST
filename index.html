@@ -212,6 +212,8 @@ input[type=checkbox],input[type=radio]{width:auto;accent-color:#7a6e58;cursor:po
   background:var(--espresso);color:#f7f2e6;padding:9px 16px;border-radius:9px;font-size:12px;font-weight:600;
   box-shadow:0 16px 40px -14px rgba(60,48,25,.5);transition:.3s;pointer-events:none}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast-undo{pointer-events:auto;cursor:pointer;margin-left:8px;padding:2px 9px;border-radius:7px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.14);color:#fff;font:700 11px/1 inherit}
+.toast-undo:hover{background:rgba(255,255,255,.28)}
 #saveind{position:fixed;bottom:11px;left:11px;z-index:40;font-size:10px;color:var(--ink-3);display:flex;align-items:center;gap:5px;opacity:.75}
 #saveind .dot{width:6px;height:6px;background:var(--sage)}
 
@@ -2280,7 +2282,8 @@ function factSave(id,t){
   else{var _num=factNum(t);DB.factures.push({id:uid('fa'),type:t,num:_num,tiers,date:g('fa-date').value,ht,taux,tva,ttc,statut:g('fa-statut').value,createdAt:today()});logAudit('Facture créée',_num+' — '+tiers+' — '+eur(ttc));}
   save();closeModal();toast('Facture enregistrée');render();
 }
-function factDel(id){if(!confirm('Supprimer cette facture ?'))return;DB.factures=DB.factures.filter(f=>f.id!==id);save();closeModal();toast('Facture supprimée');render();}
+function factDel(id){if(!confirm('Supprimer cette facture ?'))return;var i=DB.factures.findIndex(f=>f.id===id);if(i<0)return;var item=DB.factures[i];DB.factures.splice(i,1);save();closeModal();
+  toastUndo('Facture supprimée',function(){DB.factures.splice(Math.min(i,DB.factures.length),0,item);save();render();toast('Suppression annulée');});render();}
 
 /* ---------- ESPACE — poste de travail des dossiers ---------- */
 const ESP_PIECES=[
@@ -3280,7 +3283,8 @@ function devisView(id){
   setTimeout(fvFitView,40);
 }
 function devisSetStatut(id,st){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;d.statut=st;save();toast('Devis '+st.toLowerCase());devisView(id);}
-function devisDel(id){yc('Supprimer ce devis ?',function(){DB.devis=(DB.devis||[]).filter(function(x){return x.id!==id;});save();closeModal();toast('Devis supprimé');render();});}
+function devisDel(id){yc('Supprimer ce devis ?',function(){var i=(DB.devis||[]).findIndex(function(x){return x.id===id;});if(i<0)return;var item=DB.devis[i];DB.devis.splice(i,1);save();closeModal();
+  toastUndo('Devis supprimé',function(){DB.devis.splice(Math.min(i,DB.devis.length),0,item);save();render();toast('Suppression annulée');});render();});}
 function devisPrint(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(d&&d.doc&&typeof FactureVente!=='undefined'&&FactureVente.imprimerDoc)FactureVente.imprimerDoc(d.doc);}
 function devisEnvoyer(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;
   var mail=(d.doc&&d.doc.clientEmail)||docClientEmail(d)||'';
@@ -3430,6 +3434,8 @@ function openModal(t,b,f){document.getElementById('ov-t').innerHTML=t;document.g
   document.getElementById('ov-f').innerHTML=f||'';document.getElementById('ov').classList.add('show');}
 function closeModal(){document.getElementById('ov').classList.remove('show');}
 function toast(m,dur){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>t.classList.remove('show'),dur||2200);}
+function toastUndo(m,restoreFn){var t=document.getElementById('toast');t.innerHTML=esc(m)+' <button class="toast-undo" onclick="__toastUndoRun()">Annuler</button>';window.__toastUndoFn=restoreFn;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(function(){t.classList.remove('show');window.__toastUndoFn=null;},7000);}
+function __toastUndoRun(){var f=window.__toastUndoFn;window.__toastUndoFn=null;var t=document.getElementById('toast');t.classList.remove('show');clearTimeout(window._tt);if(f)f();}
 function exportDB(){const b=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');
   a.href=URL.createObjectURL(b);a.download='last-donnees-'+today()+'.json';a.click();
   DB.params=DB.params||{};DB.params.lastBackup=Date.now();try{save();}catch(e){}if(typeof toast==='function')toast('Sauvegarde téléchargée');if(typeof render==='function')render();}
@@ -3633,7 +3639,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=140;
+var LAST_VER=141;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
