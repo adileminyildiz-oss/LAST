@@ -1102,6 +1102,7 @@ function pageDash(){
   var greet=(function(){var h=new Date().getHours();return h<12?'Bonjour':h<18?'Bon après-midi':'Bonsoir';})();
   var cab=(DB.params&&DB.params.cabinet)||'AEM CONSEIL';
   var out='<div class="flow-note" style="margin-bottom:14px">'+svg(IC.dash)+'<div><b>'+greet+'</b> — voici l\'activité de <b>'+esc(cab)+'</b> en un coup d\'œil.</div></div>';
+  out+=backupBannerHTML();
   if(echues.length){var mtEch=echues.reduce(function(s,f){return s+(+f.ttc||0);},0);
     out+='<div class="dash-alert"><span class="da-ic">!</span><div class="da-txt"><b>'+echues.length+' facture'+(echues.length>1?'s':'')+' échue'+(echues.length>1?'s':'')+'</b> — '+eur(mtEch)+' à recouvrer.</div>'
       +'<button class="btn btn-sm btn-pri" onclick="relancerToutesEchues()">Tout relancer</button></div>';}
@@ -2113,8 +2114,9 @@ function pageParams(){
       <div class="section-t">Pipeline de traitement</div>
       <div class="chips">${STATUTS.map(s=>`<span class="tag" style="border-color:${s.c}55"><span class="dot" style="background:${s.c}"></span>${s.k}</span>`).join('')}</div>
       <div class="section-t">Données</div>
+      <p class="hint" style="margin:0 0 8px">Vos données sont stockées sur cet appareil (navigateur). ${(function(){var j=backupJours();return j===null?'<b style="color:#b45309">Aucune sauvegarde effectuée.</b>':('Dernière sauvegarde : il y a '+j+' jour'+(j>1?'s':'')+'.');})()} Exportez régulièrement un fichier de sauvegarde.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-sm" onclick="exportDB()">Exporter</button>
+        <button class="btn btn-sm btn-pri" onclick="exportDB()">Sauvegarder (exporter)</button>
         <button class="btn btn-sm btn-ghost" onclick="document.getElementById('imp').click()">Importer</button>
         <button class="btn btn-sm btn-danger" onclick="if(confirm('Réinitialiser toutes les données de démonstration ?')){localStorage.removeItem(KEY);location.reload();}">Réinitialiser</button>
       </div><input type="file" id="imp" accept="application/json" style="display:none" onchange="importDB(this)">
@@ -3429,7 +3431,12 @@ function openModal(t,b,f){document.getElementById('ov-t').innerHTML=t;document.g
 function closeModal(){document.getElementById('ov').classList.remove('show');}
 function toast(m,dur){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>t.classList.remove('show'),dur||2200);}
 function exportDB(){const b=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');
-  a.href=URL.createObjectURL(b);a.download='last-donnees-'+today()+'.json';a.click();}
+  a.href=URL.createObjectURL(b);a.download='last-donnees-'+today()+'.json';a.click();
+  DB.params=DB.params||{};DB.params.lastBackup=Date.now();try{save();}catch(e){}if(typeof toast==='function')toast('Sauvegarde téléchargée');if(typeof render==='function')render();}
+function backupJours(){var t=DB.params&&DB.params.lastBackup;if(!t)return null;return Math.floor((Date.now()-t)/86400000);}
+function backupBannerHTML(){var j=backupJours();var due=(j===null||j>=7);if(!due)return '';
+  var txt=(j===null)?'Vos données ne sont enregistrées que sur cet appareil. Faites une première sauvegarde.':('Dernière sauvegarde il y a '+j+' jour'+(j>1?'s':'')+'. Pensez à sauvegarder vos données.');
+  return '<div class="dash-alert" style="border-color:#d9a441;background:#fff8ec"><span class="da-ic" style="background:#d9a441">!</span><div class="da-txt">'+esc(txt)+'</div><button class="btn btn-sm" style="margin-left:auto" onclick="exportDB()">Sauvegarder maintenant</button></div>';}
 /* ---------- Export CSV (journal des ventes / devis / clients) ---------- */
 function csvCell(v){v=(v==null?'':''+v);if(/[";\n]/.test(v))v='"'+v.replace(/"/g,'""')+'"';return v;}
 function downloadCSV(filename,rows){
@@ -3626,7 +3633,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=139;
+var LAST_VER=140;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
