@@ -92,6 +92,7 @@ main{min-width:0;display:flex;flex-direction:column}
 .gs-main{flex:1;min-width:0}.gs-main b{font-size:12.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gs-main .gs-sub{font-size:10.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gs-empty{padding:14px 12px;font-size:12px;color:var(--ink-3);text-align:center}
+kbd{display:inline-block;min-width:16px;text-align:center;padding:2px 6px;font:600 11px/1.2 ui-monospace,monospace;color:#5f0f22;background:#fff1f4;border:1px solid #f2c9d4;border-bottom-width:2px;border-radius:5px}
 .dash-alert{display:flex;align-items:center;gap:11px;margin-bottom:14px;padding:11px 14px;border-radius:11px;background:linear-gradient(90deg,#fff1f4,#fde8ec);border:1px solid #f3c6d1}
 .dash-alert .da-ic{flex:none;width:24px;height:24px;border-radius:50%;background:#be123c;color:#fff;font:800 14px/24px ui-sans-serif,Arial;text-align:center}
 .dash-alert .da-txt{flex:1;font-size:12.5px;color:#7a1330}
@@ -742,6 +743,40 @@ function gsGo(type,id){
   window.scrollTo(0,0);
 }
 document.addEventListener('click',function(e){var s=e.target.closest&&e.target.closest('.search');if(!s)gsClose();});
+/* ---------- Raccourcis clavier ---------- */
+function shortcutsHelp(){openModal('Raccourcis clavier',
+  '<table class="cl-tbl" style="width:100%"><tbody>'
+  +'<tr><td><kbd>/</kbd></td><td>Rechercher (clients, dossiers, devis, factures…)</td></tr>'
+  +'<tr><td><kbd>n</kbd></td><td>Nouveau devis</td></tr>'
+  +'<tr><td><kbd>f</kbd></td><td>Nouvelle facture</td></tr>'
+  +'<tr><td><kbd>g</kbd> <kbd>d</kbd></td><td>Aller au Tableau de bord</td></tr>'
+  +'<tr><td><kbd>g</kbd> <kbd>c</kbd></td><td>Aller aux Clients</td></tr>'
+  +'<tr><td><kbd>g</kbd> <kbd>t</kbd></td><td>Aller au Traitement</td></tr>'
+  +'<tr><td><kbd>g</kbd> <kbd>r</kbd></td><td>Aller à la Rentabilité</td></tr>'
+  +'<tr><td><kbd>Échap</kbd></td><td>Fermer la fenêtre / la recherche</td></tr>'
+  +'<tr><td><kbd>?</kbd></td><td>Afficher cette aide</td></tr>'
+  +'</tbody></table>','<button class="btn btn-pri" onclick="closeModal()">Fermer</button>');}
+(function(){var chord=null,chordT=0;
+document.addEventListener('keydown',function(e){
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  var t=e.target,tag=(t&&t.tagName)||'';
+  if(/INPUT|TEXTAREA|SELECT/.test(tag)||(t&&t.isContentEditable))return;
+  var ov=document.getElementById('ov');var ovOpen=ov&&ov.classList.contains('show');
+  if(e.key==='/'){e.preventDefault();var q=document.getElementById('q');if(q){q.focus();if(q.select)q.select();}return;}
+  if(e.key==='?'){e.preventDefault();if(!ovOpen)shortcutsHelp();return;}
+  if(ovOpen)return;
+  var now=Date.now();
+  if(chord==='g'&&(now-chordT)<900){chord=null;
+    if(e.key==='d'){e.preventDefault();go('dash');return;}
+    if(e.key==='c'){e.preventDefault();go('clients');return;}
+    if(e.key==='t'){e.preventDefault();go('espace');return;}
+    if(e.key==='r'){e.preventDefault();go('marge');return;}
+  }
+  if(e.key==='g'){chord='g';chordT=now;return;}
+  if(e.key==='n'){e.preventDefault();if(typeof fvOpenDevis==='function')fvOpenDevis();return;}
+  if(e.key==='f'){e.preventDefault();if(typeof fvOpen==='function')fvOpen();return;}
+  chord=null;
+});})();
 
 function navBadgeCount(id){
   if(id==='demandes')return DB.demandes.filter(d=>!d.dossierId&&d.statut!=='Clôturé'&&!d.archived).length;
@@ -3561,7 +3596,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=135;
+var LAST_VER=136;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
