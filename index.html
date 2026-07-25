@@ -96,6 +96,12 @@ main{min-width:0;display:flex;flex-direction:column}
 .dash-alert .da-ic{flex:none;width:24px;height:24px;border-radius:50%;background:#be123c;color:#fff;font:800 14px/24px ui-sans-serif,Arial;text-align:center}
 .dash-alert .da-txt{flex:1;font-size:12.5px;color:#7a1330}
 .dash-alert .da-txt b{color:#9f1239}
+.stat-chart{display:flex;align-items:flex-end;gap:2%;height:170px;padding-top:6px}
+.stat-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.stat-bar{width:100%;max-width:34px;height:140px;display:flex;align-items:flex-end;background:#faf3f4;border-radius:6px 6px 0 0;overflow:hidden}
+.stat-bar-f{width:100%;background:linear-gradient(180deg,#e11d48,#be123c);border-radius:6px 6px 0 0;position:relative;display:flex;align-items:flex-end;min-height:2px}
+.stat-bar-e{width:100%;background:linear-gradient(180deg,#3f7d54,#2f6b45)}
+.stat-x{font-size:9.5px;color:var(--ink-3);white-space:nowrap;transform:rotate(-32deg);transform-origin:top right;height:20px}
 .content{padding:14px 16px 56px;max-width:1120px;width:100%}
 
 /* ============ CARTES FORMELLES ============ */
@@ -2013,7 +2019,29 @@ function pageMarge(){
   <table><thead><tr><th>Réf.</th><th>Client(s)</th><th class="hide-sm">Honoraires</th><th class="hide-sm">Débours</th><th class="hide-sm">Commissions</th><th>Marge nette</th><th>Taux</th></tr></thead><tbody>
   ${rows.map(function(r){var m=r.m;var tx=m.ca?Math.round((m.marge/m.ca)*100):0;
     return `<tr><td class="tname">${esc(r.d.ref)}</td><td>${esc(dossierClients(r.d))}</td><td class="hide-sm">${eur(m.hon)}</td><td class="hide-sm">${eur(m.deb)}</td><td class="hide-sm">${eur(m.com)}</td><td><b style="color:var(--ok)">${eur(m.marge)}</b></td><td><span class="tag ${tx>=50?'ok':tx>0?'warm':'mut'}">${tx} %</span></td></tr>`;}).join('')||'<tr><td colspan="7" class="empty">Aucun dossier.</td></tr>'}
-  </tbody>${rows.length?`<tfoot><tr style="font-weight:700;border-top:2px solid var(--line)"><td colspan="2">Total (${rows.length} dossier${rows.length>1?'s':''})</td><td class="hide-sm">${eur(hon)}</td><td class="hide-sm">${eur(deb)}</td><td class="hide-sm">${eur(com)}</td><td style="color:var(--ok)">${eur(marge)}</td><td>${tauxMarge} %</td></tr></tfoot>`:''}</table></div></div>`;
+  </tbody>${rows.length?`<tfoot><tr style="font-weight:700;border-top:2px solid var(--line)"><td colspan="2">Total (${rows.length} dossier${rows.length>1?'s':''})</td><td class="hide-sm">${eur(hon)}</td><td class="hide-sm">${eur(deb)}</td><td class="hide-sm">${eur(com)}</td><td style="color:var(--ok)">${eur(marge)}</td><td>${tauxMarge} %</td></tr></tfoot>`:''}</table></div></div>`+statsCard();
+}
+function statMois(n){
+  var out=[];var now=new Date();
+  for(var i=n-1;i>=0;i--){var d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    var ym=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2);
+    var lbl=['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'][d.getMonth()]+' '+String(d.getFullYear()).slice(2);
+    out.push({ym:ym,label:lbl,facture:0,encaisse:0,nb:0});}
+  var idx={};out.forEach(function(m){idx[m.ym]=m;});
+  (DB.factures||[]).filter(function(f){return f.type==='client';}).forEach(function(f){var ym=(''+(f.date||'')).slice(0,7);var m=idx[ym];if(!m)return;m.facture+=(+f.ttc||0);m.nb++;if(f.statut==='Payée')m.encaisse+=(+f.ttc||0);});
+  return out;
+}
+function statsCard(){
+  var m=statMois(12);var max=m.reduce(function(s,x){return Math.max(s,x.facture);},0)||1;
+  var caTot=m.reduce(function(s,x){return s+x.facture;},0),encTot=m.reduce(function(s,x){return s+x.encaisse;},0),nbTot=m.reduce(function(s,x){return s+x.nb;},0);
+  var bars=m.map(function(x){var hF=Math.round((x.facture/max)*100);var hE=x.facture?Math.round((x.encaisse/x.facture)*hF):0;
+    return '<div class="stat-col" title="'+esc(x.label)+' — Facturé : '+eur(x.facture)+' · Encaissé : '+eur(x.encaisse)+' ('+x.nb+' facture'+(x.nb>1?'s':'')+')">'
+      +'<div class="stat-bar"><div class="stat-bar-f" style="height:'+hF+'%"><div class="stat-bar-e" style="height:'+hE+'%"></div></div></div>'
+      +'<div class="stat-x">'+esc(x.label)+'</div></div>';}).join('');
+  return '<div class="card" style="margin-top:16px"><div class="card-h"><h2>Chiffre d\'affaires par mois</h2><span class="sub" style="margin-left:auto">12 derniers mois · '+nbTot+' facture(s)</span></div><div class="card-b">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><span class="tag blue">Facturé : '+eur(caTot)+'</span><span class="tag ok">Encaissé : '+eur(encTot)+'</span></div>'
+    +'<div class="stat-chart">'+bars+'</div>'
+    +'</div></div>';
 }
 
 /* ---------- PARAMS ---------- */
@@ -3458,7 +3486,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=128;
+var LAST_VER=129;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
