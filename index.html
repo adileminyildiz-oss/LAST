@@ -2282,6 +2282,18 @@ function espDuree(d){
   if(simple)return {lbl:'Traitement rapide',temps:'moins de 20 min',c:'ok'};
   return {lbl:'Traitement moyen',temps:'20–30 min',c:'blue'};
 }
+function espNotesCard(d){
+  var meta=d.notesTs?('Dernière modification : '+new Date(d.notesTs).toLocaleString('fr-FR')+(d.notesBy?(' · '+esc(d.notesBy)):'')):'Notes internes (non visibles par le client)';
+  return '<div class="card"><div class="card-h"><h2>Notes internes</h2><span class="sub" style="margin-left:auto">Suivi privé</span></div><div class="card-b">'
+    +'<textarea id="esp-notes-'+d.id+'" rows="4" style="width:100%;font:inherit;font-size:12.5px;resize:vertical" placeholder="Remarques, points de suivi, à faire… (visibles uniquement en interne)" onchange="espNotesSave(\''+d.id+'\')">'+esc(d.notes||'')+'</textarea>'
+    +'<div class="tsub" style="margin-top:6px">'+meta+'</div>'
+    +'</div></div>';
+}
+function espNotesSave(id){var d=(DB.dossiers||[]).find(function(x){return x.id===id;});if(!d)return;
+  var el=document.getElementById('esp-notes-'+id);if(!el)return;var v=el.value;
+  if((d.notes||'')===v)return;d.notes=v;d.notesTs=Date.now();try{d.notesBy=(typeof auditUser==='function')?auditUser():'';}catch(e){}
+  if(typeof save==='function')save();toast('Notes enregistrées');render();
+}
 function espMailCard(d){
   var dm=espDemandeDe(d);var c=clientById((d.clientIds||[])[0])||{};
   var email=(dm&&dm.clientEmail)||c.email||'—';
@@ -2521,7 +2533,7 @@ function espEnvoyerMail(id){var d=espDoss().find(function(x){return x.id===id;})
 function espPanel(d,list,id){
   return '<div class="esp-shell">'
    +espMiniList(list,id)
-   +'<div class="esp-main">'+espMailCard(d)+espTraitementCard(d)+espPiecesCard(d)+espDocsPretsCard(d)+'</div>'
+   +'<div class="esp-main">'+espMailCard(d)+espTraitementCard(d)+espNotesCard(d)+espPiecesCard(d)+espDocsPretsCard(d)+'</div>'
    +'</div>';
 }
 function espStatutsCard(d){
@@ -3538,7 +3550,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=133;
+var LAST_VER=134;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
