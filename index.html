@@ -1847,8 +1847,11 @@ function saveClient(id){
     siren:(function(){var e=g('cl-siret');var d=e?e.value.replace(/\D/g,''):'';return (window._clSiret&&window._clSiret.siren)||d.slice(0,9)||'';})(),
     associes:window._assoc.filter(a=>a.nom.trim())};
   if(!obj.nom&&!obj.prenom)return toast('Nom requis');
+  var warn=[];
+  if(obj.email&&typeof validEmail==='function'&&!validEmail(obj.email))warn.push('e-mail');
+  if(obj.siret&&typeof validSiret==='function'&&!validSiret(obj.siret))warn.push('SIRET');
   if(id){Object.assign(DB.clients.find(x=>x.id===id),obj);}else{DB.clients.push({id:uid('c'),createdAt:today(),...obj});}
-  save();closeModal();toast('Fiche client enregistrée');render();
+  save();closeModal();toast(warn.length?('Fiche enregistrée — à vérifier : '+warn.join(', ')):'Fiche client enregistrée');render();
 }
 function delClient(id){if(!confirm('Supprimer cette fiche client ?'))return;DB.clients=DB.clients.filter(c=>c.id!==id);save();closeModal();toast('Client supprimé');render();}
 /* ---------- Vérification SIRET/SIREN (API publique gratuite recherche-entreprises.api.gouv.fr, sans clé) ---------- */
@@ -3035,10 +3038,26 @@ function auditCard(){var list=(DB.audit||[]).slice(0,50);
       +'</tbody></table>'):'<div class="empty">Aucun événement enregistré pour l\'instant.</div>')
     +'</div>'+((DB.audit||[]).length?'<div style="padding:10px 14px"><button class="btn btn-sm btn-ghost" onclick="auditClear()">Effacer le journal</button></div>':'')+'</div>';
 }
+/* ---------- Contrôles de cohérence (SIREN/SIRET, IBAN, TVA, e-mail) ---------- */
+function chkLuhn(num){var s=0,alt=false;for(var i=num.length-1;i>=0;i--){var n=+num[i];if(alt){n*=2;if(n>9)n-=9;}s+=n;alt=!alt;}return s%10===0;}
+function validSiren(v){v=(''+(v||'')).replace(/\D/g,'');return v.length===9&&chkLuhn(v);}
+function validSiret(v){v=(''+(v||'')).replace(/\D/g,'');return v.length===14&&chkLuhn(v);}
+function validEmail(v){return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(''+(v||''));}
+function validTvaFr(v){return /^FR[0-9A-Z]{2}\d{9}$/i.test((''+(v||'')).replace(/\s+/g,''));}
+function validIBAN(v){v=(''+(v||'')).replace(/\s+/g,'').toUpperCase();if(!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(v))return false;
+  var re=v.slice(4)+v.slice(0,4);var exp=re.replace(/[A-Z]/g,function(c){return (c.charCodeAt(0)-55);});
+  var mod=0;for(var i=0;i<exp.length;i++){mod=(mod*10+(+exp[i]))%97;}return mod===1;}
+function chkChip(label,value,ok){if(!value)return '<span class="tag mut">'+esc(label)+' —</span>';return '<span class="tag '+(ok?'ok':'hot')+'">'+esc(label)+' '+(ok?'✓':'⚠')+'</span>';}
+function societeCoherenceHTML(){var s=DB.societe||{};
+  var chips=chkChip('SIREN',s.siren,validSiren(s.siren))+chkChip('SIRET',s.siret,validSiret(s.siret))
+    +chkChip('TVA',s.tvaIntra,validTvaFr(s.tvaIntra))+chkChip('IBAN',s.iban,validIBAN(s.iban));
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px">'+chips+'</div>';
+}
 function societeCard(){var s=DB.societe||{};
   function f(id,lbl,val,ph){return '<div><label>'+lbl+'</label><input id="'+id+'" value="'+esc(val||'')+'"'+(ph?' placeholder="'+esc(ph)+'"':'')+'></div>';}
   return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Société émettrice</h2><span class="sub" style="margin-left:auto">Mentions légales des factures & devis</span></div><div class="card-b">'
     +'<p class="hint" style="margin:0 0 10px">Ces informations figurent en pied de vos factures et devis (obligations légales : identification de l\'émetteur, SIRET, TVA intracommunautaire, capital, RCS).</p>'
+    +societeCoherenceHTML()
     +'<div class="frow">'+f('so-raison','Dénomination',s.raison,'AEM CONSEIL')+f('so-forme','Forme juridique',s.formeJur,'SAS')+'</div>'
     +'<div class="frow">'+f('so-capital','Capital social (€)',s.capital,'1000')+f('so-ape','Code APE / NAF',s.codeAPE||s.ape,'7022Z')+'</div>'
     +'<div class="frow">'+f('so-siren','SIREN',s.siren,'9 chiffres')+f('so-siret','SIRET',s.siret,'14 chiffres')+'</div>'
@@ -3519,7 +3538,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=132;
+var LAST_VER=133;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
