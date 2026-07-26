@@ -2250,6 +2250,7 @@ function pageParams(){
   <div class="card" style="margin-top:14px"><div class="card-h"><h2>Prestations</h2><span class="sub" style="margin-left:auto">Catalogue des prestations</span></div>
     <div class="card-b">${prestationsBloc()}</div></div>
   ${societeCard()}
+  ${numControlCard()}
   ${mailTplCard()}
   ${auditCard()}
   ${integStatusCard()}
@@ -3253,6 +3254,34 @@ function societeCoherenceHTML(){var s=DB.societe||{};
     +chkChip('TVA',s.tvaIntra,validTvaFr(s.tvaIntra))+chkChip('IBAN',s.iban,validIBAN(s.iban));
   return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px">'+chips+'</div>';
 }
+/* ---------- Contrôle de la numérotation (continuité légale) ---------- */
+function numGroups(){
+  var g={};function add(num){var m=(''+(num||'')).match(/^([A-Za-z]+)-?(\d+)$/);if(!m)return;var pfx=m[1].toUpperCase();(g[pfx]=g[pfx]||[]).push(+m[2]);}
+  (DB.factures||[]).forEach(function(f){add(f.num);});
+  (DB.devis||[]).forEach(function(d){add(d.num);});
+  return g;
+}
+function numSeqStatus(nums){
+  var arr=nums.slice().sort(function(a,b){return a-b;});
+  var gaps=[],seen={},dups=[];
+  arr.forEach(function(n){if(seen[n])dups.push(n);seen[n]=1;});
+  for(var i=arr[0];i<=arr[arr.length-1];i++){if(!seen[i])gaps.push(i);}
+  return {count:arr.length,dups:dups.filter(function(v,i,a){return a.indexOf(v)===i;}),gaps:gaps};
+}
+function numControlCard(){
+  var LBL={FV:'Factures de vente',FA:'Factures d\'achat',AV:'Avoirs',DEV:'Devis'};
+  var g=numGroups();var keys=Object.keys(g);
+  if(!keys.length)return '';
+  var rows=keys.map(function(k){var st=numSeqStatus(g[k]);var ok=!st.dups.length&&!st.gaps.length;
+    var note=ok?'<span class="tag ok">séquence continue ✓</span>':(
+      (st.gaps.length?'<span class="tag hot">'+st.gaps.length+' trou'+(st.gaps.length>1?'s':'')+' ('+st.gaps.slice(0,5).join(', ')+(st.gaps.length>5?'…':'')+')</span>':'')
+      +(st.dups.length?' <span class="tag hot">'+st.dups.length+' doublon'+(st.dups.length>1?'s':'')+'</span>':''));
+    return '<div class="integ-row"><div style="flex:1"><b style="font-size:12.5px">'+esc(LBL[k]||k)+'</b><div class="tsub">'+st.count+' numéro(s)</div></div><div>'+note+'</div></div>';
+  }).join('');
+  return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Conformité de la numérotation</h2><span class="sub" style="margin-left:auto">Continuité légale</span></div><div class="card-b">'
+    +'<p class="hint" style="margin:0 0 6px">La numérotation des factures doit être <b>continue, chronologique et sans rupture</b> (art. 242 nonies A du CGI). Une facture émise ne se supprime pas : émettez un <b>avoir</b>. Un trou peut résulter d\'une suppression.</p>'
+    +rows+'</div></div>';
+}
 function societeCard(){var s=DB.societe||{};
   function f(id,lbl,val,ph){return '<div><label>'+lbl+'</label><input id="'+id+'" value="'+esc(val||'')+'"'+(ph?' placeholder="'+esc(ph)+'"':'')+'></div>';}
   return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Société émettrice</h2><span class="sub" style="margin-left:auto">Mentions légales des factures & devis</span></div><div class="card-b">'
@@ -3776,7 +3805,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=150;
+var LAST_VER=151;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
