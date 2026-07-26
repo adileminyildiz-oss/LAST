@@ -2236,6 +2236,8 @@ function pageParams(){
     </div></div>
     <div class="card"><div class="card-h"><h2>Réglages</h2></div><div class="card-b">
       <label>Nom du cabinet</label><input value="${esc(DB.params.cabinet)}" onchange="DB.params.cabinet=this.value;save();toast('Enregistré')">
+      <div class="section-t">Apparence</div>
+      <label style="display:flex;align-items:center;gap:9px;cursor:pointer"><input type="checkbox" ${darkOn()?'checked':''} onchange="darkToggle(this.checked)" style="width:auto;flex:none;margin:0"> Thème sombre</label>
       <div class="section-t">Pipeline de traitement</div>
       <div class="chips">${STATUTS.map(s=>`<span class="tag" style="border-color:${s.c}55"><span class="dot" style="background:${s.c}"></span>${s.k}</span>`).join('')}</div>
       <div class="section-t">Données</div>
@@ -3595,6 +3597,11 @@ function openModal(t,b,f){document.getElementById('ov-t').innerHTML=t;document.g
   document.getElementById('ov-f').innerHTML=f||'';document.getElementById('ov').classList.add('show');
   try{if(window.matchMedia&&window.matchMedia('(min-width:861px)').matches){setTimeout(function(){var box=document.getElementById('ov-b');if(!box)return;var el=box.querySelector('input:not([type=hidden]):not([readonly]):not([type=file]), select, textarea');if(el&&!el.closest('.doc-gen,.inv,.fv-view-scroll,.st-doc'))el.focus();},40);}}catch(e){}}
 function closeModal(){document.getElementById('ov').classList.remove('show');}
+function darkOn(){try{return localStorage.getItem('last-dark')==='1';}catch(e){return false;}}
+function darkApply(){try{document.body.classList.toggle('dark',darkOn());}catch(e){}}
+function darkToggle(on){try{localStorage.setItem('last-dark',on?'1':'0');}catch(e){}darkApply();if(typeof toast==='function')toast(on?'Thème sombre activé':'Thème clair activé');}
+try{if(document.body)darkApply();}catch(e){}
+window.addEventListener('DOMContentLoaded',darkApply);window.addEventListener('load',darkApply);
 function toast(m,dur){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>t.classList.remove('show'),dur||2200);}
 function toastUndo(m,restoreFn){var t=document.getElementById('toast');t.innerHTML=esc(m)+' <button class="toast-undo" onclick="__toastUndoRun()">Annuler</button>';window.__toastUndoFn=restoreFn;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(function(){t.classList.remove('show');window.__toastUndoFn=null;},7000);}
 function __toastUndoRun(){var f=window.__toastUndoFn;window.__toastUndoFn=null;var t=document.getElementById('toast');t.classList.remove('show');clearTimeout(window._tt);if(f)f();}
@@ -3805,7 +3812,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=151;
+var LAST_VER=152;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -7020,6 +7027,57 @@ html,body,.app,main,.layout{background:#faf6f5!important}
 /* ---- Signature électronique ---- */
 .sign-padwrap{border:1px dashed #d8b9c2;border-radius:10px;background:#fff;padding:4px;margin-top:4px}
 #sign-pad{width:100%;height:180px;touch-action:none;cursor:crosshair;display:block;border-radius:7px}
+/* ============================ THÈME SOMBRE ============================ */
+body.dark{--paper:#221a1d;--paper-2:#2a2024;--card:#221a1d;--bg:#191315;--bg-side:#150f11;--ink:#ece7e9;--ink-2:#bcb0b5;--ink-3:#8f858a;--line:#3a2d33;--line-2:#43343b;--line-soft:#2b2125;--focus:0 0 0 3px rgba(225,29,72,.28)}
+body.dark,body.dark .app,body.dark main,body.dark .layout{background:#191315!important;color:var(--ink)}
+body.dark aside{background:#150f11!important;border-right-color:#2e2429!important}
+body.dark .topbar{background:rgba(28,20,23,.92)!important;border-bottom-color:#33272d!important}
+body.dark .page-title,body.dark .page-title small{color:var(--ink)!important}
+body.dark .card{background:var(--card)!important;border-color:var(--line)!important;color:var(--ink)}
+body.dark .card-h{background:linear-gradient(180deg,#2a2024,#241b1f)!important;border-bottom-color:var(--line)!important}
+body.dark .card-h h2,body.dark h2,body.dark h3,body.dark b,body.dark .kpi .v{color:var(--ink)!important}
+body.dark .sub,body.dark .tsub,body.dark .hint,body.dark .kpi .k,body.dark small,body.dark label{color:var(--ink-2)!important}
+body.dark .kpi{background:var(--card)!important;border-color:var(--line)!important}
+body.dark input,body.dark select,body.dark textarea{background:#2a2024!important;color:var(--ink)!important;border-color:var(--line)!important}
+body.dark input::placeholder,body.dark textarea::placeholder{color:#7d737a!important}
+body.dark .search input{background:#2a2024!important}
+body.dark table th{background:#2a2024!important;color:var(--ink-2)!important;border-color:var(--line)!important}
+body.dark table td{border-color:var(--line-soft)!important;color:var(--ink)}
+body.dark tbody tr:hover{background:#271d22!important}
+body.dark .btn,body.dark .dem-imp-btn{background:#2a2024!important;color:var(--ink)!important;border-color:var(--line)!important}
+body.dark .btn.btn-ghost{background:transparent!important}
+body.dark .btn:hover,body.dark .dem-imp-btn:hover{background:#33262c!important;border-color:#7a2740!important}
+body.dark .nav-btn{color:#c9bdc2!important}
+body.dark .nav-btn:hover{background:#2a1f24!important;color:#fff!important}
+body.dark .nav-btn.on{background:#301b22!important;color:#ffd9e2!important}
+body.dark .flow-note{background:#241a1e!important;border-color:var(--line)!important;color:var(--ink-2)!important}
+body.dark .tag{background:#2a2024!important;border-color:var(--line)!important;color:var(--ink-2)!important}
+body.dark .tag.mut{background:#241b1f!important}
+body.dark .fchip{background:#2a2024!important;border-color:var(--line)!important;color:var(--ink-2)!important}
+body.dark .fchip:hover{background:#33262c!important}
+body.dark .integ-row{border-top-color:var(--line)!important}
+body.dark .gsearch{background:#221a1d!important;border-color:var(--line)!important}
+body.dark .gs-grp{background:#1d1519!important}
+body.dark .gs-item{border-top-color:#2b2125!important}
+body.dark .gs-item:hover,body.dark .gs-item.on{background:#301b22!important}
+body.dark .gs-item .gs-ic{background:#3a222b!important;color:#ffb3c6!important}
+body.dark .dash-alert{background:#2a1a1f!important}
+body.dark .stat-bar{background:#2a2024!important}
+body.dark .modal,body.dark #ov-b,body.dark .modal-h{background:var(--card)!important;color:var(--ink)}
+body.dark .modal-h{border-bottom-color:var(--line)!important}
+body.dark kbd{background:#3a222b!important;border-color:#5f2537!important;color:#ffd0dc!important}
+body.dark .cl-mini,body.dark .esp-mini,body.dark .esp-shell{background:#1d1519!important}
+body.dark .esp-mini-item{color:var(--ink-2)!important}
+body.dark .cl-tbl th{background:#2a2024!important}
+/* Accents Bordeaux conservés en clair sur fond sombre */
+body.dark .section-t,body.dark .cl-sec{color:#ff7a97!important}
+body.dark .btn-pri,body.dark .tr-primary,body.dark .dem-imp-pri{color:#fff!important}
+body.dark .val.cre{color:#5bd6a0!important}body.dark .val.deb{color:#ff8a8a!important}
+/* Documents & aperçus imprimables : TOUJOURS clairs */
+body.dark .doc-gen,body.dark .doc-gen *,body.dark .inv,body.dark .inv *,body.dark .st-doc,body.dark .st-doc *,body.dark .st-page,body.dark .inv-page,body.dark .fv-view-scroll{background-color:initial}
+body.dark .doc-gen,body.dark .inv,body.dark .st-doc,body.dark .st-page,body.dark .inv-page,body.dark .fv-view-scroll{background:#fff!important}
+body.dark .doc-gen,body.dark .doc-gen b,body.dark .inv,body.dark .inv b,body.dark .st-page,body.dark .st-page b{color:#111!important}
+body.dark .fv-view-scroll{border-color:#ccc!important}
 </style>
 
 <script id="no-emoji-mod">
