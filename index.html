@@ -3574,7 +3574,9 @@ function downloadCSV(filename,rows){
   if(typeof toast==='function')toast('Export CSV téléchargé');
 }
 function exportFacturesCSV(){
-  var list=(DB.factures||[]).filter(function(f){return f.type==='client';}).sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+  var fil=state.factFilter||'tous';
+  var match=function(f){return fil==='tous'?true:(fil==='emises'?f.statut==='Émise':fil==='impayees'?f.statut==='Impayée':fil==='payees'?f.statut==='Payée':fil==='avoirs'?!!f.avoir:true);};
+  var list=(DB.factures||[]).filter(function(f){return f.type==='client'&&match(f);}).sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
   var rows=[['N°','Client','Date','Échéance','HT','TVA','TTC','Statut','Relances']];
   list.forEach(function(f){rows.push([f.num,f.tiers,f.date||'',f.ech||'',(+f.ht||0).toFixed(2),(+f.tva||0).toFixed(2),(+f.ttc||0).toFixed(2),f.statut||'',(f.relances||[]).length]);});
   var tHT=list.reduce(function(s,f){return s+(+f.ht||0);},0),tTVA=list.reduce(function(s,f){return s+(+f.tva||0);},0),tTTC=list.reduce(function(s,f){return s+(+f.ttc||0);},0);
@@ -3582,7 +3584,9 @@ function exportFacturesCSV(){
   downloadCSV('journal-ventes-'+today()+'.csv',rows);
 }
 function exportDevisCSV(){
-  var list=(DB.devis||[]).slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+  var fil=state.devisFilter||'tous';
+  var dm=function(d){return fil==='tous'?true:(fil==='emis'?d.statut==='Émis':fil==='acceptes'?d.statut==='Accepté':fil==='transformes'?d.statut==='Transformé':fil==='refuses'?(d.statut==='Refusé'||d.statut==='Expiré'):true);};
+  var list=(DB.devis||[]).filter(dm).slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
   var rows=[['N°','Client','Date','Validité','HT','TVA','TTC','Statut','Facture','Relances']];
   list.forEach(function(d){rows.push([d.num,d.tiers,d.date||'',d.ech||'',(+d.ht||0).toFixed(2),(+d.tva||0).toFixed(2),(+d.ttc||0).toFixed(2),d.statut||'',d.factureNum||'',(d.relances||[]).length]);});
   downloadCSV('devis-'+today()+'.csv',rows);
@@ -3760,7 +3764,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=147;
+var LAST_VER=148;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
