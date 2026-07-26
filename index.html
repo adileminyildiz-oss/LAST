@@ -1919,9 +1919,20 @@ function clFacturation(c){
     +devis.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');}).map(function(d){return '<tr><td>'+esc(d.num)+'</td><td>'+(d.date?frDate(d.date):'—')+'</td><td>'+eur(d.ttc)+'</td><td>'+esc(d.statut||'')+'</td><td><button class="btn btn-sm btn-ghost" onclick="closeModal();setTimeout(function(){devisView(\''+d.id+'\');},20)">Ouvrir</button></td></tr>';}).join('')+'</tbody></table>';
   return h;
 }
+function clNotes(c){
+  var meta=c.notesTs?('Dernière modification : '+new Date(c.notesTs).toLocaleString('fr-FR')+(c.notesBy?(' · '+esc(c.notesBy)):'')):'Notes internes (non visibles par le client)';
+  return '<div class="cl-sec" style="margin-top:16px">Notes internes</div>'
+    +'<textarea id="cl-notes-'+c.id+'" rows="4" style="width:100%;font:inherit;font-size:12.5px;resize:vertical" placeholder="Remarques, points de suivi, à faire… (visibles uniquement en interne)" onchange="clNotesSave(\''+c.id+'\')">'+esc(c.notes||'')+'</textarea>'
+    +'<div class="tsub" style="margin-top:6px">'+meta+'</div>';
+}
+function clNotesSave(id){var c=(DB.clients||[]).find(function(x){return x.id===id;});if(!c)return;
+  var el=document.getElementById('cl-notes-'+id);if(!el)return;var v=el.value;
+  if((c.notes||'')===v)return;c.notes=v;c.notesTs=Date.now();try{c.notesBy=(typeof auditUser==='function')?auditUser():'';}catch(e){}
+  if(typeof save==='function')save();toast('Notes enregistrées');render();
+}
 function clTabEtat(c){
   var doss=DB.dossiers.filter(function(d){return d.clientIds.includes(c.id);});
-  if(!doss.length)return '<div class="empty" style="padding:12px">Aucun dossier ouvert pour ce client.</div>'+clFacturation(c);
+  if(!doss.length)return '<div class="empty" style="padding:12px">Aucun dossier ouvert pour ce client.</div>'+clFacturation(c)+clNotes(c);
   return '<div class="cl-sec">Dossiers & avancement</div>'+doss.map(function(d){
     var req=(typeof espDocsRequis==='function')?espDocsRequis(d):[];var st=d.docState||{};
     var prets=req.filter(function(dc){return st[dc.k]&&st[dc.k].ts;}).length;
@@ -1931,7 +1942,7 @@ function clTabEtat(c){
     return '<div class="cl-etat-row"><div class="cl-etat-top"><b>'+esc(d.ref)+'</b> <span class="tag '+cls+'">'+lbl+'</span> <span class="tag mut">'+esc(d.statut||'—')+'</span></div>'
       +'<div class="cl-etat-meta">Documents : '+complets+'/'+(req.length||0)+' complets · '+prets+' préparé(s)</div>'
       +'<button class="btn btn-sm" onclick="clOuvrirDossier(\''+d.id+'\')">Ouvrir le dossier</button></div>';
-  }).join('')+clFacturation(c);
+  }).join('')+clFacturation(c)+clNotes(c);
 }
 function clOuvrirDossier(id){state.page='espace';state.espaceDossier=id;render();}
 function modalClient(id){
@@ -3765,7 +3776,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=149;
+var LAST_VER=150;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
