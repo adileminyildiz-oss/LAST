@@ -132,6 +132,14 @@ const r = await page.evaluate(async () => {
   // Backup reminder
   delete DB.params.lastBackup; out.backupNever = backupJours() === null;
 
+  // Toutes les pages se rendent sans erreur
+  let pageErr = '';
+  ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
+    try { state.page = pg; render(); const v = document.querySelector('#view'); if (!v || v.innerHTML.length < 50) pageErr += pg + ' '; }
+    catch (e) { pageErr += pg + '! '; }
+  });
+  out.pagesRender = pageErr === '';
+
   return out;
 });
 
