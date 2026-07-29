@@ -132,6 +132,20 @@ const r = await page.evaluate(async () => {
   // Backup reminder
   delete DB.params.lastBackup; out.backupNever = backupJours() === null;
 
+  // Sauvegarde automatique (instantané + restauration)
+  if (typeof LBackup === 'object' && typeof LBackup._snapshot === 'function') {
+    DB.params = DB.params || {}; DB.params.__bk = 'A';
+    await LBackup._snapshot('manuel');
+    DB.params.__bk = 'B'; await LBackup._snapshot('manuel');
+    const lst = await LBackup.list();
+    window.confirm = () => true;
+    const oldest = lst[lst.length - 1];
+    await LBackup.restore(oldest.ts);
+    await new Promise(r => setTimeout(r, 350));
+    const lst2 = await LBackup.list();
+    out.sauvegarde = lst.length >= 2 && DB.params.__bk === 'A' && lst2.some(x => x.reason === 'avant-restauration');
+  } else out.sauvegarde = false;
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

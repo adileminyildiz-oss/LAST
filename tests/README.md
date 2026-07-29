@@ -5,7 +5,8 @@ contourne l'écran de connexion, puis vérifie les invariants des flux
 principaux : validateurs (SIREN/SIRET/IBAN/TVA/e-mail), devis → facture,
 avoir, relance (modèle par défaut), échéancier, filtres/tri, recherche
 globale, export CSV, notes internes, attestation, dépôt INPI (payload),
-annulation de suppression (undo) et rappel de sauvegarde — le tout sans
+annulation de suppression (undo), rappel de sauvegarde et
+**sauvegarde automatique** (instantané + restauration) — le tout sans
 erreur JavaScript.
 
 ## Lancer

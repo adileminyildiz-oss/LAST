@@ -2248,8 +2248,6 @@ function pageParams(){
     </div></div>
     <div class="card"><div class="card-h"><h2>Réglages</h2></div><div class="card-b">
       <label>Nom du cabinet</label><input value="${esc(DB.params.cabinet)}" onchange="DB.params.cabinet=this.value;save();toast('Enregistré')">
-      <div class="section-t">Apparence</div>
-      <label style="display:flex;align-items:center;gap:9px;cursor:pointer"><input type="checkbox" ${darkOn()?'checked':''} onchange="darkToggle(this.checked)" style="width:auto;flex:none;margin:0"> Thème sombre</label>
       <div class="section-t">Pipeline de traitement</div>
       <div class="chips">${STATUTS.map(s=>`<span class="tag" style="border-color:${s.c}55"><span class="dot" style="background:${s.c}"></span>${s.k}</span>`).join('')}</div>
       <div class="section-t">Données</div>
@@ -2263,6 +2261,7 @@ function pageParams(){
   </div>
   <div class="card" style="margin-top:14px"><div class="card-h"><h2>Prestations</h2><span class="sub" style="margin-left:auto">Catalogue des prestations</span></div>
     <div class="card-b">${prestationsBloc()}</div></div>
+  ${backupAutoCard()}
   ${societeCard()}
   ${numControlCard()}
   ${mailTplCard()}
@@ -3824,7 +3823,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=163;
+var LAST_VER=164;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -7176,6 +7175,159 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot); else boot();
   window.addEventListener('load',run);
   window.__noEmojiSweep=run;
+})();
+</script>
+
+<style id="lbackup-style">
+.lb-list{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.lb-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--paper)}
+.lb-row .lb-when{font-size:12.5px;font-weight:600;color:var(--ink)}
+.lb-row .lb-meta{font-size:11px;color:var(--ink-3)}
+.lb-row .lb-tag{font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:#eef2f7;color:#5b6470;border:1px solid #e0e5ec}
+.lb-row .lb-tag.auto{background:#e8f1ff;color:#2f6fe0;border-color:#cfe0ff}
+.lb-row .lb-tag.avant{background:#fdeede;color:#b45309;border-color:#f3d8ab}
+.lb-actions{margin-left:auto;display:flex;gap:6px}
+.lb-empty{font-size:12px;color:var(--ink-3);padding:8px 2px}
+.lb-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
+.lb-dot{width:8px;height:8px;border-radius:50%;background:#2fae5f;box-shadow:0 0 0 3px rgba(47,174,95,.16)}
+.lb-dot.off{background:#b9c0cc;box-shadow:none}
+</style>
+<script id="lbackup-mod">
+/* ===================================================================
+   SAUVEGARDE AUTOMATIQUE — instantanés horodatés (IndexedDB)
+   Snapshots silencieux à chaque modification (anti-doublon), rotation,
+   restauration & téléchargement depuis Paramètres. 100% hors-ligne.
+   =================================================================== */
+(function(){
+  var IDB_NAME='last-backups', STORE='snap', DBH=null, mem=[];
+  var LSK_ENABLED='last-autobackup', LSK_TS='last-autobackup-ts';
+  var lastHash=null, snapT=null, useIDB=('indexedDB' in window);
+
+  function enabled(){try{return localStorage.getItem(LSK_ENABLED)!=='0';}catch(e){return true;}}
+  function setEnabled(v){try{localStorage.setItem(LSK_ENABLED,v?'1':'0');}catch(e){} if(v){scheduleSnap(400);} paint(); }
+  function lastTs(){try{return +localStorage.getItem(LSK_TS)||0;}catch(e){return 0;}}
+  function setLastTs(t){try{localStorage.setItem(LSK_TS,''+t);}catch(e){}}
+  function hashStr(s){var h=5381,i=s.length;while(i)h=(h*33)^s.charCodeAt(--i);return (h>>>0).toString(36);}
+
+  function open(){
+    return new Promise(function(res,rej){
+      if(!useIDB) return rej(new Error('no-idb'));
+      if(DBH) return res(DBH);
+      var rq=indexedDB.open(IDB_NAME,1);
+      rq.onupgradeneeded=function(){var db=rq.result;if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:'ts'});};
+      rq.onsuccess=function(){DBH=rq.result;res(DBH);};
+      rq.onerror=function(){useIDB=false;rej(rq.error);};
+    });
+  }
+  function tx(mode){return open().then(function(db){return db.transaction(STORE,mode).objectStore(STORE);});}
+  function put(rec){return tx('readwrite').then(function(st){return new Promise(function(r){var q=st.put(rec);q.onsuccess=function(){r(true);};q.onerror=function(){r(false);};});});}
+  function del(ts){return tx('readwrite').then(function(st){return new Promise(function(r){var q=st.delete(ts);q.onsuccess=function(){r(true);};q.onerror=function(){r(false);};});});}
+  function getOne(ts){return tx('readonly').then(function(st){return new Promise(function(r){var q=st.get(ts);q.onsuccess=function(){r(q.result||null);};q.onerror=function(){r(null);};});});}
+  function all(){return tx('readonly').then(function(st){return new Promise(function(r){var out=[];var q=st.openCursor();q.onsuccess=function(e){var c=e.target.result;if(c){var v=c.value;out.push({ts:v.ts,iso:v.iso,size:v.size,hash:v.hash,reason:v.reason});c.continue();}else{out.sort(function(a,b){return b.ts-a.ts;});r(out);}};q.onerror=function(){r([]);};});});}
+
+  /* Politique de rétention : 20 plus récents + 1 par jour sur 45 jours, plafond 60 */
+  function prune(){
+    return all().then(function(list){
+      if(list.length<=20) return;
+      var keep={}, dayKeep={}, kept=0;
+      list.forEach(function(r,i){
+        var day=(r.iso||'').slice(0,10);
+        if(i<20){keep[r.ts]=1;return;}
+        if(!dayKeep[day]){var age=(Date.now()-r.ts)/86400000; if(age<=45){dayKeep[day]=1;keep[r.ts]=1;}}
+      });
+      var dels=list.filter(function(r){return !keep[r.ts];}).map(function(r){return r.ts;});
+      // plafond dur
+      var remaining=list.filter(function(r){return keep[r.ts];});
+      if(remaining.length>60){remaining.slice(60).forEach(function(r){dels.push(r.ts);});}
+      return Promise.all(dels.map(del));
+    });
+  }
+
+  function snapshot(reason){
+    if(!enabled()||!useIDB) return Promise.resolve(false);
+    if(typeof DB==='undefined'||!DB) return Promise.resolve(false);
+    var json; try{json=JSON.stringify(DB);}catch(e){return Promise.resolve(false);}
+    if(typeof json!=='string') return Promise.resolve(false);
+    var h=hashStr(json);
+    if(reason!=='manuel' && reason!=='avant-restauration' && h===lastHash) return Promise.resolve(false);
+    var now=Date.now();
+    var rec={ts:now,iso:new Date(now).toISOString(),size:json.length,hash:h,reason:reason||'auto',data:json};
+    return put(rec).then(function(ok){ if(ok){lastHash=h;setLastTs(now);prune();paint();} return ok; });
+  }
+  function scheduleSnap(delay){ if(!enabled()) return; clearTimeout(snapT); snapT=setTimeout(function(){snapshot('auto');},delay||8000); }
+
+  function relTime(ts){
+    var s=Math.floor((Date.now()-ts)/1000);
+    if(s<50) return "à l'instant";
+    if(s<3600) return 'il y a '+Math.floor(s/60)+' min';
+    if(s<86400) return 'il y a '+Math.floor(s/3600)+' h';
+    var d=new Date(ts); return d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  }
+  function fmtSize(n){return n>1048576?(n/1048576).toFixed(1)+' Mo':Math.max(1,Math.round(n/1024))+' Ko';}
+
+  function download(ts){
+    getOne(ts).then(function(rec){ if(!rec) return; var b=new Blob([rec.data],{type:'application/json'});
+      var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='last-sauvegarde-'+rec.iso.slice(0,19).replace(/[:T]/g,'-')+'.json';
+      document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},600);
+      if(typeof toast==='function')toast('Sauvegarde téléchargée'); });
+  }
+  function restore(ts){
+    getOne(ts).then(function(rec){ if(!rec) return;
+      var when=relTime(ts);
+      if(!confirm('Restaurer la sauvegarde du '+new Date(ts).toLocaleString('fr-FR')+' ('+when+') ?\n\nL\'état actuel sera d\'abord sauvegardé automatiquement, puis remplacé.')) return;
+      snapshot('avant-restauration').then(function(){
+        try{ DB=JSON.parse(rec.data); }catch(e){ if(typeof toast==='function')toast('Sauvegarde illisible'); return; }
+        lastHash=null; try{window.save&&window.save();}catch(e){}
+        if(typeof toast==='function')toast('Sauvegarde restaurée');
+        if(typeof render==='function')render();
+      });
+    });
+  }
+  function snapshotNow(){ snapshot('manuel').then(function(ok){ if(typeof toast==='function')toast(ok?'Sauvegarde créée':'Aucune modification à sauvegarder'); }); }
+
+  /* ---- Carte Paramètres ---- */
+  window.backupAutoCard=function(){
+    var on=enabled(), lt=lastTs();
+    return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Sauvegarde automatique</h2>'
+      +'<span class="sub" style="margin-left:auto">Instantanés locaux horodatés</span></div><div class="card-b">'
+      +'<p class="hint" style="margin:0 0 10px">Vos données sont sauvegardées automatiquement sur cet appareil à chaque modification. Vous pouvez restaurer un état antérieur à tout moment.'
+      +(useIDB?'':' <b style="color:#b45309">Indisponible sur ce navigateur — utilisez l\'export manuel.</b>')+'</p>'
+      +'<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">'
+        +'<span class="lb-status"><span class="lb-dot'+(on?'':' off')+'"></span>'+(on?'Activée':'Désactivée')+(lt?' · dernier : '+relTime(lt):'')+'</span>'
+        +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:0"><input type="checkbox" '+(on?'checked':'')+' onchange="LBackup.setEnabled(this.checked)" style="width:auto;flex:none;margin:0"> Activer la sauvegarde automatique</label>'
+        +'<button class="btn btn-sm btn-pri" style="margin-left:auto" onclick="LBackup.snapshotNow()">Sauvegarder maintenant</button>'
+      +'</div>'
+      +'<div id="lbackup-list" class="lb-list"><div class="lb-empty">Chargement des sauvegardes…</div></div>'
+      +'</div></div>';
+  };
+  function paint(){
+    var box=document.getElementById('lbackup-list'); if(!box) return;
+    all().then(function(list){
+      if(!list.length){box.innerHTML='<div class="lb-empty">Aucune sauvegarde pour le moment. La première sera créée automatiquement dès la prochaine modification.</div>';return;}
+      box.innerHTML=list.map(function(r){
+        var tag=r.reason==='avant-restauration'?'<span class="lb-tag avant">avant restauration</span>':(r.reason==='manuel'?'<span class="lb-tag">manuelle</span>':'<span class="lb-tag auto">auto</span>');
+        return '<div class="lb-row"><div><div class="lb-when">'+relTime(r.ts)+' '+tag+'</div>'
+          +'<div class="lb-meta">'+new Date(r.ts).toLocaleString('fr-FR')+' · '+fmtSize(r.size)+'</div></div>'
+          +'<div class="lb-actions"><button class="btn btn-sm btn-ghost" onclick="LBackup.download('+r.ts+')">Télécharger</button>'
+          +'<button class="btn btn-sm" onclick="LBackup.restore('+r.ts+')">Restaurer</button></div></div>';
+      }).join('');
+    });
+  }
+
+  window.LBackup={snapshotNow:snapshotNow,restore:restore,download:download,setEnabled:setEnabled,isEnabled:enabled,paint:paint,lastTs:lastTs,list:all,_snapshot:snapshot};
+
+  /* Hook sur save() : instantané débattu après chaque modification */
+  function hookSave(){ if(typeof window.save!=='function'){setTimeout(hookSave,200);return;} if(window.save.__lb)return;
+    var _s=window.save; var w=function(){var r=_s.apply(this,arguments); scheduleSnap(); return r;}; w.__lb=true; window.save=w; }
+  hookSave();
+  /* Rafraîchir la liste quand on est sur Paramètres */
+  function hookRender(){ if(typeof window.render!=='function'){setTimeout(hookRender,200);return;} if(window.render.__lb)return;
+    var _r=window.render; var w=function(){var o=_r.apply(this,arguments); try{if(window.state&&state.page==='params')setTimeout(paint,0);}catch(e){} return o;}; w.__lb=true; window.render=w; }
+  hookRender();
+  /* Instantané périodique + baseline + à la mise en arrière-plan */
+  setInterval(function(){snapshot('auto');},5*60*1000);
+  setTimeout(function(){snapshot('démarrage');},3000);
+  document.addEventListener('visibilitychange',function(){if(document.hidden)snapshot('auto');});
 })();
 </script>
 
