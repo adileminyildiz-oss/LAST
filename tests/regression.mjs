@@ -186,6 +186,19 @@ const r = await page.evaluate(async () => {
   const nextOk = /^\d{4}-\d{2}-\d{2}$/.test(relanceProchaine(DB.factures.find(f => f.id === 'frl2')));
   out.relancesAuto = dueOk && nextOk && typeof relancesProgPanel === 'function' && typeof relancesAutoCard === 'function';
 
+  // Modèles de dossiers par type de formalité (détection + pièces + override)
+  DB.dossiers.push({ id: 'dmod', ref: 'DOS-MOD', clientNom: 'X', serviceSouhaite: 'Transfert de siège social', clientIds: [], docs: {}, piecesRecues: {} });
+  const dmod = DB.dossiers.find(x => x.id === 'dmod');
+  const detOk = formaliteType(dmod) === 'transfert_siege';
+  dmod.serviceSouhaite = 'Création SAS';
+  const prSas = piecesRequises(dmod);
+  const pcOk = prSas.length >= 8 && prSas.some(x => x.k === 'be');
+  modeleSetType('dmod', 'dissolution');
+  const ovOk = formaliteType(dmod) === 'dissolution' && piecesRequises(dmod).some(x => /dissolution/i.test(x.label));
+  modeleEtape('dmod', 0, true);
+  const etOk = dmod.etapesFait && dmod.etapesFait[0] === true;
+  out.modeles = detOk && pcOk && ovOk && etOk && typeof modeleDossierCard === 'function' && /Modèle de dossier/.test(modeleDossierCard(dmod));
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

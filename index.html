@@ -3826,7 +3826,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=167;
+var LAST_VER=168;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -7699,6 +7699,164 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
   hookDash();
   /* Lancement de l'envoi automatique au démarrage */
   setTimeout(function(){ try{relanceAutoRun();}catch(e){} }, 4000);
+})();
+</script>
+
+<style id="modele-style">
+.md-card .md-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.md-card .md-top select{width:auto;min-width:230px;margin:0}
+.md-badge{font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;background:#eef4ff;color:#2f6fe0;border:1px solid #d5e4ff;text-transform:uppercase;letter-spacing:.3px}
+.md-prog{height:7px;border-radius:20px;background:#eceff3;overflow:hidden;margin:2px 0 3px}
+.md-prog>i{display:block;height:100%;background:linear-gradient(90deg,#3fd08a,#2fae5f)}
+.md-sec{font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin:12px 0 6px}
+.md-docs{display:flex;flex-direction:column;gap:5px}
+.md-doc{display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--paper)}
+.md-doc .nm{font-size:12.5px;font-weight:600}
+.md-doc .st{margin-left:auto;display:flex;gap:6px;align-items:center}
+.md-steps{display:flex;flex-direction:column;gap:3px}
+.md-step{display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;cursor:pointer}
+.md-step input{width:auto;flex:none;margin:0;accent-color:#2fae5f}
+.md-step.done{color:var(--ink-3);text-decoration:line-through}
+.md-note{font-size:11px;color:var(--ink-3);margin-top:6px}
+</style>
+<script id="modele-mod">
+/* ===================================================================
+   MODÈLES DE DOSSIERS PAR TYPE DE FORMALITÉ
+   Chaque type (création SAS/SARL/SCI/micro, transfert de siège,
+   changement de dirigeant, cession, capital, dénomination, objet,
+   dissolution) porte : sa liste de pièces, ses documents à produire
+   et ses étapes de traitement. Détection auto + choix manuel.
+   =================================================================== */
+(function(){
+  var P={
+    cni_pres:{k:'cni',label:"Pièce d'identité du président (recto/verso)"},
+    cni_ger:{k:'cni',label:"Pièce d'identité du gérant (recto/verso)"},
+    cni:{k:'cni',label:"Pièce d'identité du dirigeant (recto/verso)"},
+    assoc:{k:'assoc',label:"Pièce d'identité de chaque associé"},
+    dom_pres:{k:'domicile',label:"Justificatif de domicile du président (− 3 mois)"},
+    dom_ger:{k:'domicile',label:"Justificatif de domicile du gérant (− 3 mois)"},
+    dom:{k:'domicile',label:"Justificatif de domicile du dirigeant (− 3 mois)"},
+    siege:{k:'siege',label:"Justificatif du siège (bail, domiciliation ou facture)"},
+    capital:{k:'capital',label:"Attestation de dépôt de capital"},
+    statutsSig:{k:'statutsSig',label:"Statuts signés"},
+    dnc_pres:{k:'dnc',label:"Déclaration de non-condamnation du président"},
+    dnc_ger:{k:'dnc',label:"Déclaration de non-condamnation du gérant"},
+    annonce:{k:'annonce',label:"Attestation de parution de l'annonce légale"},
+    be:{k:'be',label:"Déclaration des bénéficiaires effectifs (DBE)"}
+  };
+  var T=[
+    {key:'creation_sas',label:'Création SAS / SASU',
+      pieces:[P.cni_pres,P.assoc,P.dom_pres,P.siege,P.capital,P.statutsSig,P.dnc_pres,P.annonce,P.be],
+      docs:['statuts','souscripteurs','pouvoir','dnc'],
+      autres:['Annonce légale (support habilité)','Formulaire M0 / dépôt Guichet unique'],
+      etapes:['Collecte des pièces','Rédaction des statuts','Dépôt du capital en banque','Publication de l\'annonce légale','Dépôt au Guichet unique (INPI)','Obtention du Kbis']},
+    {key:'creation_sarl',label:'Création SARL / EURL',
+      pieces:[P.cni_ger,P.assoc,P.dom_ger,P.siege,P.capital,P.statutsSig,P.dnc_ger,P.annonce,P.be],
+      docs:['statuts','pouvoir','dnc'],
+      autres:['Annonce légale (support habilité)','Formulaire M0 / dépôt Guichet unique'],
+      etapes:['Collecte des pièces','Rédaction des statuts','Dépôt du capital en banque','Publication de l\'annonce légale','Dépôt au Guichet unique (INPI)','Obtention du Kbis']},
+    {key:'creation_sci',label:'Création SCI',
+      pieces:[P.cni_ger,P.assoc,P.dom_ger,P.siege,P.statutsSig,P.dnc_ger,P.annonce,P.be],
+      docs:['statuts','pouvoir'],
+      autres:['Annonce légale (support habilité)','Formulaire M0 / dépôt Guichet unique'],
+      etapes:['Collecte des pièces','Rédaction des statuts','Publication de l\'annonce légale','Dépôt au Guichet unique (INPI)','Obtention du Kbis']},
+    {key:'creation_micro',label:'Micro-entreprise / EI',
+      pieces:[P.cni,P.dom,{k:'declaDebut',label:"Déclaration de début d'activité"},{k:'dnc',label:"Attestation de non-condamnation"}],
+      docs:['pouvoir'],
+      autres:['Déclaration de début d\'activité (Guichet unique)'],
+      etapes:['Collecte des pièces','Déclaration de début d\'activité','Dépôt au Guichet unique (INPI)','Obtention du SIRET']},
+    {key:'transfert_siege',label:'Transfert de siège social',
+      pieces:[{k:'pv',label:'PV / décision de transfert de siège'},{k:'siege',label:'Justificatif du nouveau siège'},P.annonce],
+      docs:['pouvoir'],autres:['Annonce légale (départ / arrivée)','Statuts mis à jour'],
+      etapes:['PV de décision','Mise à jour des statuts','Annonce(s) légale(s)','Dépôt modificatif au Guichet unique']},
+    {key:'changement_dirigeant',label:'Changement de dirigeant',
+      pieces:[{k:'cni',label:"Pièce d'identité du nouveau dirigeant"},{k:'domicile',label:'Justificatif de domicile du nouveau dirigeant'},{k:'dnc',label:'Déclaration de non-condamnation'},{k:'pv',label:'PV de nomination'}],
+      docs:['dnc','pouvoir'],autres:['Annonce légale'],
+      etapes:['PV de nomination','Déclaration de non-condamnation','Annonce légale','Dépôt modificatif au Guichet unique']},
+    {key:'cession',label:'Cession de parts / actions',
+      pieces:[{k:'acte',label:'Acte de cession signé'},{k:'cni',label:"Pièce d'identité du cessionnaire"},{k:'pv',label:'PV d\'agrément (le cas échéant)'}],
+      docs:['pouvoir'],autres:['Enregistrement de l\'acte aux impôts','Statuts mis à jour'],
+      etapes:['Rédaction de l\'acte de cession','Agrément des associés (si requis)','Enregistrement aux impôts','Mise à jour du registre des mouvements']},
+    {key:'capital',label:'Modification de capital',
+      pieces:[{k:'pv',label:'PV décidant la variation de capital'},{k:'capital',label:'Justificatif de libération (augmentation)'},P.annonce],
+      docs:['pouvoir'],autres:['Annonce légale','Statuts mis à jour'],
+      etapes:['PV de décision','Réalisation (dépôt / libération)','Annonce légale','Dépôt modificatif au Guichet unique']},
+    {key:'denomination',label:'Changement de dénomination',
+      pieces:[{k:'pv',label:'PV de changement de dénomination'},P.annonce],
+      docs:['pouvoir'],autres:['Annonce légale','Statuts mis à jour'],
+      etapes:['PV de décision','Mise à jour des statuts','Annonce légale','Dépôt modificatif au Guichet unique']},
+    {key:'objet',label:"Changement d'objet social",
+      pieces:[{k:'pv',label:"PV de changement d'objet social"},P.annonce],
+      docs:['pouvoir'],autres:['Annonce légale','Statuts mis à jour'],
+      etapes:['PV de décision','Mise à jour des statuts','Annonce légale','Dépôt modificatif au Guichet unique']},
+    {key:'dissolution',label:'Dissolution / liquidation',
+      pieces:[{k:'pvd',label:'PV de dissolution'},{k:'pvl',label:'Comptes de clôture / PV de liquidation'},P.annonce],
+      docs:['pouvoir'],autres:['Annonce(s) légale(s)','Déclaration de radiation'],
+      etapes:['PV de dissolution','Annonce légale de dissolution','Opérations de liquidation','PV de clôture de liquidation','Radiation au Guichet unique']}
+  ];
+  var BYKEY={}; T.forEach(function(t){BYKEY[t.key]=t;});
+  window.FORMALITE_TEMPLATES=T;
+
+  window.formaliteType=function(d){ if(d&&d.formaliteType&&BYKEY[d.formaliteType])return d.formaliteType;
+    var dm=(typeof espDemandeDe==='function'&&d&&espDemandeDe(d))||d||{};
+    var forme=((d&&d.forme)||'').toUpperCase();
+    var extra=(typeof IA!=='undefined'&&IA.objet&&dm)?IA.objet(dm):'';
+    var txt=(((dm.serviceSouhaite||dm.service||'')+' '+(dm.objet||'')+' '+((d&&d.denom)||'')+' '+forme+' '+extra)+'').toLowerCase();
+    var creaKw=/cr[ée]a|constitu|immatricul/.test(txt);
+    if(/transfert|si[èe]ge/.test(txt))return 'transfert_siege';
+    if(/(g[ée]rant|dirigeant|pr[ée]sident|nomination)/.test(txt)&&!creaKw)return 'changement_dirigeant';
+    if(/cession|parts sociales|\bactions\b/.test(txt)&&!creaKw)return 'cession';
+    if(/(augmentation|r[ée]duction)/.test(txt)&&/capital/.test(txt))return 'capital';
+    if(/d[ée]nomination/.test(txt))return 'denomination';
+    if(/objet social/.test(txt))return 'objet';
+    if(/dissolution|liquidation|sommeil|radiation/.test(txt))return 'dissolution';
+    if(/micro|auto[- ]?entrepreneur|entreprise individuelle|\bei\b/.test(txt))return 'creation_micro';
+    if(/\bsci\b|civile immobili/.test(txt))return 'creation_sci';
+    if(/\bsarl\b|\beurl\b/.test(txt)||forme==='SARL'||forme==='EURL')return 'creation_sarl';
+    if(/\bsas\b|\bsasu\b|par actions/.test(txt)||forme==='SAS'||forme==='SASU')return 'creation_sas';
+    return 'creation_sas';
+  };
+  window.templateOf=function(d){ return BYKEY[formaliteType(d)]||BYKEY.creation_sas; };
+
+  /* Enrichit la checklist des pièces (utilisée par la carte Pièces existante) */
+  window.piecesRequises=function(d){ try{ var t=templateOf(d); if(t&&t.pieces&&t.pieces.length) return t.pieces.map(function(p){return {k:p.k,label:p.label};}); }catch(e){} return (typeof PIECES_CREATION!=='undefined')?PIECES_CREATION:[]; };
+
+  window.modeleSetType=function(id,val){ var d=(DB.dossiers||[]).find(function(x){return x.id===id;}); if(!d)return; d.formaliteType=val; try{save();}catch(e){} if(typeof render==='function')render(); };
+  window.modeleEtape=function(id,i,on){ var d=(DB.dossiers||[]).find(function(x){return x.id===id;}); if(!d)return; d.etapesFait=d.etapesFait||{}; if(on)d.etapesFait[i]=true; else delete d.etapesFait[i]; try{save();}catch(e){} if(typeof render==='function')render(); };
+
+  window.modeleDossierCard=function(d){ if(!d)return ''; var t=templateOf(d); if(!t)return '';
+    var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d; dm.docs=dm.docs||{}; dm.piecesRecues=dm.piecesRecues||{};
+    var recu=function(p){return ((dm.docs[p.k]||[]).length>0)||dm.piecesRecues[p.k]===true;};
+    var nbP=t.pieces.filter(recu).length, totP=t.pieces.length, pct=totP?Math.round(nbP/totP*100):0;
+    var manq=t.pieces.filter(function(p){return !recu(p);}).map(function(p){return p.label;});
+    var opts=T.map(function(x){return '<option value="'+x.key+'"'+(x.key===t.key?' selected':'')+'>'+esc(x.label)+'</option>';}).join('');
+    var docsList=(t.docs||[]).map(function(k){ var dc=(typeof ESP_DOCS!=='undefined')&&ESP_DOCS.filter(function(x){return x.k===k;})[0]; if(!dc)return '';
+      var st=(typeof espDocState==='function')?espDocState(d,k):{genere:false};
+      return '<div class="md-doc"><span class="nm">'+esc(dc.l)+'</span><span class="st">'
+        +(st.genere?'<span class="tag ok">Prêt</span><button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+k+'\')">Voir</button>':'<span class="tag mut">À générer</span>')
+        +'<button class="btn btn-sm btn-pri" onclick="espDocGen(\''+d.id+'\',\''+k+'\')">'+(st.genere?'Régénérer':'Générer')+'</button></span></div>'; }).join('');
+    var autres=(t.autres&&t.autres.length)?'<div class="md-note">À prévoir également : '+t.autres.map(esc).join(' · ')+'.</div>':'';
+    var fait=d.etapesFait||{};
+    var steps=(t.etapes||[]).map(function(e,i){ var on=!!fait[i];
+      return '<label class="md-step'+(on?' done':'')+'"><input type="checkbox" '+(on?'checked':'')+' onchange="modeleEtape(\''+d.id+'\','+i+',this.checked)">'+esc(e)+'</label>'; }).join('');
+    var nbEt=(t.etapes||[]).filter(function(e,i){return fait[i];}).length;
+    return '<div class="card md-card"><div class="card-h"><h2>Modèle de dossier</h2>'
+      +'<span class="sub" style="margin-left:auto">Checklist & documents par type de formalité</span></div><div class="card-b">'
+      +'<div class="md-top"><span class="md-badge">'+esc(t.label)+'</span>'
+      +'<label style="margin:0;font-size:11.5px;color:var(--ink-2)">Type :</label><select onchange="modeleSetType(\''+d.id+'\',this.value)">'+opts+'</select>'
+      +'<span class="tag '+(pct===100?'ok':'mut')+'" style="margin-left:auto">Pièces '+nbP+'/'+totP+'</span></div>'
+      +'<div class="md-prog"><i style="width:'+pct+'%"></i></div>'
+      +(manq.length?'<div class="md-note">Pièces manquantes : '+manq.join(' · ')+'.</div>':'<div class="md-note" style="color:#1f9d57">Toutes les pièces du modèle sont réunies.</div>')
+      +'<div class="md-sec">Documents à produire</div><div class="md-docs">'+(docsList||'<div class="md-note">—</div>')+'</div>'+autres
+      +'<div class="md-sec">Étapes de la formalité ('+nbEt+'/'+(t.etapes||[]).length+')</div><div class="md-steps">'+steps+'</div>'
+      +'</div></div>'; };
+
+  /* Greffe : insère la carte en tête du détail de dossier */
+  function hookPanel(){ if(typeof window.espPanel!=='function'){setTimeout(hookPanel,200);return;} if(window.espPanel.__md)return;
+    var _ep=window.espPanel; var w=function(d,list,id){ var h=_ep(d,list,id);
+      try{ var card=modeleDossierCard(d); if(card&&h.indexOf('<div class="esp-main">')>=0) h=h.replace('<div class="esp-main">','<div class="esp-main">'+card); }catch(e){}
+      return h; }; w.__md=true; window.espPanel=w; }
+  hookPanel();
 })();
 </script>
 
