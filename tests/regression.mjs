@@ -213,6 +213,22 @@ const r = await page.evaluate(async () => {
   out.treso = Math.round(pv.retard) === 1200 && Math.round(pv.m1) === 3200 && Math.round(pv.m3) === 6200
     && Math.round(pv.potTot) === 2000 && Math.round(pv.soldeFin) === 11200 && typeof tresoPrevisionCard === 'function';
 
+  // Factur-X PDF (PDF/A-3 avec XML embarqué + xref valide)
+  DB.societe = DB.societe || { raison: 'AEM CONSEIL', siret: '55208131700018', tvaIntra: 'FR40303265045', adresse: '10 rue X', cp: '75001', ville: 'Paris' };
+  const fpdf = DB.factures.find(f => f.id === 'ffx') || { id: 'fpdfx', num: 'FV-PDF', ttc: 1200, ht: 1000, tva: 200, date: '2026-05-01', ech: '2026-05-31', doc: { lignes: [{ desc: 'X', qte: 1, pu: 1000, taux: 20 }] } };
+  const blob = facturxPDF(fpdf);
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let ps = ''; for (let i = 0; i < buf.length; i++) ps += String.fromCharCode(buf[i]);
+  let xrefOk = false;
+  try {
+    const sx = ps.lastIndexOf('startxref'); const xoff = parseInt(ps.slice(sx + 9).trim(), 10);
+    const blk = ps.slice(xoff).split('\n');
+    xrefOk = ps.slice(xoff, xoff + 4) === 'xref';
+    for (let n = 1; n <= 9; n++) { const o = parseInt(blk[2 + n].slice(0, 10), 10); if (ps.slice(o, o + (n + ' 0 obj').length) !== (n + ' 0 obj')) { xrefOk = false; break; } }
+  } catch (e) { xrefOk = false; }
+  out.facturxPdf = blob.type === 'application/pdf' && ps.slice(0, 8) === '%PDF-1.7' && ps.trim().endsWith('%%EOF')
+    && ps.indexOf('factur-x.xml') >= 0 && ps.indexOf('/EmbeddedFile') >= 0 && ps.indexOf('CrossIndustryInvoice') >= 0 && ps.indexOf('pdfaid:part>3') >= 0 && xrefOk;
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

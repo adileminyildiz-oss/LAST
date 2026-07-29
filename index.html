@@ -3826,7 +3826,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=169;
+var LAST_VER=170;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -7571,7 +7571,8 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
     var timeline='<div class="ef-timeline">'+steps.map(function(st,i){ var done=(!refuse&&curIdx>=i); var byDate=(e.flux||[]).filter(function(x){return x.etape===st;})[0];
         return '<div class="ef-step'+(done?' done':'')+'"><div class="ln"></div><div class="dot"></div><div class="lbl">'+xe(st)+(byDate?'<br>'+new Date(byDate.date).toLocaleDateString('fr-FR'):'')+'</div></div>'; }).join('')+'</div>';
     var chk='<div class="ef-chk">'+ments.map(function(m){return '<div class="row '+(m.ok?'ok':'no')+'"><span class="d"></span>'+xe(m.lbl)+(m.ok?'':' — à compléter')+'</div>';}).join('')+'</div>';
-    var acts='<div class="ef-acts"><button class="btn btn-sm btn-ghost" onclick="efactTelechargerXML(\''+id+'\')">Télécharger Factur-X (XML)</button>';
+    var acts='<div class="ef-acts"><button class="btn btn-sm btn-ghost" onclick="efactTelechargerPDF(\''+id+'\')">Télécharger Factur-X (PDF)</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="efactTelechargerXML(\''+id+'\')">XML seul</button>';
     if(!e.statut){ acts+='<button class="btn btn-sm btn-pri" onclick="efactTransmettre(\''+id+'\')"'+(miss?' disabled style="opacity:.5;cursor:not-allowed"':'')+'>Transmettre (Factur-X)</button>'; }
     else if(refuse){ acts+='<button class="btn btn-sm btn-ghost" onclick="efactReset(\''+id+'\')">Réinitialiser</button>'; }
     else { if(e.statut!=='Encaissée')acts+='<button class="btn btn-sm btn-pri" onclick="efactAvancer(\''+id+'\')">Étape suivante</button>'
@@ -7949,6 +7950,99 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
   function hookMarge(){ if(typeof window.pageMarge!=='function'){setTimeout(hookMarge,200);return;} if(window.pageMarge.__tp)return;
     var _pm=window.pageMarge; var w=function(){ var h=_pm.apply(this,arguments); try{ h+=tresoPrevisionCard(); }catch(e){} return h; }; w.__tp=true; window.pageMarge=w; }
   hookMarge();
+})();
+</script>
+
+<script id="facturxpdf-mod">
+/* ===================================================================
+   PDF/A-3 FACTUR-X — PDF de la facture avec XML CII embarqué
+   Génère (sans bibliothèque) un PDF portant le fichier factur-x.xml
+   en pièce jointe (/AF Associated Files) + métadonnées XMP déclarant
+   Factur-X / PDF-A-3. Représentatif : à valider (validateur Factur-X)
+   pour une conformité PDF/A-3 stricte (police/ICC).
+   =================================================================== */
+(function(){
+  function soc(){ try{return fvSociete();}catch(e){return (DB&&DB.societe)||{};} }
+  function buyer(f){ var c=null; try{c=clientById((f.doc&&f.doc.clientId)||'');}catch(e){}
+    if(c)return {nom:((c.prenom?c.prenom+' ':'')+(c.nom||'')).trim(),adresse:c.adresse||'',cp:c.cp||'',ville:c.ville||''};
+    return {nom:f.tiers||'',adresse:'',cp:'',ville:''}; }
+  function lignes(f){ return (f.doc&&f.doc.lignes)||[]; }
+  var WMAP={8364:0x80,8218:0x82,402:0x83,8222:0x84,8230:0x85,8224:0x86,8225:0x87,710:0x88,8240:0x89,352:0x8A,8249:0x8B,338:0x8C,381:0x8E,8216:0x91,8217:0x92,8220:0x93,8221:0x94,8226:0x95,8211:0x96,8212:0x97,732:0x98,8482:0x99,353:0x9A,8250:0x9B,339:0x9C,382:0x9E,376:0x9F};
+  function winHex(str){ str=''+(str==null?'':str); var out=''; for(var i=0;i<str.length;i++){ var c=str.charCodeAt(i), b;
+    if(c>=0x20&&c<=0x7E)b=c; else if(WMAP[c]!=null)b=WMAP[c]; else if(c>=0xA0&&c<=0xFF)b=c; else b=0x3F;
+    out+=('0'+b.toString(16)).slice(-2); } return out; }
+  function money(n){ try{return (Math.round((+n||0)*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' EUR';}catch(e){return (+n||0).toFixed(2)+' EUR';} }
+  function frd(iso){ try{return frDate(iso);}catch(e){return iso||'';} }
+
+  window.facturxPDF=function(f){
+    var xml=facturxXML(f), s=soc(), b=buyer(f), avoir=!!f.avoir, enc=new TextEncoder();
+    /* ---- contenu de page ---- */
+    var C=[]; C.push('0.15 0.30 0.55 RG 0.2 0.2 0.25 rg');
+    function T(x,y,size,font,txt){ C.push('BT /'+font+' '+size+' Tf 1 0 0 1 '+x.toFixed(2)+' '+y.toFixed(2)+' Tm <'+winHex(txt)+'> Tj ET'); }
+    function L(x1,y1,x2,y2){ C.push('0.75 0.78 0.82 RG 0.6 w '+x1.toFixed(2)+' '+y1.toFixed(2)+' m '+x2.toFixed(2)+' '+y2.toFixed(2)+' l S'); }
+    T(56,800,17,'F2',s.raison||'AEM CONSEIL');
+    T(56,784,9,'F1',(s.adresse||'')+(s.cp||s.ville?(', '+(s.cp||'')+' '+(s.ville||'')):''));
+    T(56,772,9,'F1','SIRET '+(s.siret||s.siren||'—')+'    TVA '+(s.tvaIntra||'—'));
+    T(400,800,15,'F2',(avoir?'AVOIR ':'FACTURE ')+(f.num||''));
+    T(400,784,9,'F1','Date : '+frd(f.date));
+    T(400,772,9,'F1','Echeance : '+frd(f.ech));
+    T(400,752,9,'F2','Client');
+    T(400,740,9,'F1',b.nom||'');
+    if(b.adresse)T(400,729,9,'F1',b.adresse);
+    if(b.cp||b.ville)T(400,718,9,'F1',(b.cp||'')+' '+(b.ville||''));
+    L(56,700,539,700);
+    T(56,688,8.5,'F2','DESIGNATION'); T(330,688,8.5,'F2','QTE'); T(370,688,8.5,'F2','PU HT'); T(440,688,8.5,'F2','TVA'); T(492,688,8.5,'F2','TOTAL HT');
+    L(56,682,539,682);
+    var y=668; lignes(f).slice(0,22).forEach(function(l){ var q=(+l.qte||1),pu=(+l.pu||0),t=(+l.taux||0),ht=q*pu;
+      T(56,y,9,'F1',(''+(l.desc||'')).slice(0,52)); T(330,y,9,'F1',(''+q)); T(370,y,9,'F1',pu.toFixed(2)); T(440,y,9,'F1',t.toFixed(0)+'%'); T(492,y,9,'F1',ht.toFixed(2)); y-=15; });
+    L(56,y-2,539,y-2); y-=18;
+    T(400,y,9,'F1','Total HT'); T(492,y,9,'F1',(+f.ht||0).toFixed(2)); y-=14;
+    T(400,y,9,'F1','Total TVA'); T(492,y,9,'F1',(+f.tva||0).toFixed(2)); y-=14;
+    T(400,y,10,'F2','Total TTC'); T(492,y,10,'F2',money(f.ttc)); y-=26;
+    if(s.iban){ T(56,y,9,'F2','Reglement'); y-=13; T(56,y,9,'F1','IBAN '+s.iban+(s.bic?('   BIC '+s.bic):'')); y-=13; T(56,y,9,'F1','Beneficiaire : '+(s.banqueBenef||s.raison||'')); y-=20; }
+    T(56,70,8,'F1','Facture electronique Factur-X (profil BASIC, EN 16931) - fichier factur-x.xml integre a ce PDF.');
+    T(56,58,8,'F1',(s.raison||'AEM CONSEIL')+' - '+(s.formeJur||'SAS')+(s.rcsVille?(' - RCS '+s.rcsVille):'')+(s.capital?(' - Capital '+s.capital+' EUR'):''));
+    var content=C.join('\n');
+
+    /* ---- XMP ---- */
+    var xmp='<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>\n'
+      +'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+      +'<rdf:Description rdf:about="" xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/"><pdfaid:part>3</pdfaid:part><pdfaid:conformance>B</pdfaid:conformance></rdf:Description>'
+      +'<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title><rdf:Alt><rdf:li xml:lang="x-default">'+(avoir?'Avoir ':'Facture ')+(f.num||'')+'</rdf:li></rdf:Alt></dc:title></rdf:Description>'
+      +'<rdf:Description rdf:about="" xmlns:fx="urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#"><fx:DocumentType>INVOICE</fx:DocumentType><fx:DocumentFileName>factur-x.xml</fx:DocumentFileName><fx:Version>1.0</fx:Version><fx:ConformanceLevel>BASIC</fx:ConformanceLevel></rdf:Description>'
+      +'</rdf:RDF></x:xmpmeta>\n<?xpacket end="w"?>';
+
+    /* ---- assemblage PDF (octets exacts) ---- */
+    var chunks=[], len=0, off={};
+    function push(x){ var by=(typeof x==='string')?enc.encode(x):x; chunks.push(by); len+=by.length; }
+    function obj(n,body){ off[n]=len; push(n+' 0 obj\n'); push(body); push('\nendobj\n'); }
+    function streamObj(n,dict,data){ off[n]=len; push(n+' 0 obj\n'+dict+'\nstream\n'); push(data); push('\nendstream\nendobj\n'); }
+    var contentBytes=enc.encode(content), xmlBytes=enc.encode(xml), xmpBytes=enc.encode(xmp);
+    push(new Uint8Array([0x25,0x50,0x44,0x46,0x2D,0x31,0x2E,0x37,0x0A,0x25,0xE2,0xE3,0xCF,0xD3,0x0A])); // %PDF-1.7 + binaire
+    obj(1,'<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [ (factur-x.xml) 5 0 R ] >> >> /AF [ 5 0 R ] /Metadata 7 0 R /MarkInfo << /Marked true >> >>');
+    obj(2,'<< /Type /Pages /Kids [ 3 0 R ] /Count 1 >>');
+    obj(3,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 8 0 R /F2 9 0 R >> >> /Contents 4 0 R >>');
+    streamObj(4,'<< /Length '+contentBytes.length+' >>',contentBytes);
+    obj(5,'<< /Type /Filespec /F (factur-x.xml) /UF (factur-x.xml) /AFRelationship /Data /Desc (Facture electronique Factur-X) /EF << /F 6 0 R /UF 6 0 R >> >>');
+    streamObj(6,'<< /Type /EmbeddedFile /Subtype /text#2Fxml /Length '+xmlBytes.length+' /Params << /Size '+xmlBytes.length+' >> >>',xmlBytes);
+    streamObj(7,'<< /Type /Metadata /Subtype /XML /Length '+xmpBytes.length+' >>',xmpBytes);
+    obj(8,'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+    obj(9,'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+    var N=9, xrefOff=len;
+    function pad10(n){ n=''+n; while(n.length<10)n='0'+n; return n; }
+    var xref='xref\n0 '+(N+1)+'\n0000000000 65535 f \n';
+    for(var i=1;i<=N;i++) xref+=pad10(off[i])+' 00000 n \n';
+    push(xref);
+    push('trailer\n<< /Size '+(N+1)+' /Root 1 0 R >>\nstartxref\n'+xrefOff+'\n%%EOF');
+    var total=new Uint8Array(len), pos=0; chunks.forEach(function(c){ total.set(c,pos); pos+=c.length; });
+    return new Blob([total],{type:'application/pdf'});
+  };
+
+  window.efactTelechargerPDF=function(id){ var f=(DB.factures||[]).find(function(x){return x.id===id;}); if(!f)return;
+    try{ var blob=facturxPDF(f); var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+      a.download='factur-x-'+((f.num||'facture').replace(/[^\w-]/g,'_'))+'.pdf'; document.body.appendChild(a); a.click();
+      setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},800); if(typeof toast==='function')toast('Factur-X (PDF) téléchargé'); }
+    catch(e){ if(typeof toast==='function')toast('Erreur génération PDF'); } };
 })();
 </script>
 

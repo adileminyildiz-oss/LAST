@@ -12,7 +12,8 @@ annulation de suppression (undo), rappel de sauvegarde,
 obligatoires, cycle de vie), **relances automatiques programmées**
 (cadence, détection des relances dues), **modèles de dossiers par type
 de formalité** (détection, pièces, étapes, choix manuel) et
-**prévisionnel de trésorerie** (encaissements attendus, solde projeté) —
+**prévisionnel de trésorerie** (encaissements attendus, solde projeté)
+et **PDF/A-3 Factur-X** (PDF avec XML CII embarqué, xref valide) —
 le tout sans erreur JavaScript.
 
 ## Lancer
