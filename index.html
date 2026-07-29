@@ -2029,7 +2029,7 @@ function saveClient(id){
   if(id){Object.assign(DB.clients.find(x=>x.id===id),obj);}else{DB.clients.push({id:uid('c'),createdAt:today(),...obj});}
   save();closeModal();toast(warn.length?('Fiche enregistrée — à vérifier : '+warn.join(', ')):'Fiche client enregistrée');render();
 }
-function delClient(id){if(!confirm('Supprimer cette fiche client ?'))return;var i=DB.clients.findIndex(c=>c.id===id);if(i<0)return;var item=DB.clients[i];DB.clients.splice(i,1);save();closeModal();
+function delClient(id){if(!confirm('Supprimer cette fiche client ?'))return;var i=DB.clients.findIndex(c=>c.id===id);if(i<0)return;var item=DB.clients[i];DB.clients.splice(i,1);if(window.corbeilleAdd)corbeilleAdd('client',((item.prenom||'')+' '+(item.nom||'')).trim()||'Client',item);save();closeModal();
   toastUndo('Client supprimé',function(){DB.clients.splice(Math.min(i,DB.clients.length),0,item);save();render();toast('Suppression annulée');});render();}
 /* ---------- Vérification SIRET/SIREN (API publique gratuite recherche-entreprises.api.gouv.fr, sans clé) ---------- */
 var NJ_FORME={'5710':'SAS','5720':'SAS','5499':'SARL','5498':'EURL','6540':'SCI','6541':'SCI','6542':'SCI','5385':'SA','1000':'EI','5202':'SNC'};
@@ -2131,7 +2131,7 @@ function saveDossier(id,newref){
   save();closeModal();toast('Dossier enregistré');render();
 }
 function delDossier(id){if(!confirm('Supprimer ce dossier ?'))return;var i=DB.dossiers.findIndex(x=>x.id===id);if(i<0)return;var item=DB.dossiers[i];
-  DB.dossiers.splice(i,1);var dm=DB.demandes.find(x=>x.dossierId===id);var dmId=dm?dm.id:null;if(dm)dm.dossierId='';
+  DB.dossiers.splice(i,1);if(window.corbeilleAdd)corbeilleAdd('dossier',item.ref||item.denom||item.clientNom||'Dossier',item);var dm=DB.demandes.find(x=>x.dossierId===id);var dmId=dm?dm.id:null;if(dm)dm.dossierId='';
   save();closeModal();
   toastUndo('Dossier supprimé',function(){DB.dossiers.splice(Math.min(i,DB.dossiers.length),0,item);if(dmId){var dd=DB.demandes.find(x=>x.id===dmId);if(dd)dd.dossierId=item.id;}save();render();toast('Suppression annulée');});render();}
 
@@ -2262,6 +2262,7 @@ function pageParams(){
   <div class="card" style="margin-top:14px"><div class="card-h"><h2>Prestations</h2><span class="sub" style="margin-left:auto">Catalogue des prestations</span></div>
     <div class="card-b">${prestationsBloc()}</div></div>
   ${backupAutoCard()}
+  ${corbeilleCard()}
   ${societeCard()}
   ${numControlCard()}
   ${mailTplCard()}
@@ -2425,7 +2426,7 @@ function factSave(id,t){
   else{var _num=factNum(t);DB.factures.push({id:uid('fa'),type:t,num:_num,tiers,date:g('fa-date').value,ech:ech,ht,taux,tva,ttc,statut:g('fa-statut').value,createdAt:today()});logAudit('Facture créée',_num+' — '+tiers+' — '+eur(ttc));}
   save();closeModal();toast('Facture enregistrée');render();
 }
-function factDel(id){if(!confirm('Supprimer cette facture ?'))return;var i=DB.factures.findIndex(f=>f.id===id);if(i<0)return;var item=DB.factures[i];DB.factures.splice(i,1);save();closeModal();
+function factDel(id){if(!confirm('Supprimer cette facture ?'))return;var i=DB.factures.findIndex(f=>f.id===id);if(i<0)return;var item=DB.factures[i];DB.factures.splice(i,1);if(window.corbeilleAdd)corbeilleAdd('facture',(item.num||'Facture')+(item.tiers?' · '+item.tiers:''),item);save();closeModal();
   toastUndo('Facture supprimée',function(){DB.factures.splice(Math.min(i,DB.factures.length),0,item);save();render();toast('Suppression annulée');});render();}
 
 /* ---------- ESPACE — poste de travail des dossiers ---------- */
@@ -3456,7 +3457,7 @@ function devisView(id){
   setTimeout(fvFitView,40);
 }
 function devisSetStatut(id,st){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;d.statut=st;save();toast('Devis '+st.toLowerCase());devisView(id);}
-function devisDel(id){yc('Supprimer ce devis ?',function(){var i=(DB.devis||[]).findIndex(function(x){return x.id===id;});if(i<0)return;var item=DB.devis[i];DB.devis.splice(i,1);save();closeModal();
+function devisDel(id){yc('Supprimer ce devis ?',function(){var i=(DB.devis||[]).findIndex(function(x){return x.id===id;});if(i<0)return;var item=DB.devis[i];DB.devis.splice(i,1);if(window.corbeilleAdd)corbeilleAdd('devis',(item.num||'Devis')+(item.tiers?' · '+item.tiers:''),item);save();closeModal();
   toastUndo('Devis supprimé',function(){DB.devis.splice(Math.min(i,DB.devis.length),0,item);save();render();toast('Suppression annulée');});render();});}
 function devisPrint(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(d&&d.doc&&typeof FactureVente!=='undefined'&&FactureVente.imprimerDoc)FactureVente.imprimerDoc(d.doc);}
 function devisEnvoyer(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;
@@ -3588,7 +3589,7 @@ function fournSave(id){
   if(id)Object.assign(DB.fournisseurs.find(x=>x.id===id),obj);else DB.fournisseurs.push({id:uid('fo'),createdAt:today(),...obj});
   save();closeModal();toast('Fournisseur enregistré');render();
 }
-function fournDel(id){if(!confirm('Supprimer ce fournisseur ?'))return;var i=DB.fournisseurs.findIndex(f=>f.id===id);if(i<0)return;var item=DB.fournisseurs[i];DB.fournisseurs.splice(i,1);save();closeModal();
+function fournDel(id){if(!confirm('Supprimer ce fournisseur ?'))return;var i=DB.fournisseurs.findIndex(f=>f.id===id);if(i<0)return;var item=DB.fournisseurs[i];DB.fournisseurs.splice(i,1);if(window.corbeilleAdd)corbeilleAdd('fournisseur',item.nom||item.raison||'Fournisseur',item);save();closeModal();
   toastUndo('Fournisseur supprimé',function(){DB.fournisseurs.splice(Math.min(i,DB.fournisseurs.length),0,item);save();render();toast('Suppression annulée');});render();}
 
 function pageSoon(){
@@ -3823,7 +3824,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=164;
+var LAST_VER=165;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -7328,6 +7329,74 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
   setInterval(function(){snapshot('auto');},5*60*1000);
   setTimeout(function(){snapshot('démarrage');},3000);
   document.addEventListener('visibilitychange',function(){if(document.hidden)snapshot('auto');});
+})();
+</script>
+
+<style id="corbeille-style">
+.cb-list{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.cb-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--paper)}
+.cb-row .cb-lbl{font-size:12.5px;font-weight:600;color:var(--ink)}
+.cb-row .cb-meta{font-size:11px;color:var(--ink-3)}
+.cb-tag{font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:#eef2f7;color:#5b6470;border:1px solid #e0e5ec;text-transform:uppercase;letter-spacing:.3px}
+.cb-tag.dossier{background:#eef4ff;color:#2f6fe0;border-color:#d5e4ff}
+.cb-tag.facture{background:#eafaf0;color:#1f9d57;border-color:#c9edd6}
+.cb-tag.devis{background:#fff5e6;color:#b45309;border-color:#f2ddb4}
+.cb-tag.client{background:#f3eeff;color:#6b4fd8;border-color:#e0d6ff}
+.cb-tag.fournisseur{background:#fdeef1;color:#c2405a;border-color:#f4cdd6}
+.cb-actions{margin-left:auto;display:flex;gap:6px}
+.cb-empty{font-size:12px;color:var(--ink-3);padding:8px 2px}
+</style>
+<script id="corbeille-mod">
+/* ===================================================================
+   CORBEILLE — récupération des suppressions (dossiers, factures,
+   devis, clients, fournisseurs). Conservation 30 jours, restauration
+   ou suppression définitive. Complète l'annulation immédiate (7 s).
+   =================================================================== */
+(function(){
+  var MAXDAYS=30, CAP=150;
+  var MAP={client:'clients',dossier:'dossiers',facture:'factures',devis:'devis',fournisseur:'fournisseurs',prestation:'services',collaborateur:'users'};
+  var TL={client:'Client',dossier:'Dossier',facture:'Facture',devis:'Devis',fournisseur:'Fournisseur',prestation:'Prestation',collaborateur:'Collaborateur'};
+  function ensure(){ if(typeof DB==='undefined'||!DB) return null; if(!Array.isArray(DB.corbeille))DB.corbeille=[]; return DB.corbeille; }
+  function purgeOld(){ var c=ensure(); if(!c)return; var cut=Date.now()-MAXDAYS*86400000;
+    for(var i=c.length-1;i>=0;i--){ if(!c[i]||c[i].ts<cut) c.splice(i,1); }
+    if(c.length>CAP) c.splice(0,c.length-CAP); }
+  window.corbeilleAdd=function(type,label,item){ var c=ensure(); if(!c||!item)return;
+    var clone; try{clone=JSON.parse(JSON.stringify(item));}catch(e){clone=item;}
+    c.push({cid:'cb-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6),type:type,label:String(label||TL[type]||'Élément'),data:clone,ts:Date.now()});
+    purgeOld(); /* l'appelant fait save() */ };
+  function restore(cid){ var c=ensure(); if(!c)return; var i=c.findIndex(function(x){return x.cid===cid;}); if(i<0)return;
+    var rec=c[i], key=MAP[rec.type]; if(!key){if(typeof toast==='function')toast('Type inconnu');return;}
+    if(!Array.isArray(DB[key]))DB[key]=[];
+    var exists=DB[key].some(function(o){return o&&rec.data&&o.id===rec.data.id;});
+    if(!exists)DB[key].push(rec.data);
+    c.splice(i,1); try{save();}catch(e){}
+    if(typeof toast==='function')toast(exists?'Déjà présent — retiré de la corbeille':(TL[rec.type]||'Élément')+' restauré'); if(typeof render==='function')render(); }
+  function purge(cid){ var c=ensure(); if(!c)return; var i=c.findIndex(function(x){return x.cid===cid;}); if(i<0)return;
+    if(!confirm('Supprimer définitivement cet élément ? Cette action est irréversible.'))return;
+    c.splice(i,1); try{save();}catch(e){} if(typeof toast==='function')toast('Supprimé définitivement'); if(typeof render==='function')render(); }
+  function vider(){ var c=ensure(); if(!c||!c.length)return;
+    if(!confirm('Vider la corbeille ('+c.length+' élément'+(c.length>1?'s':'')+') ? Irréversible.'))return;
+    c.length=0; try{save();}catch(e){} if(typeof toast==='function')toast('Corbeille vidée'); if(typeof render==='function')render(); }
+  function relTime(ts){var s=Math.floor((Date.now()-ts)/1000);
+    if(s<50)return "à l'instant"; if(s<3600)return 'il y a '+Math.floor(s/60)+' min';
+    if(s<86400)return 'il y a '+Math.floor(s/3600)+' h'; var d=Math.floor(s/86400); return 'il y a '+d+' jour'+(d>1?'s':''); }
+  window.corbeilleCard=function(){
+    var c=ensure()||[]; purgeOld();
+    var head='<div class="card" style="margin-top:14px"><div class="card-h"><h2>Corbeille</h2>'
+      +'<span class="sub" style="margin-left:auto">Éléments supprimés — récupérables '+MAXDAYS+' jours</span></div><div class="card-b">';
+    if(!c.length) return head+'<div class="cb-empty">La corbeille est vide. Les dossiers, factures, devis, clients et fournisseurs supprimés apparaîtront ici et resteront récupérables '+MAXDAYS+' jours.</div></div></div>';
+    var list=c.slice().sort(function(a,b){return b.ts-a.ts;});
+    var rows=list.map(function(r){
+      var rest=Math.max(0,MAXDAYS-Math.floor((Date.now()-r.ts)/86400000));
+      return '<div class="cb-row"><div><div class="cb-lbl"><span class="cb-tag '+r.type+'">'+(TL[r.type]||r.type)+'</span> '+esc(r.label)+'</div>'
+        +'<div class="cb-meta">Supprimé '+relTime(r.ts)+' · '+new Date(r.ts).toLocaleDateString('fr-FR')+' · récupérable encore '+rest+' j</div></div>'
+        +'<div class="cb-actions"><button class="btn btn-sm btn-pri" onclick="Corbeille.restore(\''+r.cid+'\')">Restaurer</button>'
+        +'<button class="btn btn-sm btn-ghost" onclick="Corbeille.purge(\''+r.cid+'\')">Supprimer définitivement</button></div></div>';
+    }).join('');
+    return head+'<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="btn btn-sm btn-danger" onclick="Corbeille.vider()">Vider la corbeille</button></div>'
+      +'<div class="cb-list">'+rows+'</div></div></div>';
+  };
+  window.Corbeille={restore:restore,purge:purge,vider:vider,add:window.corbeilleAdd};
 })();
 </script>
 

@@ -41,7 +41,9 @@ const url = pathToFileURL(path.resolve(process.cwd(), 'index.html')).href;
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
 const perr = [];
-page.on('pageerror', e => perr.push('' + e));
+// Le service worker ne peut pas s'enregistrer sous file:// (SecurityError) —
+// bruit d'environnement sans rapport avec l'app : on l'ignore.
+page.on('pageerror', e => { const s = '' + e; if (/ServiceWorker/i.test(s)) return; perr.push(s); });
 await page.addInitScript(() => { try { localStorage.setItem('last-gate-ok', '1'); } catch (e) {} });
 await page.goto(url, { waitUntil: 'networkidle' });
 await page.waitForTimeout(400);
@@ -145,6 +147,19 @@ const r = await page.evaluate(async () => {
     const lst2 = await LBackup.list();
     out.sauvegarde = lst.length >= 2 && DB.params.__bk === 'A' && lst2.some(x => x.reason === 'avant-restauration');
   } else out.sauvegarde = false;
+
+  // Corbeille (capture suppression + restauration + purge)
+  DB.corbeille = [];
+  DB.factures.push({ id: 'fcorb', type: 'client', num: 'FV-CORB', tiers: 'X', ttc: 100, statut: 'Émise' });
+  factDel('fcorb');
+  const inCorb = (DB.corbeille || []).some(x => x.type === 'facture' && x.data.id === 'fcorb') && !DB.factures.some(f => f.id === 'fcorb');
+  const rec = DB.corbeille.find(x => x.data.id === 'fcorb');
+  Corbeille.restore(rec.cid);
+  const back = DB.factures.some(f => f.id === 'fcorb') && !DB.corbeille.some(x => x.cid === rec.cid);
+  factDel('fcorb'); const rec2 = DB.corbeille.find(x => x.data.id === 'fcorb');
+  Corbeille.purge(rec2.cid);
+  const purged = !DB.corbeille.some(x => x.cid === rec2.cid) && !DB.factures.some(f => f.id === 'fcorb');
+  out.corbeille = inCorb && back && purged;
 
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
