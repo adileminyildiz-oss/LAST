@@ -175,6 +175,17 @@ const r = await page.evaluate(async () => {
   const cycleOk = fx.efact && fx.efact.statut === 'Encaissée' && fx.statut === 'Payée';
   out.facturx = xmlOk && mentOk && cycleOk;
 
+  // Relances automatiques programmées (cadence + détection des dues)
+  const isoR = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  DB.params = DB.params || {}; DB.params.relance = { enabled: true, auto: false, plan: [3, 8, 15, 30], repeat: 15 };
+  DB.clients.push({ id: 'crel', prenom: 'Rel', nom: 'Ance', email: 'r@ex.fr' });
+  DB.factures.push({ id: 'frl1', type: 'client', num: 'FV-RL1', tiers: 'Rel Ance', ech: isoR(-10), ttc: 1200, statut: 'Impayée', relances: [], doc: { clientEmail: 'r@ex.fr' } });
+  DB.factures.push({ id: 'frl2', type: 'client', num: 'FV-RL2', tiers: 'Rel Ance', ech: isoR(-2), ttc: 300, statut: 'Impayée', relances: [], doc: { clientEmail: 'r@ex.fr' } });
+  const due = relancesDues();
+  const dueOk = due.some(x => x.f.id === 'frl1' && x.step === 1) && !due.some(x => x.f.id === 'frl2');
+  const nextOk = /^\d{4}-\d{2}-\d{2}$/.test(relanceProchaine(DB.factures.find(f => f.id === 'frl2')));
+  out.relancesAuto = dueOk && nextOk && typeof relancesProgPanel === 'function' && typeof relancesAutoCard === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

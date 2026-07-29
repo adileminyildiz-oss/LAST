@@ -2261,6 +2261,7 @@ function pageParams(){
   </div>
   <div class="card" style="margin-top:14px"><div class="card-h"><h2>Prestations</h2><span class="sub" style="margin-left:auto">Catalogue des prestations</span></div>
     <div class="card-b">${prestationsBloc()}</div></div>
+  ${relancesAutoCard()}
   ${backupAutoCard()}
   ${corbeilleCard()}
   ${societeCard()}
@@ -3825,7 +3826,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=166;
+var LAST_VER=167;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -7583,6 +7584,121 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
       +(e.statut&&!refuse?timeline:'')
       +chk+acts+'</div>';
   };
+})();
+</script>
+
+<style id="relauto-style">
+.rp-card .rp-note{font-size:11.5px;color:var(--ink-2);margin:0 0 8px}
+.rp-prov{display:inline-flex;align-items:center;gap:6px;font-size:11.5px}
+.rp-prov .d{width:8px;height:8px;border-radius:50%;background:#2fae5f}
+.rp-prov.off .d{background:#d9a441}
+.rp-badge{font-size:10px;font-weight:700;padding:1px 8px;border-radius:20px;background:#fde7e7;color:#c0392b;border:1px solid #f3c3c3;margin-left:8px}
+.rp-steps{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.rp-chip{font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:#eef2f7;border:1px solid #e0e5ec;color:#5b6470}
+</style>
+<script id="relauto-mod">
+/* ===================================================================
+   RELANCES AUTOMATIQUES PROGRAMMÉES
+   Cadence configurable (J+3 / J+8 / J+15 / J+30 après échéance),
+   détection des relances dues, envoi groupé, option d'envoi
+   automatique à l'ouverture (si e-mail automatique configuré),
+   panneau sur le tableau de bord + carte de réglage.
+   =================================================================== */
+(function(){
+  function cfg(){ if(typeof DB==='undefined'||!DB)return {enabled:true,auto:false,plan:[3,8,15,30],repeat:15};
+    DB.params=DB.params||{}; var r=DB.params.relance;
+    if(!r||!Array.isArray(r.plan)||!r.plan.length){ r=DB.params.relance={enabled:true,auto:false,plan:[3,8,15,30],repeat:15}; }
+    if(r.enabled==null)r.enabled=true; if(r.repeat==null)r.repeat=15; return r; }
+  function providerOn(){ try{var s=demSyncCfg();return !!(s&&s.url);}catch(e){return false;} }
+  function retardOf(f){ var j=(typeof joursAvant==='function')?joursAvant(f.ech):null; return j==null?0:Math.max(0,-j); }
+  function shouldCount(c,retard){ var n=0; c.plan.forEach(function(s){ if(retard>=s)n++; });
+    var last=c.plan[c.plan.length-1]||0, rep=c.repeat||0;
+    if(rep>0 && retard>last) n+=Math.floor((retard-last)/rep);
+    return n; }
+  function sameDay(ts){ if(!ts)return false; var a=new Date(ts);a.setHours(0,0,0,0); var b=new Date();b.setHours(0,0,0,0); return a.getTime()===b.getTime(); }
+  function dueOf(f){ var c=cfg(); if(!c.enabled)return null;
+    if(!f||f.type!=='client'||f.avoir||f.statut!=='Impayée'||!f.ech)return null;
+    if(f.ech>=today())return null;
+    if(typeof docClientEmail==='function' && !docClientEmail(f))return null;
+    var retard=retardOf(f), should=shouldCount(c,retard), sent=(f.relances||[]).length;
+    if(sent>=should)return null;
+    var last=(f.relances||[]).length?f.relances[f.relances.length-1].ts:0; if(sameDay(last))return null;
+    return {f:f,step:sent+1,retard:retard,should:should}; }
+  function dues(){ return (DB.factures||[]).map(dueOf).filter(Boolean).sort(function(a,b){return b.retard-a.retard;}); }
+  function prochaine(f){ var c=cfg(); var sent=(f.relances||[]).length; var base=new Date((f.ech||today())+'T00:00:00');
+    var off; if(sent<c.plan.length)off=c.plan[sent]; else { var last=c.plan[c.plan.length-1]||0, rep=c.repeat||15; off=last+rep*(sent-c.plan.length+1); }
+    var d=new Date(base.getTime()+off*86400000); return d.toISOString().slice(0,10); }
+  window.relancesDues=dues; window.relanceCfg=cfg; window.relanceProchaine=prochaine;
+
+  function envoiSilencieux(f){ var mail=docClientEmail(f); if(!mail)return false;
+    var _v={num:f.num,client:f.tiers,ttc:eur(f.ttc),ech:(f.ech?frDate(f.ech):'—'),cabinet:(typeof mailCabinet==='function'?mailCabinet():((DB.params&&DB.params.cabinet)||'AEM CONSEIL')),n:(f.relances||[]).length+1};
+    var _t=mailTpl('relanceFacture');
+    if(typeof demEnvoiSilencieux==='function' && demEnvoiSilencieux(mail,mailFill(_t.sujet,_v),mailFill(_t.corps,_v))){
+      f.relances=f.relances||[]; f.relances.push({ts:Date.now(),canal:'email',auto:true}); return true; }
+    return false; }
+
+  window.relancesEnvoyerDues=function(){ var list=dues(); if(!list.length)return (typeof toast==='function')&&toast('Aucune relance due.');
+    if(!providerOn()){ (typeof toast==='function')&&toast('Envoi groupé indisponible sans e-mail automatique — utilisez « Relancer » sur chaque ligne.'); return; }
+    var go=function(){ var ok=0,ko=0; list.forEach(function(d){ if(envoiSilencieux(d.f))ok++; else ko++; });
+      if(typeof logAudit==='function')logAudit('Relances programmées',ok+' envoyée(s)'+(ko?(' · '+ko+' échec'):''));
+      try{save();}catch(e){} if(typeof render==='function')render();
+      (typeof toast==='function')&&toast(ok+' relance(s) programmée(s) envoyée(s)'+(ko?(' · '+ko+' sans e-mail'):'')); };
+    if(typeof yc==='function')yc('Envoyer '+list.length+' relance(s) programmée(s) maintenant ?',go); else if(confirm('Envoyer '+list.length+' relance(s) ?'))go(); };
+
+  /* Envoi automatique à l'ouverture (1×/jour, si activé + e-mail auto configuré) */
+  window.relanceAutoRun=function(){ try{ var c=cfg(); if(!c.enabled||!c.auto||!providerOn())return;
+    var K='last-relance-auto', ts=today(); if(localStorage.getItem(K)===ts)return;
+    var list=dues(); localStorage.setItem(K,ts); if(!list.length)return;
+    var ok=0; list.forEach(function(d){ if(envoiSilencieux(d.f))ok++; });
+    if(ok){ if(typeof logAudit==='function')logAudit('Relances automatiques',ok+' envoyée(s) à l\'ouverture'); try{save();}catch(e){}
+      if(typeof toast==='function')toast(ok+' relance(s) automatique(s) envoyée(s)'); if(typeof render==='function')render(); }
+  }catch(e){} };
+
+  /* ---- Panneau tableau de bord ---- */
+  window.relancesProgPanel=function(){ var c=cfg(); if(!c.enabled)return ''; var list=dues(); if(!list.length)return '';
+    var tot=list.reduce(function(s,d){return s+(+d.f.ttc||0);},0);
+    var rows=list.slice(0,8).map(function(d){var f=d.f;
+      return '<tr><td class="tname">'+esc(f.num)+'</td><td>'+esc(f.tiers)+'</td><td class="hide-sm">'+d.retard+' j</td><td>Relance n°'+d.step+'</td><td>'+eur(f.ttc)+'</td>'
+        +'<td><button class="btn btn-sm btn-ghost" onclick="factRelancer(\''+f.id+'\')">Relancer</button></td></tr>';}).join('');
+    var prov=providerOn();
+    return '<div class="card rp-card" style="margin-top:16px;border-color:#f0c98a"><div class="card-h" style="background:#fff8ec"><h2>Relances programmées'
+      +'<span class="rp-badge">'+list.length+' due'+(list.length>1?'s':'')+'</span></h2>'
+      +'<span class="sub" style="margin-left:auto">'+eur(tot)+' concerné'+(list.length>1?'s':'')+'</span></div><div class="card-b">'
+      +'<p class="rp-note">Selon votre cadence ('+c.plan.map(function(x){return 'J+'+x;}).join(' · ')+'), ces factures échues doivent être relancées aujourd\'hui. '
+      +'<span class="rp-prov'+(prov?'':' off')+'"><span class="d"></span>'+(prov?'Envoi automatique disponible':'E-mail automatique non configuré (envoi via votre messagerie)')+'</span></p>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+      +(prov?'<button class="btn btn-sm btn-pri" onclick="relancesEnvoyerDues()">Envoyer les '+list.length+' relances dues</button>':'')
+      +'<button class="btn btn-sm btn-ghost" onclick="go(\'params\')">Régler la cadence</button></div>'
+      +'<table><thead><tr><th>N°</th><th>Client</th><th class="hide-sm">Retard</th><th>Étape</th><th>TTC</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'
+      +'</div></div>'; };
+
+  /* ---- Carte de réglage (Paramètres) ---- */
+  window.relancesAutoCard=function(){ var c=cfg(); var prov=providerOn();
+    return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Relances automatiques</h2>'
+      +'<span class="sub" style="margin-left:auto">Cadence & envoi programmé</span></div><div class="card-b">'
+      +'<p class="hint" style="margin:0 0 10px">Définissez la cadence de relance des factures impayées (nombre de jours après l\'échéance). Les relances dues apparaissent sur le tableau de bord.</p>'
+      +'<label style="display:flex;align-items:center;gap:9px;cursor:pointer;margin-bottom:6px"><input type="checkbox" '+(c.enabled?'checked':'')+' onchange="relanceSet(\'enabled\',this.checked)" style="width:auto;flex:none;margin:0"> Activer les relances programmées</label>'
+      +'<label>Cadence (jours après échéance, séparés par des virgules)</label><input id="rel-plan" value="'+esc(c.plan.join(', '))+'" placeholder="3, 8, 15, 30">'
+      +'<div class="rp-steps">'+c.plan.map(function(x){return '<span class="rp-chip">J+'+x+'</span>';}).join('')+(c.repeat>0?'<span class="rp-chip">puis tous les '+c.repeat+' j</span>':'')+'</div>'
+      +'<div class="frow"><div><label>Répéter au-delà (jours, 0 = arrêter)</label><input id="rel-rep" value="'+esc(c.repeat)+'" placeholder="15"></div><div></div></div>'
+      +'<label style="display:flex;align-items:center;gap:9px;cursor:pointer;margin:8px 0 4px"><input type="checkbox" '+(c.auto?'checked':'')+' '+(prov?'':'disabled')+' onchange="relanceSet(\'auto\',this.checked)" style="width:auto;flex:none;margin:0"> Envoyer automatiquement à l\'ouverture'+(prov?'':' <span class="hint">(nécessite l\'e-mail automatique)</span>')+'</label>'
+      +'<div style="margin-top:10px"><button class="btn btn-sm btn-pri" onclick="relanceCadenceSave()">Enregistrer la cadence</button></div>'
+      +'</div></div>'; };
+  window.relanceSet=function(k,v){ var c=cfg(); c[k]=v; try{save();}catch(e){} if(typeof render==='function')render(); };
+  window.relanceCadenceSave=function(){ var c=cfg();
+    var pe=document.getElementById('rel-plan'); if(pe){ var arr=(pe.value||'').split(/[,;\s]+/).map(function(x){return parseInt(x,10);}).filter(function(n){return n>0;});
+      arr=arr.filter(function(v,i){return arr.indexOf(v)===i;}).sort(function(a,b){return a-b;}); if(arr.length)c.plan=arr; }
+    var re=document.getElementById('rel-rep'); if(re){ var r=parseInt(re.value,10); c.repeat=isNaN(r)||r<0?0:r; }
+    try{save();}catch(e){} if(typeof toast==='function')toast('Cadence enregistrée'); if(typeof render==='function')render(); };
+
+  /* Greffe sur le tableau de bord */
+  function hookDash(){ if(typeof window.pageDash!=='function'){setTimeout(hookDash,200);return;} if(window.pageDash.__rel)return;
+    var _p=window.pageDash; var w=function(){ var h=_p.apply(this,arguments);
+      try{ var panel=relancesProgPanel(); if(panel){ if(h.indexOf('<div class="grid g3">')>=0) h=h.replace('<div class="grid g3">', panel+'<div class="grid g3">'); else h=panel+h; } }catch(e){}
+      return h; }; w.__rel=true; window.pageDash=w; }
+  hookDash();
+  /* Lancement de l'envoi automatique au démarrage */
+  setTimeout(function(){ try{relanceAutoRun();}catch(e){} }, 4000);
 })();
 </script>
 
