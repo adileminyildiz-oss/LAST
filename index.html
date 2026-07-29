@@ -3826,7 +3826,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=168;
+var LAST_VER=169;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -7857,6 +7857,98 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
       try{ var card=modeleDossierCard(d); if(card&&h.indexOf('<div class="esp-main">')>=0) h=h.replace('<div class="esp-main">','<div class="esp-main">'+card); }catch(e){}
       return h; }; w.__md=true; window.espPanel=w; }
   hookPanel();
+})();
+</script>
+
+<style id="treso-style">
+.tp-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:4px 0 12px}
+@media(max-width:760px){.tp-kpis{grid-template-columns:repeat(2,1fr)}}
+.tp-k{border:1px solid var(--line);border-radius:11px;background:var(--paper);padding:10px 12px}
+.tp-k .v{font-size:17px;font-weight:800;letter-spacing:.1px}
+.tp-k .k{font-size:11px;color:var(--ink-3);margin-top:2px}
+.tp-k.hot .v{color:#c2405a}.tp-k.ok .v{color:#1f9d57}.tp-k.blue .v{color:#2f6fe0}
+.tp-cfg{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin:2px 0 12px}
+.tp-cfg > div{display:flex;flex-direction:column;gap:3px}
+.tp-cfg label{font-size:11px;color:var(--ink-3)}
+.tp-cfg input{width:150px;margin:0}
+.tp-chart{display:flex;align-items:flex-end;gap:12px;height:180px;padding:6px 2px 0;border-bottom:1px solid var(--line)}
+.tp-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0}
+.tp-bar{width:100%;max-width:46px;height:150px;display:flex;flex-direction:column;justify-content:flex-end;border-radius:6px 6px 0 0;overflow:hidden;background:#f2f4f7}
+.tp-bar .pot{width:100%;background:repeating-linear-gradient(45deg,#bcd3f7,#bcd3f7 5px,#cfe0fb 5px,#cfe0fb 10px)}
+.tp-bar .sure{width:100%;background:linear-gradient(180deg,#4c8dff,#2f6fe0)}
+.tp-lab{display:flex;flex-direction:column;align-items:center;line-height:1.2}
+.tp-lab .amt{font-size:11px;font-weight:700}
+.tp-lab .mo{font-size:10.5px;color:var(--ink-3)}
+.tp-lab .bal{font-size:10px;color:#1f9d57;font-weight:700}
+.tp-lab .bal.neg{color:#c2405a}
+.tp-leg{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0 4px;font-size:11.5px;color:var(--ink-2)}
+.tp-leg i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+.tp-retard{background:#fff6f7;border:1px solid #f4cdd6;border-radius:9px;padding:8px 11px;font-size:12px;color:#b02a45;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+</style>
+<script id="treso-mod">
+/* ===================================================================
+   PRÉVISIONNEL DE TRÉSORERIE
+   Projection des encaissements attendus (factures impayées à leur
+   échéance + devis émis pondérés) sur les prochains mois, avec
+   solde projeté à partir d'une trésorerie de départ optionnelle.
+   =================================================================== */
+(function(){
+  function cfg(){ DB.params=DB.params||{}; if(DB.params.tresoSolde==null)DB.params.tresoSolde=''; if(DB.params.devisProb==null)DB.params.devisProb=40; return DB.params; }
+  function joursA(iso){ return (typeof joursAvant==='function')?joursAvant(iso):null; }
+  function moLabel(dt){ return ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'][dt.getMonth()]+' '+String(dt.getFullYear()).slice(2); }
+
+  window.tresoPrevision=function(nbMois){ nbMois=nbMois||6; var c=cfg(); var prob=(+c.devisProb||0)/100;
+    var now=new Date(); now.setHours(0,0,0,0);
+    var months=[]; var idx={};
+    for(var i=0;i<nbMois;i++){ var dt=new Date(now.getFullYear(),now.getMonth()+i,1); var key=dt.getFullYear()+'-'+('0'+(dt.getMonth()+1)).slice(-2);
+      var m={key:key,label:moLabel(dt),sure:0,pot:0,nb:0}; months.push(m); idx[key]=m; }
+    var retard=0, retardNb=0, d30=0, d90=0;
+    (DB.factures||[]).forEach(function(f){ if(f.type!=='client'||f.avoir)return; if(f.statut!=='Impayée'&&f.statut!=='Émise')return; if(!f.ech)return;
+      var j=joursA(f.ech); if(j==null)return; var ttc=+f.ttc||0;
+      if(j<0){ retard+=ttc; retardNb++; return; }
+      if(j<=30)d30+=ttc; if(j<=90)d90+=ttc;
+      var key=(''+f.ech).slice(0,7); if(idx[key]){ idx[key].sure+=ttc; idx[key].nb++; } });
+    (DB.devis||[]).forEach(function(d){ if(d.statut!=='Émis'||!d.ech)return; var j=joursA(d.ech); if(j==null||j<0)return;
+      var key=(''+d.ech).slice(0,7); if(idx[key]) idx[key].pot+=(+d.ttc||0)*prob; });
+    var solde=parseFloat((''+(c.tresoSolde||'')).replace(',','.'))||0;
+    var bal=solde+retard; // le retard est supposé recouvré rapidement
+    months.forEach(function(m){ bal+=m.sure; m.bal=bal; });
+    return { months:months, retard:retard, retardNb:retardNb, sureTot:months.reduce(function(s,m){return s+m.sure;},0),
+      potTot:months.reduce(function(s,m){return s+m.pot;},0), solde:solde, soldeFin:months.length?months[months.length-1].bal:solde,
+      m1:retard+d30, m3:retard+d90, prob:c.devisProb }; };
+
+  window.tresoSet=function(k,v){ var c=cfg(); c[k]=v; try{save();}catch(e){} if(typeof render==='function')render(); };
+
+  window.tresoPrevisionCard=function(){ var p=tresoPrevision(6);
+    var max=Math.max(1,p.months.reduce(function(mx,m){return Math.max(mx,m.sure+m.pot);},0));
+    var eurS=function(n){ n=+n||0; if(Math.abs(n)>=1000)return Math.round(n/1000)+'k'; return Math.round(n)+''; };
+    var bars=p.months.map(function(m){ var hs=Math.round(m.sure/max*150), hp=Math.round(m.pot/max*150);
+      return '<div class="tp-col"><div class="tp-bar">'+(hp>0?'<div class="pot" style="height:'+hp+'px" title="Devis pondérés"></div>':'')+(hs>0?'<div class="sure" style="height:'+hs+'px" title="Factures à encaisser"></div>':'')+'</div>'
+        +'<div class="tp-lab"><span class="amt">'+(m.sure+m.pot>0?eurS(m.sure+m.pot)+' €':'—')+'</span><span class="mo">'+esc(m.label)+'</span>'
+        +'<span class="bal'+(m.bal<0?' neg':'')+'">'+eur(m.bal)+'</span></div></div>'; }).join('');
+    var c=cfg();
+    return '<div class="card" style="margin-top:16px"><div class="card-h"><h2>Prévisionnel de trésorerie</h2>'
+      +'<span class="sub" style="margin-left:auto">Encaissements attendus · 6 mois</span></div><div class="card-b">'
+      +'<div class="tp-cfg">'
+        +'<div><label>Trésorerie de départ (€)</label><input value="'+esc(c.tresoSolde)+'" placeholder="0" onchange="tresoSet(\'tresoSolde\',this.value)"></div>'
+        +'<div><label>Probabilité devis (%)</label><input value="'+esc(c.devisProb)+'" placeholder="40" onchange="tresoSet(\'devisProb\',this.value)"></div>'
+      +'</div>'
+      +(p.retard>0?'<div class="tp-retard"><b>'+eur(p.retard)+'</b> en retard à recouvrer ('+p.retardNb+' facture'+(p.retardNb>1?'s':'')+' échue'+(p.retardNb>1?'s':'')+') — intégré au solde projeté. <button class="btn btn-sm btn-ghost" onclick="relancerToutesEchues()">Relancer</button></div>':'')
+      +'<div class="tp-kpis">'
+        +'<div class="tp-k hot"><div class="v">'+eur(p.retard)+'</div><div class="k">À recouvrer (en retard)</div></div>'
+        +'<div class="tp-k blue"><div class="v">'+eur(p.m1)+'</div><div class="k">Attendu ≤ 30 jours</div></div>'
+        +'<div class="tp-k blue"><div class="v">'+eur(p.m3)+'</div><div class="k">Attendu ≤ 90 jours</div></div>'
+        +'<div class="tp-k '+(p.soldeFin>=0?'ok':'hot')+'"><div class="v">'+eur(p.soldeFin)+'</div><div class="k">Solde projeté à 6 mois</div></div>'
+      +'</div>'
+      +'<div class="tp-chart">'+bars+'</div>'
+      +'<div class="tp-leg"><span><i style="background:#2f6fe0"></i>Factures à encaisser (échéance)</span><span><i style="background:#bcd3f7"></i>Devis émis pondérés ('+p.prob+' %)</span><span>Chiffre vert/rouge = solde projeté cumulé</span></div>'
+      +'<p class="hint" style="margin:8px 0 0">Projection basée sur les échéances des factures impayées et les devis émis (pondérés). Le solde projeté part de la trésorerie de départ saisie et ajoute les encaissements attendus mois par mois.</p>'
+      +'</div></div>'; };
+
+  /* Greffe sur la page Rentabilité */
+  function hookMarge(){ if(typeof window.pageMarge!=='function'){setTimeout(hookMarge,200);return;} if(window.pageMarge.__tp)return;
+    var _pm=window.pageMarge; var w=function(){ var h=_pm.apply(this,arguments); try{ h+=tresoPrevisionCard(); }catch(e){} return h; }; w.__tp=true; window.pageMarge=w; }
+  hookMarge();
 })();
 </script>
 

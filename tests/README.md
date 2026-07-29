@@ -10,9 +10,10 @@ annulation de suppression (undo), rappel de sauvegarde,
 **corbeille** (capture, restauration, purge),
 **facture électronique Factur-X** (XML CII EN 16931, mentions
 obligatoires, cycle de vie), **relances automatiques programmées**
-(cadence, détection des relances dues) et **modèles de dossiers par type
-de formalité** (détection, pièces, étapes, choix manuel) — le tout sans
-erreur JavaScript.
+(cadence, détection des relances dues), **modèles de dossiers par type
+de formalité** (détection, pièces, étapes, choix manuel) et
+**prévisionnel de trésorerie** (encaissements attendus, solde projeté) —
+le tout sans erreur JavaScript.
 
 ## Lancer
 

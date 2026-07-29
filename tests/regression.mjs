@@ -199,6 +199,20 @@ const r = await page.evaluate(async () => {
   const etOk = dmod.etapesFait && dmod.etapesFait[0] === true;
   out.modeles = detOk && pcOk && ovOk && etOk && typeof modeleDossierCard === 'function' && /Modèle de dossier/.test(modeleDossierCard(dmod));
 
+  // Prévisionnel de trésorerie (retard + attendu + solde projeté)
+  const isoT = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  DB.params = DB.params || {}; DB.params.tresoSolde = '5000'; DB.params.devisProb = 50;
+  DB.factures = [
+    { id: 'tra', type: 'client', num: 'T-A', tiers: 'X', ttc: 1200, statut: 'Impayée', ech: isoT(-5) },
+    { id: 'trb', type: 'client', num: 'T-B', tiers: 'Y', ttc: 2000, statut: 'Impayée', ech: isoT(10) },
+    { id: 'trc', type: 'client', num: 'T-C', tiers: 'Z', ttc: 3000, statut: 'Émise', ech: isoT(70) },
+    { id: 'trd', type: 'client', num: 'T-D', tiers: 'W', ttc: 9999, statut: 'Payée', ech: isoT(15) }
+  ];
+  DB.devis = [{ id: 'tdv', num: 'TDV', tiers: 'Q', ttc: 4000, statut: 'Émis', ech: isoT(20) }];
+  const pv = tresoPrevision(6);
+  out.treso = Math.round(pv.retard) === 1200 && Math.round(pv.m1) === 3200 && Math.round(pv.m3) === 6200
+    && Math.round(pv.potTot) === 2000 && Math.round(pv.soldeFin) === 11200 && typeof tresoPrevisionCard === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
