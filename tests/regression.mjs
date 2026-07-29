@@ -161,6 +161,20 @@ const r = await page.evaluate(async () => {
   const purged = !DB.corbeille.some(x => x.cid === rec2.cid) && !DB.factures.some(f => f.id === 'fcorb');
   out.corbeille = inCorb && back && purged;
 
+  // Facture électronique (Factur-X : XML CII + mentions + cycle)
+  DB.societe = { raison: 'AEM CONSEIL', formeJur: 'SAS', siret: '55208131700018', tvaIntra: 'FR40303265045', adresse: '10 rue X', cp: '75001', ville: 'Paris' };
+  DB.clients.push({ id: 'cfx', prenom: 'Léa', nom: 'Fx', adresse: '3 rue Z', cp: '69001', ville: 'Lyon', siret: '44306184100047' });
+  DB.factures.push({ id: 'ffx', type: 'client', num: 'FV-FX', tiers: 'Léa Fx', date: '2026-05-01', ech: '2026-05-31', ht: 1000, tva: 200, ttc: 1200, statut: 'Émise',
+    doc: { type: 'facture', numero: 'FV-FX', clientId: 'cfx', date: '2026-05-01', echeance: '2026-05-31', lignes: [{ desc: 'Création SAS', qte: 1, pu: 1000, taux: 20 }], ht: 1000, tva: 200, ttc: 1200 } });
+  const fx = DB.factures.find(f => f.id === 'ffx');
+  const xml = facturxXML(fx);
+  const wf = (() => { try { return !new DOMParser().parseFromString(xml, 'application/xml').querySelector('parsererror'); } catch (e) { return false; } })();
+  const xmlOk = wf && /CrossIndustryInvoice/.test(xml) && /55208131700018/.test(xml) && /GrandTotalAmount>1200\.00/.test(xml) && /TypeCode>380/.test(xml);
+  const mentOk = factMentions(fx).every(m => m.ok);
+  efactTransmettre('ffx'); efactAvancer('ffx'); efactAvancer('ffx'); efactAvancer('ffx'); efactAvancer('ffx');
+  const cycleOk = fx.efact && fx.efact.statut === 'Encaissée' && fx.statut === 'Payée';
+  out.facturx = xmlOk && mentOk && cycleOk;
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

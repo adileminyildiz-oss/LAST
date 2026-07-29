@@ -6,9 +6,10 @@ principaux : validateurs (SIREN/SIRET/IBAN/TVA/e-mail), devis → facture,
 avoir, relance (modèle par défaut), échéancier, filtres/tri, recherche
 globale, export CSV, notes internes, attestation, dépôt INPI (payload),
 annulation de suppression (undo), rappel de sauvegarde,
-**sauvegarde automatique** (instantané + restauration) et
-**corbeille** (capture, restauration, purge) — le tout sans
-erreur JavaScript.
+**sauvegarde automatique** (instantané + restauration),
+**corbeille** (capture, restauration, purge) et
+**facture électronique Factur-X** (XML CII EN 16931, mentions
+obligatoires, cycle de vie) — le tout sans erreur JavaScript.
 
 ## Lancer
 
