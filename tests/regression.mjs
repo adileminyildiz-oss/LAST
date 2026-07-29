@@ -229,6 +229,17 @@ const r = await page.evaluate(async () => {
   out.facturxPdf = blob.type === 'application/pdf' && ps.slice(0, 8) === '%PDF-1.7' && ps.trim().endsWith('%%EOF')
     && ps.indexOf('factur-x.xml') >= 0 && ps.indexOf('/EmbeddedFile') >= 0 && ps.indexOf('CrossIndustryInvoice') >= 0 && ps.indexOf('pdfaid:part>3') >= 0 && xrefOk;
 
+  // Accessibilité (lien d'évitement, ARIA, sémantique modale)
+  out.a11y = !!document.querySelector('.skip-link')
+    && document.querySelector('.skip-link').getAttribute('href') === '#view'
+    && document.getElementById('toast').getAttribute('aria-live') === 'polite'
+    && document.getElementById('toast').getAttribute('role') === 'status'
+    && document.querySelector('#ov .modal').getAttribute('role') === 'dialog'
+    && document.querySelector('#ov .modal').getAttribute('aria-modal') === 'true'
+    && document.querySelector('#ov .x').getAttribute('aria-label') === 'Fermer'
+    && !!document.querySelector('.burger').getAttribute('aria-label')
+    && !!document.getElementById('q').getAttribute('aria-label');
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

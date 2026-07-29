@@ -3826,7 +3826,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=170;
+var LAST_VER=171;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -8043,6 +8043,68 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
       a.download='factur-x-'+((f.num||'facture').replace(/[^\w-]/g,'_'))+'.pdf'; document.body.appendChild(a); a.click();
       setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},800); if(typeof toast==='function')toast('Factur-X (PDF) téléchargé'); }
     catch(e){ if(typeof toast==='function')toast('Erreur génération PDF'); } };
+})();
+</script>
+
+<style id="a11y-style">
+/* Anneau de focus clavier visible (n'affecte pas la souris) */
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,
+.nav-btn:focus-visible,.esp-dl:focus-visible,.tp-k:focus-visible,[tabindex]:focus-visible{
+  outline:3px solid #4c8dff !important;outline-offset:2px !important;border-radius:8px;
+}
+#view:focus{outline:none}
+/* Lien d'évitement (accessible au clavier) */
+.skip-link{position:fixed;left:12px;top:-60px;z-index:100000;background:#0d1b2f;color:#fff;padding:9px 15px;
+  border-radius:9px;font-size:13px;font-weight:600;text-decoration:none;transition:top .15s;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.skip-link:focus{top:12px}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;scroll-behavior:auto !important}
+}
+</style>
+<script id="a11y-mod">
+/* ===================================================================
+   ACCESSIBILITÉ — focus clavier visible, lien d'évitement, rôles ARIA,
+   piège de focus dans les modales + restauration du focus, mouvement
+   réduit. 100% additif.
+   =================================================================== */
+(function(){
+  function ready(fn){ if(document.readyState!=='loading')fn(); else document.addEventListener('DOMContentLoaded',fn); }
+  ready(function(){ try{
+    if(!document.querySelector('.skip-link')){ var sk=document.createElement('a'); sk.href='#view'; sk.className='skip-link'; sk.textContent='Aller au contenu';
+      sk.style.top='-60px';
+      sk.addEventListener('focus',function(){ sk.style.top='12px'; });
+      sk.addEventListener('blur',function(){ sk.style.top='-60px'; });
+      sk.addEventListener('click',function(e){ e.preventDefault(); var v=document.getElementById('view'); if(v){ v.setAttribute('tabindex','-1'); v.focus(); } });
+      document.body.insertBefore(sk,document.body.firstChild); }
+    var ov=document.getElementById('ov'); if(ov){ var m=ov.querySelector('.modal'); if(m){ m.setAttribute('role','dialog'); m.setAttribute('aria-modal','true'); m.setAttribute('aria-labelledby','ov-t'); } var x=ov.querySelector('.x'); if(x)x.setAttribute('aria-label','Fermer'); }
+    var t=document.getElementById('toast'); if(t){ t.setAttribute('role','status'); t.setAttribute('aria-live','polite'); t.setAttribute('aria-atomic','true'); }
+    var si=document.getElementById('saveind'); if(si)si.setAttribute('aria-hidden','true');
+    var bg=document.querySelector('.burger'); if(bg)bg.setAttribute('aria-label','Ouvrir le menu');
+    var q=document.getElementById('q'); if(q){ q.setAttribute('aria-label','Rechercher un client, un dossier, un devis'); q.setAttribute('role','searchbox'); }
+    var mn=document.querySelector('main'); if(mn)mn.setAttribute('role','main');
+    var asd=document.querySelector('aside'); if(asd)asd.setAttribute('aria-label','Navigation principale');
+  }catch(e){} });
+
+  function focusables(c){ return Array.prototype.filter.call(
+    c.querySelectorAll('a[href],button:not([disabled]),input:not([type=hidden]):not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'),
+    function(el){ return el.offsetParent!==null||el===document.activeElement; }); }
+  document.addEventListener('keydown',function(e){ if(e.key!=='Tab')return;
+    var ov=document.getElementById('ov'); if(!ov||!ov.classList.contains('show'))return;
+    var m=ov.querySelector('.modal'); if(!m)return; var f=focusables(m); if(!f.length)return;
+    var first=f[0], last=f[f.length-1];
+    if(e.shiftKey&&document.activeElement===first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey&&document.activeElement===last){ e.preventDefault(); first.focus(); }
+    else if(!m.contains(document.activeElement)){ e.preventDefault(); first.focus(); }
+  },true);
+
+  var lastFocus=null;
+  function hook(){ if(typeof window.openModal!=='function'||typeof window.closeModal!=='function'){ setTimeout(hook,150); return; }
+    if(window.openModal.__a11y)return;
+    var _o=window.openModal; window.openModal=function(){ try{ lastFocus=document.activeElement; }catch(e){} return _o.apply(this,arguments); }; window.openModal.__a11y=true;
+    var _c=window.closeModal; window.closeModal=function(){ var r=_c.apply(this,arguments); try{ if(lastFocus&&typeof lastFocus.focus==='function'&&document.contains(lastFocus))lastFocus.focus(); }catch(e){} lastFocus=null; return r; }; window.closeModal.__a11y=true;
+  }
+  hook();
 })();
 </script>
 
