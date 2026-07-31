@@ -251,6 +251,21 @@ const r = await page.evaluate(async () => {
     && /SOCIÉTÉ CIVILE IMMOBILIÈRE/.test(stSci) && /1857 du Code civil/.test(stSci)
     && /parts sociales/.test(souscripteursHTML(DB.dossiers.find(x => x.id === 'dsarl')));
 
+  // Tableau de bord conformité (échéances légales)
+  const isoC = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  DB.clients.push({ id: 'ccf1', prenom: 'A', nom: 'B', forme: 'SARL' });
+  DB.clients.push({ id: 'ccf2', prenom: 'C', nom: 'D', forme: 'SCI' });
+  DB.dossiers.push({ id: 'dcf1', ref: 'DOS-CF1', clientNom: 'Sarl CF', clientIds: ['ccf1'], clotureDate: isoC(-200) });
+  DB.dossiers.push({ id: 'dcf2', ref: 'DOS-CF2', clientNom: 'Sci CF', clientIds: ['ccf2'], clotureDate: isoC(-160) });
+  const oCf = conformiteObligations(DB.dossiers.find(x => x.id === 'dcf1'));
+  const oSci = conformiteObligations(DB.dossiers.find(x => x.id === 'dcf2'));
+  const Ccf = conformiteData();
+  conformiteToggle('dcf1', oCf[0].key, true);
+  out.conformite = oCf.length === 2 && oCf.some(x => /Dépôt/.test(x.label))
+    && oSci.length === 1 && !oSci.some(x => /Dépôt/.test(x.label))
+    && Ccf.retard >= 1 && DB.dossiers.find(x => x.id === 'dcf1').conformiteFait[oCf[0].key] === true
+    && typeof conformiteCard === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

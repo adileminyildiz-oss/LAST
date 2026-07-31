@@ -14,8 +14,9 @@ obligatoires, cycle de vie), **relances automatiques programmées**
 de formalité** (détection, pièces, étapes, choix manuel) et
 **prévisionnel de trésorerie** (encaissements attendus, solde projeté)
 **PDF/A-3 Factur-X** (PDF avec XML CII embarqué, xref valide),
-**accessibilité** (lien d'évitement, ARIA, sémantique modale) et
-**documents adaptés à la forme juridique** (statuts SAS/SARL/SCI/EURL) —
+**accessibilité** (lien d'évitement, ARIA, sémantique modale),
+**documents adaptés à la forme juridique** (statuts SAS/SARL/SCI/EURL) et
+**tableau de bord conformité** (échéances légales : AGO, dépôt au greffe) —
 le tout sans erreur JavaScript.
 
 ## Lancer

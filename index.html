@@ -3828,7 +3828,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=172;
+var LAST_VER=173;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -8279,6 +8279,90 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(f==='SARL'||f==='EURL')return statutsSarlHTML(d);
     if(f==='SCI')return statutsSciHTML(d);
     return statutsSasHTML(d); }catch(e){ return statutsSasHTML(d); } };
+})();
+</script>
+
+<style id="conformite-style">
+.cf-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:2px 0 12px}
+@media(max-width:640px){.cf-kpis{grid-template-columns:repeat(3,1fr)}}
+.cf-k{border:1px solid var(--line);border-radius:11px;background:var(--paper);padding:9px 12px}
+.cf-k .v{font-size:18px;font-weight:800}.cf-k .k{font-size:11px;color:var(--ink-3);margin-top:2px}
+.cf-k.hot .v{color:#c2405a}.cf-k.warm .v{color:#b45309}.cf-k.ok .v{color:#1f9d57}
+.cf-badge{font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;white-space:nowrap}
+.cf-badge.retard{background:#fdeef1;color:#c2405a;border:1px solid #f4cdd6}
+.cf-badge.imminent{background:#fff5e6;color:#b45309;border:1px solid #f2ddb4}
+.cf-badge.venir{background:#eef4ff;color:#2f6fe0;border:1px solid #d5e4ff}
+.cf-badge.fait{background:#eafaf0;color:#1f9d57;border:1px solid #c9edd6}
+.cf-set{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.cf-set-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px}
+.cf-set-row input[type=date]{width:170px;margin:0}
+.cf-set-row .nm{font-weight:600;min-width:150px}
+.cf-note{font-size:11px;color:var(--ink-3);margin-top:8px}
+</style>
+<script id="conformite-mod">
+/* ===================================================================
+   TABLEAU DE BORD CONFORMITÉ — échéances légales annuelles
+   Par société : approbation des comptes (AGO, 6 mois après la clôture)
+   et dépôt des comptes au greffe (1 mois après l'AGO). Statuts,
+   alertes retard/imminent, marquage « fait ».
+   =================================================================== */
+(function(){
+  var COMM={SARL:1,EURL:1,SAS:1,SASU:1,SA:1};
+  function formeOf(d){ var c=(typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{}; return ((c.forme||d.forme||'')+'').toUpperCase(); }
+  function addMonths(iso,n){ try{ var d=new Date(iso+'T00:00:00'); d.setMonth(d.getMonth()+n); return d.toISOString().slice(0,10); }catch(e){ return iso; } }
+  function jA(iso){ return (typeof joursAvant==='function')?joursAvant(iso):null; }
+  function statut(o){ if(o.done)return {c:'fait',t:'Fait'}; var j=jA(o.due); if(j==null)return {c:'venir',t:'—'};
+    if(j<0)return {c:'retard',t:'En retard ('+(-j)+' j)'}; if(j<=30)return {c:'imminent',t:'Imminent ('+j+' j)'}; return {c:'venir',t:'Dans '+j+' j'}; }
+
+  window.conformiteObligations=function(d){ var f=formeOf(d); var cl=d.clotureDate; if(!cl)return [];
+    var y=(''+cl).slice(0,4); var out=[]; var fait=d.conformiteFait||{};
+    var ago=addMonths(cl,6);
+    out.push({key:'ago-'+y,label:'Approbation des comptes (AGO)',due:ago,done:!!fait['ago-'+y],detail:'6 mois après la clôture'});
+    if(COMM[f]){ out.push({key:'depot-'+y,label:'Dépôt des comptes au greffe',due:addMonths(ago,1),done:!!fait['depot-'+y],detail:'1 mois après l\'AGO (2 mois si dépôt en ligne)'}); }
+    return out; };
+
+  window.conformiteSetCloture=function(id,val){ var d=(DB.dossiers||[]).find(function(x){return x.id===id;}); if(!d)return; d.clotureDate=val||''; try{save();}catch(e){} if(typeof render==='function')render(); };
+  window.conformiteToggle=function(id,key,on){ var d=(DB.dossiers||[]).find(function(x){return x.id===id;}); if(!d)return; d.conformiteFait=d.conformiteFait||{}; if(on)d.conformiteFait[key]=true; else delete d.conformiteFait[key]; try{save();}catch(e){} if(typeof render==='function')render(); };
+
+  window.conformiteData=function(){ var rows=[], sansCloture=[], retard=0, imminent=0, fait=0;
+    (DB.dossiers||[]).forEach(function(d){ if(d.archived)return; var f=formeOf(d);
+      if(!COMM[f]&&f!=='SCI')return; // sociétés soumises à obligations annuelles
+      if(!d.clotureDate){ sansCloture.push(d); return; }
+      conformiteObligations(d).forEach(function(o){ var st=statut(o); if(st.c==='retard')retard++; else if(st.c==='imminent')imminent++; else if(st.c==='fait')fait++;
+        rows.push({d:d,o:o,st:st}); }); });
+    rows.sort(function(a,b){ if(a.o.done!==b.o.done)return a.o.done?1:-1; return (a.o.due||'').localeCompare(b.o.due||''); });
+    return {rows:rows, sansCloture:sansCloture, retard:retard, imminent:imminent, fait:fait}; };
+
+  window.conformiteCard=function(){ var C=conformiteData();
+    if(!C.rows.length && !C.sansCloture.length) return '';
+    var nom=(typeof dossierClients==='function')?dossierClients:function(d){return d.clientNom||d.ref||'';};
+    var kpis='<div class="cf-kpis">'
+      +'<div class="cf-k hot"><div class="v">'+C.retard+'</div><div class="k">En retard</div></div>'
+      +'<div class="cf-k warm"><div class="v">'+C.imminent+'</div><div class="k">Imminentes (≤ 30 j)</div></div>'
+      +'<div class="cf-k ok"><div class="v">'+C.fait+'</div><div class="k">Faites</div></div></div>';
+    var table='';
+    if(C.rows.length){ table='<table><thead><tr><th>Société</th><th>Obligation</th><th class="hide-sm">Échéance</th><th>Statut</th><th>Fait</th></tr></thead><tbody>'
+      +C.rows.map(function(r){ return '<tr><td class="tname">'+esc(nom(r.d))+' <span class="tsub">'+esc(formeOf(r.d))+'</span></td>'
+        +'<td>'+esc(r.o.label)+'<div class="tsub hide-sm">'+esc(r.o.detail)+'</div></td>'
+        +'<td class="hide-sm">'+(r.o.due?frDate(r.o.due):'—')+'</td>'
+        +'<td><span class="cf-badge '+r.st.c+'">'+esc(r.st.t)+'</span></td>'
+        +'<td style="text-align:center"><input type="checkbox" '+(r.o.done?'checked':'')+' onchange="conformiteToggle(\''+r.d.id+'\',\''+r.o.key+'\',this.checked)" aria-label="Marquer fait" style="width:auto;margin:0"></td></tr>'; }).join('')
+      +'</tbody></table>'; }
+    var setBlock='';
+    if(C.sansCloture.length){ setBlock='<div class="section-t" style="margin-top:14px">Renseigner la date de clôture d\'exercice</div><div class="cf-set">'
+      +C.sansCloture.map(function(d){ return '<div class="cf-set-row"><span class="nm">'+esc(nom(d))+'</span><span class="tsub">'+esc(formeOf(d))+'</span>'
+        +'<input type="date" max="9999-12-31" value="'+esc(d.clotureDate||'')+'" onchange="conformiteSetCloture(\''+d.id+'\',this.value)"></div>'; }).join('')
+      +'</div>'; }
+    return '<div class="card" style="margin-top:16px"><div class="card-h"><h2>Conformité — obligations annuelles</h2>'
+      +'<span class="sub" style="margin-left:auto">Approbation des comptes · Dépôt au greffe</span></div><div class="card-b">'
+      +kpis+table+setBlock
+      +'<p class="cf-note">Échéances calculées d\'après la date de clôture : <b>approbation des comptes (AGO)</b> dans les 6 mois, <b>dépôt au greffe</b> dans le mois suivant l\'AGO (2 mois en cas de dépôt en ligne). Les SCI ne sont pas soumises au dépôt des comptes au greffe.</p>'
+      +'</div></div>'; };
+
+  /* Greffe sur le tableau de bord */
+  function hookDash(){ if(typeof window.pageDash!=='function'){setTimeout(hookDash,200);return;} if(window.pageDash.__cf)return;
+    var _pd=window.pageDash; var w=function(){ var h=_pd.apply(this,arguments); try{ h+=conformiteCard(); }catch(e){} return h; }; w.__cf=true; window.pageDash=w; }
+  hookDash();
 })();
 </script>
 
