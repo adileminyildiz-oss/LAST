@@ -2755,7 +2755,7 @@ function espStatutsCard(d){
 function espStatutsEdit(id){
   var d=espDoss().find(function(x){return x.id===id;});if(!d)return;
   var perso=!!(d.statutsCustom&&(''+d.statutsCustom).trim());
-  var contenu=perso?d.statutsCustom:statutsSasHTML(d);
+  var contenu=perso?d.statutsCustom:(typeof statutsHTML==='function'?statutsHTML(d):statutsSasHTML(d));
   var html='<div class="es-card"><div class="es-head"><b>Modifier les statuts d\'exemple — '+esc(dossierClients(d))+'</b>'
    +'<span class="es-hint">Cliquez dans le document pour éditer le texte</span>'
    +'<button class="btn btn-sm btn-ghost" onclick="espStatutsReset(\''+id+'\')">↺ Réinitialiser</button>'
@@ -2875,7 +2875,7 @@ function espDocVoir(id,k){var d=espDoss().find(function(x){return x.id===id;});v
 }
 function espDocPrint(){var el=document.querySelector('#ov .doc-gen');if(!el)return;if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}pa.innerHTML='<div class="doc-gen">'+el.innerHTML+'</div>';setTimeout(function(){window.print();},120);}
 function espDocHTML(d,dc){
-  if(dc.k==='statuts')return (d.statutsCustom&&(''+d.statutsCustom).trim())?d.statutsCustom:statutsSasHTML(d);
+  if(dc.k==='statuts')return (d.statutsCustom&&(''+d.statutsCustom).trim())?d.statutsCustom:(typeof statutsHTML==='function'?statutsHTML(d):statutsSasHTML(d));
   if(dc.k==='souscripteurs')return souscripteursHTML(d);
   if(dc.k==='pouvoir')return pouvoirHTML(d);
   if(dc.k==='dnc')return dncHTML(d);
@@ -2961,16 +2961,18 @@ function souscripteursHTML(d){
   var x=stDossData(d);
   var uni=(x.assoc.length<=1);
   var formeTxt=stFormeLabel(uni&&x.forme==='SAS'?'SASU':x.forme);
+  var _actForme=(x.forme==='SAS'||x.forme==='SASU');
+  var UN=_actForme?'action':'part sociale';var UNS=_actForme?'actions':'parts sociales';
   var capN=x.cap?stNum(x.cap):'«…»';
   var rcsVille=x.rcsVille;
   var rows=x.assoc.map(function(a,i){
     var p=Number(a.parts)||0;var m=(x.nominal&&p)?Math.round(x.nominal*p):0;
     var mTxt=m?(stNum(m)+' € ('+stLettres(m)+' euros)'):'«…»';
-    var act=p||0;var actTxt=act?(act+' ('+stLettres(act).toLowerCase()+' actions)'):'«…»';
+    var act=p||0;var actTxt=act?(act+' ('+stLettres(act).toLowerCase()+' '+UNS+')'):'«…»';
     return '<tr><td>'+(i+1)+'</td><td class="al">'+stCivil(a)+'</td><td>'+mTxt+'</td><td>'+mTxt+'</td><td>'+actTxt+'</td></tr>';
   }).join('');
   var totTxt=x.cap?(stNum(x.cap)+' € ('+stLettres(x.cap)+' euros)'):'«…»';
-  var totAct=x.nbActions?(x.nbActions+' ('+stLettres(x.nbActions).toLowerCase()+' actions)'):'«…»';
+  var totAct=x.nbActions?(x.nbActions+' ('+stLettres(x.nbActions).toLowerCase()+' '+UNS+')'):'«…»';
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
   var dateTxt=x.dateActe;
   return '<div class="st-doc"><div class="st-page">'
@@ -2982,11 +2984,11 @@ function souscripteursHTML(d){
     +'<th>N°</th><th>Associé (nom, prénom, adresse ou dénomination, forme, capital, siège, RCS)</th>'
     +'<th>Montant de l\'apport en euros</th>'
     +'<th>Montant libéré en euros lors de la création de la société, au moins égal à la moitié de l\'apport en numéraire</th>'
-    +'<th>Nombre d\'actions attribuées en rémunération de l\'apport</th></tr></thead><tbody>'
+    +'<th>Nombre de '+UNS+' attribuées en rémunération de l\'apport</th></tr></thead><tbody>'
     +rows
     +'<tr class="tot"><td></td><td class="al">TOTAL</td><td>'+totTxt+'</td><td>'+totTxt+'</td><td>'+totAct+'</td></tr>'
     +'</tbody></table>'
-    +'<p style="margin-top:12px">Le présent état, qui constate la souscription de '+(x.nbActions||'«…»')+' ('+(x.nbActions?stLettres(x.nbActions):'«…»')+') actions de la société '+esc(x.denom)+', ainsi que le versement de la somme de '+totTxt+' correspondant au moins à la moitié du nominal desdites actions, est certifié exact, sincère et véritable par '+esc(x.president)+', associé fondateur et '+stQualite(x.forme)+'.</p>'
+    +'<p style="margin-top:12px">Le présent état, qui constate la souscription de '+(x.nbActions||'«…»')+' ('+(x.nbActions?stLettres(x.nbActions):'«…»')+') '+UNS+' de la société '+esc(x.denom)+', ainsi que le versement de la somme de '+totTxt+' correspondant au moins à la moitié du nominal desdites '+UNS+', est certifié exact, sincère et véritable par '+esc(x.president)+', associé fondateur et '+stQualite(x.forme)+'.</p>'
     +'<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+', le '+dateTxt+'</p>'
     +'<div class="st-sign"><div class="sg"><b>'+esc(x.president)+'</b>Le '+stQualite(x.forme)+' — Signature</div></div></div>'
     +'</div></div>';
@@ -3826,7 +3828,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=171;
+var LAST_VER=172;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4799,7 +4801,7 @@ window.modalDemandeView=function(id){
      Ajouter un modèle = pousser une entrée ici (ex. plusieurs statuts par forme).
      Dès qu'une clé a 2 modèles ou plus, un sélecteur de modèle apparaît ; sinon le modèle unique est utilisé. */
   window.DOC_MODELS = window.DOC_MODELS || {
-    statuts:[{id:'standard',label:'Statuts — modèle standard',fn:function(d){return statutsSasHTML(d);}}],
+    statuts:[{id:'standard',label:'Statuts — modèle standard',fn:function(d){return (typeof statutsHTML==='function'?statutsHTML(d):statutsSasHTML(d));}}],
     souscripteurs:[{id:'standard',label:'Liste des souscripteurs — standard',fn:function(d){return souscripteursHTML(d);}}],
     pouvoir:[{id:'standard',label:'Pouvoir — standard',fn:function(d){return pouvoirHTML(d);}}],
     dnc:[{id:'standard',label:'Déclaration de non-condamnation — standard',fn:function(d){return dncHTML(d);}}],
@@ -8105,6 +8107,178 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var _c=window.closeModal; window.closeModal=function(){ var r=_c.apply(this,arguments); try{ if(lastFocus&&typeof lastFocus.focus==='function'&&document.contains(lastFocus))lastFocus.focus(); }catch(e){} lastFocus=null; return r; }; window.closeModal.__a11y=true;
   }
   hook();
+})();
+</script>
+
+<script id="statuts-forme-mod">
+/* ===================================================================
+   STATUTS ADAPTÉS À LA FORME JURIDIQUE
+   SARL / EURL et SCI en plus de la SAS/SASU. Un routeur statutsHTML(d)
+   choisit le modèle selon la forme du dossier ; le document
+   « souscripteurs » emploie « parts sociales » hors SAS.
+   =================================================================== */
+(function(){
+  function E(s){ return (typeof esc==='function')?esc(s):(''+(s==null?'':s)); }
+  function num(n){ return (typeof stNum==='function')?stNum(n):(''+n); }
+  function lettres(n){ return (typeof stLettres==='function')?stLettres(n):(''+n); }
+  function forme(d){ var c=(typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{}; return ((c.forme||d.forme||'SAS')+'').toUpperCase(); }
+
+  function base(d){
+    var x=stDossData(d);
+    var c=x.c||{};
+    var capN=x.cap?num(x.cap):'«…»', capL=x.cap?lettres(x.cap):'«…»';
+    var objet=((c.activites||[]).join(', ')||'').trim();
+    var nominal=x.nominal||100, nbParts=x.nbActions||0;
+    var apports=x.assoc.map(function(a){ var pn=Number(a.parts)||0; var val=pn*nominal;
+      return '<p>- '+(E(a.nom)||'«associé»')+' apporte la somme de '+(val?num(val)+' Euros':'«…» Euros')+', soit '+(pn||'«…»')+' part'+(pn>1?'s':'')+'.</p>'; }).join('');
+    var repart=x.assoc.map(function(a){ var pn=Number(a.parts)||0; return '<p>- '+(E(a.nom)||'«associé»')+' : '+(pn||'«…»')+' part'+(pn>1?'s':'')+'</p>'; }).join('');
+    var _pres=(''+x.president).trim();
+    var signs=x.assoc.map(function(a){ var an=(''+(a.nom||'')).trim(); var role=(an&&an===_pres)?'Le gérant — Signature':'Associé — Signature'; return '<div class="sg"><b>'+(E(an)||'«associé»')+'</b>'+role+'</div>'; }).join('');
+    return {x:x,c:c,capN:capN,capL:capL,objet:objet,nominal:nominal,nbParts:nbParts,apports:apports,repart:repart,signs:signs,
+      preambule:x.assoc.map(function(a){return '<p>'+((typeof stCivil==='function')?stCivil(a):E(a.nom))+'</p>';}).join('')};
+  }
+  function art(t,paras){ return '<div class="st-art">'+t+'</div>'+paras.map(function(p){return '<p>'+p+'</p>';}).join(''); }
+  function titre(t){ return '<div class="st-titre">'+t+'</div>'; }
+
+  /* ---------------- SARL / EURL ---------------- */
+  window.statutsSarlHTML=function(d){
+    var b=base(d), x=b.x, uni=(x.assoc.length<=1), eurl=(forme(d)==='EURL'||uni);
+    var formeLbl=eurl?'SOCIÉTÉ À RESPONSABILITÉ LIMITÉE À ASSOCIÉ UNIQUE (E.U.R.L.)':'SOCIÉTÉ À RESPONSABILITÉ LIMITÉE';
+    var cover='<div class="st-cover"><div class="st-c1">STATUTS</div><div class="st-c2">'+formeLbl+'</div>'
+      +'<div class="st-c3">'+E(x.denom)+'</div><div class="st-c4">au capital de '+b.capN+' Euros</div><div class="st-c4">Siège social : '+E(x.siegeComplet)+'</div></div>';
+    var preambule='<p><b>'+(eurl?'Le soussigné :':'Les soussignés :')+'</b></p>'+b.preambule
+      +'<p>'+(eurl?'A':'Ont')+' établi ainsi qu\'il suit les statuts de la société à responsabilité limitée'+(eurl?' à associé unique':'')+' devant exister entre '+(eurl?'lui':'eux')+' et toute personne qui viendrait ultérieurement à acquérir la qualité d\'associé.</p>';
+    var A=[];
+    A.push(titre('TITRE I — FORME · OBJET · DÉNOMINATION · SIÈGE · DURÉE'));
+    A.push(art('ARTICLE 1 — Forme',
+      ['Il est formé une société à responsabilité limitée régie par les dispositions du Code de commerce, notamment ses articles L. 223-1 et suivants, par toutes autres dispositions légales et réglementaires applicables, et par les présents statuts.',
+       'La Société '+(eurl?'ne comporte qu\'un seul associé. Elle peut à tout moment comprendre plusieurs associés à la suite d\'une cession ou transmission de parts, ou de la création de parts nouvelles, dans la limite de cent associés.':'peut comporter de deux à cent associés.'),
+       'Les associés ne supportent les pertes qu\'à concurrence de leurs apports.']));
+    A.push(art('ARTICLE 2 — Objet',
+      ['La Société a pour objet, en France et à l\'étranger : '+(b.objet?E(b.objet):'«objet social — activités de la société»')+'.',
+       'Et, plus généralement, toutes opérations industrielles, commerciales, financières, mobilières ou immobilières se rattachant directement ou indirectement à cet objet ou susceptibles d\'en faciliter la réalisation.']));
+    A.push('<div class="st-art">ARTICLE 3 — Dénomination sociale</div><p>La dénomination sociale est :</p><p class="st-den">'+E(x.denom)+'</p>'
+      +'<p>Tous les actes et documents émanant de la Société doivent indiquer la dénomination sociale précédée ou suivie immédiatement des mots « société à responsabilité limitée » ou des initiales « S.A.R.L. »'+(eurl?' (ou « E.U.R.L. »)':'')+' et de l\'énonciation du montant du capital social.</p>');
+    A.push(art('ARTICLE 4 — Siège social',
+      ['Le siège social est fixé à '+E(x.siegeComplet)+'.',
+       'Il peut être transféré par simple décision de la gérance, sous réserve de ratification par les associés, et en tout lieu par décision collective extraordinaire.']));
+    A.push(art('ARTICLE 5 — Durée',
+      ['La durée de la Société est fixée à quatre-vingt-dix-neuf (99) années à compter de son immatriculation au registre du commerce et des sociétés, sauf dissolution anticipée ou prorogation.']));
+    A.push(titre('TITRE II — APPORTS · CAPITAL · PARTS SOCIALES'));
+    A.push('<div class="st-art">ARTICLE 6 — Apports</div>'+(b.apports||'<p>«apports des associés»</p>')
+      +'<p>Soit au total la somme de '+b.capN+' Euros ('+b.capL+' euros), correspondant à '+(b.nbParts||'«…»')+' parts sociales, intégralement libérée ainsi qu\'il résulte de l\'état des souscriptions.</p>');
+    A.push('<div class="st-art">ARTICLE 7 — Capital social</div>'
+      +'<p>Le capital social est fixé à la somme de '+b.capN+' Euros ('+b.capL+' euros).</p>'
+      +'<p>Il est divisé en '+(b.nbParts||'«…»')+' parts sociales de '+num(b.nominal)+' Euros chacune, entièrement souscrites et réparties entre les associés en proportion de leurs apports :</p>'+(b.repart||'<p>«répartition des parts»</p>'));
+    A.push(art('ARTICLE 8 — Parts sociales',
+      ['Les parts sociales ne peuvent être représentées par des titres négociables. Le titre de chaque associé résulte des présents statuts, des actes modificatifs ultérieurs et des cessions régulièrement consenties.',
+       'Chaque part sociale confère à son propriétaire un droit proportionnel dans les bénéfices et l\'actif social ; elle est indivisible à l\'égard de la Société.']));
+    A.push(art('ARTICLE 9 — Cession et transmission des parts',
+      ['Les parts sociales sont librement cessibles entre associés'+(eurl?'':'')+' , ainsi qu\'entre conjoints, ascendants et descendants.',
+       'La cession de parts à des tiers étrangers à la Société est soumise à l\'agrément préalable de la majorité des associés représentant au moins la moitié des parts sociales, conformément à l\'article L. 223-14 du Code de commerce.',
+       'Toute cession de parts doit être constatée par écrit et devient opposable à la Société après signification ou dépôt d\'un original au siège social.']));
+    A.push(titre('TITRE III — GÉRANCE'));
+    A.push(art('ARTICLE 10 — Nomination de la gérance',
+      ['La Société est administrée par un ou plusieurs gérants, personnes physiques, associés ou non, nommés par décision des associés représentant plus de la moitié des parts sociales.',
+       'Le gérant est nommé pour une durée '+((x.c&&x.c.docVars&&x.c.docVars.dureeGerance)||'illimitée')+', sauf décision contraire des associés.']));
+    A.push(art('ARTICLE 11 — Pouvoirs de la gérance',
+      ['Dans les rapports avec les tiers, le gérant est investi des pouvoirs les plus étendus pour agir en toute circonstance au nom de la Société, sous réserve des pouvoirs que la loi attribue expressément aux associés.',
+       'Dans les rapports entre associés, le gérant peut accomplir tous actes de gestion dans l\'intérêt de la Société.']));
+    A.push(art('ARTICLE 12 — Rémunération · Responsabilité',
+      ['La rémunération du gérant est fixée par décision collective ordinaire des associés.',
+       'Le gérant est responsable individuellement ou solidairement, selon le cas, envers la Société ou envers les tiers, des infractions aux dispositions légales, de la violation des statuts et des fautes commises dans sa gestion.']));
+    A.push(titre('TITRE IV — DÉCISIONS DES ASSOCIÉS'));
+    A.push(art('ARTICLE 13 — Décisions collectives',
+      [(eurl?'L\'associé unique exerce les pouvoirs dévolus à l\'assemblée des associés. Ses décisions sont répertoriées dans un registre.':'Les décisions collectives sont prises en assemblée ou par consultation écrite. Les décisions ordinaires sont adoptées par un ou plusieurs associés représentant plus de la moitié des parts sociales ; les décisions extraordinaires (modification des statuts) par les associés représentant au moins les trois quarts des parts sociales, dans les conditions des articles L. 223-29 et L. 223-30 du Code de commerce.')]));
+    A.push(titre('TITRE V — EXERCICE SOCIAL · COMPTES · RÉSULTAT'));
+    A.push(art('ARTICLE 14 — Exercice social',
+      ['Chaque exercice social a une durée d\'une année qui commence le 1er janvier et finit le 31 décembre.',
+       'Par exception, le premier exercice comprendra le temps écoulé depuis l\'immatriculation de la Société jusqu\'au 31 décembre '+E(x.annee)+'.']));
+    A.push(art('ARTICLE 15 — Comptes annuels · Affectation du résultat',
+      ['Il est tenu une comptabilité régulière des opérations sociales. À la clôture de chaque exercice, la gérance établit les comptes annuels.',
+       'Sur le bénéfice distribuable, il est prélevé cinq pour cent (5 %) pour constituer le fonds de réserve légale, prélèvement qui cesse d\'être obligatoire lorsque la réserve atteint le dixième du capital social. Le solde est réparti entre les associés proportionnellement au nombre de leurs parts.']));
+    A.push(titre('TITRE VI — DISSOLUTION · LIQUIDATION · CONTESTATIONS'));
+    A.push(art('ARTICLE 16 — Dissolution · Liquidation',
+      ['À l\'expiration de la Société ou en cas de dissolution anticipée, la collectivité des associés règle le mode de liquidation et nomme un ou plusieurs liquidateurs. Le produit net de la liquidation est employé au remboursement du capital ; le surplus est réparti entre les associés proportionnellement au nombre de leurs parts.']));
+    A.push(art('ARTICLE 17 — Contestations',
+      ['Toutes les contestations relatives aux affaires sociales, survenant pendant la durée de la Société ou de sa liquidation, sont soumises au tribunal de commerce du lieu du siège social.']));
+    A.push(titre('TITRE VII — CONSTITUTION'));
+    A.push('<div class="st-art">ARTICLE 18 — Nomination du premier gérant</div>'
+      +'<p>Est nommé premier gérant de la Société, pour une durée illimitée :</p><p>- '+E(x.president)+'.</p>'
+      +'<p>Lequel déclare accepter lesdites fonctions et satisfaire à toutes les conditions requises par la loi pour leur exercice.</p>');
+    A.push(art('ARTICLE 19 — Formalités · Immatriculation',
+      ['Tous pouvoirs sont conférés au porteur d\'un original des présentes à l\'effet d\'accomplir les formalités de publicité, de dépôt et autres nécessaires pour parvenir à l\'immatriculation de la Société au registre du commerce et des sociétés.']));
+    var villeSig=E(x.villeSignature), dateActe=(typeof stDateSlash==='function')?stDateSlash((x.c.docVars||{}).dateActe):'';
+    var fin='<div class="st-fin"><p>Fait à '+villeSig+',</p><p>Le '+dateActe+',</p>'
+      +'<p>en autant d\'originaux que nécessaire pour les besoins de l\'enregistrement et du dépôt au greffe du tribunal de commerce.</p>'
+      +'<div class="st-sign">'+b.signs+'</div></div>';
+    return '<div class="st-doc">'+cover+'<div class="st-page">'+preambule+A.join('')+fin+'</div></div>';
+  };
+
+  /* ---------------- SCI (société civile immobilière) ---------------- */
+  window.statutsSciHTML=function(d){
+    var b=base(d), x=b.x;
+    var objet=b.objet||'l\'acquisition, la propriété, l\'administration et la gestion par location ou autrement de tous biens et droits immobiliers';
+    var cover='<div class="st-cover"><div class="st-c1">STATUTS</div><div class="st-c2">SOCIÉTÉ CIVILE IMMOBILIÈRE</div>'
+      +'<div class="st-c3">'+E(x.denom)+'</div><div class="st-c4">au capital de '+b.capN+' Euros</div><div class="st-c4">Siège social : '+E(x.siegeComplet)+'</div></div>';
+    var preambule='<p><b>Les soussignés :</b></p>'+b.preambule
+      +'<p>Ont établi ainsi qu\'il suit les statuts de la société civile immobilière qu\'ils sont convenus de constituer.</p>';
+    var A=[];
+    A.push(titre('TITRE I — FORME · OBJET · DÉNOMINATION · SIÈGE · DURÉE'));
+    A.push(art('ARTICLE 1 — Forme',
+      ['Il est formé entre les propriétaires des parts sociales ci-après créées, et de celles qui pourraient l\'être ultérieurement, une société civile régie par les articles 1832 et suivants et 1845 et suivants du Code civil, ainsi que par les présents statuts.',
+       'Cette société n\'a pas un caractère commercial. Les associés répondent indéfiniment des dettes sociales à proportion de leur part dans le capital, conformément à l\'article 1857 du Code civil.']));
+    A.push(art('ARTICLE 2 — Objet',
+      ['La Société a pour objet : '+E(objet)+'.',
+       'Et généralement toutes opérations, de quelque nature qu\'elles soient, se rattachant à cet objet, pourvu qu\'elles ne modifient pas le caractère civil de la Société.']));
+    A.push('<div class="st-art">ARTICLE 3 — Dénomination</div><p>La dénomination de la Société est :</p><p class="st-den">'+E(x.denom)+'</p>'
+      +'<p>Dans tous les actes et documents émanant de la Société, la dénomination doit être précédée ou suivie des mots « société civile immobilière » ou des initiales « S.C.I. » et de l\'indication du capital social.</p>');
+    A.push(art('ARTICLE 4 — Siège social',
+      ['Le siège social est fixé à '+E(x.siegeComplet)+'.',
+       'Il peut être transféré en tout autre endroit par décision collective des associés.']));
+    A.push(art('ARTICLE 5 — Durée',
+      ['La durée de la Société est fixée à quatre-vingt-dix-neuf (99) années à compter de son immatriculation, sauf dissolution anticipée ou prorogation.']));
+    A.push(titre('TITRE II — APPORTS · CAPITAL · PARTS'));
+    A.push('<div class="st-art">ARTICLE 6 — Apports</div>'+(b.apports||'<p>«apports des associés»</p>')
+      +'<p>Soit au total la somme de '+b.capN+' Euros ('+b.capL+' euros).</p>');
+    A.push('<div class="st-art">ARTICLE 7 — Capital social</div>'
+      +'<p>Le capital social est fixé à la somme de '+b.capN+' Euros ('+b.capL+' euros), divisé en '+(b.nbParts||'«…»')+' parts sociales de '+num(b.nominal)+' Euros chacune, attribuées aux associés en proportion de leurs apports :</p>'+(b.repart||'<p>«répartition des parts»</p>'));
+    A.push(art('ARTICLE 8 — Cession des parts',
+      ['Les parts sociales ne peuvent être cédées, à titre onéreux ou gratuit, qu\'avec l\'agrément de tous les associés, conformément à l\'article 1861 du Code civil, sauf dispositions plus favorables prévues aux présents statuts pour les cessions entre associés, conjoints, ascendants ou descendants.',
+       'Toute cession est constatée par écrit et rendue opposable à la Société dans les conditions de l\'article 1865 du Code civil.']));
+    A.push(art('ARTICLE 9 — Responsabilité des associés',
+      ['À l\'égard des tiers, les associés répondent indéfiniment des dettes sociales à proportion de leur part dans le capital social à la date de l\'exigibilité ou au jour de la cessation des paiements. Ils ne sont pas tenus solidairement, sauf convention contraire.']));
+    A.push(titre('TITRE III — GÉRANCE · DÉCISIONS'));
+    A.push(art('ARTICLE 10 — Gérance',
+      ['La Société est gérée par un ou plusieurs gérants, associés ou non, personnes physiques ou morales, nommés par décision des associés représentant plus de la moitié des parts sociales.',
+       'Le gérant est investi des pouvoirs les plus étendus pour agir au nom de la Société dans la limite de l\'objet social ; à l\'égard des tiers, la Société est engagée par les actes du gérant entrant dans l\'objet social.']));
+    A.push(art('ARTICLE 11 — Décisions collectives',
+      ['Les décisions qui excèdent les pouvoirs de la gérance sont prises par les associés, en assemblée ou par consultation écrite. Les décisions sont adoptées, sauf clause contraire, par les associés représentant plus de la moitié des parts sociales ; les décisions modifiant les statuts requièrent l\'unanimité, sauf stipulation particulière des présents statuts.']));
+    A.push(titre('TITRE IV — EXERCICE · RÉSULTAT · DISSOLUTION'));
+    A.push(art('ARTICLE 12 — Exercice social · Comptes',
+      ['L\'exercice social commence le 1er janvier et se termine le 31 décembre de chaque année. Le premier exercice comprend le temps écoulé depuis l\'immatriculation jusqu\'au 31 décembre '+E(x.annee)+'. Il est établi un état des résultats à la clôture de chaque exercice.']));
+    A.push(art('ARTICLE 13 — Affectation des résultats',
+      ['Les bénéfices nets sont répartis entre les associés proportionnellement au nombre de parts appartenant à chacun d\'eux. De même, les associés supportent les pertes dans la même proportion.']));
+    A.push(art('ARTICLE 14 — Dissolution · Liquidation',
+      ['La Société prend fin à l\'expiration du terme, ou par décision des associés, ou pour toute cause prévue par la loi. La liquidation est effectuée par le ou les gérants en fonction, ou par un liquidateur désigné par les associés. Le produit net de la liquidation est réparti entre les associés proportionnellement à leurs parts.']));
+    A.push(art('ARTICLE 15 — Contestations',
+      ['Toutes contestations relatives aux affaires sociales sont soumises au tribunal judiciaire du lieu du siège social.']));
+    A.push(titre('TITRE V — CONSTITUTION'));
+    A.push('<div class="st-art">ARTICLE 16 — Nomination du premier gérant · Formalités</div>'
+      +'<p>Est nommé premier gérant de la Société, pour une durée illimitée : '+E(x.president)+', qui déclare accepter ces fonctions.</p>'
+      +'<p>Tous pouvoirs sont conférés au porteur d\'un original des présentes pour accomplir les formalités de publicité et d\'immatriculation au registre du commerce et des sociétés.</p>');
+    var villeSig=E(x.villeSignature), dateActe=(typeof stDateSlash==='function')?stDateSlash((x.c.docVars||{}).dateActe):'';
+    var fin='<div class="st-fin"><p>Fait à '+villeSig+',</p><p>Le '+dateActe+',</p>'
+      +'<p>en autant d\'originaux que nécessaire pour l\'enregistrement et le dépôt au greffe.</p>'
+      +'<div class="st-sign">'+b.signs+'</div></div>';
+    return '<div class="st-doc">'+cover+'<div class="st-page">'+preambule+A.join('')+fin+'</div></div>';
+  };
+
+  /* Routeur : choisit le modèle selon la forme */
+  window.statutsHTML=function(d){ try{ var f=forme(d);
+    if(f==='SARL'||f==='EURL')return statutsSarlHTML(d);
+    if(f==='SCI')return statutsSciHTML(d);
+    return statutsSasHTML(d); }catch(e){ return statutsSasHTML(d); } };
 })();
 </script>
 

@@ -240,6 +240,17 @@ const r = await page.evaluate(async () => {
     && !!document.querySelector('.burger').getAttribute('aria-label')
     && !!document.getElementById('q').getAttribute('aria-label');
 
+  // Documents adaptés à la forme juridique (statuts SAS / SARL / SCI / EURL)
+  DB.clients.push({ id: 'csarl', prenom: 'C', nom: 'D', forme: 'SARL', denomination: 'BETA', capital: 2000, siege: '2 rue Y', cp: '69001', ville: 'Lyon', activites: ['restauration'], associes: [{ nom: 'C D', parts: 100 }, { nom: 'E F', parts: 100 }], president: 'C D' });
+  DB.clients.push({ id: 'csci', prenom: 'G', nom: 'H', forme: 'SCI', denomination: 'GAMMA', capital: 1500, siege: '3 rue Z', cp: '33000', ville: 'Bordeaux', activites: ['immobilier'], associes: [{ nom: 'G H', parts: 150 }], president: 'G H' });
+  DB.dossiers.push({ id: 'dsarl', ref: 'DOS-SARL', clientIds: ['csarl'], docs: {}, piecesRecues: {} });
+  DB.dossiers.push({ id: 'dsci', ref: 'DOS-SCI', clientIds: ['csci'], docs: {}, piecesRecues: {} });
+  const stSarl = statutsHTML(DB.dossiers.find(x => x.id === 'dsarl'));
+  const stSci = statutsHTML(DB.dossiers.find(x => x.id === 'dsci'));
+  out.statutsForme = /SOCIÉTÉ À RESPONSABILITÉ LIMITÉE/.test(stSarl) && /parts sociales/.test(stSarl) && !/par actions simplifiée/i.test(stSarl)
+    && /SOCIÉTÉ CIVILE IMMOBILIÈRE/.test(stSci) && /1857 du Code civil/.test(stSci)
+    && /parts sociales/.test(souscripteursHTML(DB.dossiers.find(x => x.id === 'dsarl')));
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

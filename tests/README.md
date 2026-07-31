@@ -13,8 +13,9 @@ obligatoires, cycle de vie), **relances automatiques programmées**
 (cadence, détection des relances dues), **modèles de dossiers par type
 de formalité** (détection, pièces, étapes, choix manuel) et
 **prévisionnel de trésorerie** (encaissements attendus, solde projeté)
-**PDF/A-3 Factur-X** (PDF avec XML CII embarqué, xref valide) et
-**accessibilité** (lien d'évitement, ARIA, sémantique modale) —
+**PDF/A-3 Factur-X** (PDF avec XML CII embarqué, xref valide),
+**accessibilité** (lien d'évitement, ARIA, sémantique modale) et
+**documents adaptés à la forme juridique** (statuts SAS/SARL/SCI/EURL) —
 le tout sans erreur JavaScript.
 
 ## Lancer
