@@ -251,6 +251,13 @@ const r = await page.evaluate(async () => {
     && /SOCIÉTÉ CIVILE IMMOBILIÈRE/.test(stSci) && /1857 du Code civil/.test(stSci)
     && /parts sociales/.test(souscripteursHTML(DB.dossiers.find(x => x.id === 'dsarl')));
 
+  // Actes & procès-verbaux adaptés à la forme (PV AGO, PV de modification)
+  const aSarl = acteHTML(DB.dossiers.find(x => x.id === 'dsarl'), 'approbation');
+  const aTr = acteHTML(DB.dossiers.find(x => x.id === 'dsarl'), 'transfert');
+  out.actes = /ASSEMBLÉE GÉNÉRALE ORDINAIRE/.test(aSarl) && /parts sociales/.test(aSarl) && /gérant/.test(aSarl)
+    && /EXTRAORDINAIRE/.test(aTr) && /transférer le siège/.test(aTr)
+    && typeof actesCard === 'function' && typeof actesButtons === 'function';
+
   // Tableau de bord conformité (échéances légales)
   const isoC = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
   DB.clients.push({ id: 'ccf1', prenom: 'A', nom: 'B', forme: 'SARL' });

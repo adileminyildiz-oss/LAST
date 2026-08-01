@@ -2737,7 +2737,7 @@ function espEnvoyerMail(id){var d=espDoss().find(function(x){return x.id===id;})
 function espPanel(d,list,id){
   return '<div class="esp-shell">'
    +espMiniList(list,id)
-   +'<div class="esp-main">'+espMailCard(d)+espTraitementCard(d)+espNotesCard(d)+espPiecesCard(d)+espDocsPretsCard(d)+'</div>'
+   +'<div class="esp-main">'+espMailCard(d)+espTraitementCard(d)+((typeof actesCard==='function')?actesCard(d):'')+espNotesCard(d)+espPiecesCard(d)+espDocsPretsCard(d)+'</div>'
    +'</div>';
 }
 function espStatutsCard(d){
@@ -3828,7 +3828,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=173;
+var LAST_VER=174;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -8363,6 +8363,123 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function hookDash(){ if(typeof window.pageDash!=='function'){setTimeout(hookDash,200);return;} if(window.pageDash.__cf)return;
     var _pd=window.pageDash; var w=function(){ var h=_pd.apply(this,arguments); try{ h+=conformiteCard(); }catch(e){} return h; }; w.__cf=true; window.pageDash=w; }
   hookDash();
+})();
+</script>
+
+<style id="actes-style">
+.ac-card .ac-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.ac-note{font-size:11px;color:var(--ink-3);margin-top:9px}
+.ac-titre{text-align:center;font-weight:800;margin:10px 0 4px;font-size:15px;letter-spacing:.3px}
+.ac-res{font-weight:700;margin-top:12px}
+</style>
+<script id="actes-mod">
+/* ===================================================================
+   ACTES & PROCÈS-VERBAUX adaptés à la forme juridique
+   PV d'AGO d'approbation des comptes + PV/décisions de modification
+   (transfert de siège, dirigeant, dénomination, objet, capital,
+   dissolution). Assemblée vs décision de l'associé unique ; parts
+   sociales/actions ; gérant/Président ; SARL·EURL·SAS·SASU·SCI.
+   =================================================================== */
+(function(){
+  function E(s){ return (typeof esc==='function')?esc(s):(''+(s==null?'':s)); }
+  function num(n){ return (typeof stNum==='function')?stNum(n):(''+n); }
+  var TITRES={approbation:'PV — Approbation des comptes',transfert:'PV — Transfert de siège',dirigeant:'PV — Changement de dirigeant',denomination:'PV — Changement de dénomination',objet:"PV — Changement d'objet",capital:'PV — Modification de capital',dissolution:'PV — Dissolution'};
+
+  function acteHTML(d,type){
+    var x=stDossData(d); var f=(x.forme||'SAS').toUpperCase();
+    var uni=(x.assoc.length<=1);
+    var parts=(f==='SAS'||f==='SASU')?'actions':'parts sociales';
+    var dirig=(f==='SARL'||f==='EURL'||f==='SCI')?'gérant':'Président';
+    var formeLbl=(typeof stFormeLabel==='function')?stFormeLabel(uni&&f==='SAS'?'SASU':(uni&&f==='SARL'?'EURL':f)):f;
+    var capN=x.cap?num(x.cap):'«…»';
+    var cloture=d.clotureDate?frDate(d.clotureDate):(x.finExo||('31 décembre '+x.annee));
+    var villeSig=E(x.villeSignature), dateActe=(typeof stDateSlash==='function')?stDateSlash((x.c.docVars||{}).dateActe):'';
+    var instance=uni?('L\'associé unique'):('L\'assemblée générale');
+    var decide=uni?'L\'associé unique décide':'L\'assemblée générale décide';
+    // Résolutions par type
+    var R=[];
+    if(type==='transfert'){
+      R=[['Transfert du siège social',decide+' de transférer le siège social, actuellement situé '+E(x.siegeComplet)+', à l\'adresse suivante : «nouvelle adresse du siège», à compter de ce jour.'],
+         ['Modification des statuts',decide+' de modifier en conséquence l\'article des statuts relatif au siège social.'],
+         ['Pouvoirs','Tous pouvoirs sont donnés au porteur d\'un original, d\'une copie ou d\'un extrait du présent procès-verbal pour accomplir les formalités de publicité, de dépôt et d\'inscription modificative.']];
+    } else if(type==='dirigeant'){
+      R=[['Cessation de fonctions',instance+' prend acte de la cessation des fonctions de '+E(x.president)+', '+dirig+', à compter de ce jour.'],
+         ['Nomination',decide+' de nommer «Nom du nouveau '+dirig+'» en qualité de '+dirig+', pour une durée illimitée, qui déclare accepter ces fonctions et n\'être frappé d\'aucune incompatibilité ni interdiction.'],
+         ['Pouvoirs','Tous pouvoirs sont donnés au porteur d\'un original pour accomplir les formalités légales.']];
+    } else if(type==='denomination'){
+      R=[['Changement de dénomination',decide+' d\'adopter la nouvelle dénomination sociale : «NOUVELLE DÉNOMINATION», en remplacement de la dénomination actuelle « '+E(x.denom)+' », à compter de ce jour.'],
+         ['Modification des statuts',decide+' de modifier en conséquence l\'article des statuts relatif à la dénomination sociale.'],
+         ['Pouvoirs','Tous pouvoirs sont donnés au porteur d\'un original pour accomplir les formalités légales.']];
+    } else if(type==='objet'){
+      R=[['Modification de l\'objet social',decide+' de modifier l\'objet social comme suit : «nouvel objet social», et le cas échéant de l\'étendre aux activités susvisées.'],
+         ['Modification des statuts',decide+' de modifier en conséquence l\'article des statuts relatif à l\'objet social.'],
+         ['Pouvoirs','Tous pouvoirs sont donnés au porteur d\'un original pour accomplir les formalités légales.']];
+    } else if(type==='capital'){
+      R=[['Modification du capital social',decide+' de porter le capital social de '+capN+' euros à «nouveau montant» euros, soit une «augmentation/réduction» de «montant» euros, dans les conditions légales.'],
+         ['Modification des statuts',decide+' de modifier en conséquence les articles des statuts relatifs aux apports et au capital social.'],
+         ['Pouvoirs','Tous pouvoirs sont donnés au porteur d\'un original pour accomplir les formalités légales.']];
+    } else if(type==='dissolution'){
+      R=[['Dissolution anticipée',decide+' la dissolution anticipée de la Société à compter de ce jour et sa mise en liquidation amiable.'],
+         ['Nomination du liquidateur',decide+' de nommer «Nom du liquidateur» en qualité de liquidateur, avec les pouvoirs les plus étendus pour réaliser l\'actif et apurer le passif.'],
+         ['Siège de la liquidation','Le siège de la liquidation est fixé à «adresse du siège de la liquidation», adresse à laquelle toute correspondance devra être envoyée.'],
+         ['Pouvoirs','Tous pouvoirs sont donnés au porteur d\'un original pour accomplir les formalités de publicité et de radiation.']];
+    } else { // approbation (défaut)
+      type='approbation';
+      R=[['Approbation des comptes',instance+', après avoir entendu la lecture du rapport de gestion et pris connaissance des comptes annuels, approuve les comptes de l\'exercice clos le '+cloture+' tels qu\'ils lui ont été présentés, ainsi que les opérations traduites dans ces comptes.'],
+         ['Affectation du résultat',decide+' d\'affecter le résultat de l\'exercice de la manière suivante : «affectation (réserves, report à nouveau, dividendes)».'],
+         ['Quitus au '+dirig,instance+' donne au '+dirig+' quitus entier, plein et sans réserve de l\'exécution de son mandat pour l\'exercice écoulé.']];
+    }
+    var ordre='<p>1. '+R.map(function(r,i){return r[0];}).join('<br>'+'')+'</p>';
+    var ordreList='<div class="ac-res">ORDRE DU JOUR</div><ol style="margin:4px 0 0 18px">'+R.map(function(r){return '<li>'+E(r[0])+'</li>';}).join('')+'</ol>';
+    var ords=['PREMIÈRE','DEUXIÈME','TROISIÈME','QUATRIÈME','CINQUIÈME'];
+    var resHTML=R.map(function(r,i){ return '<div class="ac-res">'+ords[i]+' RÉSOLUTION — '+E(r[0])+'</div><p>'+r[1]+'</p>'
+      +(uni?'':'<p><i>Cette résolution, mise aux voix, est adoptée.</i></p>'); }).join('');
+    var titre=uni
+      ? ('DÉCISIONS DE L\'ASSOCIÉ UNIQUE'+(type==='approbation'?' — APPROBATION DES COMPTES':''))
+      : ('PROCÈS-VERBAL DE L\'ASSEMBLÉE GÉNÉRALE '+(type==='approbation'?'ORDINAIRE ANNUELLE':'EXTRAORDINAIRE'));
+    var entree=uni
+      ? ('<p>Le soussigné, '+E(x.president)+', associé unique de la société <b>'+E(x.denom)+'</b>, '+E(formeLbl)+' au capital de '+capN+' euros, dont le siège social est situé '+E(x.siegeComplet)+', a pris les décisions suivantes :</p>')
+      : ('<p>Les associés de la société <b>'+E(x.denom)+'</b>, '+E(formeLbl)+' au capital de '+capN+' euros, dont le siège social est situé '+E(x.siegeComplet)+', se sont réunis en assemblée générale, sur convocation du '+dirig+'.</p>'
+        +'<p>Il a été établi une feuille de présence, signée par les associés présents ou représentés, à laquelle sont annexés les pouvoirs des associés représentés. L\'ensemble des '+parts+' composant le capital étant représenté, l\'assemblée peut valablement délibérer.</p>'
+        +'<p>Le '+dirig+' préside la séance. Le Président constate que l\'assemblée est régulièrement constituée et peut valablement délibérer sur l\'ordre du jour suivant.</p>');
+    var signs=x.assoc.map(function(a){ var an=(''+(a.nom||'')).trim(); var role=(an&&an===(''+x.president).trim())?('Le '+dirig+' — Signature'):'Associé — Signature'; return '<div class="sg"><b>'+(E(an)||'«associé»')+'</b>'+role+'</div>'; }).join('');
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-hdr"><b>'+E(x.denom)+'</b><div class="sub">'+E(formeLbl)+' au capital de '+capN+' euros</div>'
+      +'<div class="sub">Siège social : '+E(x.siegeComplet)+'</div><div class="sub">RCS '+E(x.rcsVille)+'</div></div>'
+      +'<div class="ac-titre">'+titre+'</div>'
+      +'<p>L\'an '+E(x.annee)+', le '+dateActe+', à '+villeSig+',</p>'
+      +entree
+      +ordreList
+      +'<div class="ac-res" style="margin-top:14px">RÉSOLUTIONS</div>'+resHTML
+      +'<p style="margin-top:12px">'+(uni?'De tout ce que dessus, il a été dressé le présent procès-verbal signé par l\'associé unique.':'L\'ordre du jour étant épuisé et personne ne demandant plus la parole, la séance est levée. De tout ce que dessus, il a été dressé le présent procès-verbal signé par les membres de l\'assemblée.')+'</p>'
+      +'<div class="st-fin"><p>Fait à '+villeSig+', le '+dateActe+'</p><div class="st-sign">'+signs+'</div></div>'
+      +'</div></div>';
+  }
+  window.acteHTML=acteHTML;
+
+  window.acteVoir=function(id,type){ var d=(DB.dossiers||[]).find(function(x){return x.id===id;}); if(!d)return;
+    if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();
+    openModal(TITRES[type]||'Procès-verbal',
+      '<div class="fv-view-scroll"><div class="doc-gen">'+acteHTML(d,type)+'</div></div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+      +'<button class="btn btn-pri" onclick="espDocPrint()">Imprimer</button>');
+    setTimeout(function(){ if(typeof fvFitView==='function')fvFitView(); },40);
+  };
+
+  var MODIF={transfert_siege:'transfert',changement_dirigeant:'dirigeant',denomination:'denomination',objet:'objet',capital:'capital',dissolution:'dissolution'};
+  /* Boutons d'actes — insérés dans la carte « Modèle de dossier » */
+  window.actesButtons=function(d){ if(!d)return '';
+    var mt=(typeof formaliteType==='function')?formaliteType(d):''; var modif=MODIF[mt];
+    var btns='<button class="btn btn-sm" onclick="acteVoir(\''+d.id+'\',\'approbation\')">PV d\'approbation des comptes</button>';
+    if(modif){ btns+='<button class="btn btn-sm btn-pri" onclick="acteVoir(\''+d.id+'\',\''+modif+'\')">'+esc(TITRES[modif])+'</button>'; }
+    return '<div class="md-sec">Actes & procès-verbaux (adaptés à la forme)</div><div class="ac-btns">'+btns+'</div>'; };
+  /* Carte autonome (au cas où) */
+  window.actesCard=function(d){ if(!d)return '';
+    return '<div class="card ac-card"><div class="card-h"><h2>Actes & procès-verbaux</h2>'
+      +'<span class="sub" style="margin-left:auto">Adaptés à la forme juridique</span></div><div class="card-b">'
+      +actesButtons(d)
+      +'<p class="ac-note">Procès-verbaux générés d\'après les données du dossier et la forme juridique. Aperçu imprimable ; champs «…» à compléter avant signature.</p>'
+      +'</div></div>'; };
 })();
 </script>
 
