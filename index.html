@@ -2380,9 +2380,11 @@ function pageFacturation(){
     ${kpi('inbox',aRelancer,'À relancer (échues)',aRelancer?'hot':'')}
   </div>
   <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center"><button class="btn btn-pri" onclick="${t==='client'?'fvOpen()':'factModal()'}">${svg(IC.plus)}Ajouter</button>
+    ${t==='client'?`<button class="btn btn-ghost btn-sm" onclick="recModal()">🔁 Facturation récurrente</button>`:''}
     ${t==='client'&&list.length?`<button class="btn btn-ghost btn-sm" onclick="exportFacturesCSV()">Exporter (CSV)</button>`:''}
     ${t==='client'&&list.filter(f=>f.doc).length?`<button class="btn btn-ghost btn-sm" onclick="factImprimerLot()">Imprimer le lot (PDF)</button>`:''}
     <span class="tag blue">${list.length}${fil!=='tous'?'/'+all.length:''} facture(s)</span></div>
+  ${(typeof recCard==='function')?recCard():''}
   ${all.length?filtres:''}
   <div class="card"><div class="card-b" style="padding:0">
   ${list.length?`<table><thead><tr>${fh('num','N°')}${fh('tiers',t==='client'?'Client':'Fournisseur')}${fh('date','Date','hide-sm')}${fh('ht','HT')}${fh('tva','TVA','hide-sm')}${fh('ttc','TTC')}${fh('statut','Statut')}<th></th></tr></thead><tbody>
@@ -3914,7 +3916,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=176;
+var LAST_VER=177;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -8681,6 +8683,123 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +actesButtons(d)
       +'<p class="ac-note">Procès-verbaux générés d\'après les données du dossier et la forme juridique. Aperçu imprimable ; champs «…» à compléter avant signature.</p>'
       +'</div></div>'; };
+})();
+</script>
+
+<script id="recurrence-mod">
+/* ===================================================================
+   FACTURATION RÉCURRENTE AUTOMATIQUE
+   Abonnements (loyers, honoraires, forfaits) : à chaque ouverture,
+   toute échéance arrivée à terme génère automatiquement sa facture
+   client, puis la prochaine échéance est reportée selon la cadence.
+   =================================================================== */
+(function(){
+  var CAD={mensuelle:{m:1,lbl:'Mensuelle'},trimestrielle:{m:3,lbl:'Trimestrielle'},semestrielle:{m:6,lbl:'Semestrielle'},annuelle:{m:12,lbl:'Annuelle'}};
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function recCfg(){DB.recurrences=DB.recurrences||[];return DB.recurrences;}
+  function addMonthsISO(iso,n){var d=new Date((iso||today())+'T00:00:00');var day=d.getDate();d.setDate(1);d.setMonth(d.getMonth()+n);var last=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(day,last));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  window.recAddMonthsISO=addMonthsISO;
+
+  /* Génère toutes les factures dues (échéance <= aujourd'hui) et reporte la prochaine échéance. */
+  function recRun(silent){
+    var recs=recCfg();var made=0;var td=today();
+    recs.forEach(function(r){
+      if(!r.actif||!r.prochaine)return;var guard=0;
+      while(r.prochaine && r.prochaine<=td && guard<120){
+        guard++;if(r.fin && r.prochaine>r.fin)break;
+        var ht=+r.ht||0,taux=+r.taux||0,tva=Math.round(ht*taux)/100,ttc=ht+tva;
+        var num=(typeof factNum==='function')?factNum('client'):('FV-'+Date.now());
+        DB.factures=DB.factures||[];
+        DB.factures.push({id:uid('fa'),type:'client',num:num,tiers:r.clientNom,label:r.label||'',date:r.prochaine,
+          ech:(typeof factEchDefaut==='function')?factEchDefaut(r.prochaine):r.prochaine,
+          ht:ht,taux:taux,tva:tva,ttc:ttc,statut:'Émise',createdAt:today(),recId:r.id,recurrente:true});
+        if(typeof logAudit==='function')try{logAudit('Facture récurrente',num+' — '+r.clientNom+' — '+(typeof eur==='function'?eur(ttc):ttc));}catch(e){}
+        r.dernFacture=num;r.dernGen=today();r.count=(r.count||0)+1;
+        r.prochaine=addMonthsISO(r.prochaine,(CAD[r.cadence]||CAD.mensuelle).m);made++;
+      }
+      if(r.fin && r.prochaine>r.fin)r.actif=false;
+    });
+    if(made){if(typeof save==='function')save();if(!silent&&typeof toast==='function')toast(made+' facture(s) récurrente(s) générée(s)');if(!silent&&typeof render==='function')render();}
+    return made;
+  }
+  window.recGenererDues=recRun;
+
+  /* ---- Carte de gestion (dans la page Facturation) ---- */
+  window.recCard=function(){
+    var recs=recCfg();
+    if(!recs.length)return '';
+    var td=today();
+    var rows=recs.slice().sort(function(a,b){return (''+(a.prochaine||'')).localeCompare(''+(b.prochaine||''));}).map(function(r){
+      var due=r.actif&&r.prochaine&&r.prochaine<=td;
+      var cad=(CAD[r.cadence]||CAD.mensuelle).lbl;
+      return '<tr>'
+        +'<td class="tname">'+E(r.clientNom||'—')+(r.label?'<div class="tsub">'+E(r.label)+'</div>':'')+'</td>'
+        +'<td class="hide-sm">'+cad+'</td>'
+        +'<td>'+(typeof eur==='function'?eur((+r.ht||0)+Math.round((+r.ht||0)*(+r.taux||0))/100):r.ht)+'</td>'
+        +'<td>'+(r.prochaine?frDate(r.prochaine):'—')+(due?' <span class="tag hot" style="font-size:9px">à générer</span>':'')+'</td>'
+        +'<td><span class="tag '+(r.actif?'ok':'mut')+'">'+(r.actif?'Active':'En pause')+'</span>'+(r.count?' <span class="tsub">'+r.count+' émise(s)</span>':'')+'</td>'
+        +'<td onclick="event.stopPropagation()" style="white-space:nowrap">'
+          +'<button class="btn btn-sm btn-ghost" onclick="recToggle(\''+r.id+'\')">'+(r.actif?'Pause':'Activer')+'</button> '
+          +'<button class="btn btn-sm btn-ghost" onclick="recModal(\''+r.id+'\')">Modifier</button>'
+        +'</td></tr>';
+    }).join('');
+    var nbDue=recs.filter(function(r){return r.actif&&r.prochaine&&r.prochaine<=td;}).length;
+    return '<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>🔁 Facturation récurrente</h2>'
+      +'<span class="sub" style="margin-left:auto">'+recs.length+' abonnement(s)'+(nbDue?' · <b style="color:#b45309">'+nbDue+' à générer</b>':'')+'</span></div>'
+      +'<div class="card-b" style="padding:0">'
+      +'<table><thead><tr><th>Client</th><th class="hide-sm">Cadence</th><th>TTC</th><th>Prochaine</th><th>État</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'
+      +(nbDue?'<div style="padding:10px 14px;border-top:1px solid var(--line-soft,#f0e9da)"><button class="btn btn-sm btn-pri" onclick="recGenererDues(false)">Générer les '+nbDue+' facture(s) due(s) maintenant</button></div>':'')
+      +'</div></div>';
+  };
+
+  /* ---- Modale création / édition d'un abonnement ---- */
+  window.recModal=function(id){
+    var recs=recCfg();
+    var r=id?recs.find(function(x){return x.id===id;}):null;
+    r=r||{clientNom:'',label:'',ht:'',taux:20,cadence:'mensuelle',prochaine:today(),fin:'',actif:true};
+    var clientOpts=['<option value="">— Choisir un client —</option>'].concat((DB.clients||[]).map(function(c){var n=((c.prenom||'')+' '+(c.nom||'')).trim();return '<option '+(r.clientNom===n?'selected':'')+'>'+E(n)+'</option>';})).join('');
+    openModal(id?'Modifier l\'abonnement':'Nouvelle facturation récurrente',
+      '<div class="frow"><div><label>Client</label><select id="rec-client">'+clientOpts+'</select>'
+        +'<input id="rec-client-libre" value="'+E(r.clientNom)+'" placeholder="ou saisir un nom" style="margin-top:6px"></div>'
+        +'<div><label>Libellé (objet)</label><input id="rec-label" value="'+E(r.label)+'" placeholder="Honoraires mensuels, loyer…"></div></div>'
+      +'<div class="frow"><div><label>Montant HT (€)</label><input id="rec-ht" type="number" step="0.01" value="'+E(r.ht)+'"></div>'
+        +'<div><label>TVA (%)</label><select id="rec-taux">'+[0,5.5,10,20].map(function(x){return '<option value="'+x+'" '+((+r.taux)===x?'selected':'')+'>'+x+' %</option>';}).join('')+'</select></div></div>'
+      +'<div class="frow"><div><label>Cadence</label><select id="rec-cadence">'+Object.keys(CAD).map(function(k){return '<option value="'+k+'" '+(r.cadence===k?'selected':'')+'>'+CAD[k].lbl+'</option>';}).join('')+'</select></div>'
+        +'<div><label>Prochaine facture</label><input id="rec-prochaine" type="date" max="9999-12-31" value="'+E(r.prochaine)+'"></div></div>'
+      +'<div class="frow"><div><label>Fin (optionnel)</label><input id="rec-fin" type="date" max="9999-12-31" value="'+E(r.fin||'')+'"></div>'
+        +'<div><label style="display:flex;align-items:center;gap:8px;margin-top:26px;cursor:pointer"><input type="checkbox" id="rec-actif" '+(r.actif?'checked':'')+' style="width:auto;flex:none;margin:0"> Abonnement actif</label></div></div>'
+      +'<p class="hint" style="margin:10px 0 0">À chaque ouverture de l\'application, toute échéance arrivée à terme génère automatiquement sa facture client (statut « Émise »), puis la date suivante est reportée selon la cadence.</p>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>'
+      +(id?'<button class="btn btn-danger" onclick="recDel(\''+id+'\')">Supprimer</button>':'')
+      +'<button class="btn btn-pri" onclick="recSave(\''+(id||'')+'\')">Enregistrer</button>');
+  };
+  window.recSave=function(id){
+    var g=function(x){return document.getElementById(x);};
+    var clientNom=((g('rec-client')&&g('rec-client').value)||'').trim()||((g('rec-client-libre')&&g('rec-client-libre').value)||'').trim();
+    if(!clientNom)return toast('Client requis');
+    var ht=+(g('rec-ht').value)||0;if(ht<=0)return toast('Montant HT requis');
+    var obj={clientNom:clientNom,label:(g('rec-label').value||'').trim(),ht:ht,taux:+g('rec-taux').value||0,
+      cadence:g('rec-cadence').value,prochaine:g('rec-prochaine').value||today(),fin:(g('rec-fin').value||''),actif:!!g('rec-actif').checked};
+    var recs=recCfg();
+    if(id){Object.assign(recs.find(function(x){return x.id===id;}),obj);}
+    else{obj.id=uid('rec');obj.count=0;recs.push(obj);if(typeof logAudit==='function')try{logAudit('Abonnement créé',clientNom+(obj.label?' — '+obj.label:''));}catch(e){}}
+    if(typeof save==='function')save();closeModal();
+    var made=recRun(true);
+    if(typeof toast==='function')toast('Abonnement enregistré'+(made?(' · '+made+' facture(s) générée(s)'):''));
+    if(typeof render==='function')render();
+  };
+  window.recToggle=function(id){var r=recCfg().find(function(x){return x.id===id;});if(!r)return;r.actif=!r.actif;if(typeof save==='function')save();var made=r.actif?recRun(true):0;if(typeof toast==='function')toast(r.actif?('Abonnement activé'+(made?(' · '+made+' facture(s) générée(s)'):'')):'Abonnement mis en pause');if(typeof render==='function')render();};
+  window.recDel=function(id){if(typeof confirm==='function'&&!confirm('Supprimer cet abonnement ? Les factures déjà émises sont conservées.'))return;var recs=recCfg();var i=recs.findIndex(function(x){return x.id===id;});if(i<0)return;var it=recs[i];recs.splice(i,1);if(window.corbeilleAdd)corbeilleAdd('abonnement',(it.clientNom||'Abonnement')+(it.label?' · '+it.label:''),it);if(typeof save==='function')save();closeModal();if(typeof toast==='function')toast('Abonnement supprimé');if(typeof render==='function')render();};
+
+  /* ---- Exécution automatique au démarrage (avant le 1er rendu) ---- */
+  var _r=window.render;
+  if(typeof _r==='function'&&!window.__recHook){
+    window.__recHook=1;
+    window.render=function(){
+      if(!window.__recDone){window.__recDone=1;try{if(typeof DB!=='undefined'&&DB&&DB.recurrences&&DB.recurrences.length)recRun(true);}catch(e){}}
+      return _r.apply(this,arguments);
+    };
+  }
 })();
 </script>
 

@@ -304,6 +304,21 @@ const r = await page.evaluate(async () => {
     && typeof demMessagerieView === 'function' && typeof demInfosCard === 'function';
   state.demMode = 'traitement'; state.demCanal = 'tous'; state.demView = '';
 
+  // Facturation récurrente automatique (abonnement → génération des échéances dues)
+  const isoM = (off) => { const d = new Date(); d.setMonth(d.getMonth() + off); return d.toISOString().slice(0, 10); };
+  const fBefore = DB.factures.length;
+  DB.recurrences = [{ id: 'recTest', clientNom: 'ACME SARL', label: 'Honoraires', ht: 1000, taux: 20, cadence: 'mensuelle', prochaine: isoM(-2), fin: '', actif: true, count: 0 }];
+  const recMade = recGenererDues(true);
+  const recF = DB.factures.filter(f => f.recId === 'recTest');
+  const recR = DB.recurrences[0];
+  const recMade2 = recGenererDues(true);
+  state.page = 'facturation'; state.factFilter = 'tous'; render();
+  const recCardOk = [...document.querySelectorAll('#view .card h2')].some(h => /Facturation récurrente/.test(h.textContent));
+  out.recurrence = recMade === 3 && DB.factures.length - fBefore === 3
+    && recF.every(f => f.ttc === 1200 && f.statut === 'Émise' && f.tiers === 'ACME SARL')
+    && recR.count === 3 && recR.prochaine > isoM(0) && recMade2 === 0
+    && recCardOk && typeof recCard === 'function' && typeof recModal === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
