@@ -273,6 +273,20 @@ const r = await page.evaluate(async () => {
     && Ccf.retard >= 1 && DB.dossiers.find(x => x.id === 'dcf1').conformiteFait[oCf[0].key] === true
     && typeof conformiteCard === 'function';
 
+  // Rapprochement des paiements (parsing relevé + match + lettrage)
+  const rl = rapproParse('15/05/2026 ; VIREMENT CLAIRE MOREAU FV-RAP ; 1200,00\n18/05/2026 ; INCONNU ; 42,00');
+  DB.factures.push({ id: 'frap', type: 'client', num: 'FV-RAP', tiers: 'Claire Moreau', date: '2026-05-01', ttc: 1200, statut: 'Impayée' });
+  const sug = rapproSuggest(rl[0]);
+  state.rapproLines = rl;
+  const beforeR = state.rapproLines.length;
+  rapproMatchSilent(0, 'frap');
+  out.rappro = Math.round(rl[0] ? rl[0].montant : 0) === 42 && sug.id === 'frap' && sug.sur === true
+    && DB.factures.find(f => f.id === 'frap').statut === 'Payée'
+    && (DB.rapprochements || []).some(x => x.factId === 'frap')
+    && state.rapproLines.length === beforeR - 1
+    && typeof pageRappro === 'function';
+  state.rapproLines = null;
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

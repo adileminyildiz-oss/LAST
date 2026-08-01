@@ -728,6 +728,7 @@ const PAGES=[
   {id:'espace',lbl:'Traitement',ic:'espace',sub:'Travail & génération des dossiers'},
   {id:'clients',lbl:'Clients',ic:'users',sub:'Fiches & informations'},
   {id:'facturation',lbl:'Facturation',ic:'card',sub:'Factures de vente'},
+  {id:'rappro',lbl:'Rapprochement',ic:'euro',sub:'Encaissements & lettrage'},
   {id:'devis',lbl:'Devis',ic:'quote',sub:'Devis automatiques'},
   {id:'marge',lbl:'Rentabilité',ic:'trend',sub:'Rentabilité par dossier'},
   {id:'params',lbl:'Paramètres',ic:'gear',sub:'Équipe & réglages'}
@@ -832,7 +833,7 @@ function render(){
   document.getElementById('psub').textContent=p.sub;
   const V=document.getElementById('view');
   V.innerHTML=({dash:pageDash,demandes:pageDemandes,clients:pageClientsEspace,espace:pageEspace,
-    services:pageServices,devis:pageDevis,facturation:pageFacturation,marge:pageMarge,params:pageParams}[state.page]||pageDemandes)();
+    services:pageServices,devis:pageDevis,facturation:pageFacturation,rappro:pageRappro,marge:pageMarge,params:pageParams}[state.page]||pageDemandes)();
   wireCards();
 }
 
@@ -3386,6 +3387,91 @@ function factImprimerLot(){
 }
 function factStatutSave(id){var f=(DB.factures||[]).find(function(x){return x.id===id;});if(!f)return;var el=document.getElementById('fa-statut');if(el)f.statut=el.value;save();closeModal();toast('Statut mis à jour');render();}
 
+/* ---------- RAPPROCHEMENT DES PAIEMENTS (relevé bancaire → lettrage) ---------- */
+function rapproNorm(s){return (''+(s||'')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');}
+function rapproNum(t){t=(''+t).replace(/[^\d.,-]/g,'');if(!t)return NaN;var neg=/-/.test(t);t=t.replace(/-/g,'');var lc=t.lastIndexOf(','),ld=t.lastIndexOf('.');var dec=Math.max(lc,ld);var ip,fr='';if(dec>=0&&(t.length-dec-1)<=2){ip=t.slice(0,dec).replace(/[.,]/g,'');fr=t.slice(dec+1);}else{ip=t.replace(/[.,]/g,'');}var v=parseFloat((ip||'0')+'.'+(fr||'0'));if(isNaN(v))return NaN;return neg?-v:v;}
+function rapproDate(s){s=''+(s||'');var m=s.match(/(\d{4})-(\d{2})-(\d{2})/);if(m)return m[1]+'-'+m[2]+'-'+m[3];m=s.match(/(\d{2})[\/.](\d{2})[\/.](\d{2,4})/);if(m){var y=m[3].length===2?('20'+m[3]):m[3];return y+'-'+m[2]+'-'+m[1];}return '';}
+function rapproParse(text){var out=[];(text||'').split(/\r?\n/).forEach(function(raw){var line=(raw||'').trim();if(!line)return;
+  if(/^(date|libell|lib|montant|op[eé]ration|solde|cr[eé]dit|d[eé]bit)\b/i.test(line)&&!/\d[.,]\d/.test(line))return;
+  var dm=line.match(/(\d{4}-\d{2}-\d{2})|(\d{2}[\/.]\d{2}[\/.]\d{2,4})/);var date=dm?rapproDate(dm[0]):'';
+  var nums=line.match(/-?\d[\d  .]*[.,]\d{2}(?!\d)/g);if(!nums||!nums.length)nums=line.match(/-?\d[\d ]{2,}/g);
+  if(!nums||!nums.length)return;var amt=rapproNum(nums[nums.length-1]);if(isNaN(amt)||amt===0)return;
+  var lib=line;if(dm)lib=lib.replace(dm[0],' ');nums.forEach(function(n){lib=lib.replace(n,' ');});lib=lib.replace(/€|eur/gi,' ').replace(/[;|\t]+/g,' ').replace(/\s+/g,' ').trim();
+  out.push({date:date,libelle:lib,montant:amt});});
+  return out;}
+function rapproCandidates(){return (DB.factures||[]).filter(function(f){return f.type==='client'&&!f.avoir&&f.statut!=='Payée';});}
+function rapproSuggest(line){var amt=Math.round(Math.abs(line.montant)*100)/100;var cands=rapproCandidates();var libN=rapproNorm(line.libelle);
+  var exact=cands.filter(function(f){return Math.round((+f.ttc||0)*100)/100===amt;});
+  if(exact.length){var byNum=exact.filter(function(f){return f.num&&libN.indexOf(rapproNorm(f.num))>=0;});
+    var byName=exact.filter(function(f){var t=rapproNorm(f.tiers);return t&&libN.indexOf(t)>=0;});
+    var pick=byNum[0]||byName[0]||exact.slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');})[0];
+    return {id:pick.id,sur:true};}
+  var fz=cands.filter(function(f){var t=rapproNorm(f.tiers);return (t&&t.length>=3&&libN.indexOf(t)>=0)||(f.num&&libN.indexOf(rapproNorm(f.num))>=0);});
+  if(fz.length)return {id:fz[0].id,sur:false};
+  return {id:'',sur:false};}
+function rapproImport(){var el=document.getElementById('rappro-text');var t=el?el.value:'';var lines=rapproParse(t);if(!lines.length){toast('Aucune ligne détectée — vérifiez le format (date, libellé, montant).');return;}state.rapproLines=lines;state.rapproText='';render();}
+function rapproFile(inp){var f=inp.files&&inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(e){var lines=rapproParse(''+e.target.result);if(!lines.length){toast('Aucune ligne détectée dans le fichier.');return;}state.rapproLines=lines;render();};r.readAsText(f);inp.value='';}
+function rapproClear(){state.rapproLines=null;state.rapproText='';render();}
+function rapproMatch(idx,factId){var lines=state.rapproLines||[];var line=lines[idx];if(!line)return;
+  var sel=document.getElementById('rappro-sel-'+idx);var fid=factId||(sel?sel.value:'');if(!fid){toast('Sélectionnez une facture.');return;}
+  var f=(DB.factures||[]).find(function(x){return x.id===fid;});if(!f)return;
+  f.statut='Payée';f.paiementDate=line.date||today();f.paiementMontant=Math.abs(line.montant);
+  DB.rapprochements=DB.rapprochements||[];DB.rapprochements.unshift({ts:Date.now(),factId:f.id,num:f.num,tiers:f.tiers,montant:Math.abs(line.montant),date:f.paiementDate,libelle:line.libelle});
+  if(DB.rapprochements.length>200)DB.rapprochements.length=200;
+  lines.splice(idx,1);if(typeof logAudit==='function')logAudit('Paiement rapproché',f.num+' — '+f.tiers+' — '+eur(f.paiementMontant));save();toast('Facture '+f.num+' rapprochée (Payée)');render();}
+function rapproAuto(){var lines=state.rapproLines||[];var done=0;for(var i=lines.length-1;i>=0;i--){var s=rapproSuggest(lines[i]);if(s.id&&s.sur){rapproMatchSilent(i,s.id);done++;}}
+  if(typeof logAudit==='function'&&done)logAudit('Rapprochement automatique',done+' facture(s) rapprochée(s)');save();toast(done?(done+' correspondance(s) exacte(s) rapprochée(s)'):'Aucune correspondance exacte.');render();}
+function rapproMatchSilent(idx,fid){var lines=state.rapproLines||[];var line=lines[idx];var f=(DB.factures||[]).find(function(x){return x.id===fid;});if(!line||!f)return;
+  f.statut='Payée';f.paiementDate=line.date||today();f.paiementMontant=Math.abs(line.montant);
+  DB.rapprochements=DB.rapprochements||[];DB.rapprochements.unshift({ts:Date.now(),factId:f.id,num:f.num,tiers:f.tiers,montant:Math.abs(line.montant),date:f.paiementDate,libelle:line.libelle});
+  lines.splice(idx,1);}
+function pageRappro(){
+  var lines=state.rapproLines;
+  var out='<div class="flow-note">'+svg(IC.card)+'<div><b>Rapprochement des paiements</b> — collez ou importez votre relevé bancaire ; les <b>encaissements</b> sont rapprochés automatiquement de vos <b>factures impayées</b> (marquées « Payée »).</div></div>';
+  if(!lines||!lines.length){
+    out+='<div class="card" style="margin-top:14px"><div class="card-h"><h2>Importer un relevé</h2><span class="sub" style="margin-left:auto">Copier-coller ou fichier CSV</span></div><div class="card-b">'
+      +'<p class="hint" style="margin:0 0 8px">Une ligne par opération. Formats reconnus : <code>date ; libellé ; montant</code>, CSV, ou copie directe depuis votre banque (la date, le libellé et le montant sont détectés automatiquement).</p>'
+      +'<textarea id="rappro-text" rows="7" style="width:100%;font:inherit;font-size:12.5px" placeholder="15/05/2026 ; VIREMENT CLAIRE MOREAU FV-2601 ; 1200,00\n18/05/2026 ; VIR DUPONT SAS ; 960,00"></textarea>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
+      +'<button class="btn btn-sm btn-pri" onclick="rapproImport()">Analyser le relevé</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="document.getElementById(\'rappro-file\').click()">Importer un fichier CSV</button>'
+      +'<input type="file" id="rappro-file" accept=".csv,text/csv,text/plain" style="display:none" onchange="rapproFile(this)"></div>'
+      +'</div></div>';
+    out+=rapproLogCard();
+    return out;
+  }
+  var sugg=lines.map(rapproSuggest);
+  var exact=sugg.filter(function(s){return s.id&&s.sur;}).length;
+  var approx=sugg.filter(function(s){return s.id&&!s.sur;}).length;
+  var none=sugg.filter(function(s){return !s.id;}).length;
+  var totalRappro=lines.reduce(function(t,l,i){return t+(sugg[i].id&&sugg[i].sur?Math.abs(l.montant):0);},0);
+  out+='<div class="cf-kpis" style="margin-top:14px">'
+    +'<div class="cf-k ok"><div class="v">'+exact+'</div><div class="k">Correspondances exactes</div></div>'
+    +'<div class="cf-k warm"><div class="v">'+approx+'</div><div class="k">À vérifier</div></div>'
+    +'<div class="cf-k hot"><div class="v">'+none+'</div><div class="k">Sans correspondance</div></div></div>';
+  out+='<div class="card"><div class="card-h"><h2>Rapprochement — '+lines.length+' opération(s)</h2>'
+    +'<button class="btn btn-sm btn-pri" style="margin-left:auto" onclick="rapproAuto()"'+(exact?'':' disabled style="opacity:.5;margin-left:auto"')+'>Rapprocher les '+exact+' exactes</button>'
+    +'<button class="btn btn-sm btn-ghost" style="margin-left:8px" onclick="rapproClear()">Effacer</button></div><div class="card-b" style="padding:0">'
+    +'<table><thead><tr><th class="hide-sm">Date</th><th>Libellé</th><th>Montant</th><th>Facture</th><th></th></tr></thead><tbody>';
+  var cands=rapproCandidates();
+  lines.forEach(function(l,i){ var s=sugg[i];
+    var opts='<option value="">— choisir —</option>'+cands.map(function(f){return '<option value="'+f.id+'"'+(f.id===s.id?' selected':'')+'>'+esc(f.num)+' · '+esc(f.tiers)+' · '+eur(f.ttc)+'</option>';}).join('');
+    var badge=s.id?(s.sur?'<span class="cf-badge fait">exact</span>':'<span class="cf-badge imminent">à vérifier</span>'):'<span class="cf-badge retard">aucune</span>';
+    out+='<tr><td class="hide-sm">'+(l.date?frDate(l.date):'—')+'</td><td>'+esc(l.libelle||'—')+' '+badge+'</td>'
+      +'<td class="'+(l.montant<0?'':'')+'"><b>'+eur(Math.abs(l.montant))+'</b></td>'
+      +'<td><select id="rappro-sel-'+i+'" style="min-width:220px;margin:0">'+opts+'</select></td>'
+      +'<td><button class="btn btn-sm'+(s.id?' btn-pri':' btn-ghost')+'" onclick="rapproMatch('+i+')">Rapprocher</button></td></tr>';
+  });
+  out+='</tbody></table></div></div>';
+  out+=rapproLogCard();
+  return out;
+}
+function rapproLogCard(){var log=DB.rapprochements||[];if(!log.length)return '';
+  return '<div class="card" style="margin-top:16px"><div class="card-h"><h2>Paiements rapprochés</h2><span class="sub" style="margin-left:auto">'+log.length+' dernier(s)</span></div><div class="card-b" style="padding:0">'
+    +'<table><thead><tr><th class="hide-sm">Le</th><th>Facture</th><th>Client</th><th>Montant</th></tr></thead><tbody>'
+    +log.slice(0,15).map(function(r){return '<tr><td class="hide-sm">'+(r.date?frDate(r.date):frDate(new Date(r.ts).toISOString().slice(0,10)))+'</td><td class="tname">'+esc(r.num||'')+'</td><td>'+esc(r.tiers||'')+'</td><td>'+eur(r.montant)+'</td></tr>';}).join('')
+    +'</tbody></table></div></div>';}
+
 /* ---------- DEVIS (établissement, suivi, transformation en facture) ---------- */
 function devisStatColor(s){return s==='Accepté'?'#3f7d54':s==='Refusé'?'#c0392b':s==='Transformé'?'#8e44ad':s==='Expiré'?'#b45309':'#5a6b8c';}
 function devisExpire(d){if(!d.ech)return false;if(d.statut==='Transformé'||d.statut==='Accepté')return false;return d.ech<today();}
@@ -3828,7 +3914,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=174;
+var LAST_VER=175;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }

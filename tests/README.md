@@ -16,8 +16,9 @@ de formalité** (détection, pièces, étapes, choix manuel) et
 **PDF/A-3 Factur-X** (PDF avec XML CII embarqué, xref valide),
 **accessibilité** (lien d'évitement, ARIA, sémantique modale),
 **documents adaptés à la forme juridique** (statuts SAS/SARL/SCI/EURL),
-**tableau de bord conformité** (échéances légales : AGO, dépôt au greffe) et
-**actes & procès-verbaux par forme** (PV d'AGO, PV de modification) —
+**tableau de bord conformité** (échéances légales : AGO, dépôt au greffe),
+**actes & procès-verbaux par forme** (PV d'AGO, PV de modification) et
+**rapprochement des paiements** (relevé bancaire → lettrage des factures) —
 le tout sans erreur JavaScript.
 
 ## Lancer
