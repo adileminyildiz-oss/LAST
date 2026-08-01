@@ -1187,7 +1187,7 @@ function demSyncMails(silent){var c=demSyncCfg();if(!c.url){if(!silent)demSyncCo
     if(j.error){if(!silent)toast(j.error==='unauthorized'?'Clé secrète incorrecte.':('Erreur du script : '+j.error));return;}
     var r=demIngest(demParseMails(JSON.stringify(j)));save();
     if(!silent||r.add)toast(r.add?(r.add+' nouveau(x) mail(s) transmis'+(r.dup?(' · '+r.dup+' déjà traité(s)'):'')):'Aucun nouveau mail'+(r.dup?(' ('+r.dup+' déjà traité(s))'):''));
-    if(r.add)state.demTab='nouveau';render();}
+    if(r.add){state.demTab='nouveau';state.demMode='messagerie';}render();}
   var settled=false;function once(j){if(settled)return;settled=true;finish(j);}
   try{fetch(base,{cache:'no-store'}).then(function(r){return r.text();}).then(function(txt){
     var j=null;try{j=JSON.parse(txt);}catch(e){}
@@ -3914,7 +3914,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=175;
+var LAST_VER=176;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4625,8 +4625,9 @@ window.demIngest=function(mails){
    var body=mailCleanBody(m.body)||(m.subject||'');
    var subj=(m.subject||'');
    var atts=(m.att||m.attachments||[]).map(function(a){var o=(typeof a==='string')?{name:a}:Object.assign({},a);o.msgId=o.msgId||m.id;return o;});
-   var cliNom=fr.nom||fr.email||'Client',cliEmail=fr.email||'',tel='',msg=body,objet=subj;
+   var cliNom=fr.nom||fr.email||'Client',cliEmail=fr.email||'',tel='',msg=body,objet=subj,fsFields={};
    if(isFS){var fsx=formSubmitExtract(m);
+     fsFields=fsx.fields||{};
      if(fsx.nomComplet)cliNom=fsx.nomComplet;
      if(fsx.email)cliEmail=fsx.email;
      if(fsx.tel)tel=fsx.tel;
@@ -4640,13 +4641,14 @@ window.demIngest=function(mails){
    if(existing){
      existing.thread=existing.thread||[{from:existing.clientNom,subject:existing.subject||existing.serviceSouhaite,date:existing.date,body:existing.message}];
      existing.thread.push({from:cliNom,subject:subj,date:dateISO,body:body});
-     existing.message=body;existing.date=dateISO;if(dateTime)existing.dateTime=dateTime;existing.__reponse=true;if(isFS){existing.rawBody=body;existing.rawHtml=(''+(m.body||'')).slice(0,20000);existing.__prerempli=false;}
+     existing.message=body;existing.date=dateISO;if(dateTime)existing.dateTime=dateTime;existing.__reponse=true;existing.lu=false;if(isFS){existing.rawBody=body;existing.rawHtml=(''+(m.body||'')).slice(0,20000);existing.__prerempli=false;if(fsFields&&Object.keys(fsFields).length&&(!existing.fields||!Object.keys(existing.fields).length))existing.fields=fsFields;}
      if(atts.length)existing.attachments=(existing.attachments||[]).concat(atts);
      fil++;
    } else {
      DB.demandes.unshift({id:uid('d'),code:demCodeGen(),clientNom:cliNom,clientEmail:cliEmail,clientTel:tel,
        canal:'Formulaire du site',subject:subj,serviceSouhaite:((''+objet).slice(0,80))||'À qualifier',
        message:msg,rawBody:(isFS?body:''),rawHtml:(isFS?(''+(m.body||'')).slice(0,20000):''),date:dateISO,dateTime:dateTime,statut:'Nouveau',assigneA:'',docsRecus:atts.length>0,dossierId:'',msgKey:key,
+       fields:fsFields,lu:false,
        attachments:atts,thread:[{from:cliNom,subject:subj,date:dateISO,body:msg}]});
      add++;
    }
@@ -4683,8 +4685,86 @@ window.demArchivesModal=function(){
     '<div class="hint" style="margin-bottom:10px">Les dossiers refusés sont archivés ici (retirés de la liste). Vous pouvez les restaurer à tout moment.</div>'+body,
     '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
 };
+/* ---- Informations transmises par le client via le formulaire du site (aemconseil.eu) ---- */
+window.demFieldLabels={nom:'Nom',prenom:'Prénom','nom complet':'Nom complet','nom et prenom':'Nom complet','nom de famille':'Nom',name:'Nom','full name':'Nom complet','votre nom':'Nom','first name':'Prénom','last name':'Nom',email:'E-mail','e-mail':'E-mail',mail:'E-mail',courriel:'E-mail','adresse email':'E-mail','adresse e-mail':'E-mail',telephone:'Téléphone',tel:'Téléphone',phone:'Téléphone',portable:'Téléphone',mobile:'Téléphone',numero:'Téléphone','numero de telephone':'Téléphone','type de societe':'Type de société','forme juridique':'Forme juridique',formalite:'Formalité','type de formalite':'Type de formalité','type de demande':'Type de demande',objet:'Objet',service:'Service demandé',sujet:'Sujet',message:'Message','votre message':'Message',demande:'Demande','votre demande':'Demande',projet:'Projet',description:'Description',commentaire:'Commentaire',denomination:'Dénomination',societe:'Société',entreprise:'Entreprise',adresse:'Adresse',ville:'Ville',cp:'Code postal','code postal':'Code postal',capital:'Capital',activite:'Activité'};
+window.demFields=function(d){
+ if(!d)return [];
+ var F=d.fields;
+ if(!F||!Object.keys(F).length){try{var fx=formSubmitExtract({body:(d.rawHtml||d.rawBody||d.message||''),from:''});F=fx&&fx.fields;}catch(e){F=null;}}
+ F=F||{};
+ var skip=/formsubmit|submitted\s*at|sponsor|captcha|honey|^_|reply.?to|^cc$|^form$|^next$|^redirect$|^subject$/i;
+ var order=['nom complet','nom et prenom','name','full name','votre nom','nom','prenom','first name','last name','nom de famille','email','e-mail','mail','courriel','adresse email','adresse e-mail','telephone','tel','phone','portable','mobile','numero','numero de telephone','type de societe','forme juridique','type de formalite','type de demande','formalite','service','objet','sujet','denomination','societe','entreprise','capital','activite','adresse','cp','code postal','ville','message','votre message','demande','votre demande','projet','description','commentaire'];
+ var seen={},out=[];
+ var push=function(k){if(seen[k])return;var v=(''+F[k]).trim();if(!v||v.length>600)return;if(skip.test(k))return;if(/formsubmit|https?:\/\/\S+@|@formsubmit/i.test(v))return;seen[k]=1;var lab=window.demFieldLabels[k]||(k.charAt(0).toUpperCase()+k.slice(1));out.push({key:k,label:lab,value:v,long:(k==='message'||k==='votre message'||k==='demande'||k==='votre demande'||k==='projet'||k==='description'||k==='commentaire'||v.length>90)});};
+ order.forEach(function(k){if(F[k]!=null&&(''+F[k]).trim())push(k);});
+ Object.keys(F).forEach(function(k){if(F[k]!=null&&(''+F[k]).trim())push(k);});
+ return out;
+};
+/* Carte « Informations transmises par le client » — visible dans le traitement ET la messagerie */
+window.demInfosCard=function(d){
+ var f=window.demFields(d);
+ if(!f.length)return '';
+ var rows=f.map(function(x){return '<div class="dinf-row'+(x.long?' dinf-long':'')+'"><span class="dinf-l">'+esc(x.label)+'</span><span class="dinf-v">'+esc(x.value)+'</span></div>';}).join('');
+ return '<div class="card"><div class="card-h"><h2>Informations transmises par le client</h2><span class="sub" style="margin-left:auto">Formulaire du site · aemconseil.eu</span></div><div class="card-b"><div class="dinf">'+rows+'</div></div></div>';
+};
+window.demEstSite=function(d){return /formulaire du site|site aem|aemconseil|formsubmit|formulaire/i.test(d&&d.canal||'');};
+window.demMarquerLu=function(id){var d=DB.demandes.find(function(x){return x.id===id;});if(d&&!d.lu){d.lu=true;if(typeof save==='function')save();}};
+window.demMsgOuvrir=function(id){window.demMarquerLu(id);state.demMode='traitement';if(typeof demOuvrirVue==='function')demOuvrirVue(id);else{state.demView=id;render();}};
+window.demToutLu=function(){var n=0;DB.demandes.forEach(function(d){if(!d.archived&&!d.lu){d.lu=true;n++;}});if(typeof save==='function')save();render();if(typeof toast==='function')toast(n?(n+' message(s) marqué(s) comme lu(s)'):'Aucun message non lu');};
+window.demNonLus=function(){return DB.demandes.filter(function(d){return !d.archived&&!d.lu;}).length;};
+/* Vue MESSAGERIE : boîte de réception façon mail, avec les informations du formulaire du site */
+window.demMessagerieView=function(){
+ var q=(state.q||'').toLowerCase();
+ var vis=DB.demandes.filter(function(d){return !d.archived;});
+ var canal=state.demCanal||'tous';
+ var cnt={tous:vis.length,site:vis.filter(window.demEstSite).length,autres:vis.filter(function(d){return !window.demEstSite(d);}).length};
+ var list=vis.filter(function(d){return canal==='tous'||(canal==='site'?window.demEstSite(d):!window.demEstSite(d));});
+ if(q)list=list.filter(function(d){return (demBestName(d)+' '+IA.objet(d)+' '+(d.message||'')+' '+(d.clientEmail||'')+' '+(window.demFields(d).map(function(x){return x.value;}).join(' '))).toLowerCase().indexOf(q)>=0;});
+ list.sort(function(a,b){return (''+(b.dateTime||b.date||'')).localeCompare(''+(a.dateTime||a.date||''));});
+ var canBtn=function(k,lbl,n){return '<button class="dem-nat-b'+(canal===k?' on':'')+'" onclick="state.demCanal=\''+k+'\';render()">'+lbl+'<span class="dem-nat-n">'+n+'</span></button>';};
+ var canBar='<div class="dem-nat">'+canBtn('tous','📬 Tous',cnt.tous)+canBtn('site','🌐 Site aemconseil.eu',cnt.site)+canBtn('autres','✉ Autres',cnt.autres)+'</div>';
+ var nl=window.demNonLus();
+ var acts='<div class="dem-acts">'
+   +'<button class="btn btn-sm dem-imp-btn" onclick="demSyncMails(false)">🔄 Synchroniser</button>'
+   +'<button class="btn btn-sm dem-imp-btn" onclick="demToutLu()"'+(nl?'':' disabled')+'>✓ Tout marquer lu</button>'
+   +'<button class="btn btn-sm dem-imp-btn" onclick="demSyncConfig()">⚙ Configurer</button></div>';
+ var search='<div class="dem-search">'+svg(IC.inbox)+'<input value="'+esc(state.q||'')+'" oninput="state.q=this.value.toLowerCase();render()" placeholder="Rechercher un expéditeur, une information…"></div>';
+ var box='';
+ if(list.length){
+   box='<div class="msg-list">'+list.map(function(d){
+     var f=window.demFields(d);
+     var infos=f.filter(function(x){return !x.long;}).slice(0,4).map(function(x){return '<span class="msg-chip"><b>'+esc(x.label)+'</b> '+esc(x.value)+'</span>';}).join('');
+     var apercu=(mailDemande(d)||d.message||'').slice(0,150);
+     var u=userById(d.assigneA);
+     return '<div class="msg-item'+(d.lu?'':' unread')+'" onclick="demMsgOuvrir(\''+d.id+'\')">'
+       +'<span class="msg-dot"></span>'
+       +'<div class="msg-body">'
+         +'<div class="msg-top"><span class="msg-from">'+esc(demBestName(d))+'</span>'
+           +'<span class="msg-canal">'+(window.demEstSite(d)?'🌐 aemconseil.eu':esc(d.canal||'E-mail'))+'</span>'
+           +'<span class="msg-date">'+esc(mailDateHeure(d))+'</span></div>'
+         +'<div class="msg-obj"><span class="tag blue">'+esc(IA.objet(d))+'</span>'+(u?'<span class="tag"><span class="av" style="width:16px;height:16px;font-size:7px;background:'+u.couleur+'">'+initials(u.nom)+'</span> '+esc(u.nom)+'</span>':'')+'<span class="tag mut">'+esc(d.statut||'Nouveau')+'</span></div>'
+         +(infos?'<div class="msg-infos">'+infos+'</div>':'')
+         +(apercu?'<div class="msg-prev">'+esc(apercu)+(apercu.length>=150?'…':'')+'</div>':'')
+       +'</div>'
+       +'<span class="msg-go">Ouvrir ›</span>'
+     +'</div>';
+   }).join('')+'</div>';
+ } else box='<div class="empty">Aucun message '+(canal==='site'?'du site ':(canal==='autres'?'hors site ':''))+'dans la boîte de réception.</div>';
+ return '<div class="dem-head"><div class="dem-head-row">'+canBar+acts+'</div><div class="dem-head-row">'+search+'</div></div>'
+   +'<div class="card"><div class="card-b" style="padding:0">'+box+'</div></div>';
+};
 window.pageDemandes=function(){
  if(state.demView){var dv=DB.demandes.find(function(x){return x.id===state.demView;});if(dv)return demVueDetail(state.demView);state.demView='';}
+ var mode=state.demMode||'traitement';
+ var nl=window.demNonLus();
+ var modeBar='<div class="dem-mode">'
+   +'<button class="dem-mode-b'+(mode==='messagerie'?' on':'')+'" onclick="state.demMode=\'messagerie\';render()">📨 Messagerie'+(nl?'<span class="dem-mode-n">'+nl+'</span>':'')+'</button>'
+   +'<button class="dem-mode-b'+(mode==='traitement'?' on':'')+'" onclick="state.demMode=\'traitement\';render()">🗂 Traitement des demandes</button>'
+   +'</div>';
+ if(mode==='messagerie')return modeBar+window.demMessagerieView();
+ return modeBar+window.demTraitementView();
+};
+window.demTraitementView=function(){
  var tab=state.demTab||'nouveau';var q=(state.q||'').toLowerCase();
  var nat=state.demNat||'creation';
  var vis=DB.demandes.filter(function(d){return !d.archived;});
@@ -4777,6 +4857,7 @@ window.demVueDetail=function(id){
         +mailFrame(d)
       +'</div></div>'
       +'<div class="dem-view-col">'
+      +((typeof demInfosCard==='function')?demInfosCard(d):'')
       +'<div class="card"><div class="card-h"><h2>Traitement</h2>'
         +'<span class="dem-nat-tog" style="margin-left:auto">'
         +'<button class="dem-nat-t'+(demNature(d)==='creation'?' on':'')+'" onclick="demSetNature(\''+id+'\',\'creation\')">🏗 Création</button>'
@@ -4862,6 +4943,40 @@ window.modalDemandeView=function(id){
 .dem-atts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
 .dem-att{font-size:11.5px;background:var(--card);border:1px solid var(--line-2);border-radius:7px;padding:4px 9px}
 .dem-att a{color:var(--accent,#8a6d3b);text-decoration:none;font-weight:700}
+/* Onglets Messagerie / Traitement */
+.dem-mode{display:inline-flex;gap:4px;padding:4px;background:var(--card,#fbf8f1);border:1px solid var(--line-2,#e2d9c6);border-radius:12px;margin-bottom:14px}
+.dem-mode-b{display:inline-flex;align-items:center;gap:8px;border:0;background:transparent;color:var(--ink-3,#8a7f6c);font:800 13px/1 inherit;padding:10px 18px;border-radius:9px;cursor:pointer;transition:background .15s,color .15s}
+.dem-mode-b:hover{color:var(--ink,#302c24)}
+.dem-mode-b.on{background:var(--accent,#7a6e58);color:#fff;box-shadow:0 1px 4px rgba(40,30,10,.18)}
+.dem-mode-n{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#e11d48;color:#fff;font:700 10.5px/1 inherit}
+.dem-mode-b.on .dem-mode-n{background:#fff;color:#b91c34}
+/* Boîte de réception (messagerie) */
+.msg-list{display:flex;flex-direction:column}
+.msg-item{display:flex;align-items:flex-start;gap:11px;padding:13px 16px;border-bottom:1px solid var(--line-soft,#f0e9da);cursor:pointer;transition:background .12s}
+.msg-item:last-child{border-bottom:0}
+.msg-item:hover{background:var(--paper-2,#faf5ea)}
+.msg-dot{flex:none;width:9px;height:9px;border-radius:50%;background:transparent;margin-top:6px}
+.msg-item.unread .msg-dot{background:#e11d48;box-shadow:0 0 0 3px rgba(225,29,72,.15)}
+.msg-item.unread .msg-from{color:var(--ink,#302c24)}
+.msg-item.unread{background:linear-gradient(90deg,rgba(225,29,72,.05),transparent)}
+.msg-body{flex:1;min-width:0}
+.msg-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:5px}
+.msg-from{font-size:13.5px;font-weight:700;color:var(--ink,#302c24)}
+.msg-canal{font-size:10.5px;font-weight:700;color:#1d4ed8;background:#eef4ff;border:1px solid #dbe6ff;border-radius:20px;padding:1px 8px}
+.msg-date{margin-left:auto;font-size:11px;color:var(--ink-3,#9c9078)}
+.msg-obj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.msg-infos{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.msg-chip{font-size:11px;color:var(--ink-2,#5a5142);background:var(--paper,#fffef9);border:1px solid var(--line-2,#e2d9c6);border-radius:7px;padding:3px 9px}
+.msg-chip b{color:var(--ink-3,#8a7f6c);font-weight:700;margin-right:4px;font-size:10px;text-transform:uppercase;letter-spacing:.3px}
+.msg-prev{font-size:12px;color:var(--ink-3,#8a7f6c);line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.msg-go{flex:none;align-self:center;font-size:12px;font-weight:700;color:var(--accent,#8a6d3b)}
+/* Informations transmises par le client */
+.dinf{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dinf-row{display:flex;flex-direction:column;gap:2px;background:var(--paper,#fffef9);border:1px solid var(--line-2,#e2d9c6);border-radius:9px;padding:8px 11px;min-width:0}
+.dinf-row.dinf-long{grid-column:1 / -1}
+.dinf-l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3,#9c9078)}
+.dinf-v{font-size:13px;color:var(--ink,#302c24);word-break:break-word;white-space:pre-wrap}
+@media(max-width:640px){.dinf{grid-template-columns:1fr}}
 </style>
 <script id="doc-models-mod">
 /* ===== Registre de MODÈLES de documents — choix si plusieurs, sinon un seul ===== */

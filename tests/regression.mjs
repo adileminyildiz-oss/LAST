@@ -287,6 +287,23 @@ const r = await page.evaluate(async () => {
     && typeof pageRappro === 'function';
   state.rapproLines = null;
 
+  // Messagerie & informations du formulaire du site (aemconseil.eu)
+  const rMsg = demIngest([{ from: 'AEM CONSEIL <submissions@formsubmit.co>', subject: 'Nouvelle soumission du formulaire', date: '2026-08-01T10:30:00Z', id: 'reg-msg-1',
+    body: 'New submission from your form via FormSubmit\n*Nom* Testeur\n*Email* testeur@example.org\n*Telephone* 0600000000\n*Type de societe* SAS\n*Message* Bonjour, je veux creer.\nsubmitted at 2026-08-01 10:30:00' }]);
+  const dMsg = DB.demandes.find(x => x.msgKey === 'reg-msg-1');
+  const fMsg = dMsg ? demFields(dMsg) : [];
+  const labs = fMsg.map(x => x.label);
+  state.page = 'demandes'; state.demMode = 'messagerie'; state.demCanal = 'site'; state.demView = ''; render();
+  const msgItem = !!document.querySelector('#view .msg-item');
+  const msgChips = document.querySelectorAll('#view .msg-chip').length;
+  demMsgOuvrir(dMsg.id);
+  const infCard = [...document.querySelectorAll('#view .card h2')].some(h => /Informations transmises/.test(h.textContent));
+  const dinfRows = document.querySelectorAll('#view .dinf-row').length;
+  out.messagerie = rMsg.add === 1 && !!dMsg && dMsg.fields && labs.indexOf('E-mail') >= 0 && labs.indexOf('Type de société') >= 0
+    && msgItem && msgChips >= 3 && dMsg.lu === true && infCard && dinfRows >= 4
+    && typeof demMessagerieView === 'function' && typeof demInfosCard === 'function';
+  state.demMode = 'traitement'; state.demCanal = 'tous'; state.demView = '';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

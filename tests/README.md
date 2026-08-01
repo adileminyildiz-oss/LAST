@@ -17,9 +17,13 @@ de formalité** (détection, pièces, étapes, choix manuel) et
 **accessibilité** (lien d'évitement, ARIA, sémantique modale),
 **documents adaptés à la forme juridique** (statuts SAS/SARL/SCI/EURL),
 **tableau de bord conformité** (échéances légales : AGO, dépôt au greffe),
-**actes & procès-verbaux par forme** (PV d'AGO, PV de modification) et
-**rapprochement des paiements** (relevé bancaire → lettrage des factures) —
-le tout sans erreur JavaScript.
+**actes & procès-verbaux par forme** (PV d'AGO, PV de modification),
+**rapprochement des paiements** (relevé bancaire → lettrage des factures) et
+**messagerie & informations du formulaire du site** (les champs saisis par
+le client sur aemconseil.eu — nom, e-mail, téléphone, type de société,
+message — sont extraits, affichés dans une boîte de réception « Messagerie »
+avec suivi des non-lus par canal, et repris dans la fiche de traitement de
+la demande) — le tout sans erreur JavaScript.
 
 ## Lancer
 
