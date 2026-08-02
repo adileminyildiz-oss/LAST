@@ -258,6 +258,17 @@ const r = await page.evaluate(async () => {
     && /EXTRAORDINAIRE/.test(aTr) && /transférer le siège/.test(aTr)
     && typeof actesCard === 'function' && typeof actesButtons === 'function';
 
+  // Actes complémentaires : feuille de présence + registre des décisions (adaptés à la forme)
+  const fpSarl = feuillePresenceHTML(DB.dossiers.find(x => x.id === 'dsarl'));
+  const regSarl = registreHTML(DB.dossiers.find(x => x.id === 'dsarl'));
+  const regSci = registreHTML(DB.dossiers.find(x => x.id === 'dsci'));
+  const btnsSarl = actesButtons(DB.dossiers.find(x => x.id === 'dsarl'));
+  out.actesComplement = /FEUILLE DE PRÉSENCE/.test(fpSarl) && /Nombre de parts/.test(fpSarl) && /Quote-part/.test(fpSarl) && /100 %/.test(fpSarl)
+    && /REGISTRE DES ASSEMBLÉES GÉNÉRALES/.test(regSarl) && /Nature de la décision/.test(regSarl)
+    && /ASSOCIÉ UNIQUE/.test(regSci)
+    && /Feuille de présence/.test(btnsSarl) && /Registre des décisions/.test(btnsSarl)
+    && typeof feuillePresenceHTML === 'function' && typeof registreHTML === 'function' && typeof acteDocHTML === 'function';
+
   // Tableau de bord conformité (échéances légales)
   const isoC = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
   DB.clients.push({ id: 'ccf1', prenom: 'A', nom: 'B', forme: 'SARL' });

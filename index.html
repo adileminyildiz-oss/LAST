@@ -3916,7 +3916,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=177;
+var LAST_VER=178;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -8586,7 +8586,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 (function(){
   function E(s){ return (typeof esc==='function')?esc(s):(''+(s==null?'':s)); }
   function num(n){ return (typeof stNum==='function')?stNum(n):(''+n); }
-  var TITRES={approbation:'PV — Approbation des comptes',transfert:'PV — Transfert de siège',dirigeant:'PV — Changement de dirigeant',denomination:'PV — Changement de dénomination',objet:"PV — Changement d'objet",capital:'PV — Modification de capital',dissolution:'PV — Dissolution'};
+  var TITRES={approbation:'PV — Approbation des comptes',transfert:'PV — Transfert de siège',dirigeant:'PV — Changement de dirigeant',denomination:'PV — Changement de dénomination',objet:"PV — Changement d'objet",capital:'PV — Modification de capital',dissolution:'PV — Dissolution',presence:'Feuille de présence',registre:'Registre des décisions'};
+  if(!document.getElementById('acte-extra-css')){var _st=document.createElement('style');_st.id='acte-extra-css';_st.textContent='.ac-tbl{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}.ac-tbl th,.ac-tbl td{border:1px solid #c9bfa8;padding:6px 8px;text-align:left;vertical-align:top}.ac-tbl th{background:#f3ecda;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;color:#4a4130}.st-doc .ac-tbl td{color:#1a1a1a}.ac-tbl .ac-tot td{font-weight:700;background:#faf5e8}';document.head.appendChild(_st);}
+  function hdr(x,formeLbl,capN){return '<div class="st-hdr"><b>'+E(x.denom)+'</b><div class="sub">'+E(formeLbl)+' au capital de '+capN+' euros</div><div class="sub">Siège social : '+E(x.siegeComplet)+'</div><div class="sub">RCS '+E(x.rcsVille)+'</div></div>';}
+  function formeLabelOf(x){var f=(x.forme||'SAS').toUpperCase();var uni=(x.assoc.length<=1);return (typeof stFormeLabel==='function')?stFormeLabel(uni&&f==='SAS'?'SASU':(uni&&f==='SARL'?'EURL':f)):f;}
+  function dateActeOf(x){return (typeof stDateSlash==='function')?stDateSlash((x.c.docVars||{}).dateActe):'';}
 
   function acteHTML(d,type){
     var x=stDossData(d); var f=(x.forme||'SAS').toUpperCase();
@@ -8660,10 +8664,56 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   }
   window.acteHTML=acteHTML;
 
+  /* ---- Feuille de présence (à annexer au PV d'assemblée) ---- */
+  function feuillePresenceHTML(d){
+    var x=stDossData(d); var f=(x.forme||'SAS').toUpperCase(); var uni=(x.assoc.length<=1);
+    var titres=(f==='SAS'||f==='SASU')?'actions':'parts sociales';
+    var partLbl=(f==='SAS'||f==='SASU')?"Nombre d'actions":'Nombre de parts';
+    var holder=(f==='SAS'||f==='SASU')?'Actionnaire':'Associé';
+    var dirig=(f==='SARL'||f==='EURL'||f==='SCI')?'gérant':'Président';
+    var formeLbl=formeLabelOf(x); var capN=x.cap?num(x.cap):'«…»'; var total=x.totalParts||0;
+    var dateActe=dateActeOf(x);
+    var rows=x.assoc.map(function(a){ var pn=Number(a.parts)||0; var pct=(total>0)?((pn/total*100).toFixed(2).replace(/\.00$/,'')+' %'):'«…»';
+      return '<tr><td>'+(E(a.nom)||'«'+holder.toLowerCase()+'»')+'</td><td style="text-align:center">'+(pn||'«…»')+'</td><td style="text-align:center">'+pct+'</td><td style="text-align:center">☐ Présent&nbsp;&nbsp;☐ Représenté</td><td></td></tr>'; }).join('');
+    var totRow='<tr class="ac-tot"><td>TOTAL</td><td style="text-align:center">'+(total||'«…»')+'</td><td style="text-align:center">100 %</td><td></td><td></td></tr>';
+    return '<div class="st-doc"><div class="st-page">'
+      +hdr(x,formeLbl,capN)
+      +'<div class="ac-titre">FEUILLE DE PRÉSENCE</div>'
+      +'<p style="text-align:center">'+(uni?'Décisions de l\'associé unique':'Assemblée générale')+' du '+dateActe+'</p>'
+      +'<table class="ac-tbl"><thead><tr><th>'+holder+'</th><th>'+partLbl+'</th><th>Quote-part</th><th>Présence</th><th>Signature</th></tr></thead><tbody>'+rows+totRow+'</tbody></table>'
+      +'<p style="margin-top:14px">La totalité des '+titres+' composant le capital social de '+capN+' euros étant '+(uni?'détenue par l\'associé unique':'présente ou représentée')+', '+(uni?'les décisions peuvent être valablement prises':'l\'assemblée peut valablement délibérer')+' sur l\'ordre du jour.</p>'
+      +'<div class="st-fin"><p>Feuille de présence certifiée exacte, arrêtée à '+(total||'«…»')+' '+titres+'.</p><p>Fait à '+E(x.villeSignature)+', le '+dateActe+'</p>'
+      +'<div class="st-sign"><div class="sg"><b>'+(E(x.president)||'«'+dirig+'»')+'</b>Le '+dirig+' de séance — Signature</div></div></div>'
+      +'</div></div>';
+  }
+  window.feuillePresenceHTML=feuillePresenceHTML;
+
+  /* ---- Registre des décisions / assemblées (page de garde + index chronologique) ---- */
+  function registreHTML(d){
+    var x=stDossData(d); var f=(x.forme||'SAS').toUpperCase(); var uni=(x.assoc.length<=1);
+    var dirig=(f==='SARL'||f==='EURL'||f==='SCI')?'gérant':'Président';
+    var formeLbl=formeLabelOf(x); var capN=x.cap?num(x.cap):'«…»'; var dateActe=dateActeOf(x);
+    var titre=uni?'REGISTRE DES DÉCISIONS DE L\'ASSOCIÉ UNIQUE':('REGISTRE DES '+((f==='SAS'||f==='SASU')?'DÉCISIONS COLLECTIVES':'ASSEMBLÉES GÉNÉRALES'));
+    var blank='';for(var i=0;i<8;i++){blank+='<tr><td style="text-align:center">'+(i+1)+'</td><td></td><td></td><td style="text-align:center"></td></tr>';}
+    return '<div class="st-doc"><div class="st-page">'
+      +hdr(x,formeLbl,capN)
+      +'<div class="ac-titre">'+titre+'</div>'
+      +'<p>Le présent registre, coté et paraphé par le '+dirig+', est destiné à recevoir, par ordre chronologique, les procès-verbaux des '+(uni?'décisions de l\'associé unique':'assemblées générales et décisions collectives')+' de la société <b>'+E(x.denom)+'</b>, '+E(formeLbl)+' au capital de '+capN+' euros, dont le siège social est situé '+E(x.siegeComplet)+'.</p>'
+      +'<p>Registre ouvert le '+dateActe+' à '+E(x.villeSignature)+'.</p>'
+      +'<table class="ac-tbl"><thead><tr><th style="width:44px">N°</th><th style="width:110px">Date</th><th>Nature de la décision</th><th style="width:60px">Page</th></tr></thead><tbody>'+blank+'</tbody></table>'
+      +'<div class="st-fin"><p>Le présent registre comporte «…» feuillets numérotés et paraphés.</p><p>Fait à '+E(x.villeSignature)+', le '+dateActe+'</p>'
+      +'<div class="st-sign"><div class="sg"><b>'+(E(x.president)||'«'+dirig+'»')+'</b>Le '+dirig+' — Signature</div></div></div>'
+      +'</div></div>';
+  }
+  window.registreHTML=registreHTML;
+
+  function acteDocHTML(d,type){ return type==='presence'?feuillePresenceHTML(d):(type==='registre'?registreHTML(d):acteHTML(d,type)); }
+  window.acteDocHTML=acteDocHTML;
+
   window.acteVoir=function(id,type){ var d=(DB.dossiers||[]).find(function(x){return x.id===id;}); if(!d)return;
     if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();
     openModal(TITRES[type]||'Procès-verbal',
-      '<div class="fv-view-scroll"><div class="doc-gen">'+acteHTML(d,type)+'</div></div>',
+      '<div class="fv-view-scroll"><div class="doc-gen">'+acteDocHTML(d,type)+'</div></div>',
       '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
       +'<button class="btn btn-pri" onclick="espDocPrint()">Imprimer</button>');
     setTimeout(function(){ if(typeof fvFitView==='function')fvFitView(); },40);
@@ -8675,6 +8725,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var mt=(typeof formaliteType==='function')?formaliteType(d):''; var modif=MODIF[mt];
     var btns='<button class="btn btn-sm" onclick="acteVoir(\''+d.id+'\',\'approbation\')">PV d\'approbation des comptes</button>';
     if(modif){ btns+='<button class="btn btn-sm btn-pri" onclick="acteVoir(\''+d.id+'\',\''+modif+'\')">'+esc(TITRES[modif])+'</button>'; }
+    btns+='<button class="btn btn-sm" onclick="acteVoir(\''+d.id+'\',\'presence\')">Feuille de présence</button>';
+    btns+='<button class="btn btn-sm" onclick="acteVoir(\''+d.id+'\',\'registre\')">Registre des décisions</button>';
     return '<div class="md-sec">Actes & procès-verbaux (adaptés à la forme)</div><div class="ac-btns">'+btns+'</div>'; };
   /* Carte autonome (au cas où) */
   window.actesCard=function(d){ if(!d)return '';

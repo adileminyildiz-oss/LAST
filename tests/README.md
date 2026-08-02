@@ -26,8 +26,11 @@ avec suivi des non-lus par canal, et repris dans la fiche de traitement de
 la demande) et **facturation récurrente automatique** (abonnements :
 à chaque ouverture, toute échéance arrivée à terme génère
 automatiquement sa facture client et reporte la date suivante selon
-la cadence — mensuelle, trimestrielle, semestrielle, annuelle) —
-le tout sans erreur JavaScript.
+la cadence — mensuelle, trimestrielle, semestrielle, annuelle) et
+**actes complémentaires** (feuille de présence avec quote-part par
+associé/actionnaire et registre des décisions/assemblées, adaptés à la
+forme juridique : actions vs parts sociales, associé unique vs
+assemblée générale) — le tout sans erreur JavaScript.
 
 ## Lancer
 
