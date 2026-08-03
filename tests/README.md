@@ -69,8 +69,11 @@ commercial ; carte « Analyse IA » dans la fiche, analyse automatique,
 et pré-remplissage proposé puis validé avant application) et
 **IA — brouillon de réponse + reformulation** (« Rédiger la réponse (IA) »
 au ton chaleureux depuis la fiche, ouverture du composeur pré-rempli ;
-barre IA dans le composeur : corriger, raccourcir, plus pro, traduire) —
-le tout sans erreur JavaScript.
+barre IA dans le composeur : corriger, raccourcir, plus pro, traduire)
+et **IA — signaux & traduction** (détection urgence/intention(spam)/
+sentiment/langue affichée en pastilles dans la fiche et la messagerie,
+urgence IA qui remonte la priorité de la file d'attente, et traduction
+française à la demande) — le tout sans erreur JavaScript.
 
 ## Lancer
 

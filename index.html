@@ -3927,7 +3927,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=190;
+var LAST_VER=191;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4764,6 +4764,7 @@ window.demMessagerieView=function(){
            +'<span class="msg-canal">'+(window.demEstSite(d)?'🌐 aemconseil.eu':esc(d.canal||'E-mail'))+'</span>'
            +(nAtt?'<span class="msg-att">📎 '+nAtt+'</span>':'')
            +sla
+           +((typeof demSignauxHTML==='function')?demSignauxHTML(d):'')
            +'<span class="msg-date">'+esc(mailDateHeure(d))+'</span></div>'
          +'<div class="msg-obj"><span class="tag blue">'+esc(IA.objet(d))+'</span>'+(u?'<span class="tag"><span class="av" style="width:16px;height:16px;font-size:7px;background:'+u.couleur+'">'+initials(u.nom)+'</span> '+esc(u.nom)+'</span>':'')+'<span class="tag mut">'+esc(d.statut||'Nouveau')+'</span></div>'
          +(infos?'<div class="msg-infos">'+infos+'</div>':'')
@@ -9728,12 +9729,21 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var forme='';try{if(typeof templateOf==='function'){var t=templateOf(d);var lab=(t&&t.label)||'';var m=lab.match(/SAS|SARL|SCI|EURL|SASU/i);forme=m?m[0].toUpperCase():'';}}catch(e){}
     var msg=(typeof mailDemande==='function'?mailDemande(d):d.message)||d.serviceSouhaite||'';
     var nom=(typeof demBestName==='function'?demBestName(d):d.clientNom)||'';
+    var low=(''+msg).toLowerCase();
+    var intention=/cr[ée]a|constitu|immatricul|ouvrir une (soci|entrepr)|monter (ma|une) (soci|boite|entrepr)/.test(low)?'création'
+      :/transfert|changer|modif|c[ée]ssion|dissolu|fermeture|radiation|g[ée]rant/.test(low)?'modification'
+      :((low.length&&low.length<12)||/viagra|casino|crypto|bitcoin|\bloan\b|\bseo\b|backlink|marketing/.test(low))?'spam'
+      :/\?|comment|combien|tarif|prix|question|renseign|devis/.test(low)?'question':'autre';
+    var sentiment=/inadmissible|scandaleux|honteux|m[ée]content|rembours|inacceptable|\bnul\b|arnaque|déçu|decu|colère|colere/.test(low)?'négatif'
+      :/merci beaucoup|super|g[ée]nial|parfait|ravi|content|hâte|hate/.test(low)?'positif':'neutre';
+    var langue=(/\b(the|and|please|company|hello|dear|would|need|create|business|want)\b/.test(low)&&!/\b(le|la|les|bonjour|merci|soci[ée]t[ée]|je|vous|une)\b/.test(low))?'en':'fr';
     return {
       resume:(msg?('Le prospect '+nom+' sollicite le cabinet : '+msg.slice(0,170)+(msg.length>170?'…':'')):('Demande reçue via '+(d.canal||'le site')+'.')),
+      intention:intention,sentiment:sentiment,langue:langue,
       nom:F.nom||'',prenom:F.prenom||'',email:(typeof demReplyTo==='function'?demReplyTo(d):d.clientEmail)||F.email||'',telephone:d.clientTel||F.telephone||'',
       forme:forme||F['type de societe']||'',type_formalite:(typeof IA!=='undefined'&&IA.objet?IA.objet(d):d.serviceSouhaite)||'',
       activite:F.activite||'',objet_social:'',denomination:F.denomination||'',nb_associes:'',capital:F.capital||'',
-      budget:'',delai:'',urgence:(typeof demSlaState==='function'&&demSlaState(d).level==='late')?'haute':'moyenne',
+      budget:'',delai:'',urgence:(/urgent|au plus vite|rapidement|d[ée]s que possible|\basap\b|avant (le|la fin|demain|ce soir)|cette semaine|press[ée]/.test(low)||(typeof demSlaState==='function'&&demSlaState(d).level==='late'))?'haute':'moyenne',
       autres:'(mode démonstration — analyse générée localement à partir des champs connus)'
     };
   }
@@ -9745,7 +9755,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var msg=(typeof mailDemande==='function'?mailDemande(d):d.message)||d.serviceSouhaite||'';
     var sys='Tu es l\'assistant d\'un cabinet français de création et de formalités d\'entreprise (AEM CONSEIL). Analyse la demande d\'un prospect et réponds UNIQUEMENT par un objet JSON valide, en français, sans aucun texte autour.';
     var user='Demande reçue :\n"""\n'+msg+'\n"""\n'+(known?('Champs déjà connus :\n'+known+'\n'):'')
-      +'\nRenvoie exactement ce JSON (laisse vide si absent) : {"resume":"2 à 3 phrases résumant le besoin","nom":"","prenom":"","email":"","telephone":"","forme":"SAS|SARL|SCI|EURL|SASU|micro|autre ou vide","type_formalite":"création|transfert de siège|changement de dirigeant|cession|modification de capital|dénomination|objet|dissolution|autre","activite":"","objet_social":"","denomination":"","nb_associes":"","capital":"","budget":"","delai":"","urgence":"faible|moyenne|haute","autres":"toute autre information utile au traitement du dossier"}';
+      +'\nRenvoie exactement ce JSON (laisse vide si absent) : {"resume":"2 à 3 phrases résumant le besoin","nom":"","prenom":"","email":"","telephone":"","forme":"SAS|SARL|SCI|EURL|SASU|micro|autre ou vide","type_formalite":"création|transfert de siège|changement de dirigeant|cession|modification de capital|dénomination|objet|dissolution|autre","activite":"","objet_social":"","denomination":"","nb_associes":"","capital":"","budget":"","delai":"","urgence":"faible|moyenne|haute","intention":"création|modification|question|spam|autre","sentiment":"positif|neutre|négatif","langue":"code ISO de la langue du message (fr, en, es, …)","autres":"toute autre information utile au traitement du dossier"}';
     iaAsk({system:sys,user:user,json:true,temperature:0.1,demo:function(){return demAnalyseDemo(d);}},function(r){
       d.__iaBusy=false;
       if(r&&r.ok){var data=r.data||safeParse(r.text)||{};d.iaAnalyse={data:data,ts:Date.now(),demo:!!r.demo};if(typeof save==='function')save();}
@@ -9779,8 +9789,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       if(!rows)return '';return '<div class="iana-grp"><div class="iana-gt">'+E(g.t)+'</div>'+rows+'</div>';
     }).filter(Boolean).join('');
     var autres=(''+(a.autres||'')).trim();
+    var lang=(''+(a.langue||'')).toLowerCase();var needTrad=!!(lang&&lang!=='fr'&&lang!=='français'&&lang!=='francais');
+    var sig=(typeof demSignaux==='function')?demSignaux(d):[];
     return '<div class="card">'+head+'<div class="card-b">'
+      +(sig.length?'<div class="iana-sig">'+demSignauxHTML(d)+'</div>':'')
       +(a.resume?'<div class="iana-resume">'+E(a.resume)+'</div>':'')
+      +(needTrad&&!d.iaTraduction?'<div class="iana-trad-bar"><span class="hint" style="margin:0">Message en '+E(lang.toUpperCase())+'.</span> <button class="btn btn-sm btn-ghost" onclick="demTraduire(\''+id+'\')">🌍 Traduire en français</button></div>':'')
+      +(d.iaTraduction?'<div class="iana-trad"><b>Traduction française</b><div>'+E(d.iaTraduction)+'</div></div>':'')
       +'<div class="iana-grid">'+(grps||'<div class="hint">Aucune information structurée détectée.</div>')+'</div>'
       +(autres?'<div class="iana-autres"><b>À noter :</b> '+E(autres)+'</div>':'')
       +'<div class="iana-acts"><button class="btn btn-sm btn-pri" onclick="demAnalyseAppliquer(\''+id+'\')">✎ Proposer le pré-remplissage</button>'
@@ -9906,6 +9921,65 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   if(!document.getElementById('ia-rep-css')){var st=document.createElement('style');st.id='ia-rep-css';
     st.textContent='.ia-reform{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft,#f0e9da)}'
       +'.ia-reform-t{font-size:11px;font-weight:700;color:var(--accent,#8a6d3b)}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="ia-sig-mod">
+/* ===================================================================
+   IA — Signaux : urgence, intention (spam), sentiment, langue + trad.
+   Objectif n°4. Pastilles dans la fiche ET la messagerie ; l'urgence
+   IA remonte la priorité (file d'attente) ; traduction à la demande.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function find(id){return (DB.demandes||[]).find(function(x){return x.id===id;});}
+  function norm(s){return (''+(s||'')).toLowerCase();}
+
+  window.demSignaux=function(d){
+    var a=(d&&d.iaAnalyse&&d.iaAnalyse.data)||null;if(!a)return [];
+    var out=[];
+    if(norm(a.urgence)==='haute')out.push({label:'⏰ Urgent',cls:'sig-urg'});
+    if(norm(a.intention)==='spam')out.push({label:'Spam ?',cls:'sig-spam'});
+    var s=norm(a.sentiment);if(s==='négatif'||s==='negatif')out.push({label:'⚠ Mécontent',cls:'sig-neg'});
+    else if(s==='positif')out.push({label:'☺ Positif',cls:'sig-pos'});
+    var lg=norm(a.langue);if(lg&&lg!=='fr'&&lg!=='français'&&lg!=='francais')out.push({label:'🌐 '+lg.toUpperCase(),cls:'sig-lang'});
+    return out;
+  };
+  window.demSignauxHTML=function(d){return window.demSignaux(d).map(function(x){return '<span class="sig '+x.cls+'">'+x.label+'</span>';}).join('');};
+
+  /* Traduction à la demande (garde l'original) */
+  window.demTraduire=function(id){
+    var d=find(id);if(!d)return;
+    var mode=(typeof iaMode==='function')?iaMode():'off';if(mode==='off')return (typeof toast==='function')&&toast('Activez l\'IA (ou le mode démo) dans Paramètres.');
+    var msg=(typeof mailDemande==='function'?mailDemande(d):d.message)||d.serviceSouhaite||'';
+    if(typeof toast==='function')toast('Traduction en cours…');
+    iaAsk({system:'Traduis le texte suivant en français, en gardant le sens et le ton. Réponds UNIQUEMENT par la traduction.',user:msg,temperature:0.2,
+      demo:function(){return '[Traduction française — mode démonstration]\n\n'+msg;}},
+      function(r){if(r&&r.ok&&r.text){d.iaTraduction=r.text;if(typeof save==='function')save();if(typeof render==='function')render();}
+        else if(typeof toast==='function')toast('Échec de la traduction : '+((r&&r.error)||'inconnu'));});
+  };
+
+  /* L'urgence IA remonte la priorité (tri file d'attente) */
+  if(typeof window.demPriority==='function'&&!window.__iaPriHook){window.__iaPriHook=1;
+    var _pri=window.demPriority;
+    window.demPriority=function(d){var base=0;try{base=_pri(d);}catch(e){}
+      try{var a=d&&d.iaAnalyse&&d.iaAnalyse.data;if(a){var u=norm(a.urgence);if(u==='haute')base+=250;else if(u==='moyenne')base+=60;if(norm(a.intention)==='spam')base-=400;}}catch(e){}
+      return base;};
+  }
+
+  if(!document.getElementById('ia-sig-css')){var st=document.createElement('style');st.id='ia-sig-css';
+    st.textContent='.sig{display:inline-block;font-size:10px;font-weight:700;border-radius:20px;padding:1px 8px;border:1px solid;white-space:nowrap}'
+      +'.sig-urg{color:#be123c;background:#fff1f4;border-color:#f6cdd8}'
+      +'.sig-spam{color:#6b7280;background:#f3f4f6;border-color:#e5e7eb}'
+      +'.sig-neg{color:#b45309;background:#fffaf0;border-color:#eed09a}'
+      +'.sig-pos{color:#3f7d54;background:#eef7f0;border-color:#cfe6d6}'
+      +'.sig-lang{color:#1d4ed8;background:#eef4ff;border-color:#dbe6ff}'
+      +'.iana-sig{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}'
+      +'.iana-trad-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}'
+      +'.iana-trad{background:var(--paper,#fffef9);border:1px solid var(--line-2,#e2d9c6);border-radius:8px;padding:9px 11px;margin-bottom:11px;font-size:12.5px;line-height:1.5;white-space:pre-wrap}'
+      +'.iana-trad b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3,#9c9078);margin-bottom:4px}'
+      +'.msg-top .sig{margin-left:2px}';
     document.head.appendChild(st);}
 })();
 </script>

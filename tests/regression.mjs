@@ -505,6 +505,22 @@ const r = await page.evaluate(async () => {
   out.iaReponse = /Rédiger la réponse \(IA\)/.test(ficheHTML) && /ia-reform/.test(reformBar) && (reformBar.match(/<button/g) || []).length === 4 && compReform
     && typeof demReponseIA === 'function' && typeof iaReformuler === 'function' && typeof iaReformBar === 'function';
 
+  // IA — signaux (urgence/intention/sentiment/langue) + priorité + traduction
+  const mkSig = (id, over) => Object.assign({ id, code: 'SIG' + id, clientNom: id, canal: 'Formulaire du site', statut: 'Nouveau', assigneA: '', date: '2026-08-01', lu: false }, over);
+  DB.demandes.unshift(mkSig('sigU', { message: 'x', iaAnalyse: { data: { urgence: 'haute' }, ts: 1, demo: true } }));
+  DB.demandes.unshift(mkSig('sigN', { message: 'x', iaAnalyse: { data: { sentiment: 'négatif' }, ts: 1, demo: true } }));
+  DB.demandes.unshift(mkSig('sigE', { message: 'x', iaAnalyse: { data: { langue: 'en' }, ts: 1, demo: true } }));
+  DB.demandes.unshift(mkSig('sigS', { message: 'x', iaAnalyse: { data: { intention: 'spam' }, ts: 1, demo: true } }));
+  DB.demandes.unshift(mkSig('sigNone', { message: 'x' }));
+  const sigLabels = id => demSignaux(DB.demandes.find(d => d.id === id)).map(s => s.label).join('|');
+  const priU = demPriority(DB.demandes.find(d => d.id === 'sigU'));
+  const priS = demPriority(DB.demandes.find(d => d.id === 'sigS'));
+  const cardU = demAnalyseCard('sigE'); // EN → bouton traduire
+  out.iaSignaux = /Urgent/.test(sigLabels('sigU')) && /Mécontent/.test(sigLabels('sigN')) && /EN/.test(sigLabels('sigE')) && /Spam/.test(sigLabels('sigS'))
+    && demSignaux(DB.demandes.find(d => d.id === 'sigNone')).length === 0
+    && priU > priS && /Traduire en français/.test(cardU)
+    && typeof demSignaux === 'function' && typeof demTraduire === 'function' && typeof demSignauxHTML === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
