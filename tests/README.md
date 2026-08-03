@@ -148,7 +148,11 @@ restreint — Demandes, Traitement, Clients (consultation), documents — le res
 masqué, et n'ont aucun pouvoir de modification structurelle — suppressions,
 finances, réglages bloqués — uniquement l'édition des dossiers et l'envoi de mails ;
 identifiant insensible à la casse, comptes activables/désactivables, périmètre par
-assignation, redirection hors des pages interdites)
+assignation, redirection hors des pages interdites) et **suivi des collaborateurs**
+(module d'administration dédié, invisible aux collaborateurs : présentation en liste —
+un collaborateur par ligne — avec ses tâches assignées — demandes + dossiers ouverts,
+cliquables —, ses compteurs, sa barre d'avancement des dossiers, ses retards SLA et
+son activité récente ; KPIs globaux collaborateurs actifs / tâches en cours / en retard)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test

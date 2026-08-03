@@ -732,6 +732,21 @@ const r = await page.evaluate(async () => {
     && (authGood && authGood.id === 'u-sofia') && authBad === null && authInactif === null
     && scopeOk && navRestricted && redirectOk && guardOk && roleFlagsOk && isAdmin() === true;
 
+  // SUIVI DES COLLABORATEURS (admin) — page dédiée, tâches par collaborateur, activité, retards
+  DB.demandes = [{ id: 'svd', clientNom: 'Client Suivi', assigneA: 'u-sofia', serviceSouhaite: 'Création SARL', date: '2020-01-01' }];
+  DB.dossiers = [{ id: 'svo1', ref: 'DOS-SV1', clientIds: [], serviceIds: [], statut: 'En cours', assigneA: 'u-sofia' }, { id: 'svo2', ref: 'DOS-SV2', clientIds: [], serviceIds: [], statut: 'Clôturé', assigneA: 'u-sofia' }];
+  DB.audit = [{ ts: Date.now(), user: 'Sofia B.', action: 'Relance facture', detail: 'FV-9' }];
+  const suiviInPages = PAGES.some((x) => x.id === 'suivi');
+  const suiviHTML = pageSuivi();
+  const suiviOk = /Suivi des collaborateurs/.test(suiviHTML) && /Sofia B\./.test(suiviHTML) && /DOS-SV1/.test(suiviHTML) && /Client Suivi/.test(suiviHTML) && /Relance facture/.test(suiviHTML) && /En retard/.test(suiviHTML);
+  // dispatch : rendu via render() sans erreur
+  state.page = 'suivi'; render(); const suiviRendered = /Suivi des collaborateurs/.test((document.getElementById('view') || {}).innerHTML || '');
+  // admin-only : un collaborateur est redirigé hors de 'suivi'
+  localStorage.setItem('last-role', 'collab'); localStorage.setItem('last-user', 'u-sofia'); state.page = 'suivi'; render();
+  const suiviCollabBlocked = state.page !== 'suivi';
+  localStorage.setItem('last-role', 'admin'); localStorage.removeItem('last-user'); state.page = 'dash'; render();
+  out.suivi = typeof pageSuivi === 'function' && suiviInPages && suiviOk && suiviRendered && suiviCollabBlocked;
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
