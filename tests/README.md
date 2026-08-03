@@ -134,7 +134,12 @@ titulaire : mot de passe — étape 1 — puis code TOTP à 6 chiffres d'une
 application d'authentification — étape 2 ; TOTP conforme RFC 6238/4226 calculé
 hors-ligne via WebCrypto, secret 2FA chiffré par le mot de passe — AES-256-GCM +
 PBKDF2, clé d'ancrage portable — enrôlement guidé — QR/clé — au premier accès, et
-verrouillage temporaire anti-force-brute après cinq échecs)
+verrouillage temporaire anti-force-brute après cinq échecs) et
+**gestion de la sécurité** (carte « Sécurité & accès » dans les Paramètres :
+statut 2FA, (re)configuration guidée de la double authentification — QR/clé +
+vérification —, changement de mot de passe — nouvelle empreinte SHA-256 stockée
+localement, prise en compte par le gate via un mot de passe modifiable —, affichage
+de la clé d'ancrage portable, et guide pas à pas d'enrôlement)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test

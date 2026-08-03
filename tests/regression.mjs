@@ -692,6 +692,17 @@ const r = await page.evaluate(async () => {
   out.auth2fa = hotp0 === '755224' && hotp1 === '287082' && decOk && decBad && totpAccept && totpReject && lockOn && lockOff
     && typeof lastGateOtp === 'function' && typeof lastGateEnrollVerify === 'function' && typeof has2fa === 'function';
 
+  // SÉCURITÉ — carte dans Paramètres + mot de passe modifiable (override localStorage) + guide
+  const secCardHTML = (typeof secCard === 'function') ? secCard() : '';
+  const secInParams = pageParams().indexOf('Sécurité') >= 0 && /double authentification/.test(pageParams());
+  const newHash = await _sha256('MotDePasseFort!2026');
+  localStorage.setItem('last-pwd', newHash);
+  const pwdOverrideOk = getPwdHash() === newHash;
+  localStorage.removeItem('last-pwd');
+  const pwdDefaultOk = getPwdHash() === LAST_PWD_HASH;
+  out.securite = typeof secCard === 'function' && typeof sec2FAStart === 'function' && typeof secChangePwdSave === 'function' && typeof secGuide === 'function' && typeof getPwdHash === 'function'
+    && /Sécurité/.test(secCardHTML) && secInParams && pwdOverrideOk && pwdDefaultOk;
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

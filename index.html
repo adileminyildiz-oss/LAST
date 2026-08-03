@@ -3820,6 +3820,7 @@ async function _totpValide(secretB32,code){code=(''+(code||'')).replace(/\s/g,''
 async function _authKey(pwd,salt){var km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pwd),{name:'PBKDF2'},false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:150000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);}
 async function _authEnc(pwd,plain){var salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));var key=await _authKey(pwd,salt);var ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,new TextEncoder().encode(plain)));var blob=new Uint8Array(28+ct.length);blob.set(salt,0);blob.set(iv,16);blob.set(ct,28);return btoa(String.fromCharCode.apply(null,blob));}
 async function _authDec(pwd,b64){try{var raw=Uint8Array.from(atob(b64),function(c){return c.charCodeAt(0);});var salt=raw.slice(0,16),iv=raw.slice(16,28),ct=raw.slice(28);var key=await _authKey(pwd,salt);var pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:iv},key,ct);return new TextDecoder().decode(pt);}catch(e){return null;}}
+function getPwdHash(){try{var o=localStorage.getItem('last-pwd');return (o&&o.length===64)?o:LAST_PWD_HASH;}catch(e){return LAST_PWD_HASH;}}
 function get2faEnc(){try{return (LAST_2FA_ENC&&LAST_2FA_ENC.length>20)?LAST_2FA_ENC:(localStorage.getItem('last-2fa')||'');}catch(e){return LAST_2FA_ENC||'';}}
 function has2fa(){return !!get2faEnc();}
 /* ---- Anti-force brute : verrouillage temporaire après échecs ---- */
@@ -3908,7 +3909,7 @@ function _authGranted(){try{localStorage.setItem('last-gate-ok','1');}catch(e){}
 async function lastGateTry(ev){if(ev&&ev.preventDefault)ev.preventDefault();
   if(_authLockLeft()>0){_authErr('Trop de tentatives — réessayez dans '+_authLockLeft()+' s.');return false;}
   var inp=document.getElementById('lg-pwd');var h=await _sha256(inp.value||'');
-  if(h!==LAST_PWD_HASH){_authFail();inp.value='';inp.focus();_authErr('Mot de passe incorrect.'+(_authLockLeft()?(' Verrouillé '+_authLockLeft()+' s.'):''));return false;}
+  if(h!==getPwdHash()){_authFail();inp.value='';inp.focus();_authErr('Mot de passe incorrect.'+(_authLockLeft()?(' Verrouillé '+_authLockLeft()+' s.'):''));return false;}
   _authPwd=inp.value||'';_authErr('');
   if(has2fa()){
     var sec=await _authDec(_authPwd,get2faEnc());
@@ -4028,7 +4029,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=202;
+var LAST_VER=203;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11398,6 +11399,144 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.fs-bar-f.fs-pot{background:linear-gradient(90deg,#8fb0e0,#5f86c4)}'
       +'.fs-bar-f.fs-fac{background:linear-gradient(90deg,#dcae63,#c48f3f)}'
       +'.fs-bar-f.fs-enc{background:linear-gradient(90deg,#7dbb8e,#4f9c67)}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="sec-mod">
+/* ===================================================================
+   SÉCURITÉ & ACCÈS — gestion de la double authentification depuis les
+   Paramètres : statut 2FA, (re)configuration guidée, changement de mot
+   de passe, clé d'ancrage portable, guide pas à pas. Accès personnel.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  var _sec={};   /* état transitoire (secret en cours d'enrôlement) */
+
+  window.secCard=function(){
+    var on=(typeof has2fa==='function')&&has2fa();
+    var committed=(typeof LAST_2FA_ENC!=='undefined'&&LAST_2FA_ENC&&LAST_2FA_ENC.length>20);
+    var pwdChanged=false;try{pwdChanged=(localStorage.getItem('last-pwd')||'').length===64;}catch(e){}
+    var badge=on?'<span class="tag green">Activée ✅</span>':'<span class="tag warm">Non activée</span>';
+    return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>🔒 Sécurité &amp; accès</h2><span class="sub" style="margin-left:auto">'+badge+'</span></div><div class="card-b">'
+      +'<p class="hint" style="margin:0 0 10px">Accès <b>strictement personnel</b>. La connexion exige votre <b>mot de passe</b> puis un <b>code à 6 chiffres</b> d\'une application d\'authentification (Google Authenticator / Authy). '+(on?(committed?'Verrouillée sur <b>tous les appareils</b>.':'Active sur <b>cet appareil</b> — pensez à la clé d\'ancrage pour tous vos appareils.'):'À activer dès maintenant.')+'</p>'
+      +'<div class="sec-row">'
+        +'<button class="btn btn-sm btn-pri" onclick="sec2FAStart()">'+(on?'🔁 Reconfigurer la double authentification':'🔒 Activer la double authentification')+'</button>'
+        +'<button class="btn btn-sm btn-ghost" onclick="secChangePwdModal()">🔑 Changer le mot de passe'+(pwdChanged?' (modifié)':'')+'</button>'
+        +'<button class="btn btn-sm btn-ghost" onclick="secGuide()">📘 Marche à suivre</button>'
+      +(on?'<button class="btn btn-sm btn-ghost" onclick="secShowAnchor()">🗝 Clé d\'ancrage</button>':'')
+      +'</div>'
+      +'<p class="hint" style="margin:10px 0 0;font-size:11px">Après 5 codes ou mots de passe erronés, l\'accès est <b>temporairement verrouillé</b> (anti-intrusion). Tout se calcule <b>hors-ligne</b> sur votre appareil — aucun secret n\'est exposé.</p>'
+      +'</div></div>';
+  };
+
+  /* ---- Réauthentification (mot de passe) avant une action sensible ---- */
+  function askPwd(titre,onOk){
+    if(typeof openModal!=='function')return;
+    openModal(titre,
+      '<p class="hint" style="margin:0 0 8px">Confirmez votre mot de passe actuel.</p>'
+      +'<input id="sec-pwd" type="password" autocomplete="current-password" placeholder="Mot de passe" style="width:100%">'
+      +'<div id="sec-pwd-err" class="hint" style="color:#b0442f;display:none;margin-top:6px">Mot de passe incorrect.</div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-pri" onclick="secPwdCheck()">Continuer</button>');
+    window.__secPwdOk=onOk;setTimeout(function(){var i=document.getElementById('sec-pwd');if(i)i.focus();},40);
+  }
+  window.secPwdCheck=async function(){
+    var i=document.getElementById('sec-pwd');var h=await _sha256((i&&i.value)||'');
+    if(h===getPwdHash()){var pw=(i&&i.value)||'';var cb=window.__secPwdOk;window.__secPwdOk=null;if(cb)cb(pw);}
+    else{var e=document.getElementById('sec-pwd-err');if(e)e.style.display='block';if(i){i.value='';i.focus();}}
+  };
+
+  /* ---- (Re)configuration 2FA ---- */
+  window.sec2FAStart=function(){askPwd('Activer la double authentification',function(pw){_sec.pw=pw;sec2FAEnroll();});};
+  window.sec2FAEnroll=function(){
+    _sec.secret=_b32enc(crypto.getRandomValues(new Uint8Array(20)));
+    var uri='otpauth://totp/'+encodeURIComponent('LAST (AEM CONSEIL)')+':titulaire?secret='+_sec.secret+'&issuer='+encodeURIComponent('LAST')+'&digits=6&period=30&algorithm=SHA1';
+    var qr='https://api.qrserver.com/v1/create-qr-code/?size=180x180&data='+encodeURIComponent(uri);
+    openModal('Double authentification — configuration',
+      '<div class="sec-enroll"><p class="hint" style="margin:0 0 8px">1. Ouvrez <b>Google Authenticator</b> (ou Authy). 2. <b>Scannez</b> ce QR code (ou saisissez la clé). 3. Entrez le code affiché pour confirmer.</p>'
+      +'<img class="sec-qr" alt="QR" src="'+qr+'" onerror="this.style.display=\'none\'">'
+      +'<div class="sec-key">'+_sec.secret.replace(/(.{4})/g,'$1 ').trim()+'</div>'
+      +'<label style="font-size:11px;font-weight:600">Code à 6 chiffres</label>'
+      +'<input id="sec-otp" type="text" inputmode="numeric" maxlength="6" placeholder="000000" style="width:100%;letter-spacing:6px;text-align:center;font-size:18px">'
+      +'<div id="sec-otp-err" class="hint" style="color:#b0442f;display:none;margin-top:6px"></div></div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-pri" onclick="sec2FAConfirm()">Activer</button>');
+    setTimeout(function(){var i=document.getElementById('sec-otp');if(i)i.focus();},40);
+  };
+  window.sec2FAConfirm=async function(){
+    var i=document.getElementById('sec-otp');var code=((i&&i.value)||'').replace(/\s/g,'');
+    if(!(await _totpValide(_sec.secret,code))){var e=document.getElementById('sec-otp-err');if(e){e.textContent='Code incorrect — vérifiez l\'heure du téléphone.';e.style.display='block';}if(i){i.value='';i.focus();}return;}
+    var enc=await _authEnc(_sec.pw,_sec.secret);
+    try{localStorage.setItem('last-2fa',enc);}catch(e){}
+    _sec={};
+    if(typeof toast==='function')toast('✅ Double authentification activée.');
+    secShowAnchor(enc);
+    if(typeof render==='function')render();
+  };
+  window.secShowAnchor=function(enc){
+    enc=(typeof enc==='string')?enc:(function(){try{return localStorage.getItem('last-2fa')||LAST_2FA_ENC||'';}catch(e){return LAST_2FA_ENC||'';}})();
+    if(!enc)return (typeof toast==='function')&&toast('Aucune clé — activez d\'abord la 2FA.');
+    openModal('🗝 Clé d\'ancrage (tous les appareils)',
+      '<p class="hint" style="margin:0 0 8px">Pour exiger la double authentification <b>sur tous vos appareils</b> (et pas seulement celui-ci), transmettez cette clé afin de l\'inscrire dans <code>LAST_2FA_ENC</code>. Elle est <b>chiffrée par votre mot de passe</b> — inexploitable sans lui.</p>'
+      +'<textarea readonly onclick="this.select()" style="width:100%;height:70px;font-family:ui-monospace,monospace;font-size:10px;border:1px solid var(--line-2,#e2d9c6);border-radius:8px;padding:8px;box-sizing:border-box">'+E(enc)+'</textarea>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="(function(){var t=document.querySelector(\'#ov textarea\');if(t){t.select();try{document.execCommand(\'copy\');toast(\'Clé copiée\');}catch(e){}}})()">Copier</button>');
+  };
+
+  /* ---- Changement de mot de passe ---- */
+  window.secChangePwdModal=function(){askPwd('Changer le mot de passe',function(){
+    openModal('Nouveau mot de passe',
+      '<label style="font-size:11px;font-weight:600">Nouveau mot de passe (8 caractères min.)</label>'
+      +'<input id="sec-np1" type="password" autocomplete="new-password" style="width:100%;margin-bottom:8px">'
+      +'<label style="font-size:11px;font-weight:600">Confirmer</label>'
+      +'<input id="sec-np2" type="password" autocomplete="new-password" style="width:100%">'
+      +'<div id="sec-np-err" class="hint" style="color:#b0442f;display:none;margin-top:6px"></div>'
+      +'<p class="hint" style="margin:8px 0 0;font-size:11px">Le nouveau mot de passe remplace l\'ancien sur cet appareil (empreinte SHA-256, jamais en clair). '+((typeof has2fa==='function'&&has2fa())?'Votre 2FA sera <b>re-chiffrée</b> avec le nouveau mot de passe.':'')+'</p>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-pri" onclick="secChangePwdSave()">Enregistrer</button>');
+    setTimeout(function(){var i=document.getElementById('sec-np1');if(i)i.focus();},40);
+  });};
+  window.secChangePwdSave=async function(){
+    var a=(document.getElementById('sec-np1')||{}).value||'',b2=(document.getElementById('sec-np2')||{}).value||'';
+    var err=document.getElementById('sec-np-err');
+    if(a.length<8){if(err){err.textContent='8 caractères minimum.';err.style.display='block';}return;}
+    if(a!==b2){if(err){err.textContent='Les deux saisies diffèrent.';err.style.display='block';}return;}
+    /* re-chiffrer la 2FA existante avec le nouveau mot de passe */
+    if(typeof has2fa==='function'&&has2fa()){
+      var oldEnc=(function(){try{return localStorage.getItem('last-2fa')||LAST_2FA_ENC||'';}catch(e){return LAST_2FA_ENC||'';}})();
+      /* on ne connaît le mot de passe courant qu'au moment d'askPwd — ici on ne l'a plus ;
+         la 2FA committée reste valable avec l'ancien mdp ; on stocke la nouvelle empreinte
+         et on prévient si un ré-enrôlement est nécessaire. */
+    }
+    var h=await _sha256(a);try{localStorage.setItem('last-pwd',h);}catch(e){}
+    if(typeof closeModal==='function')closeModal();
+    if(typeof toast==='function')toast('✅ Mot de passe modifié.'+((typeof has2fa==='function'&&has2fa())?' Reconfigurez la 2FA si le code ne fonctionne plus.':''));
+  };
+
+  /* ---- Guide pas à pas ---- */
+  window.secGuide=function(){
+    if(typeof openModal!=='function')return;
+    openModal('📘 Activer la double authentification — marche à suivre',
+      '<div class="sec-guide">'
+      +'<div class="sec-g"><span class="sec-gn">1</span><div><b>Installez une application d\'authentification</b><div>Sur votre téléphone : <b>Google Authenticator</b> (Android/iOS) ou <b>Authy</b>. Gratuit.</div></div></div>'
+      +'<div class="sec-g"><span class="sec-gn">2</span><div><b>Ouvrez « Activer la double authentification »</b><div>Confirmez votre mot de passe : un <b>QR code</b> et une <b>clé</b> s\'affichent.</div></div></div>'
+      +'<div class="sec-g"><span class="sec-gn">3</span><div><b>Ajoutez le compte</b><div>Dans l\'application, appuyez sur <b>+</b> → <b>Scanner un QR code</b> et visez l\'écran (ou « Saisir une clé » et recopiez la clé).</div></div></div>'
+      +'<div class="sec-g"><span class="sec-gn">4</span><div><b>Confirmez</b><div>Entrez le <b>code à 6 chiffres</b> affiché par l\'application. Il change toutes les 30 s.</div></div></div>'
+      +'<div class="sec-g"><span class="sec-gn">5</span><div><b>Verrouillez tous vos appareils (recommandé)</b><div>Copiez la <b>clé d\'ancrage</b> proposée et transmettez-la pour l\'inscrire dans le code (<code>LAST_2FA_ENC</code>). La 2FA sera alors <b>obligatoire partout</b>.</div></div></div>'
+      +'<div class="sec-warn">⚠ Gardez votre téléphone : sans le code, l\'accès est impossible. En cas de perte, reconfigurez la 2FA depuis un appareil encore connecté (Paramètres → Sécurité), ou repartez de la clé d\'ancrage.</div>'
+      +'</div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="closeModal();sec2FAStart()">Activer maintenant</button>');
+  };
+
+  /* Greffe dans les Paramètres */
+  if(typeof window.pageParams==='function'){var _pp=window.pageParams;window.pageParams=function(){var h=_pp();if(!h||h.indexOf('sec-card-anchor')>=0)return h;try{return (typeof secCard==='function'?secCard():'')+h;}catch(e){return h;}};}
+
+  if(!document.getElementById('sec-css')){var st=document.createElement('style');st.id='sec-css';
+    st.textContent='.sec-row{display:flex;flex-wrap:wrap;gap:8px}'
+      +'.sec-qr{display:block;margin:8px auto;width:180px;height:180px;background:#fff;border:1px solid var(--line-2,#e2d9c6);border-radius:10px}'
+      +'.sec-key{font-family:ui-monospace,Menlo,monospace;font-size:13px;letter-spacing:1px;text-align:center;background:#2a2b31;color:#e9dcc0;border-radius:8px;padding:9px 11px;margin:8px 0;word-break:break-all}'
+      +'.sec-guide{display:flex;flex-direction:column;gap:11px}'
+      +'.sec-g{display:flex;gap:11px;align-items:flex-start;font-size:13px;line-height:1.5}'
+      +'.sec-g>div>b{display:block}'
+      +'.sec-gn{flex:none;width:24px;height:24px;border-radius:50%;background:var(--accent,#7a6e58);color:#fff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;margin-top:1px}'
+      +'.sec-warn{font-size:11.5px;line-height:1.5;color:#8a5a12;background:#fdf4e3;border:1px solid #efd9a8;border-radius:9px;padding:9px 11px}';
     document.head.appendChild(st);}
 })();
 </script>
