@@ -45,7 +45,11 @@ avec la charge du collaborateur + prochaine étape par demande) et
 **file d'attente priorisée + SLA** (ancienneté de chaque demande,
 badge d'échéance vert/ambre/rouge au-delà d'un délai cible réglable,
 score de priorité et tri « file d'attente », compteur « en retard »
-dans le bandeau du poste) — le tout sans erreur JavaScript.
+dans le bandeau du poste) et **checklist de traitement par formalité +
+réponses types** (étapes cochables tirées du modèle de la formalité avec
+progression %, et réponses en 1 clic — accusé de réception, demande de
+pièces, point d'avancement, relance — pré-remplies avec le numéro de
+série) — le tout sans erreur JavaScript.
 
 ## Lancer
 

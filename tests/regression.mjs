@@ -399,6 +399,22 @@ const r = await page.evaluate(async () => {
   out.demSla = slaLevels && prioOrder && sortOk && badgeOk && retardOk && cfgOk
     && typeof demSlaState === 'function' && typeof demPriority === 'function' && typeof demSortApply === 'function' && typeof demSlaBadge === 'function';
 
+  // Checklist de traitement par formalité + réponses types
+  DB.demandes.unshift({ id: 'dchk', code: 'DC-0500', clientNom: 'Marie Client', clientEmail: 'marie@ex.fr', canal: 'Formulaire du site', serviceSouhaite: 'Création SCI', statut: 'Nouveau', assigneA: '', date: '2026-08-01', lu: false });
+  const dChk = DB.demandes.find(d => d.id === 'dchk');
+  const etapes = demEtapes(dChk);
+  const p0 = demChkProgress(dChk).pct;
+  demChkToggle('dchk', demChkKey(etapes[0]));
+  demChkToggle('dchk', demChkKey(etapes[1]));
+  const pr2 = demChkProgress(dChk);
+  const cardChk = demChecklistCard('dchk');
+  const repBuilt = demReponses.map(t => t.build(dChk));
+  out.demChecklist = etapes.length >= 4 && /SCI/.test((templateOf(dChk) || {}).label || '')
+    && p0 === 0 && pr2.done === 2 && pr2.pct === Math.round(2 / etapes.length * 100)
+    && /Étapes de traitement/.test(cardChk)
+    && demReponses.length >= 3 && repBuilt.every(m => /DC-0500/.test(m.c)) && /Accusé/.test(demReponsesBar('dchk'))
+    && typeof demChecklistCard === 'function' && typeof demReponseType === 'function' && typeof demReponsesBar === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

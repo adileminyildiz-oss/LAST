@@ -3918,7 +3918,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=182;
+var LAST_VER=183;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4879,6 +4879,7 @@ window.demVueDetail=function(id){
         +mailFrame(d)
       +'</div></div>'
       +'<div class="dem-view-col">'
+      +((typeof demChecklistCard==='function')?demChecklistCard(d.id):'')
       +((typeof demInfosCard==='function')?demInfosCard(d):'')
       +((typeof demAttBlock==='function')?demAttBlock(d.id):'')
       +'<div class="card"><div class="card-h"><h2>Traitement</h2>'
@@ -4889,7 +4890,8 @@ window.demVueDetail=function(id){
         +'<div class="dem-decide"><button class="btn btn-pri dem-accept" onclick="demAccepter(\''+id+'\')">✓ Accepter (prise en charge)</button>'
         +'<button class="btn dem-refuse" onclick="demRefuser(\''+id+'\')">✕ Refuser (mail d\'excuse)</button></div>'
         +'<button class="btn btn-pri" style="width:100%;justify-content:center;margin:12px 0 6px" onclick="demDemanderDocs(\''+id+'\')">✉ Demander les documents</button>'
-        +'<button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-bottom:12px" onclick="demInstallerLogoSignature()">🖼 Ajouter le logo à ma signature Gmail</button>'
+        +((typeof demReponsesBar==='function')?'<div class="section-t" style="margin-top:6px">Réponses types (1 clic)</div>'+demReponsesBar(id):'')
+        +'<button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin:12px 0" onclick="demInstallerLogoSignature()">🖼 Ajouter le logo à ma signature Gmail</button>'
         +'<label>E-mail du client '+(mailEmail(d)==='—'?'<span style="color:#be123c;font-weight:700">(introuvable — saisissez-le)</span>':'<span style="color:#3f7d54">(récupéré automatiquement)</span>')+'</label>'
         +'<input id="dm-cliemail" type="email" value="'+esc(demReplyTo(d)||'')+'" placeholder="client@email.fr" oninput="demSetEmail(\''+id+'\',this.value)" style="width:100%;margin-bottom:12px'+(mailEmail(d)==='—'?';border-color:#e0a6b4;background:#fff1f4':'')+'">'
         +'<label>Assigner à un collaborateur</label>'+assignSel
@@ -9227,6 +9229,79 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.sla-late{color:#be123c;background:#fff1f4;border-color:#f6cdd8}'
       +'.sla-done{color:var(--ink-3,#8a7f6c);background:var(--paper-2,#f6efe0);border-color:var(--line-2,#e2d9c6)}'
       +'.dem-tbl .sla{margin-left:6px}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="demchk-mod">
+/* ===================================================================
+   CHECKLIST DE TRAITEMENT (par type de formalité) + RÉPONSES TYPES
+   - Étapes cochables tirées de FORMALITE_TEMPLATES.etapes, progression %.
+   - Réponses types en 1 clic, pré-remplies avec le numéro de série.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+
+  /* ---- Checklist ---- */
+  window.demEtapes=function(d){
+    try{if(typeof templateOf==='function'){var t=templateOf(d);if(t&&t.etapes&&t.etapes.length)return t.etapes.slice();}}catch(e){}
+    return ['Qualifier la demande','Demander les pièces au client','Constituer le dossier','Déposer / transmettre','Finaliser & informer le client'];
+  };
+  window.demChkKey=function(s){return (''+s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,40);};
+  window.demChkToggle=function(id,key){var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return;d.checklist=d.checklist||{};d.checklist[key]=!d.checklist[key];if(typeof save==='function')save();if(typeof render==='function')render();};
+  window.demChkProgress=function(d){var e=window.demEtapes(d);var cl=(d&&d.checklist)||{};var done=0;e.forEach(function(s){if(cl[window.demChkKey(s)])done++;});return {done:done,total:e.length,pct:e.length?Math.round(done/e.length*100):0};};
+  window.demChecklistCard=function(id){
+    var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return '';
+    var e=window.demEtapes(d);var cl=d.checklist||{};var pr=window.demChkProgress(d);
+    var label='';try{if(typeof templateOf==='function'){var t=templateOf(d);label=(t&&t.label)||'';}}catch(_e){}
+    var rows=e.map(function(s,i){var k=window.demChkKey(s);var on=!!cl[k];
+      return '<button class="chk-row'+(on?' on':'')+'" onclick="demChkToggle(\''+id+'\',\''+k+'\')"><span class="chk-box">'+(on?'✓':'')+'</span><span class="chk-n">'+(i+1)+'.</span><span class="chk-lbl">'+E(s)+'</span></button>';
+    }).join('');
+    return '<div class="card"><div class="card-h"><h2>Étapes de traitement</h2><span class="sub" style="margin-left:auto">'+(label?E(label)+' · ':'')+pr.done+'/'+pr.total+'</span></div>'
+      +'<div class="card-b"><div class="chk-bar"><span style="width:'+pr.pct+'%"></span></div><div class="chk-pct">'+pr.pct+'% traité</div>'
+      +'<div class="chk-list">'+rows+'</div></div></div>';
+  };
+
+  /* ---- Réponses types (pré-remplies avec le n° de série) ---- */
+  function nm(d){return (typeof demBestName==='function')?demBestName(d):((d&&d.clientNom)||'');}
+  function prenom(d){return ((nm(d)||'').split(/\s+/)[0]||'').trim();}
+  function ref(d){return (d&&d.code)?(' (référence '+d.code+')'):'';}
+  function serie(d){return (d&&d.code)||'';}
+  window.demReponses=[
+    {k:'accuse',label:'Accusé de réception',build:function(d){return {s:'Bonne réception de votre demande'+ref(d)+' — AEM CONSEIL',
+      c:'Bonjour'+(prenom(d)?(' '+prenom(d)):'')+',\n\nNous accusons bonne réception de votre demande'+ref(d)+' et vous remercions de votre confiance.\n\nElle est enregistrée sous le numéro '+serie(d)+'. Un conseiller la prend en charge et reviendra vers vous très prochainement.\n\nBien cordialement,'};}},
+    {k:'pieces',label:'Demande de pièces',build:function(d){return {s:'Documents nécessaires'+ref(d)+' — AEM CONSEIL',
+      c:'Bonjour'+(prenom(d)?(' '+prenom(d)):'')+',\n\nAfin de poursuivre le traitement de votre dossier '+serie(d)+', merci de nous transmettre les documents suivants :\n\n  1. Pièce d\'identité du dirigeant (recto/verso)\n  2. Justificatif de domicile de moins de 3 mois\n\nVous pouvez répondre directement à cet e-mail en y joignant les documents (PDF ou photo nette).\n\nBien cordialement,'};}},
+    {k:'suivi',label:'Point d\'avancement',build:function(d){return {s:'Avancement de votre dossier '+serie(d)+' — AEM CONSEIL',
+      c:'Bonjour'+(prenom(d)?(' '+prenom(d)):'')+',\n\nVotre dossier '+serie(d)+' est en cours de traitement par nos services. Nous revenons vers vous dès la prochaine étape.\n\nNous restons à votre disposition pour toute question.\n\nBien cordialement,'};}},
+    {k:'relance',label:'Relance (sans réponse)',build:function(d){return {s:'Relance — votre dossier '+serie(d)+' — AEM CONSEIL',
+      c:'Bonjour'+(prenom(d)?(' '+prenom(d)):'')+',\n\nSauf erreur de notre part, nous restons en attente des éléments nécessaires pour avancer sur votre dossier '+serie(d)+'.\n\nPourriez-vous nous les faire parvenir en réponse à cet e-mail ? Nous restons bien entendu disponibles si vous avez la moindre question.\n\nBien cordialement,'};}}
+  ];
+  window.demReponseType=function(id,key){
+    var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return;
+    var tpl=null;window.demReponses.forEach(function(x){if(x.k===key)tpl=x;});if(!tpl)return;
+    var m=tpl.build(d);var to=(typeof demReplyTo==='function')?demReplyTo(d):((d.clientEmail)||'');
+    if(!to&&typeof toast==='function')toast('Adresse e-mail du client introuvable — vérifiez la demande avant d\'envoyer.');
+    if(typeof demOuvrirMessagerie==='function')demOuvrirMessagerie(to||'',m.s,m.c);
+  };
+  window.demReponsesBar=function(id){
+    return '<div class="rep-bar">'+window.demReponses.map(function(t){return '<button class="btn btn-sm btn-ghost" onclick="demReponseType(\''+id+'\',\''+t.k+'\')">'+E(t.label)+'</button>';}).join('')+'</div>';
+  };
+
+  if(!document.getElementById('demchk-css')){var st=document.createElement('style');st.id='demchk-css';
+    st.textContent='.chk-bar{height:8px;border-radius:6px;background:var(--paper-2,#f0e9da);overflow:hidden;margin-bottom:5px}'
+      +'.chk-bar span{display:block;height:100%;background:linear-gradient(90deg,#7a6e58,#a68a54)}'
+      +'.chk-pct{font-size:11px;color:var(--ink-3,#8a7f6c);margin-bottom:9px;font-weight:700}'
+      +'.chk-list{display:flex;flex-direction:column;gap:5px}'
+      +'.chk-row{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--line-2,#e2d9c6);border-radius:9px;background:var(--paper,#fffef9);cursor:pointer;font:inherit;text-align:left;color:var(--ink,#302c24)}'
+      +'.chk-row:hover{border-color:#cbbc93}'
+      +'.chk-row.on{background:#eef7f0;border-color:#cfe6d6}'
+      +'.chk-box{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--line-2,#e2d9c6);display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:#3f7d54;flex:none;background:#fff}'
+      +'.chk-row.on .chk-box{background:#3f7d54;border-color:#3f7d54;color:#fff}'
+      +'.chk-n{color:var(--ink-3,#8a7f6c);font-size:11px;font-weight:700;flex:none}'
+      +'.chk-lbl{font-size:12.5px}'
+      +'.chk-row.on .chk-lbl{text-decoration:line-through;color:var(--ink-3,#8a7f6c)}'
+      +'.rep-bar{display:flex;flex-wrap:wrap;gap:6px}';
     document.head.appendChild(st);}
 })();
 </script>
