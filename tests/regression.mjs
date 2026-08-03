@@ -472,6 +472,20 @@ const r = await page.evaluate(async () => {
     && typeof demStatsExport === 'function' && typeof demInPeriode === 'function' && typeof demStatsSetPeriode === 'function';
   state.demStatsPeriode = 'tout';
 
+  // Fondation IA (config, modes démo/off, carte réglages, proxy Mistral)
+  const iaC = iaCfg();
+  const iaDefaultDemo = iaMode() === 'demo' && iaC.demo === true && iaC.model === 'mistral-small-latest' && iaLiveReady() === false;
+  iaCfg().demo = false; iaCfg().enabled = false;
+  const iaOff = iaMode() === 'off';
+  iaCfg().demo = false; iaCfg().enabled = true; iaCfg().url = 'https://x/exec'; iaCfg().key = 'k';
+  const iaLive = iaMode() === 'live' && iaLiveReady() === true;
+  iaCfg().demo = true; iaCfg().enabled = false; iaCfg().url = ''; iaCfg().key = '';
+  const iaCardHTML = iaConfigCard();
+  out.iaFoundation = iaDefaultDemo && iaOff && iaLive
+    && /Assistant IA/.test(iaCardHTML) && /ia-demo/.test(iaCardHTML) && /ia-model/.test(iaCardHTML)
+    && /api\.mistral\.ai/.test(IA_PROXY_SRC) && /MISTRAL_KEY/.test(IA_PROXY_SRC)
+    && typeof iaAsk === 'function' && typeof iaCfg === 'function' && typeof iaConfigCard === 'function' && typeof iaTest === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

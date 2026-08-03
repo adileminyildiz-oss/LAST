@@ -2278,6 +2278,7 @@ function pageParams(){
   ${mailTplCard()}
   ${auditCard()}
   ${integStatusCard()}
+  ${(typeof iaConfigCard==='function'?iaConfigCard():'')}
   ${smsCfgCard()}
   ${ysCfgCard()}
   ${inpiCfgCard()}
@@ -3924,7 +3925,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=187;
+var LAST_VER=188;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9551,6 +9552,158 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.stat-bv{font-size:12px;font-weight:700;color:var(--ink,#302c24);text-align:right}'
       +'@media(max-width:520px){.stat-bar{grid-template-columns:96px 1fr 26px}}';
     document.head.appendChild(st);}
+})();
+</script>
+
+<script id="ia-core-mod">
+/* ===================================================================
+   FONDATION IA — moteur unifié (Mistral) + proxy Apps Script + démo
+   Toutes les fonctionnalités IA passent par iaAsk(). La clé reste
+   côté serveur (proxy Apps Script). Mode démonstration hors-ligne
+   pour tester sans clé. Objectif n°1 de la feuille de route IA.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  window.iaCfg=function(){DB.parametres=DB.parametres||{};
+    var c=DB.parametres.ia=DB.parametres.ia||{};
+    if(c.demo==null)c.demo=true;               /* démarrage en mode démo */
+    if(c.enabled==null)c.enabled=false;
+    if(!c.model)c.model='mistral-small-latest';
+    if(c.url==null)c.url='';if(c.key==null)c.key='';
+    if(c.allowFiles==null)c.allowFiles=true;    /* l'utilisateur a accepté texte+pièces */
+    return c;};
+  window.iaLiveReady=function(){var c=iaCfg();return !!(c.enabled&&c.url&&c.key);};
+  window.iaMode=function(){var c=iaCfg();if(c.demo)return 'demo';if(iaLiveReady())return 'live';return 'off';};
+
+  /* Appel unifié. opts:{system,user,images[],json,temperature,demo,label}
+     cb reçoit {ok, text, data, demo, error}. En mode démo, opts.demo()
+     (chaîne ou objet) fournit la réponse simulée propre à la fonctionnalité. */
+  window.iaAsk=function(opts,cb){
+    opts=opts||{};cb=cb||function(){};
+    var mode=iaMode();
+    if(mode==='demo'){
+      var d=(typeof opts.demo==='function')?opts.demo():opts.demo;
+      return setTimeout(function(){
+        if(opts.json){var data=(d&&typeof d==='object')?d:null;cb({ok:true,demo:true,data:data,text:data?JSON.stringify(data,null,2):(''+(d==null?'{}':d))});}
+        else cb({ok:true,demo:true,text:(''+(d==null?'(Réponse simulée — mode démonstration. Renseignez le proxy Mistral pour une vraie réponse IA.)':d))});
+      },320);
+    }
+    if(mode==='off'){return setTimeout(function(){cb({error:'off',text:'',data:null});},0);}
+    var c=iaCfg();
+    var payload={action:'chat',key:c.key,model:opts.model||c.model,temperature:(opts.temperature!=null?opts.temperature:0.2),
+      json:opts.json?1:0,system:opts.system||'',user:opts.user||'',images:(opts.images||[])};
+    function parseResp(t){var j=null;try{j=(typeof t==='object')?t:JSON.parse(t);}catch(e){}
+      if(!j)return cb({error:'reponse',text:''});
+      if(j.error)return cb({error:j.error,text:''});
+      var txt=(''+(j.text!=null?j.text:(j.content||''))).trim();
+      var data=null;if(opts.json){try{data=JSON.parse(txt);}catch(e){var m=txt.match(/\{[\s\S]*\}/);if(m){try{data=JSON.parse(m[0]);}catch(_e){}}}}
+      cb({ok:true,text:txt,data:data});}
+    /* POST text/plain (requête simple → pas de préflight CORS) ; repli JSONP GET pour texte court sans image */
+    var url=c.url;var settled=false;function once(t){if(settled)return;settled=true;parseResp(t);}
+    try{
+      fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)})
+        .then(function(r){return r.text();}).then(once)
+        .catch(function(){
+          if((opts.images||[]).length===0 && typeof demJsonp==='function'){
+            var g=url+(url.indexOf('?')>=0?'&':'?')+'action=chat&key='+encodeURIComponent(c.key||'')+'&model='+encodeURIComponent(payload.model)+'&json='+payload.json+'&temperature='+payload.temperature+'&system='+encodeURIComponent((opts.system||'').slice(0,1500))+'&user='+encodeURIComponent((opts.user||'').slice(0,4000));
+            demJsonp(g,once);
+          } else cb({error:'reseau',text:''});
+        });
+    }catch(e){cb({error:'reseau',text:''});}
+  };
+
+  /* Réglages (Paramètres) */
+  window.iaSave=function(){var c=iaCfg();var g=function(x){var e=document.getElementById(x);return e?e:null;};
+    var u=g('ia-url'),k=g('ia-key'),m=g('ia-model'),en=g('ia-enabled'),dm=g('ia-demo');
+    if(u)c.url=(u.value||'').trim();if(k)c.key=(k.value||'').trim();if(m)c.model=m.value;
+    if(en)c.enabled=en.checked;if(dm)c.demo=dm.checked;
+    if(typeof save==='function')save();if(typeof toast==='function')toast('Configuration IA enregistrée — '+(iaMode()==='demo'?'mode démonstration':(iaMode()==='live'?'IA connectée':'désactivée')));
+    if(typeof render==='function')render();};
+  window.iaTest=function(){
+    if(typeof toast==='function')toast('Test IA en cours…');
+    iaAsk({system:'Tu es l\'assistant du cabinet AEM CONSEIL. Réponds en une phrase.',user:'Dis bonjour et confirme que la connexion fonctionne.',
+      demo:'Bonjour ! (réponse simulée) — le mode démonstration fonctionne. Renseignez le proxy Mistral pour activer l\'IA réelle.'},
+      function(r){
+        if(r&&r.ok)toast((r.demo?'✅ Démo IA OK — ':'✅ IA connectée — ')+(r.text||'').slice(0,120));
+        else if(r&&r.error==='off')toast('IA désactivée — activez-la ou cochez le mode démonstration.');
+        else toast('❌ Échec IA : '+((r&&r.error)||'inconnu')+' — vérifiez l\'URL du proxy et la clé.');
+      });};
+  window.iaConfigCard=function(){
+    var c=iaCfg();var mode=iaMode();
+    var badge=mode==='demo'?'<span class="tag warm">Mode démo</span>':(mode==='live'?'<span class="tag green">IA connectée</span>':'<span class="tag">Désactivée</span>');
+    var models=[['mistral-small-latest','Mistral Small (rapide, économique)'],['mistral-large-latest','Mistral Large (le plus performant)'],['pixtral-12b-latest','Pixtral (lecture d\'images — CNI, K-bis)']];
+    return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>🤖 Assistant IA (Mistral)</h2><span class="sub" style="margin-left:auto">'+badge+'</span></div><div class="card-b">'
+      +'<p class="hint" style="margin:0 0 10px">Moteur commun à toutes les fonctions IA (résumé, extraction, réponses, copilote…). La <b>clé Mistral reste sur le serveur</b> (proxy Apps Script), jamais dans le navigateur. Fournisseur <b>européen</b> — adapté au RGPD pour vos données clients.</p>'
+      +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px"><input type="checkbox" id="ia-demo" '+(c.demo?'checked':'')+' style="width:auto;flex:none;margin:0"> Mode démonstration (hors-ligne, réponses simulées — pour tester sans clé)</label>'
+      +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="ia-enabled" '+(c.enabled?'checked':'')+' style="width:auto;flex:none;margin:0"> Activer l\'IA réelle (une fois le proxy configuré)</label>'
+      +'<div class="grid g2" style="margin-top:10px">'
+      +'<div><label>URL du proxy (Apps Script …/exec)</label><input id="ia-url" value="'+E(c.url)+'" placeholder="https://script.google.com/macros/s/…/exec"></div>'
+      +'<div><label>Clé secrète (partagée avec le proxy)</label><input id="ia-key" value="'+E(c.key)+'" placeholder="une phrase secrète"></div>'
+      +'</div>'
+      +'<div style="margin-top:10px"><label>Modèle</label><select id="ia-model">'+models.map(function(m){return '<option value="'+m[0]+'"'+(c.model===m[0]?' selected':'')+'>'+E(m[1])+'</option>';}).join('')+'</select></div>'
+      +'<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn btn-sm btn-pri" onclick="iaSave()">Enregistrer</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="iaTest()">Tester</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="iaProxyDoc()">Voir le code serveur (proxy Mistral)</button></div>'
+      +'<p class="hint" style="margin:10px 0 0;font-size:11px;color:#b45309">RGPD : en mode IA réelle, les textes (et pièces si activé) sont transmis à Mistral (UE) pour traitement. Informez vos clients et limitez aux données nécessaires.</p>'
+      +'</div></div>';};
+  window.iaProxyDoc=function(){if(typeof openModal!=='function')return;
+    openModal('Code serveur — proxy Mistral (Google Apps Script)',
+      '<p class="hint" style="margin:0 0 10px">Créez un projet <b>Apps Script</b> (script.google.com), collez ce code, mettez votre clé Mistral dans <b>Propriétés du script</b> (clé <code>MISTRAL_KEY</code>) et une clé secrète partagée (<code>SHARED_KEY</code>), puis <b>Déployer → Application Web</b> (accès « Tout le monde »). Copiez l\'URL <code>…/exec</code> ci-dessus.</p>'
+      +'<textarea readonly style="width:100%;height:300px;font-family:monospace;font-size:11px;white-space:pre" onclick="this.select()">'+E(IA_PROXY_SRC)+'</textarea>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="(function(){var t=document.querySelector(\'#ov textarea\');if(t){t.select();document.execCommand(\'copy\');toast(\'Code copié\');}})()">Copier</button>');};
+
+  var IA_PROXY_SRC=[
+   "// === Proxy Mistral pour LAST — Google Apps Script ===",
+   "// Propriétés du script (Paramètres du projet → Propriétés du script) :",
+   "//   MISTRAL_KEY = votre clé API Mistral",
+   "//   SHARED_KEY  = la même 'clé secrète' que dans LAST",
+   "",
+   "function doPost(e){ return handle_(e, (e && e.postData && e.postData.contents) || '{}'); }",
+   "function doGet(e){  return handle_(e, null); }",
+   "",
+   "function handle_(e, rawBody){",
+   "  var p = (e && e.parameter) || {};",
+   "  var body = {};",
+   "  if (rawBody) { try { body = JSON.parse(rawBody); } catch (err) {} }",
+   "  var get = function(k){ return body[k] != null ? body[k] : p[k]; };",
+   "  var out;",
+   "  try {",
+   "    var props = PropertiesService.getScriptProperties();",
+   "    var SHARED = props.getProperty('SHARED_KEY') || '';",
+   "    var MKEY   = props.getProperty('MISTRAL_KEY') || '';",
+   "    if (SHARED && get('key') !== SHARED) { out = { error: 'unauthorized' }; }",
+   "    else if ((get('action')||'chat') !== 'chat') { out = { error: 'bad_action' }; }",
+   "    else {",
+   "      var model = get('model') || 'mistral-small-latest';",
+   "      var sys = get('system') || '';",
+   "      var usr = get('user') || '';",
+   "      var images = get('images') || [];",
+   "      if (typeof images === 'string') { try { images = JSON.parse(images); } catch(e2){ images = []; } }",
+   "      var content;",
+   "      if (images && images.length) {",
+   "        content = [{ type:'text', text: usr }];",
+   "        for (var i=0;i<images.length;i++){ content.push({ type:'image_url', image_url: images[i] }); }",
+   "      } else { content = usr; }",
+   "      var messages = [];",
+   "      if (sys) messages.push({ role:'system', content: sys });",
+   "      messages.push({ role:'user', content: content });",
+   "      var req = { model: model, messages: messages, temperature: Number(get('temperature')||0.2) };",
+   "      if (String(get('json')) === '1') req.response_format = { type:'json_object' };",
+   "      var resp = UrlFetchApp.fetch('https://api.mistral.ai/v1/chat/completions', {",
+   "        method:'post', contentType:'application/json',",
+   "        headers:{ Authorization:'Bearer ' + MKEY },",
+   "        payload: JSON.stringify(req), muteHttpExceptions:true });",
+   "      var j = JSON.parse(resp.getContentText());",
+   "      if (j.error) out = { error: (j.error.message || 'mistral_error') };",
+   "      else out = { text: (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '' };",
+   "    }",
+   "  } catch (err) { out = { error: String(err) }; }",
+   "  var json = JSON.stringify(out);",
+   "  if (p.callback) return ContentService.createTextOutput(p.callback + '(' + json + ')').setMimeType(ContentService.MimeType.JAVASCRIPT);",
+   "  return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);",
+   "}"
+  ].join('\n');
+  window.IA_PROXY_SRC=IA_PROXY_SRC;
 })();
 </script>
 
