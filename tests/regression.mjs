@@ -447,6 +447,16 @@ const r = await page.evaluate(async () => {
     && /Couverture des pièces requises/.test(blk) && /datt-cat/.test(blk) && catFixed
     && typeof demAttGuess === 'function' && typeof demAttPreview === 'function' && typeof demAttCouverture === 'function';
 
+  // Statistiques du poste (volumes, conversion, SLA, breakdowns)
+  const st0 = demStats();
+  DB.demandes.unshift({ id: 'statconv', code: 'DC-STAT', clientNom: 'Conv', canal: 'Formulaire du site', serviceSouhaite: 'Création SAS', statut: 'Accepté', assigneA: '', dossierId: 'dosStat', date: '2026-08-01', lu: true });
+  const st1 = demStats();
+  const statView = demStatsView();
+  out.demStats = typeof demStats === 'function' && st1.total === st0.total + 1 && st1.withDossier === st0.withDossier + 1
+    && st1.conv >= 0 && st1.conv <= 100 && st1.dansDelais >= 0 && st1.dansDelais <= 100 && Object.keys(st1.byForm).length >= 1
+    && /Statistiques des demandes/.test(statView) && /stat-bar/.test(statView) && /stat-k/.test(statView)
+    && typeof demStatsCard === 'function' && typeof demStatsView === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

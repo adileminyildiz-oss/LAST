@@ -3924,7 +3924,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=185;
+var LAST_VER=186;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4782,8 +4782,10 @@ window.pageDemandes=function(){
  var modeBar='<div class="dem-mode">'
    +'<button class="dem-mode-b'+(mode==='messagerie'?' on':'')+'" onclick="state.demMode=\'messagerie\';render()">📨 Messagerie'+(nl?'<span class="dem-mode-n">'+nl+'</span>':'')+'</button>'
    +'<button class="dem-mode-b'+(mode==='traitement'?' on':'')+'" onclick="state.demMode=\'traitement\';render()">🗂 Traitement des demandes</button>'
+   +'<button class="dem-mode-b'+(mode==='stats'?' on':'')+'" onclick="state.demMode=\'stats\';render()">📊 Statistiques</button>'
    +'</div>';
  if(mode==='messagerie')return modeBar+window.demMessagerieView();
+ if(mode==='stats'&&typeof window.demStatsView==='function')return modeBar+window.demStatsView();
  return modeBar+window.demTraitementView();
 };
 window.demTraitementView=function(){
@@ -9416,6 +9418,98 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.datt-chip{font-size:11px;border-radius:20px;padding:2px 9px;border:1px solid}'
       +'.datt-chip.ok{color:#3f7d54;background:#eef7f0;border-color:#cfe6d6}'
       +'.datt-chip.no{color:var(--ink-3,#8a7f6c);background:var(--paper-2,#f6efe0);border-color:var(--line-2,#e2d9c6)}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="demstats-mod">
+/* ===================================================================
+   STATISTIQUES DU POSTE — pilotage des demandes
+   Volumes, canaux, formalités, performance SLA, conversion en dossier,
+   charge par collaborateur. Calculé sur DB.demandes (aucune écriture).
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function etatOf(d){return (typeof demEtat==='function')?demEtat(d):(d&&d.dossierId?'encours':(d&&d.assigneA?'assigne':'nouveau'));}
+  window.demStats=function(){
+    var all=(DB.demandes||[]);
+    var vis=all.filter(function(d){return !d.archived;});
+    var refus=all.length-vis.length;
+    var byEtat={nouveau:0,assigne:0,encours:0,finalise:0};
+    vis.forEach(function(d){var e=etatOf(d);if(byEtat[e]==null)byEtat[e]=0;byEtat[e]++;});
+    var site=vis.filter(function(d){return (typeof demEstSite==='function')?demEstSite(d):/formulaire|site|aemconseil/i.test(d.canal||'');}).length;
+    var byForm={},byUser={};
+    vis.forEach(function(d){
+      var l='Autre';try{if(typeof templateOf==='function'){var t=templateOf(d);l=(t&&t.label)||'Autre';}}catch(e){}
+      byForm[l]=(byForm[l]||0)+1;
+      if(d.assigneA){var u=(typeof userById==='function')?userById(d.assigneA):null;var n=(u&&u.nom)||'—';byUser[n]=(byUser[n]||0)+1;}
+    });
+    var withDossier=vis.filter(function(d){return d.dossierId;}).length;
+    var finalises=vis.filter(function(d){return etatOf(d)==='finalise';}).length;
+    var conv=vis.length?Math.round(withDossier/vis.length*100):0;
+    var late=(typeof demRetardCount==='function')?demRetardCount(vis):0;
+    var openAges=vis.filter(function(d){var e=etatOf(d);return e==='nouveau'||e==='assigne';}).map(function(d){return (typeof demAgeDays==='function')?demAgeDays(d):0;});
+    var avgAge=openAges.length?Math.round(openAges.reduce(function(a,b){return a+b;},0)/openAges.length):0;
+    var aTraiter=byEtat.nouveau+byEtat.assigne;
+    var dansDelais=aTraiter?Math.round((aTraiter-late)/aTraiter*100):100;
+    var nonLus=vis.filter(function(d){return !d.lu;}).length;
+    return {total:vis.length,refus:refus,byEtat:byEtat,site:site,autres:vis.length-site,byForm:byForm,byUser:byUser,
+      withDossier:withDossier,finalises:finalises,conv:conv,late:late,avgAge:avgAge,dansDelais:dansDelais,nonLus:nonLus};
+  };
+
+  function bars(obj,accent){
+    var keys=Object.keys(obj).sort(function(a,b){return obj[b]-obj[a];}).slice(0,7);
+    var max=keys.reduce(function(m,k){return Math.max(m,obj[k]);},0)||1;
+    if(!keys.length)return '<div class="tsub" style="padding:6px 0">Aucune donnée.</div>';
+    return '<div class="stat-bars">'+keys.map(function(k){var v=obj[k];var pct=Math.round(v/max*100);
+      return '<div class="stat-bar"><span class="stat-bl" title="'+E(k)+'">'+E(k)+'</span>'
+        +'<span class="stat-bt"><span style="width:'+pct+'%'+(accent?(';background:'+accent):'')+'"></span></span>'
+        +'<b class="stat-bv">'+v+'</b></div>';
+    }).join('')+'</div>';
+  }
+  function kpi(v,l,cls){return '<div class="stat-k'+(cls?' '+cls:'')+'"><b>'+v+'</b><span>'+l+'</span></div>';}
+
+  window.demStatsCard=function(){
+    var s=window.demStats();
+    var etatLbl={nouveau:'À traiter',assigne:'Assignées',encours:'En cours',finalise:'Finalisées'};
+    var etatObj={};Object.keys(s.byEtat).forEach(function(k){etatObj[etatLbl[k]||k]=s.byEtat[k];});
+    var canalObj={'Site aemconseil.eu':s.site,'Autres (e-mail)':s.autres};
+    return '<div class="card"><div class="card-h"><h2>📊 Statistiques des demandes</h2><span class="sub" style="margin-left:auto">'+s.total+' demande(s)'+(s.refus?(' · '+s.refus+' refusée(s)'):'')+'</span></div>'
+      +'<div class="card-b">'
+      +'<div class="stat-kpis">'
+      +kpi(s.total,'Demandes reçues','')
+      +kpi(s.withDossier,'Converties en dossier','')
+      +kpi(s.conv+'%','Taux de conversion',s.conv>=50?'ok':'')
+      +kpi(s.dansDelais+'%','Traitées dans les délais',s.dansDelais>=80?'ok':(s.dansDelais<50?'hot':'warn'))
+      +kpi(s.late,'En retard (SLA)',s.late?'hot':'')
+      +kpi(s.avgAge+' j','Âge moyen (à traiter)',s.avgAge>3?'warn':'')
+      +'</div>'
+      +'<div class="stat-cols">'
+      +'<div class="stat-col"><div class="stat-t">Par canal</div>'+bars(canalObj,'#1d4ed8')+'</div>'
+      +'<div class="stat-col"><div class="stat-t">Par état</div>'+bars(etatObj)+'</div>'
+      +'<div class="stat-col"><div class="stat-t">Par formalité</div>'+bars(s.byForm,'#8a6d3b')+'</div>'
+      +'<div class="stat-col"><div class="stat-t">Par collaborateur</div>'+bars(s.byUser,'#6f8a7d')+'</div>'
+      +'</div></div></div>';
+  };
+  window.demStatsView=function(){
+    return ((typeof demPosteBanner==='function')?demPosteBanner():'')+window.demStatsCard();
+  };
+
+  if(!document.getElementById('demstats-css')){var st=document.createElement('style');st.id='demstats-css';
+    st.textContent='.stat-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}'
+      +'.stat-k{background:var(--paper,#fffef9);border:1px solid var(--line-2,#e2d9c6);border-radius:11px;padding:11px 13px}'
+      +'.stat-k b{display:block;font-size:22px;font-weight:800;color:var(--ink,#302c24);line-height:1}'
+      +'.stat-k span{font-size:11px;color:var(--ink-3,#8a7f6c)}'
+      +'.stat-k.ok b{color:#3f7d54}.stat-k.warn b{color:#b45309}.stat-k.hot b{color:#be123c}'
+      +'.stat-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}'
+      +'.stat-t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3,#9c9078);margin-bottom:8px}'
+      +'.stat-bars{display:flex;flex-direction:column;gap:7px}'
+      +'.stat-bar{display:grid;grid-template-columns:120px 1fr 30px;align-items:center;gap:9px}'
+      +'.stat-bl{font-size:11.5px;color:var(--ink,#302c24);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+      +'.stat-bt{height:9px;border-radius:6px;background:var(--paper-2,#f0e9da);overflow:hidden}'
+      +'.stat-bt span{display:block;height:100%;background:#7a6e58;border-radius:6px}'
+      +'.stat-bv{font-size:12px;font-weight:700;color:var(--ink,#302c24);text-align:right}'
+      +'@media(max-width:520px){.stat-bar{grid-template-columns:96px 1fr 26px}}';
     document.head.appendChild(st);}
 })();
 </script>
