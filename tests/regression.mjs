@@ -619,6 +619,31 @@ const r = await page.evaluate(async () => {
     && /console.mistral.ai/.test(guideBody) && /MISTRAL_KEY/.test(guideBody) && /SHARED_KEY/.test(guideBody) && /RGPD/.test(guideBody);
   if (typeof closeModal === 'function') closeModal();
 
+  // FLUX — pipeline argent (4 étapes + € potentiel) + acceptation → devis + lien dossier↔facture
+  const svc0 = (DB.services || [])[0];
+  DB.demandes = DB.demandes || []; DB.demandes.push({ id: 'flxd', clientNom: 'Prospect Flux', clientEmail: 'p@ex.fr', serviceSouhaite: 'Création SARL', message: 'créer ma sarl', date: '2026-07-01' });
+  DB.devis = DB.devis || []; DB.devis.push({ id: 'flxv', num: 'DEV-FLX', tiers: 'Client Devis', date: '2026-06-01', ech: '2026-07-01', ht: 1000, tva: 200, ttc: 1200, statut: 'Émis' });
+  DB.dossiers = DB.dossiers || []; DB.dossiers.push({ id: 'flxo', ref: 'DOS-FLX', clientIds: [], serviceIds: svc0 ? [svc0.id] : [], statut: 'Transmis greffe', createdAt: '2026-06-01', historique: [] });
+  DB.factures = DB.factures || []; DB.factures.push({ id: 'flxi', type: 'client', num: 'FV-FLXI', tiers: 'Retardataire', date: '2020-01-01', ech: '2020-02-01', ht: 500, tva: 100, ttc: 600, statut: 'Impayée', relances: [], doc: { clientEmail: 'r@ex.fr' } });
+  const flxStages = fluxStages();
+  const flxStagesOk = flxStages.demandes.some((x) => x.id === 'flxd') && flxStages.devis.some((x) => x.id === 'flxv') && flxStages.facturer.some((x) => x.id === 'flxo') && flxStages.impayes.some((x) => x.id === 'flxi');
+  const flxTot = fluxTotals();
+  const flxTotOk = flxTot.impayes.eur >= 600 && flxTot.facturer.n >= 1 && typeof flxTot.demandes.eur === "number";
+  state.page = 'dash'; render();
+  const dashHTML = (document.getElementById('view') || {}).innerHTML || '';
+  const flxCardOk = /Pipeline commercial/.test(dashHTML) && /Demandes à qualifier/.test(dashHTML) && /Dossiers à facturer/.test(dashHTML) && /Impayés à relancer/.test(dashHTML);
+  const flxFicheBtn = /flux-accdev/.test(demVueDetail('flxd')) && /demAccepterDevis\('flxd'\)/.test(demVueDetail('flxd'));
+  demAccepterDevis('flxd');
+  const flxAccepted = (DB.demandes.find((x) => x.id === 'flxd') || {}).decision === 'accepte';
+  if (typeof closeModal === 'function') closeModal();
+  if (typeof FactureVente !== 'undefined' && FactureVente.fermer) FactureVente.fermer();
+  // lien dossier↔facture : une facture liée retire le dossier de « à facturer »
+  DB.factures.push({ id: 'flxf', type: 'client', num: 'FV-FLXF', tiers: 'X', ttc: 390, statut: 'Émise', dossierId: 'flxo' });
+  const flxLinkOk = !fluxStages().facturer.some((x) => x.id === 'flxo');
+  out.fluxPipeline = typeof fluxPipelineCard === 'function' && typeof fluxStages === 'function' && typeof fluxTotals === 'function' && typeof fluxFacturerDossier === 'function'
+    && flxStagesOk && flxTotOk && flxCardOk && flxLinkOk;
+  out.fluxAccepterDevis = typeof demAccepterDevis === 'function' && flxFicheBtn && flxAccepted;
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

@@ -108,7 +108,14 @@ points d'attention ; mode démonstration hors-ligne) et
 Assistant IA, pour passer du mode démonstration à l'IA réelle : obtenir la
 clé Mistral, créer le proxy Apps Script — code copiable en un clic —,
 renseigner les secrets `MISTRAL_KEY`/`SHARED_KEY`, déployer, brancher LAST et
-tester la connexion ; rappel RGPD, clé serveur jamais exposée au navigateur)
+tester la connexion ; rappel RGPD, clé serveur jamais exposée au navigateur) et
+**flux commercial anti-fuite** (bouton « Accepter & établir le devis » dans la
+fiche demande — l'acceptation marque la demande et ouvre le devis pré-rempli,
+plus de devis oublié — et carte « Pipeline commercial » en tête du tableau de
+bord : les quatre étapes du tunnel de vente — demandes à qualifier, devis en
+attente, dossiers à facturer, impayés — avec compteur, montant potentiel et
+action rapide par étape ; le lien dossier↔facture retire un dossier de « à
+facturer » dès qu'une facture lui est rattachée)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test

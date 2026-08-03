@@ -3932,7 +3932,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=198;
+var LAST_VER=199;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10975,6 +10975,135 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.iag-code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;background:var(--paper-2,#f1ead9);border:1px solid var(--line-2,#e2d9c6);border-radius:5px;padding:1px 6px;white-space:nowrap}'
       +'.iag-rgpd{margin-top:14px;font-size:11.5px;line-height:1.5;color:#8a5a12;background:#fdf4e3;border:1px solid #efd9a8;border-radius:9px;padding:9px 11px}'
       +'.iag-state{margin-top:10px;font-size:12px;color:var(--ink-3,#9c9078)}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="flux-mod">
+/* ===================================================================
+   FLUX QUI GÉNÈRE DU CHIFFRE — deux leviers anti-fuite :
+   1) Accepter une demande → devis auto pré-rempli (plus de devis oublié).
+   2) Pipeline argent sur le tableau de bord — les 4 étapes du tunnel de
+      vente avec le € potentiel et les actions rapides à chaque étape.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function money(n){return (typeof eur==='function')?eur(n):(''+(n||0));}
+
+  /* ---- Montants estimés par étape ---- */
+  function demMontant(d){try{var s=(typeof svcMatchDemande==='function')?svcMatchDemande(((d.serviceSouhaite||d.service||'')+' '+(d.message||d.corps||''))):null;return s?((+s.prix||0)+(+s.debours||0)):0;}catch(e){return 0;}}
+  function dosMontant(d){try{return (typeof dossierMontant==='function')?dossierMontant(d):0;}catch(e){return 0;}}
+  function dosFacture(d){if(d.factureNum)return true;return (DB.factures||[]).some(function(f){return f.dossierId===d.id;});}
+  var LIVRE={'Paiement':1,'Transmis greffe':1,'Clôturé':1};
+
+  window.fluxStages=function(){
+    return {
+      demandes:(DB.demandes||[]).filter(function(d){return !d.archived && !d.dossierId && d.statut!=='Clôturé' && d.decision!=='refuse';}),
+      devis:(DB.devis||[]).filter(function(d){return d.statut==='Émis' || d.statut==='Accepté';}),
+      facturer:(DB.dossiers||[]).filter(function(d){return !d.archived && LIVRE[d.statut] && !dosFacture(d);}),
+      impayes:(DB.factures||[]).filter(function(f){return f.type==='client' && f.statut==='Impayée';})
+    };
+  };
+  window.fluxTotals=function(){
+    var s=fluxStages();var sum=function(a,fn){return a.reduce(function(t,x){return t+(fn(x)||0);},0);};
+    return {
+      demandes:{n:s.demandes.length,eur:sum(s.demandes,demMontant)},
+      devis:{n:s.devis.length,eur:sum(s.devis,function(d){return +d.ttc||0;})},
+      facturer:{n:s.facturer.length,eur:sum(s.facturer,dosMontant)},
+      impayes:{n:s.impayes.length,eur:sum(s.impayes,function(f){return +f.ttc||0;})}
+    };
+  };
+
+  /* ---- LEVIER 1 : Accepter → devis ---- */
+  window.demAccepterDevis=function(id){
+    var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return;
+    d.decision='accepte';d.decisionTs=Date.now();
+    if(typeof logAudit==='function')logAudit('Demande acceptée','→ devis — '+((typeof demBestName==='function')?demBestName(d):(d.clientNom||'')));
+    if(typeof save==='function')save();
+    if(typeof toast==='function')toast('Demande acceptée — établissez le devis.');
+    if(typeof demDevis==='function')demDevis(id);
+    else if(typeof render==='function')render();
+  };
+
+  /* ---- LEVIER 1 bis : facturer un dossier livré (lien dossier↔facture) ---- */
+  window.fluxFacturerDossier=function(id){
+    var d=(DB.dossiers||[]).find(function(x){return x.id===id;});if(!d)return;
+    if(typeof FactureVente==='undefined')return (typeof toast==='function')&&toast('Module facture indisponible');
+    var cid=(d.clientIds||[])[0];
+    var lignes=(typeof devisLignesFromServices==='function')?devisLignesFromServices(d.serviceIds):undefined;
+    window._devisClientNom=(typeof dossierClients==='function')?dossierClients(d):'';
+    FactureVente.ouvrir({societe:fvSociete(),clients:fvClients(),services:(DB.services||[]),numero:fvNextNum(),
+      initial:{clientId:cid,lignes:lignes},
+      onCreer:function(doc){
+        if(!DB.factures)DB.factures=[];
+        var c=(DB.clients||[]).find(function(x){return x.id===doc.clientId;});
+        var name=c?(c.prenom+' '+c.nom).trim():(window._devisClientNom||'(client)');
+        DB.factures.unshift({id:uid('fa'),type:'client',num:doc.numero,tiers:name,date:doc.date,ech:doc.echeance,
+          ht:doc.ht,tva:doc.tva,ttc:doc.ttc,taux:(doc.lignes&&doc.lignes[0]?+doc.lignes[0].taux:20),
+          statut:'Émise',doc:doc,dossierId:d.id,createdAt:today()});
+        DB.seq=DB.seq||{};DB.seq.factVente=(DB.seq.factVente||1)+1;
+        d.factureNum=doc.numero;(d.historique=d.historique||[]).push({d:today(),t:'Facture '+doc.numero+' émise'});
+        if(typeof logAudit==='function')logAudit('Facture créée',doc.numero+' — '+name+' — '+money(doc.ttc)+' (dossier '+(d.ref||'')+')');
+        if(typeof save==='function')save();FactureVente.fermer();
+        if(typeof toast==='function')toast('Facture '+doc.numero+' créée pour '+(d.ref||'le dossier'));
+        if(typeof render==='function')render();
+      }});
+  };
+
+  /* ---- LEVIER 3 : carte Pipeline argent ---- */
+  function nomDem(d){return (typeof demBestName==='function')?demBestName(d):(d.clientNom||'(demande)');}
+  function col(key,emo,titre,tot,items){
+    var head='<div class="flux-col-h flux-'+key+'"><span class="flux-emo">'+emo+'</span><div class="flux-col-t"><b>'+E(titre)+'</b>'
+      +'<span class="flux-col-m">'+tot.n+' · '+money(tot.eur)+'</span></div></div>';
+    var body=items.length?items.map(function(it){
+      return '<div class="flux-it"><div class="flux-it-main" onclick="'+it.open+'"><b>'+E(it.nom)+'</b><span class="flux-it-eur">'+money(it.eur)+'</span></div>'
+        +'<button class="btn btn-sm '+(it.pri?'btn-pri':'btn-ghost')+' flux-it-act" onclick="'+it.act+'">'+E(it.lbl)+'</button></div>';
+    }).join(''):'<div class="flux-empty">—</div>';
+    return '<div class="flux-col">'+head+'<div class="flux-col-b">'+body+'</div></div>';
+  }
+  window.fluxPipelineCard=function(){
+    var s=fluxStages(),t=fluxTotals();var MAX=5;
+    var potentiel=t.demandes.eur+t.devis.eur+t.facturer.eur;
+    var cDem=col('dem','📨','Demandes à qualifier',t.demandes,
+      s.demandes.slice(0,MAX).map(function(d){return {nom:nomDem(d),eur:demMontant(d),open:"gsGo('demande','"+d.id+"')",act:"demAccepterDevis('"+d.id+"')",lbl:'🧾 Devis',pri:true};}));
+    var cDev=col('dev','📝','Devis en attente',t.devis,
+      s.devis.slice(0,MAX).map(function(d){return {nom:(d.num||'')+' · '+(d.tiers||''),eur:+d.ttc||0,open:"gsGo('devis','"+d.id+"')",act:"devisTransformer('"+d.id+"')",lbl:'→ Facture',pri:true};}));
+    var cFac=col('fac','📂','Dossiers à facturer',t.facturer,
+      s.facturer.slice(0,MAX).map(function(d){return {nom:(d.ref||'')+' · '+((typeof dossierClients==='function')?dossierClients(d):''),eur:dosMontant(d),open:"gsGo('dossier','"+d.id+"')",act:"fluxFacturerDossier('"+d.id+"')",lbl:'💶 Facturer',pri:true};}));
+    var cImp=col('imp','⏰','Impayés à relancer',t.impayes,
+      s.impayes.slice(0,MAX).map(function(f){return {nom:(f.num||'')+' · '+(f.tiers||''),eur:+f.ttc||0,open:"gsGo('facture','"+f.id+"')",act:"factRelancer('"+f.id+"')",lbl:'Relancer',pri:false};}));
+    return '<div class="card flux-card"><div class="card-h"><h2>💰 Pipeline commercial</h2>'
+      +'<span class="sub" style="margin-left:auto">Potentiel à convertir : <b>'+money(potentiel)+'</b> · Impayés : <b>'+money(t.impayes.eur)+'</b></span></div>'
+      +'<div class="card-b" style="padding:12px"><div class="flux-grid">'+cDem+cDev+cFac+cImp+'</div>'
+      +'<p class="hint" style="margin:10px 2px 0;font-size:11px">Chaque colonne = une étape du tunnel de vente. Traitez de gauche à droite : qualifiez → chiffrez → livrez → facturez → encaissez.</p>'
+      +'</div></div>';
+  };
+
+  /* ---- Greffes ---- */
+  if(typeof window.pageDash==='function'){var _pd=window.pageDash;window.pageDash=function(){var h=_pd();try{return fluxPipelineCard()+h;}catch(e){return h;}};}
+  if(typeof window.demVueDetail==='function'){var _dv=window.demVueDetail;window.demVueDetail=function(id){var h=_dv(id);if(!h||h.indexOf('dem-decide')<0)return h;
+    var btn='<button class="btn btn-pri flux-accdev" onclick="demAccepterDevis(\''+id+'\')">🧾 Accepter &amp; établir le devis</button>';
+    return h.replace('<div class="dem-decide">',btn+'<div class="dem-decide">');};}
+
+  if(!document.getElementById('flux-css')){var st=document.createElement('style');st.id='flux-css';
+    st.textContent='.flux-card{margin-bottom:16px}'
+      +'.flux-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}'
+      +'@media(max-width:1100px){.flux-grid{grid-template-columns:repeat(2,1fr)}}'
+      +'@media(max-width:640px){.flux-grid{grid-template-columns:1fr}}'
+      +'.flux-col{border:1px solid var(--line-2,#e2d9c6);border-radius:11px;background:var(--paper-2,#f8f2e6);overflow:hidden;display:flex;flex-direction:column}'
+      +'.flux-col-h{display:flex;align-items:center;gap:9px;padding:10px 11px;border-bottom:1px solid var(--line-soft,#f0e9da)}'
+      +'.flux-emo{font-size:18px;flex:none}'
+      +'.flux-col-t{min-width:0;line-height:1.25}.flux-col-t b{display:block;font-size:12.5px}'
+      +'.flux-col-m{font-size:11.5px;color:var(--ink-3,#9c9078);font-weight:700}'
+      +'.flux-col-h.flux-imp{background:#fbf1e5}.flux-col-h.flux-fac{background:#eef4ea}.flux-col-h.flux-dev{background:#f3eee0}'
+      +'.flux-col-b{padding:7px;display:flex;flex-direction:column;gap:6px}'
+      +'.flux-it{display:flex;align-items:center;gap:7px}'
+      +'.flux-it-main{min-width:0;flex:1;cursor:pointer;display:flex;flex-direction:column;line-height:1.2}'
+      +'.flux-it-main b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}'
+      +'.flux-it-eur{font-size:11px;color:var(--ink-3,#9c9078)}'
+      +'.flux-it-act{flex:none;padding:3px 8px;font-size:11px}'
+      +'.flux-empty{text-align:center;color:var(--ink-3,#9c9078);font-size:12px;padding:8px 0}'
+      +'.flux-accdev{width:100%;justify-content:center;margin-bottom:8px}';
     document.head.appendChild(st);}
 })();
 </script>
