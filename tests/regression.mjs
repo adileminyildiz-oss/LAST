@@ -700,8 +700,15 @@ const r = await page.evaluate(async () => {
   const pwdOverrideOk = getPwdHash() === newHash;
   localStorage.removeItem('last-pwd');
   const pwdDefaultOk = getPwdHash() === LAST_PWD_HASH;
-  out.securite = typeof secCard === 'function' && typeof sec2FAStart === 'function' && typeof secChangePwdSave === 'function' && typeof secGuide === 'function' && typeof getPwdHash === 'function'
-    && /Sécurité/.test(secCardHTML) && secInParams && pwdOverrideOk && pwdDefaultOk;
+  // Code de verrouillage universel : 2 lignes source (empreinte + blob 2FA chiffré)
+  localStorage.setItem('last-2fa', await _authEnc('pw', 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ'));
+  secExportLock();
+  const lockBody = (document.getElementById('ov-b') || {}).innerHTML || '';
+  const lockOk = /var LAST_PWD_HASH='[0-9a-f]{64}'/.test(lockBody) && /var LAST_2FA_ENC='[^']{20,}'/.test(lockBody);
+  if (typeof closeModal === 'function') closeModal();
+  localStorage.removeItem('last-2fa');
+  out.securite = typeof secCard === 'function' && typeof sec2FAStart === 'function' && typeof secChangePwdSave === 'function' && typeof secGuide === 'function' && typeof getPwdHash === 'function' && typeof secExportLock === 'function'
+    && /Sécurité/.test(secCardHTML) && secInParams && pwdOverrideOk && pwdDefaultOk && lockOk;
 
   // Toutes les pages se rendent sans erreur
   let pageErr = '';

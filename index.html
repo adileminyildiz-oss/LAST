@@ -4029,7 +4029,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=203;
+var LAST_VER=204;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11425,6 +11425,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
         +'<button class="btn btn-sm btn-ghost" onclick="secChangePwdModal()">🔑 Changer le mot de passe'+(pwdChanged?' (modifié)':'')+'</button>'
         +'<button class="btn btn-sm btn-ghost" onclick="secGuide()">📘 Marche à suivre</button>'
       +(on?'<button class="btn btn-sm btn-ghost" onclick="secShowAnchor()">🗝 Clé d\'ancrage</button>':'')
+      +(on?'<button class="btn btn-sm btn-ghost" onclick="secExportLock()">🔧 Code de verrouillage (tous appareils)</button>':'')
       +'</div>'
       +'<p class="hint" style="margin:10px 0 0;font-size:11px">Après 5 codes ou mots de passe erronés, l\'accès est <b>temporairement verrouillé</b> (anti-intrusion). Tout se calcule <b>hors-ligne</b> sur votre appareil — aucun secret n\'est exposé.</p>'
       +'</div></div>';
@@ -11479,6 +11480,20 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '<p class="hint" style="margin:0 0 8px">Pour exiger la double authentification <b>sur tous vos appareils</b> (et pas seulement celui-ci), transmettez cette clé afin de l\'inscrire dans <code>LAST_2FA_ENC</code>. Elle est <b>chiffrée par votre mot de passe</b> — inexploitable sans lui.</p>'
       +'<textarea readonly onclick="this.select()" style="width:100%;height:70px;font-family:ui-monospace,monospace;font-size:10px;border:1px solid var(--line-2,#e2d9c6);border-radius:8px;padding:8px;box-sizing:border-box">'+E(enc)+'</textarea>',
       '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="(function(){var t=document.querySelector(\'#ov textarea\');if(t){t.select();try{document.execCommand(\'copy\');toast(\'Clé copiée\');}catch(e){}}})()">Copier</button>');
+  };
+
+  /* ---- Code de verrouillage universel : les 2 lignes à graver dans le source ---- */
+  window.secExportLock=function(){
+    var enc=(function(){try{return localStorage.getItem('last-2fa')||LAST_2FA_ENC||'';}catch(e){return LAST_2FA_ENC||'';}})();
+    if(!enc)return (typeof toast==='function')&&toast('Activez d\'abord la double authentification.');
+    var ph=getPwdHash();
+    var lines="var LAST_PWD_HASH='"+ph+"';\nvar LAST_2FA_ENC='"+enc+"';";
+    openModal('🔧 Code de verrouillage (tous les appareils)',
+      '<p class="hint" style="margin:0 0 8px">Pour rendre la double authentification <b>obligatoire sur tous les appareils</b> (et non plus seulement celui-ci), <b>transmettez ces deux lignes</b> afin qu\'elles soient inscrites dans le code source. '
+      +'Elles ne contiennent <b>aucun secret en clair</b> : le mot de passe est une <b>empreinte</b> et la clé 2FA est <b>chiffrée par votre mot de passe</b> — inexploitables sans lui.</p>'
+      +'<textarea readonly onclick="this.select()" style="width:100%;height:96px;font-family:ui-monospace,monospace;font-size:11px;border:1px solid var(--line-2,#e2d9c6);border-radius:8px;padding:9px;box-sizing:border-box">'+E(lines)+'</textarea>'
+      +'<p class="hint" style="margin:8px 0 0;font-size:11px">Une fois gravées, un appareil neuf exigera <b>votre mot de passe + votre code d\'authentification</b> — l\'auto-inscription d\'un autre téléphone devient impossible.</p>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="(function(){var t=document.querySelector(\'#ov textarea\');if(t){t.select();try{document.execCommand(\'copy\');toast(\'Code copié\');}catch(e){}}})()">Copier les 2 lignes</button>');
   };
 
   /* ---- Changement de mot de passe ---- */
