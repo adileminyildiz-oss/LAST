@@ -344,6 +344,26 @@ const r = await page.evaluate(async () => {
   out.cmdk = gsDoss && cmdkShown && cmdkFound && cmdkGroups.indexOf('Aller à') >= 0 && cmdkGroups.indexOf('Actions') >= 0
     && cmdkPages && typeof cmdkOpen === 'function' && typeof cmdkClose === 'function';
 
+  // Espace de travail par collaborateur (identité active + Mes demandes + auto-assignation)
+  const collabU = DB.users.find(u => u.role === 'collab');
+  meSet(collabU.id);
+  const meOk = meGet() === collabU.id && meUser() && meUser().role === 'collab';
+  DB.demandes.unshift({ id: 'dmine1', clientNom: 'CA', canal: 'Formulaire du site', serviceSouhaite: 'X', statut: 'Nouveau', assigneA: collabU.id, date: '2026-08-01', lu: false });
+  DB.demandes.unshift({ id: 'dmine2', clientNom: 'CB', canal: 'Formulaire du site', serviceSouhaite: 'Y', statut: 'Nouveau', assigneA: '', date: '2026-08-01', lu: false });
+  const allV = DB.demandes.filter(d => !d.archived);
+  state.demMine = true;
+  const mineV = demMineFilter(allV);
+  const mineSem = mineV.every(d => d.assigneA === collabU.id) && mineV.some(d => d.id === 'dmine1') && !mineV.some(d => d.id === 'dmine2');
+  demMeAssigner('dmine2');
+  const mineV2 = demMineFilter(DB.demandes.filter(d => !d.archived));
+  const selfOk = DB.demandes.find(d => d.id === 'dmine2').assigneA === collabU.id && mineV2.some(d => d.id === 'dmine2');
+  state.demMine = false;
+  state.page = 'demandes'; render();
+  const chipOk = !!document.getElementById('me-chip');
+  meSet(DB.users.find(u => u.role === 'admin').id);
+  out.collab = meOk && mineSem && selfOk && chipOk
+    && typeof meGet === 'function' && typeof demMineBtn === 'function' && typeof mePick === 'function' && typeof demMeAssigner === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

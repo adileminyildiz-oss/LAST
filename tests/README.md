@@ -33,7 +33,11 @@ forme juridique : actions vs parts sociales, associé unique vs
 assemblée générale) et **palette de commandes** (Ctrl/Cmd+K :
 navigation vers les pages, actions rapides et recherche instantanée
 des clients, dossiers, devis, factures et demandes ; ouverture ciblée
-d'un dossier depuis la recherche) — le tout sans erreur JavaScript.
+d'un dossier depuis la recherche) et **espace de travail par
+collaborateur** (identité active mémorisée « Je travaille en tant
+que… », filtre « Mes demandes » sur les demandes assignées, et
+auto-assignation rapide au collaborateur courant) — le tout sans
+erreur JavaScript.
 
 ## Lancer
 
