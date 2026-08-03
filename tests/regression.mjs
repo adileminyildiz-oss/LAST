@@ -659,6 +659,24 @@ const r = await page.evaluate(async () => {
   const debAnnualOk = svcAnnuel ? (fluxDeboursRequis(dAnn).length === 1 && /greffe/i.test(fluxDeboursRequis(dAnn)[0].nom)) : true;
   out.fluxDebours = typeof fluxDeboursRequis === 'function' && typeof fluxAjouterDebours === 'function' && debMissOk && debAddOk && debAnnualOk;
 
+  // RÉCURRENCE — MRR/ARR + opportunités d'abonnement + carte sur le dashboard
+  DB.recurrences = DB.recurrences || [];
+  const mrrBefore = recMRR().mrr; // d'autres abonnements peuvent préexister → on mesure le delta
+  DB.recurrences.push({ id: 'rr1', clientNom: 'Client Mensuel', ht: 100, taux: 20, cadence: 'mensuelle', prochaine: '2099-01-01', actif: true });
+  DB.recurrences.push({ id: 'rr2', clientNom: 'Client Annuel', ht: 1200, taux: 0, cadence: 'annuelle', prochaine: '2099-01-01', actif: true });
+  const mrr = recMRR();
+  const mrrOk = Math.round(mrr.mrr - mrrBefore) === 220 && Math.round(mrr.arr) === Math.round(mrr.mrr * 12) && mrr.n >= 2; // +120 mensuel +100 (1200/12)
+  DB.clients = DB.clients || []; DB.clients.push({ id: 'rcx', prenom: 'Nadia', nom: 'Recur', email: 'n@ex.fr' });
+  DB.dossiers.push({ id: 'rdo', ref: 'DOS-REC', clientIds: ['rcx'], serviceIds: [], statut: 'Clôturé', createdAt: '2026-01-01' });
+  const oppHas = recOpportunites().some((x) => /Nadia Recur/.test(x.nom));
+  DB.recurrences.push({ id: 'rr3', clientNom: 'Nadia Recur', ht: 150, taux: 20, cadence: 'annuelle', prochaine: '2099-01-01', actif: true });
+  const oppExcl = !recOpportunites().some((x) => /Nadia Recur/.test(x.nom));
+  state.page = 'dash'; render();
+  const dashRec = (document.getElementById('view') || {}).innerHTML || '';
+  const recDashOk = /Revenus récurrents/.test(dashRec) && /MRR/.test(dashRec);
+  out.recurrence = typeof recMRR === 'function' && typeof recOpportunites === 'function' && typeof recFromClient === 'function' && typeof recOpportunitesCard === 'function'
+    && mrrOk && oppHas && oppExcl && recDashOk;
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

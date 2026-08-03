@@ -3932,7 +3932,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=200;
+var LAST_VER=201;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11133,6 +11133,107 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.flux-it-act{flex:none;padding:3px 8px;font-size:11px}'
       +'.flux-empty{text-align:center;color:var(--ink-3,#9c9078);font-size:12px;padding:8px 0}'
       +'.flux-accdev{width:100%;justify-content:center;margin-bottom:8px}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="recplus-mod">
+/* ===================================================================
+   POUSSER LA RÉCURRENCE — revenu récurrent (MRR/ARR) rendu visible +
+   opportunités d'abonnement (clients au dossier livré sans abonnement)
+   + proposition d'abonnement en 1 clic (pré-remplie). Le moteur reste
+   celui de recurrence-mod ; ici on maximise l'adoption.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function money(n){return (typeof eur==='function')?eur(n):(''+(n||0));}
+  var CADm={mensuelle:1,trimestrielle:3,semestrielle:6,annuelle:12};
+  function norm(s){return (''+(s||'')).toLowerCase().trim();}
+
+  /* Revenu récurrent normalisé au mois + à l'année */
+  window.recMRR=function(){
+    var recs=(DB.recurrences||[]).filter(function(r){return r.actif;});
+    var monthly=0;recs.forEach(function(r){var ttc=(+r.ht||0)*(1+(+r.taux||0)/100);var m=CADm[r.cadence]||1;monthly+=ttc/m;});
+    return {mrr:monthly,arr:monthly*12,n:recs.length};
+  };
+
+  /* Clients ayant un dossier livré/clôturé mais AUCUN abonnement actif */
+  window.recOpportunites=function(){
+    var abo={};(DB.recurrences||[]).filter(function(r){return r.actif;}).forEach(function(r){abo[norm(r.clientNom)]=1;});
+    var seen={},opp=[];
+    (DB.dossiers||[]).forEach(function(d){
+      if(d.archived)return;
+      if(!/Transmis greffe|Clôturé|Paiement/.test(d.statut||''))return;
+      var nom=(typeof dossierClients==='function')?dossierClients(d):'';var k=norm(nom);
+      if(!nom||abo[k]||seen[k])return;seen[k]=1;opp.push({nom:nom,ref:d.ref||''});
+    });
+    return opp;
+  };
+
+  /* Ouvre la modale d'abonnement pré-remplie (client + offre suggérée) */
+  window.recFromClient=function(nom,sugg){
+    if(typeof recModal!=='function')return;
+    recModal();
+    sugg=sugg||{label:'Approbation des comptes (annuelle)',ht:150,taux:20,cadence:'annuelle'};
+    setTimeout(function(){
+      var g=function(x){return document.getElementById(x);};
+      var sel=g('rec-client');
+      if(nom&&sel){var hit=false;[].forEach.call(sel.options,function(o){if(o.value===nom||o.text===nom){sel.value=o.value;hit=true;}});if(!hit&&g('rec-client-libre'))g('rec-client-libre').value=nom;}
+      if(g('rec-label')&&!g('rec-label').value)g('rec-label').value=sugg.label;
+      if(g('rec-ht')&&!g('rec-ht').value)g('rec-ht').value=sugg.ht;
+      if(g('rec-taux'))g('rec-taux').value=sugg.taux;
+      if(g('rec-cadence'))g('rec-cadence').value=sugg.cadence;
+    },60);
+  };
+
+  /* Carte « Revenus récurrents & opportunités » (tableau de bord) */
+  window.recOpportunitesCard=function(){
+    var m=recMRR();var opp=recOpportunites();var MAX=6;
+    var kpis='<div class="recp-kpis">'
+      +'<div class="recp-kpi"><div class="recp-v">'+money(m.mrr)+'</div><div class="recp-l">Revenu récurrent / mois (MRR)</div></div>'
+      +'<div class="recp-kpi"><div class="recp-v">'+money(m.arr)+'</div><div class="recp-l">Revenu récurrent / an (ARR)</div></div>'
+      +'<div class="recp-kpi"><div class="recp-v">'+m.n+'</div><div class="recp-l">Abonnements actifs</div></div>'
+      +'</div>';
+    var oppHTML;
+    if(opp.length){
+      oppHTML='<div class="recp-opp-t">Clients sans abonnement (dossier livré) — <b>'+opp.length+'</b> opportunité(s) :</div>'
+        +'<div class="recp-opp">'+opp.slice(0,MAX).map(function(o){
+          return '<div class="recp-opp-it"><div class="recp-opp-main"><b>'+E(o.nom)+'</b><span class="recp-opp-ref">'+E(o.ref)+'</span></div>'
+            +'<button class="btn btn-sm btn-pri" onclick="recFromClient('+JSON.stringify(o.nom)+')">🔁 Proposer</button></div>';
+        }).join('')+'</div>'
+        +(opp.length>MAX?'<div class="hint" style="margin-top:6px;font-size:11px">+'+(opp.length-MAX)+' autre(s)…</div>':'');
+    } else {
+      oppHTML='<div class="recp-none">✅ Tous vos clients livrés ont déjà un abonnement, ou aucun dossier livré à convertir.</div>';
+    }
+    return '<div class="card recp-card"><div class="card-h"><h2>🔁 Revenus récurrents &amp; opportunités</h2>'
+      +'<span class="sub" style="margin-left:auto"><button class="btn btn-sm btn-ghost" onclick="recModal()">+ Nouvel abonnement</button></span></div>'
+      +'<div class="card-b">'+kpis+oppHTML
+      +'<p class="hint" style="margin:10px 2px 0;font-size:11px">Le revenu récurrent est le plus rentable et le plus prévisible. Proposez un suivi annuel (approbation des comptes, domiciliation, veille juridique) à chaque dossier livré.</p>'
+      +'</div></div>';
+  };
+
+  /* Greffes : carte sur le tableau de bord + bouton dans la fiche dossier */
+  if(typeof window.pageDash==='function'){var _pd=window.pageDash;window.pageDash=function(){var h=_pd();try{return h+recOpportunitesCard();}catch(e){return h;}};}
+  if(typeof window.espPanel==='function'){var _ep=window.espPanel;window.espPanel=function(d,list,id){var h=_ep(d,list,id);if(!h||h.indexOf('esp-main')<0)return h;
+    var nom=(typeof dossierClients==='function')?dossierClients(d):'';
+    var btn='<button class="btn btn-ghost recp-dossbtn" onclick="recFromClient('+JSON.stringify(nom)+')">🔁 Proposer un abonnement</button>';
+    return h.replace('<div class="esp-main">','<div class="esp-main">'+btn);};}
+
+  if(!document.getElementById('recp-css')){var st=document.createElement('style');st.id='recp-css';
+    st.textContent='.recp-card{margin-top:16px}'
+      +'.recp-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}'
+      +'@media(max-width:640px){.recp-kpis{grid-template-columns:1fr}}'
+      +'.recp-kpi{background:var(--paper-2,#f6efe0);border:1px solid var(--line-soft,#f0e9da);border-radius:10px;padding:11px 13px}'
+      +'.recp-v{font-size:18px;font-weight:800;color:var(--accent,#7a6e58)}'
+      +'.recp-l{font-size:11px;color:var(--ink-3,#9c9078);margin-top:2px}'
+      +'.recp-opp-t{font-size:12.5px;color:var(--ink-2,#5a5344);margin:2px 0 8px}'
+      +'.recp-opp{display:flex;flex-direction:column;gap:6px}'
+      +'.recp-opp-it{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--line-2,#e2d9c6);border-radius:9px;background:var(--card,#fffdf7)}'
+      +'.recp-opp-main{min-width:0;flex:1;display:flex;flex-direction:column;line-height:1.2}'
+      +'.recp-opp-main b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+      +'.recp-opp-ref{font-size:11px;color:var(--ink-3,#9c9078)}'
+      +'.recp-none{font-size:12.5px;color:var(--ink-3,#9c9078);padding:6px 0}'
+      +'.recp-dossbtn{margin-bottom:10px}';
     document.head.appendChild(st);}
 })();
 </script>

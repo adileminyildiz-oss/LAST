@@ -119,7 +119,13 @@ facturer » dès qu'une facture lui est rattachée) et **anti-fuite débours**
 (détection des frais officiels manquants d'un dossier — annonce légale et
 frais de greffe/INPI selon la nature création/modification/annuelle — signalés
 par un ⚠ dans le pipeline et proposés à l'ajout au moment de facturer, pour
-qu'ils soient refacturés au client et ne rognent pas la marge)
+qu'ils soient refacturés au client et ne rognent pas la marge) et
+**pousser la récurrence** (revenu récurrent rendu visible — MRR mensuel et ARR
+annuel normalisés depuis les abonnements actifs — carte « Revenus récurrents &
+opportunités » sur le tableau de bord listant les clients au dossier livré sans
+abonnement actif, avec proposition d'abonnement en 1 clic pré-remplie — client +
+offre suggérée — et bouton « Proposer un abonnement » dans la fiche dossier ;
+le moteur de génération automatique des factures d'abonnement reste inchangé)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test
