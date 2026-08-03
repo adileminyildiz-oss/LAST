@@ -79,7 +79,11 @@ conformité — lisibilité, recto+verso, expiration, justificatif récent —
 et pré-remplissage proposé) et **IA — formalités** (objet social en
 plusieurs formulations à choisir, relecture de cohérence du dossier sur
 bouton — forme/associés, capital, mentions manquantes — et suggestion de
-clauses pour les gabarits) — le tout sans erreur JavaScript.
+clauses pour les gabarits) et **IA — facturation** (désignation de
+prestation générée, relances d'impayés personnalisées à ton progressif,
+lecture de facture fournisseur par vision — fournisseur/date/HT/TVA/TTC —
+et détection d'anomalies : doublons et montants inhabituels, badge +
+liste) — le tout sans erreur JavaScript.
 
 ## Lancer
 

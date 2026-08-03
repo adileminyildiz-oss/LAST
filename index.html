@@ -2392,18 +2392,21 @@ function pageFacturation(){
   </div>
   <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center"><button class="btn btn-pri" onclick="${t==='client'?'fvOpen()':'factModal()'}">${svg(IC.plus)}Ajouter</button>
     ${t==='client'?`<button class="btn btn-ghost btn-sm" onclick="recModal()">🔁 Facturation récurrente</button>`:''}
+    ${t==='client'?`<button class="btn btn-ghost btn-sm" onclick="demDesignationIA()">✨ Désignation (IA)</button>`:''}
+    <button class="btn btn-ghost btn-sm" onclick="iaLireFacture()">📷 Lire une facture (IA)</button>
     ${t==='client'&&list.length?`<button class="btn btn-ghost btn-sm" onclick="exportFacturesCSV()">Exporter (CSV)</button>`:''}
     ${t==='client'&&list.filter(f=>f.doc).length?`<button class="btn btn-ghost btn-sm" onclick="factImprimerLot()">Imprimer le lot (PDF)</button>`:''}
     <span class="tag blue">${list.length}${fil!=='tous'?'/'+all.length:''} facture(s)</span></div>
   ${(typeof recCard==='function')?recCard():''}
+  ${(typeof factAnomaliesCard==='function')?factAnomaliesCard(t):''}
   ${all.length?filtres:''}
   <div class="card"><div class="card-b" style="padding:0">
   ${list.length?`<table><thead><tr>${fh('num','N°')}${fh('tiers',t==='client'?'Client':'Fournisseur')}${fh('date','Date','hide-sm')}${fh('ht','HT')}${fh('tva','TVA','hide-sm')}${fh('ttc','TTC')}${fh('statut','Statut')}<th></th></tr></thead><tbody>
   ${list.map(f=>`<tr onclick="${t==='client'?"fvView('"+f.id+"')":"factModal('"+f.id+"')"}" style="cursor:pointer">
-    <td class="tname">${esc(f.num)}</td><td>${esc(f.tiers)}</td><td class="hide-sm">${frDate(f.date)}</td>
+    <td class="tname">${esc(f.num)}${(typeof factAnomalieBadge==='function')?factAnomalieBadge(f):''}</td><td>${esc(f.tiers)}</td><td class="hide-sm">${frDate(f.date)}</td>
     <td>${eur(f.ht)}</td><td class="hide-sm">${eur(f.tva)}</td><td>${eur(f.ttc)}</td>
     <td><span class="pill-stat" style="color:${factStatColor(f.statut)};border-color:${factStatColor(f.statut)}55;background:${factStatColor(f.statut)}18">${esc(f.statut)}</span>${(f.statut==='Impayée'&&relanceEnRetard(f))?' <span class="tag hot" style="font-size:9px">échue</span>':''}${(f.relances&&f.relances.length)?' <span class="tsub">'+f.relances.length+'×</span>':''}</td>
-    <td onclick="event.stopPropagation()">${(t==='client'&&f.statut==='Impayée')?"<button class=\"btn btn-sm btn-ghost\" onclick=\"factRelancer('"+f.id+"')\">Relancer</button> ":''}<button class="btn btn-sm btn-ghost" onclick="${t==='client'?"fvView('"+f.id+"')":"factModal('"+f.id+"')"}">Ouvrir</button></td></tr>`).join('')}
+    <td onclick="event.stopPropagation()">${(t==='client'&&f.statut==='Impayée')?"<button class=\"btn btn-sm btn-ghost\" onclick=\"factRelancer('"+f.id+"')\">Relancer</button> <button class=\"btn btn-sm btn-ghost\" onclick=\"demRelanceIA('"+f.id+"')\">✨ Relance IA</button> ":''}<button class="btn btn-sm btn-ghost" onclick="${t==='client'?"fvView('"+f.id+"')":"factModal('"+f.id+"')"}">Ouvrir</button></td></tr>`).join('')}
   </tbody></table>`:`<div class="empty">${all.length?'Aucune facture pour ce filtre.':'Aucune facture '+(t==='client'?'client (ventes)':'fournisseur (achats/débours)')+'. Ajoutez-en une.'}</div>`}
   </div></div>`;
 }
@@ -3927,7 +3930,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=193;
+var LAST_VER=194;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10248,6 +10251,134 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.ia-coh-row.warn{color:#b45309;background:#fffaf0;border-color:#eed09a}'
       +'.ia-coh-row.no{color:#be123c;background:#fff1f4;border-color:#f6cdd8}'
       +'.ia-clauses{white-space:pre-wrap;font-size:12.5px;line-height:1.55;max-height:52vh;overflow:auto;background:var(--paper,#fffef9);border:1px solid var(--line-2,#e2d9c6);border-radius:8px;padding:11px}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="ia-fact-mod">
+/* ===================================================================
+   IA — Facturation : désignation, relances progressives, lecture de
+   factures fournisseurs (vision), détection d'anomalies (badge + liste).
+   Objectif n°7.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function money(n){return (typeof eur==='function')?eur(n):(''+n);}
+  function offCheck(){var m=(typeof iaMode==='function')?iaMode():'off';if(m==='off'){if(typeof toast==='function')toast('Activez l\'IA (ou le mode démo) dans Paramètres → Assistant IA.');return true;}return false;}
+
+  /* ---- 1) Désignation de prestation ---- */
+  window.demDesignationIA=function(){
+    if(typeof openModal!=='function')return;
+    openModal('Désignation de prestation (IA)',
+      '<p class="hint" style="margin:0 0 8px">Saisissez quelques mots-clés, l\'IA rédige un libellé professionnel.</p>'
+      +'<input id="iad-kw" placeholder="ex. création SAS, statuts, immatriculation" style="width:100%">'
+      +'<div id="iad-out" style="margin-top:10px"></div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="demDesignationGo()">✨ Générer</button>');
+  };
+  window.demDesignationGo=function(){
+    if(offCheck())return;var kw=((document.getElementById('iad-kw')||{}).value||'').trim();if(!kw)return (typeof toast==='function')&&toast('Saisissez des mots-clés.');
+    var out=document.getElementById('iad-out');if(out)out.innerHTML='<span class="hint">Rédaction…</span>';
+    iaAsk({system:'Tu rédiges des libellés de prestation pour les factures d\'un cabinet de formalités d\'entreprise. Réponds UNIQUEMENT par le libellé (une ligne, clair et professionnel), sans guillemets.',
+      user:'Mots-clés : '+kw,temperature:0.4,demo:function(){return demoDesig(kw);}},
+      function(r){if(!out)return;if(r&&r.ok&&r.text){out.innerHTML='<div class="ia-desig-out">'+E(r.text)+'</div><button class="btn btn-sm btn-ghost" style="margin-top:6px" onclick="(function(){try{navigator.clipboard.writeText('+JSON.stringify(r.text)+');toast(\'Copié\');}catch(e){}})()">Copier</button>';}
+        else out.innerHTML='<span class="hint">Échec : '+E((r&&r.error)||'inconnu')+'</span>';});
+  };
+  function demoDesig(kw){var k=kw.toLowerCase();
+    if(/cr[ée]a|constitu|sas|sarl|sci|eurl|sasu/.test(k))return 'Accompagnement à la constitution et à l\'immatriculation de la société (rédaction des statuts, formalités au guichet unique).';
+    if(/transfert|si[èe]ge/.test(k))return 'Formalités de transfert du siège social (procès-verbal, annonce légale, dépôt modificatif).';
+    if(/dirigeant|g[ée]rant|pr[ée]sident/.test(k))return 'Formalités de changement de dirigeant (procès-verbal, déclaration, dépôt modificatif).';
+    return 'Prestation de conseil et formalités : '+kw+'.';
+  }
+
+  /* ---- 2) Relances personnalisées progressives ---- */
+  window.demRelanceIA=function(factId){
+    if(offCheck())return;var f=(DB.factures||[]).find(function(x){return x.id===factId;});if(!f)return;
+    var n=((f.relances||[]).length)+1;var ton=n<=1?'courtois et compréhensif':(n===2?'ferme mais poli':'très ferme, en rappelant les conséquences d\'un non-paiement (intérêts de retard, recouvrement)');
+    var retard='';try{if(typeof joursAvant==='function'){var j=joursAvant(f.ech);if(j!=null&&j<0)retard=(-j)+' jours de retard';}}catch(e){}
+    if(typeof toast==='function')toast('Rédaction de la relance…');
+    iaAsk({system:'Tu es chargé du recouvrement pour le cabinet AEM CONSEIL. Rédige un e-mail de relance d\'impayé, en français, dans un ton '+ton+'. Réponds UNIQUEMENT par le corps du message.',
+      user:'Client : '+f.tiers+'\nFacture : '+f.num+'\nMontant TTC : '+money(f.ttc)+'\nÉchéance : '+(f.ech?frDate(f.ech):'—')+(retard?(' ('+retard+')'):'')+'\nRelance n° '+n+'.\nRédige la relance adaptée à ce niveau.',
+      temperature:0.5,demo:function(){return demoRelance(f,n);}},
+      function(r){if(!(r&&r.ok&&r.text))return (typeof toast==='function')&&toast('Échec : '+((r&&r.error)||'inconnu'));
+        var sujet='Relance — facture '+f.num+' — AEM CONSEIL';var to=(f.doc&&f.doc.clientEmail)||'';
+        if(typeof demSmtpModal==='function')demSmtpModal(to,sujet,r.text);else if(typeof demOuvrirMessagerie==='function')demOuvrirMessagerie(to,sujet,r.text);});
+  };
+  function demoRelance(f,n){
+    var head=n<=1?'Bonjour,\n\nSauf erreur de notre part, la facture '+f.num+' d\'un montant de '+money(f.ttc)+' demeure impayée à ce jour.'
+      :(n===2?'Bonjour,\n\nMalgré notre précédente relance, la facture '+f.num+' ('+money(f.ttc)+') reste impayée.'
+      :'Bonjour,\n\nEn l\'absence de règlement de la facture '+f.num+' ('+money(f.ttc)+') malgré nos relances,');
+    var mid=n<=1?'\n\nNous vous remercions de bien vouloir procéder à son règlement dans les meilleurs délais. Si le paiement a déjà été effectué, merci de ne pas tenir compte de ce message.'
+      :(n===2?'\n\nNous vous invitons à régulariser cette situation sous 8 jours.'
+      :'\n\nnous nous verrons contraints d\'appliquer les intérêts de retard légaux et d\'engager une procédure de recouvrement.');
+    return head+mid+'\n\nBien cordialement,\nL\'équipe AEM CONSEIL\n\n(relance générée en mode démonstration)';
+  }
+
+  /* ---- 3) Lecture de facture fournisseur (vision) ---- */
+  window.iaLireFacture=function(){
+    if(offCheck())return;
+    var inp=document.getElementById('ia-fact-file');
+    if(!inp){inp=document.createElement('input');inp.type='file';inp.id='ia-fact-file';inp.accept='image/*,application/pdf';inp.style.display='none';inp.onchange=function(){iaLireFactureFile(this);};document.body.appendChild(inp);}
+    inp.value='';inp.click();
+  };
+  window.iaLireFactureFile=function(inp){
+    var f=inp&&inp.files&&inp.files[0];if(!f)return;
+    var rd=new FileReader();rd.onload=function(e){
+      var dataUri=''+e.target.result;var isImg=/^data:image\//.test(dataUri);
+      if(typeof toast==='function')toast('Lecture de la facture…');
+      iaAsk({system:'Tu lis une facture fournisseur et en extrais les informations comptables. Réponds UNIQUEMENT par un JSON.',
+        user:'Extrais de cette facture : {"fournisseur":"","numero":"","date":"JJ/MM/AAAA","ht":0,"tva":0,"ttc":0,"taux":20}. Donne les montants en nombres.',
+        json:true,temperature:0,model:'pixtral-12b-latest',images:isImg?[dataUri]:[],
+        demo:function(){return {fournisseur:'Greffe du Tribunal de Commerce',numero:'F-'+(f.name||'').replace(/\D/g,'').slice(0,6),date:'10/07/2026',ht:66.42,tva:13.28,ttc:79.70,taux:20,_demo:true};}},
+        function(r){if(!(r&&r.ok&&r.data))return (typeof toast==='function')&&toast('Lecture échouée : '+((r&&r.error)||'inconnu'));
+          iaFactPrefill(r.data,!!r.demo);});
+    };rd.readAsDataURL(f);
+  };
+  function iaFactPrefill(data,demo){
+    state.factTab='achat';
+    if(typeof factModal==='function')factModal();
+    setTimeout(function(){
+      var set=function(id,v){var e=document.getElementById(id);if(e&&v!=null&&v!=='')e.value=v;};
+      set('fa-tiers',data.fournisseur);set('fa-date',isoDate(data.date));set('fa-ht',data.ht);
+      var tx=document.getElementById('fa-taux');if(tx&&data.taux!=null){tx.value=data.taux;}
+      if(typeof factCalc==='function')factCalc();
+      if(typeof toast==='function')toast((demo?'(démo) ':'')+'Facture lue — vérifiez puis enregistrez.');
+    },90);
+  }
+  function isoDate(fr){var m=(''+fr).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(m)return m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');var d=(''+fr).match(/\d{4}-\d{2}-\d{2}/);return d?d[0]:'';}
+
+  /* ---- 4) Détection d'anomalies (locale, fiable) ---- */
+  window.factAnomalies=function(type){
+    type=type||'client';var fx=(DB.factures||[]).filter(function(f){return (f.type||'client')===type&&!f.avoir;});
+    var out=[];
+    // Doublons : même tiers + même n° ; ou même tiers + même date + même TTC
+    var seenNum={},seenSig={};
+    fx.forEach(function(f){
+      var kNum=(f.tiers||'')+'|'+(f.num||'');
+      if(f.num&&seenNum[kNum]){out.push({id:f.id,num:f.num,tiers:f.tiers,type:'doublon',msg:'Doublon possible : même n° pour '+f.tiers+'.'});}
+      else seenNum[kNum]=1;
+      var kSig=(f.tiers||'')+'|'+(f.date||'')+'|'+Math.round(+f.ttc||0);
+      if(seenSig[kSig]){out.push({id:f.id,num:f.num,tiers:f.tiers,type:'doublon',msg:'Doublon possible : même client, date et montant.'});}
+      else seenSig[kSig]=1;
+    });
+    // Montants inhabituels : TTC > 4× la médiane des factures du même client (si >=3 factures)
+    var byT={};fx.forEach(function(f){(byT[f.tiers]=byT[f.tiers]||[]).push(+f.ttc||0);});
+    fx.forEach(function(f){var arr=(byT[f.tiers]||[]).slice().sort(function(a,b){return a-b;});if(arr.length>=3){var med=arr[Math.floor(arr.length/2)]||0;if(med>0&&(+f.ttc||0)>med*4){out.push({id:f.id,num:f.num,tiers:f.tiers,type:'montant',msg:'Montant inhabituel ('+money(f.ttc)+') vs habituel ('+money(med)+') pour '+f.tiers+'.'});}}});
+    return out;
+  };
+  window.factAnomalieIds=function(type){var m={};window.factAnomalies(type).forEach(function(a){m[a.id]=(m[a.id]||[]);m[a.id].push(a);});return m;};
+  window.factAnomalieBadge=function(f){var m=window.__factAnoIds||{};if(m[f.id])return ' <span class="tag hot" style="font-size:9px" title="'+E(m[f.id].map(function(a){return a.msg;}).join(' '))+'">⚠ anomalie</span>';return '';};
+  window.factAnomaliesCard=function(type){
+    var list=window.factAnomalies(type);
+    window.__factAnoIds=window.factAnomalieIds(type);
+    if(!list.length)return '';
+    return '<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>⚠ Anomalies détectées</h2><span class="sub" style="margin-left:auto">'+list.length+'</span></div>'
+      +'<div class="card-b" style="padding:0"><table><tbody>'
+      +list.map(function(a){return '<tr onclick="'+(a.type==='doublon'||a.type==='montant'?"fvView('"+a.id+"')":'')+'" style="cursor:pointer"><td class="tname">'+E(a.num||'—')+'</td><td>'+E(a.tiers||'')+'</td><td>'+E(a.msg)+'</td></tr>';}).join('')
+      +'</tbody></table></div></div>';
+  };
+
+  if(!document.getElementById('ia-fact-css')){var st=document.createElement('style');st.id='ia-fact-css';
+    st.textContent='.ia-desig-out{font-size:13px;line-height:1.5;background:var(--paper-2,#f6efe0);border-left:3px solid var(--accent,#7a6e58);border-radius:6px;padding:9px 11px}';
     document.head.appendChild(st);}
 })();
 </script>

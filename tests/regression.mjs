@@ -541,6 +541,23 @@ const r = await page.evaluate(async () => {
     && /ia-coh-row/.test(fcard) && /Forme unipersonnelle/.test(fcard)
     && typeof demObjetSocial === 'function' && typeof demCoherence === 'function' && typeof demClauses === 'function' && typeof iaFormaliteCard === 'function';
 
+  // IA — facturation : anomalies (doublon + montant) + boutons + fonctions
+  DB.factures.push({ id: 'ano1', type: 'client', num: 'FV-ANO', tiers: 'ANOTEST', date: '2026-01-01', ht: 100, tva: 20, ttc: 120, statut: 'Émise' });
+  DB.factures.push({ id: 'ano2', type: 'client', num: 'FV-ANO', tiers: 'ANOTEST', date: '2026-02-01', ht: 100, tva: 20, ttc: 120, statut: 'Émise' });
+  DB.factures.push({ id: 'anb1', type: 'client', num: 'B1', tiers: 'ANOBIG', date: '2026-01-01', ht: 100, tva: 20, ttc: 120, statut: 'Émise' });
+  DB.factures.push({ id: 'anb2', type: 'client', num: 'B2', tiers: 'ANOBIG', date: '2026-02-01', ht: 100, tva: 20, ttc: 120, statut: 'Émise' });
+  DB.factures.push({ id: 'anb3', type: 'client', num: 'B3', tiers: 'ANOBIG', date: '2026-03-01', ht: 100, tva: 20, ttc: 120, statut: 'Émise' });
+  DB.factures.push({ id: 'anb4', type: 'client', num: 'B4', tiers: 'ANOBIG', date: '2026-04-01', ht: 5000, tva: 1000, ttc: 6000, statut: 'Émise' });
+  const anoList = factAnomalies('client');
+  const anoCard = factAnomaliesCard('client');
+  const anoBadge = factAnomalieBadge(DB.factures.find(f => f.id === 'ano2')).length > 0;
+  state.page = 'facturation'; state.factTab = 'client';
+  const factPage = pageFacturation();
+  out.iaFacture = anoList.some(a => a.tiers === 'ANOTEST' && a.type === 'doublon') && anoList.some(a => a.tiers === 'ANOBIG' && a.type === 'montant')
+    && /Anomalies détectées/.test(anoCard) && anoBadge
+    && /Désignation \(IA\)/.test(factPage) && /Lire une facture \(IA\)/.test(factPage)
+    && typeof demDesignationIA === 'function' && typeof demRelanceIA === 'function' && typeof iaLireFacture === 'function' && typeof factAnomalies === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
