@@ -125,7 +125,16 @@ annuel normalisés depuis les abonnements actifs — carte « Revenus récurrent
 opportunités » sur le tableau de bord listant les clients au dossier livré sans
 abonnement actif, avec proposition d'abonnement en 1 clic pré-remplie — client +
 offre suggérée — et bouton « Proposer un abonnement » dans la fiche dossier ;
-le moteur de génération automatique des factures d'abonnement reste inchangé)
+le moteur de génération automatique des factures d'abonnement reste inchangé) et
+**cockpit santé financière** (bandeau en tête du tableau de bord consolidant tout
+l'argent : encaissé total et du mois, reste dû, potentiel du pipeline, revenu
+récurrent MRR/ARR, taux de recouvrement, plus un entonnoir visuel potentiel →
+facturé → encaissé) et **double authentification (2FA)** (accès verrouillé au
+titulaire : mot de passe — étape 1 — puis code TOTP à 6 chiffres d'une
+application d'authentification — étape 2 ; TOTP conforme RFC 6238/4226 calculé
+hors-ligne via WebCrypto, secret 2FA chiffré par le mot de passe — AES-256-GCM +
+PBKDF2, clé d'ancrage portable — enrôlement guidé — QR/clé — au premier accès, et
+verrouillage temporaire anti-force-brute après cinq échecs)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test

@@ -677,6 +677,21 @@ const r = await page.evaluate(async () => {
   out.recurrence = typeof recMRR === 'function' && typeof recOpportunites === 'function' && typeof recFromClient === 'function' && typeof recOpportunitesCard === 'function'
     && mrrOk && oppHas && oppExcl && recDashOk;
 
+  // AUTH 2FA — TOTP (vecteurs RFC 4226) + chiffrement du secret par mot de passe + anti-force-brute
+  const RFCSEC = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ'; // base32 de "12345678901234567890"
+  const hotp0 = await _hotp(RFCSEC, 0); // doit valoir 755224
+  const hotp1 = await _hotp(RFCSEC, 1); // doit valoir 287082
+  const encSec = await _authEnc('motdepasse', RFCSEC);
+  const decOk = (await _authDec('motdepasse', encSec)) === RFCSEC;
+  const decBad = (await _authDec('faux', encSec)) === null;
+  const nowCode = await _totp(RFCSEC, Math.floor(Date.now() / 1000));
+  const totpAccept = await _totpValide(RFCSEC, nowCode);
+  const totpReject = (await _totpValide(RFCSEC, 'abc')) === false;
+  _authOk(); for (let i = 0; i < 5; i++) _authFail();
+  const lockOn = _authLockLeft() > 0; _authOk(); const lockOff = _authLockLeft() === 0;
+  out.auth2fa = hotp0 === '755224' && hotp1 === '287082' && decOk && decBad && totpAccept && totpReject && lockOn && lockOff
+    && typeof lastGateOtp === 'function' && typeof lastGateEnrollVerify === 'function' && typeof has2fa === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

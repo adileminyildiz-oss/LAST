@@ -3804,8 +3804,28 @@ function ensureData(){
   save();
 }
 /* boot */
-/* ===== Accès protégé (mot de passe) ===== */
+/* ===== Accès protégé — DOUBLE AUTHENTIFICATION (mot de passe + code TOTP) ===== */
 var LAST_PWD_HASH='afab4393905b6a733139713689265cb550f4749024a49723e675a772a7c85a64';
+/* Secret 2FA chiffré avec le mot de passe (portable, à coller après enrôlement pour
+   verrouiller l'accès sur tous les appareils). Vide = enrôlement au 1er accès. */
+var LAST_2FA_ENC='';
+
+/* ---- Crypto TOTP (RFC 6238 / Google Authenticator), 100% hors-ligne ---- */
+function _b32dec(s){s=(''+(s||'')).toUpperCase().replace(/=+$/,'').replace(/[^A-Z2-7]/g,'');var A='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567',bits=0,val=0,out=[];for(var i=0;i<s.length;i++){val=(val<<5)|A.indexOf(s[i]);bits+=5;if(bits>=8){out.push((val>>>(bits-8))&0xff);bits-=8;}}return new Uint8Array(out);}
+function _b32enc(bytes){var A='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567',bits=0,val=0,out='';for(var i=0;i<bytes.length;i++){val=(val<<8)|bytes[i];bits+=8;while(bits>=5){out+=A[(val>>>(bits-5))&31];bits-=5;}}if(bits>0)out+=A[(val<<(5-bits))&31];return out;}
+async function _hotp(secretB32,counter){var key=_b32dec(secretB32);var buf=new ArrayBuffer(8),dv=new DataView(buf);dv.setUint32(0,Math.floor(counter/0x100000000));dv.setUint32(4,counter>>>0);var ck=await crypto.subtle.importKey('raw',key,{name:'HMAC',hash:'SHA-1'},false,['sign']);var sig=new Uint8Array(await crypto.subtle.sign('HMAC',ck,buf));var off=sig[19]&0xf;var bin=((sig[off]&0x7f)<<24)|((sig[off+1]&0xff)<<16)|((sig[off+2]&0xff)<<8)|(sig[off+3]&0xff);return (bin%1000000).toString().padStart(6,'0');}
+async function _totp(secretB32,epochSec){epochSec=(epochSec==null)?Math.floor(Date.now()/1000):epochSec;return _hotp(secretB32,Math.floor(epochSec/30));}
+async function _totpValide(secretB32,code){code=(''+(code||'')).replace(/\s/g,'');if(!/^\d{6}$/.test(code))return false;var t=Math.floor(Date.now()/1000);for(var w=-1;w<=1;w++){if(await _totp(secretB32,t+w*30)===code)return true;}return false;}
+/* ---- Chiffrement du secret 2FA par le mot de passe (AES-256-GCM + PBKDF2) ---- */
+async function _authKey(pwd,salt){var km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pwd),{name:'PBKDF2'},false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:150000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);}
+async function _authEnc(pwd,plain){var salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));var key=await _authKey(pwd,salt);var ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,new TextEncoder().encode(plain)));var blob=new Uint8Array(28+ct.length);blob.set(salt,0);blob.set(iv,16);blob.set(ct,28);return btoa(String.fromCharCode.apply(null,blob));}
+async function _authDec(pwd,b64){try{var raw=Uint8Array.from(atob(b64),function(c){return c.charCodeAt(0);});var salt=raw.slice(0,16),iv=raw.slice(16,28),ct=raw.slice(28);var key=await _authKey(pwd,salt);var pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:iv},key,ct);return new TextDecoder().decode(pt);}catch(e){return null;}}
+function get2faEnc(){try{return (LAST_2FA_ENC&&LAST_2FA_ENC.length>20)?LAST_2FA_ENC:(localStorage.getItem('last-2fa')||'');}catch(e){return LAST_2FA_ENC||'';}}
+function has2fa(){return !!get2faEnc();}
+/* ---- Anti-force brute : verrouillage temporaire après échecs ---- */
+function _authLockLeft(){try{var u=+localStorage.getItem('last-auth-lock')||0;var s=Math.ceil((u-Date.now())/1000);return s>0?s:0;}catch(e){return 0;}}
+function _authFail(){try{var n=(+localStorage.getItem('last-auth-fails')||0)+1;localStorage.setItem('last-auth-fails',n);if(n>=5){var wait=Math.min(15,Math.pow(2,n-5))*60000;localStorage.setItem('last-auth-lock',Date.now()+wait);}return n;}catch(e){return 0;}}
+function _authOk(){try{localStorage.removeItem('last-auth-fails');localStorage.removeItem('last-auth-lock');}catch(e){}}
 /* Extraction robuste du nom réel d'un mail FormSubmit (essaie HTML, texte, *nom*, « nom  valeur ») */
 function mailExtractName(d){if(!d)return '';var cands=[d.rawHtml,d.rawBody,d.message,(d.thread&&d.thread[0]&&d.thread[0].body)];
   for(var i=0;i<cands.length;i++){var body=cands[i];if(!body)continue;
@@ -3880,12 +3900,43 @@ function ensureDemCodes(){try{DB.parametres=DB.parametres||{};
 }catch(e){}}
 function lastBoot(){try{load();ensureData();migrateFormSubmitNames();purgeNonFormSubmit();ensureDemCodes();migrateReplyEmails();}catch(e){}render();}
 async function _sha256(s){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0');}).join('');}
+var _authPwd='';var _authSecret='';   /* en mémoire, le temps de la connexion */
+function _authErr(m){var e=document.getElementById('lg-err');if(e){e.textContent=m||'';e.style.display=m?'block':'none';}}
+function _authGranted(){try{localStorage.setItem('last-gate-ok','1');}catch(e){}_authOk();_authPwd='';_authSecret='';var g=document.getElementById('last-gate');if(g)g.remove();lastBoot();}
+
+/* Étape 1 — mot de passe */
 async function lastGateTry(ev){if(ev&&ev.preventDefault)ev.preventDefault();
-  var inp=document.getElementById('lg-pwd');var err=document.getElementById('lg-err');
-  var h=await _sha256(inp.value||'');
-  if(h===LAST_PWD_HASH){try{localStorage.setItem('last-gate-ok','1');}catch(e){}var g=document.getElementById('last-gate');if(g)g.remove();lastBoot();}
-  else{if(err)err.style.display='block';inp.value='';inp.focus();}
-  return false;}
+  if(_authLockLeft()>0){_authErr('Trop de tentatives — réessayez dans '+_authLockLeft()+' s.');return false;}
+  var inp=document.getElementById('lg-pwd');var h=await _sha256(inp.value||'');
+  if(h!==LAST_PWD_HASH){_authFail();inp.value='';inp.focus();_authErr('Mot de passe incorrect.'+(_authLockLeft()?(' Verrouillé '+_authLockLeft()+' s.'):''));return false;}
+  _authPwd=inp.value||'';_authErr('');
+  if(has2fa()){
+    var sec=await _authDec(_authPwd,get2faEnc());
+    if(!sec){_authFail();_authErr('Clé de sécurité illisible avec ce mot de passe.');return false;}
+    _authSecret=sec;lastGateRender('otp');
+  } else { lastGateRender('enroll'); }
+  return false;
+}
+/* Étape 2 — code de l'application d'authentification */
+async function lastGateOtp(ev){if(ev&&ev.preventDefault)ev.preventDefault();
+  if(_authLockLeft()>0){_authErr('Trop de tentatives — réessayez dans '+_authLockLeft()+' s.');return false;}
+  var inp=document.getElementById('lg-otp');var code=(inp.value||'').replace(/\s/g,'');
+  if(await _totpValide(_authSecret,code)){_authGranted();}
+  else{_authFail();inp.value='';inp.focus();_authErr('Code incorrect ou expiré.'+(_authLockLeft()?(' Verrouillé '+_authLockLeft()+' s.'):''));}
+  return false;
+}
+/* Enrôlement — lie l'accès à VOTRE application d'authentification */
+var _enrollSecret='';
+async function lastGateEnrollVerify(ev){if(ev&&ev.preventDefault)ev.preventDefault();
+  var inp=document.getElementById('lg-otp');var code=(inp.value||'').replace(/\s/g,'');
+  if(!(await _totpValide(_enrollSecret,code))){_authErr('Code incorrect — vérifiez l\'heure du téléphone et réessayez.');inp.value='';inp.focus();return false;}
+  var enc=await _authEnc(_authPwd,_enrollSecret);
+  try{localStorage.setItem('last-2fa',enc);}catch(e){}
+  _authSecret=_enrollSecret;
+  lastGateRender('anchor',{enc:enc});   /* propose de verrouiller sur tous les appareils */
+  return false;
+}
+function lastGateAnchorDone(){_authGranted();}
 function lastLogout(){
   if(!window.confirm('Se déconnecter de LAST ?'))return;
   try{localStorage.removeItem('last-gate-ok');}catch(e){}
@@ -3894,29 +3945,74 @@ function lastLogout(){
 function lastGate(){
   var ok=false;try{ok=localStorage.getItem('last-gate-ok')==='1';}catch(e){}
   if(ok){lastBoot();return;}
-  var g=document.createElement('div');g.id='last-gate';
-  g.innerHTML='<div class="lg-card">'
-    +'<div class="lg-brand"><span class="brand-mark brand-word" aria-label="LAST">LAST</span><div class="lg-sub">AEM CONSEIL · Espace interne</div></div>'
-    +'<form class="lg-form" onsubmit="return lastGateTry(event)"><label>Mot de passe</label>'
-    +'<input id="lg-pwd" type="password" autocomplete="current-password" autofocus placeholder="••••••••">'
-    +'<div id="lg-err" class="lg-err">Mot de passe incorrect.</div>'
-    +'<button class="btn btn-pri" type="submit" style="width:100%;justify-content:center;margin-top:6px">Se connecter</button></form>'
-    +'<div class="lg-note">Accès réservé aux collaborateurs AEM CONSEIL.</div></div>';
-  document.body.appendChild(g);
-  var st=document.createElement('style');st.textContent='#last-gate{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:radial-gradient(1100px 600px at 50% -8%,#efe7d6,#e7ddc9);padding:20px}'
-    +'#last-gate .lg-card{background:#fffdf8;border:1px solid #e5e3dc;border-radius:18px;box-shadow:0 34px 80px -34px rgba(40,40,45,.55);padding:0;overflow:hidden;width:100%;max-width:380px}'
-    +'#last-gate .lg-brand{position:relative;text-align:center;margin:0;padding:36px 28px 28px;background:linear-gradient(135deg,#3b3d45,#24252b);color:#fff}'
+  if(!document.getElementById('lg-css')){var st=document.createElement('style');st.id='lg-css';st.textContent='#last-gate{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:radial-gradient(1200px 640px at 50% -10%,#f3ecdc,#e7ddc9 60%,#ded2ba);padding:20px}'
+    +'#last-gate .lg-card{background:#fffdf8;border:1px solid #e5e3dc;border-radius:18px;box-shadow:0 40px 90px -34px rgba(40,40,45,.6);padding:0;overflow:hidden;width:100%;max-width:400px}'
+    +'#last-gate .lg-brand{position:relative;text-align:center;padding:34px 28px 26px;background:linear-gradient(135deg,#3b3d45,#22232a);color:#fff}'
     +'#last-gate .lg-brand::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,#c0872f,#e8b463)}'
-    +'#last-gate .brand-word{color:#fff;font-size:42px;letter-spacing:6px}'
-    +'#last-gate .lg-sub{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#d8b878;font-weight:700;margin-top:11px}'
-    +'#last-gate .lg-form{padding:28px 28px 6px}'
+    +'#last-gate .brand-word{color:#fff;font-size:40px;letter-spacing:6px;font-weight:800}'
+    +'#last-gate .lg-sub{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#d8b878;font-weight:700;margin-top:10px}'
+    +'#last-gate .lg-lock{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:10px;color:#cdbf9f;background:rgba(216,184,120,.12);border:1px solid rgba(216,184,120,.3);border-radius:20px;padding:3px 10px}'
+    +'#last-gate .lg-form{padding:26px 28px 8px}'
     +'#last-gate label{display:block;font-size:11px;font-weight:600;color:#5b5040;margin-bottom:5px}'
-    +'#last-gate input{width:100%;padding:11px 12px;border:1px solid #e2ddd2;border-radius:9px;background:#fff;color:var(--ink);font:inherit;font-size:14px;outline:none}'
+    +'#last-gate .lg-step{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#b08a3c;margin-bottom:10px}'
+    +'#last-gate input{width:100%;padding:11px 12px;border:1px solid #e2ddd2;border-radius:9px;background:#fff;color:var(--ink,#2a2117);font:inherit;font-size:14px;outline:none;box-sizing:border-box}'
+    +'#last-gate input#lg-otp{letter-spacing:8px;text-align:center;font-size:22px;font-weight:700}'
     +'#last-gate input:focus{border-color:#c0872f;box-shadow:0 0 0 3px rgba(192,135,47,.18)}'
-    +'#last-gate .lg-err{display:none;color:#b0442f;font-size:11.5px;margin-top:7px}'
-    +'#last-gate .lg-note{text-align:center;font-size:10.5px;color:var(--ink-3);padding:0 28px 26px;margin-top:14px}';
-  document.head.appendChild(st);
-  var i=document.getElementById('lg-pwd');if(i)i.focus();
+    +'#last-gate .lg-err{display:none;color:#b0442f;font-size:11.5px;margin-top:8px}'
+    +'#last-gate .lg-note{text-align:center;font-size:10.5px;color:#8a7d69;padding:0 28px 24px;margin-top:14px}'
+    +'#last-gate .lg-back{background:none;border:none;color:#8a7d69;font-size:11.5px;cursor:pointer;padding:8px 0;text-decoration:underline}'
+    +'#last-gate .lg-hint{font-size:11.5px;line-height:1.5;color:#5b5040;background:#f6efdf;border:1px solid #e7ddc4;border-radius:9px;padding:10px 12px;margin-bottom:12px}'
+    +'#last-gate .lg-secret{font-family:ui-monospace,Menlo,monospace;font-size:13px;letter-spacing:1px;word-break:break-all;background:#2a2b31;color:#e9dcc0;border-radius:8px;padding:9px 11px;text-align:center;margin:8px 0}'
+    +'#last-gate .lg-qr{display:block;margin:10px auto;width:172px;height:172px;background:#fff;border:1px solid #e2ddd2;border-radius:10px}'
+    +'#last-gate .lg-blob{width:100%;height:64px;font-family:ui-monospace,Menlo,monospace;font-size:10px;border:1px solid #e2ddd2;border-radius:8px;padding:8px;resize:none;box-sizing:border-box}';
+    document.head.appendChild(st);}
+  if(!document.getElementById('last-gate')){var g=document.createElement('div');g.id='last-gate';g.innerHTML='<div class="lg-card">'
+    +'<div class="lg-brand"><span class="brand-mark brand-word" aria-label="LAST">LAST</span><div class="lg-sub">AEM CONSEIL · Espace interne</div><div class="lg-lock">🔒 Accès protégé — double authentification</div></div>'
+    +'<div id="lg-body"></div>'
+    +'<div class="lg-note">Accès strictement personnel — réservé au titulaire du compte.</div></div>';document.body.appendChild(g);}
+  lastGateRender('pwd');
+}
+function lastGateRender(stage,data){
+  data=data||{};var b=document.getElementById('lg-body');if(!b)return;
+  if(stage==='pwd'){
+    b.innerHTML='<form class="lg-form" onsubmit="return lastGateTry(event)">'
+      +'<div class="lg-step">Étape 1 / 2 · Mot de passe</div>'
+      +'<label>Mot de passe</label><input id="lg-pwd" type="password" autocomplete="current-password" autofocus placeholder="••••••••">'
+      +'<div id="lg-err" class="lg-err"></div>'
+      +'<button class="btn btn-pri" type="submit" style="width:100%;justify-content:center;margin-top:12px">Continuer</button></form>';
+    var i=document.getElementById('lg-pwd');if(i)i.focus();
+  } else if(stage==='otp'){
+    b.innerHTML='<form class="lg-form" onsubmit="return lastGateOtp(event)">'
+      +'<div class="lg-step">Étape 2 / 2 · Code de sécurité</div>'
+      +'<label>Code à 6 chiffres (votre application d\'authentification)</label>'
+      +'<input id="lg-otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" autofocus placeholder="000000">'
+      +'<div id="lg-err" class="lg-err"></div>'
+      +'<button class="btn btn-pri" type="submit" style="width:100%;justify-content:center;margin-top:12px">Se connecter</button>'
+      +'<div style="text-align:center"><button type="button" class="lg-back" onclick="lastGateRender(\'pwd\')">← Retour</button></div></form>';
+    var i2=document.getElementById('lg-otp');if(i2)i2.focus();
+  } else if(stage==='enroll'){
+    _enrollSecret=_b32enc(crypto.getRandomValues(new Uint8Array(20)));
+    var uri='otpauth://totp/'+encodeURIComponent('LAST (AEM CONSEIL)')+':titulaire?secret='+_enrollSecret+'&issuer='+encodeURIComponent('LAST')+'&digits=6&period=30&algorithm=SHA1';
+    var qr='https://api.qrserver.com/v1/create-qr-code/?size=172x172&data='+encodeURIComponent(uri);
+    b.innerHTML='<div class="lg-form">'
+      +'<div class="lg-step">Activer la double authentification</div>'
+      +'<div class="lg-hint">Pour verrouiller l\'accès à <b>vous seul</b> : ouvrez <b>Google Authenticator</b> (ou Authy) sur votre téléphone, scannez le QR code ci-dessous (ou saisissez la clé), puis entrez le code affiché.</div>'
+      +'<img class="lg-qr" alt="QR code" src="'+qr+'" onerror="this.style.display=\'none\'">'
+      +'<label>Clé (si le scan est impossible)</label><div class="lg-secret">'+_enrollSecret.replace(/(.{4})/g,'$1 ').trim()+'</div>'
+      +'<form onsubmit="return lastGateEnrollVerify(event)"><label>Code à 6 chiffres pour confirmer</label>'
+      +'<input id="lg-otp" type="text" inputmode="numeric" maxlength="6" autofocus placeholder="000000">'
+      +'<div id="lg-err" class="lg-err"></div>'
+      +'<button class="btn btn-pri" type="submit" style="width:100%;justify-content:center;margin-top:12px">Activer &amp; se connecter</button></form>'
+      +'<div style="text-align:center"><button type="button" class="lg-back" onclick="lastGateRender(\'pwd\')">← Retour</button></div></div>';
+    var i3=document.getElementById('lg-otp');if(i3)i3.focus();
+  } else if(stage==='anchor'){
+    b.innerHTML='<div class="lg-form">'
+      +'<div class="lg-step">✅ Double authentification activée</div>'
+      +'<div class="lg-hint">Cet appareil est protégé. Pour verrouiller l\'accès <b>sur tous vos appareils</b> (recommandé), copiez la clé d\'ancrage ci-dessous et transmettez-la pour l\'inscrire dans <code>LAST_2FA_ENC</code>. Sinon, elle reste enregistrée sur cet appareil.</div>'
+      +'<textarea class="lg-blob" readonly onclick="this.select()">'+(data.enc||'')+'</textarea>'
+      +'<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="(function(){var t=document.querySelector(\'#last-gate .lg-blob\');if(t){t.select();try{document.execCommand(\'copy\');}catch(e){}}})()">Copier la clé d\'ancrage</button>'
+      +'<button class="btn btn-pri" style="width:100%;justify-content:center;margin-top:12px" onclick="lastGateAnchorDone()">Entrer dans LAST</button></div>';
+  }
 }
 /* ===== PWA : installation en application + hors-ligne ===== */
 (function(){var s=document.createElement('style');s.textContent='#pwa-install{position:fixed;left:0;right:0;bottom:0;z-index:100002;display:flex;justify-content:center;padding:12px;pointer-events:none}'
@@ -3932,7 +4028,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=201;
+var LAST_VER=202;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11234,6 +11330,74 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.recp-opp-ref{font-size:11px;color:var(--ink-3,#9c9078)}'
       +'.recp-none{font-size:12.5px;color:var(--ink-3,#9c9078);padding:6px 0}'
       +'.recp-dossbtn{margin-bottom:10px}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="finsante-mod">
+/* ===================================================================
+   COCKPIT « SANTÉ FINANCIÈRE » — en tête du tableau de bord, une
+   synthèse unique de tout l'argent : encaissé, reste dû, potentiel du
+   pipeline, revenu récurrent, taux de recouvrement + entonnoir visuel.
+   =================================================================== */
+(function(){
+  function money(n){return (typeof eur==='function')?eur(n):(''+(n||0));}
+  function ymNow(){return (typeof today==='function')?today().slice(0,7):(''+new Date().toISOString().slice(0,7));}
+
+  window.finSanteData=function(){
+    var fv=(DB.factures||[]).filter(function(f){return f.type==='client' && !f.avoir;});
+    var enc=fv.filter(function(f){return f.statut==='Payée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
+    var facture=fv.reduce(function(s,f){return s+(+f.ttc||0);},0);
+    var impaye=fv.filter(function(f){return f.statut==='Impayée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
+    var ym=ymNow();
+    var encMois=fv.filter(function(f){return f.statut==='Payée' && (''+(f.date||'')).slice(0,7)===ym;}).reduce(function(s,f){return s+(+f.ttc||0);},0);
+    var pot=0;try{if(typeof fluxTotals==='function'){var t=fluxTotals();pot=(t.demandes.eur||0)+(t.devis.eur||0)+(t.facturer.eur||0);}}catch(e){}
+    var arr=0,mrr=0;try{if(typeof recMRR==='function'){var m=recMRR();arr=m.arr||0;mrr=m.mrr||0;}}catch(e){}
+    var recouvr=facture?Math.round(enc/facture*100):0;
+    return {enc:enc,encMois:encMois,facture:facture,impaye:impaye,potentiel:pot,arr:arr,mrr:mrr,recouvr:recouvr};
+  };
+
+  function kpi(val,lbl,cls,sub){return '<div class="fs-kpi '+(cls||'')+'"><div class="fs-v">'+val+'</div><div class="fs-l">'+lbl+'</div>'+(sub?'<div class="fs-sub">'+sub+'</div>':'')+'</div>';}
+
+  window.finSanteCard=function(){
+    var d=finSanteData();
+    /* Entonnoir : Potentiel → Facturé → Encaissé (largeurs proportionnelles au max) */
+    var mx=Math.max(d.potentiel,d.facture,d.enc,1);
+    var seg=function(lbl,val,cls){var w=Math.max(4,Math.round(val/mx*100));return '<div class="fs-seg"><div class="fs-seg-h"><span>'+lbl+'</span><b>'+money(val)+'</b></div><div class="fs-bar"><span class="fs-bar-f '+cls+'" style="width:'+w+'%"></span></div></div>';};
+    var funnel='<div class="fs-funnel">'+seg('Potentiel à convertir',d.potentiel,'fs-pot')+seg('Facturé',d.facture,'fs-fac')+seg('Encaissé',d.enc,'fs-enc')+'</div>';
+    var kpis='<div class="fs-kpis">'
+      +kpi(money(d.enc),'Encaissé (total)','fs-good','Ce mois : '+money(d.encMois))
+      +kpi(money(d.impaye),'Reste dû (impayés)',(d.impaye>0?'fs-bad':'fs-good'))
+      +kpi(money(d.potentiel),'Potentiel pipeline','fs-blue')
+      +kpi(money(d.arr),'Revenu récurrent /an','fs-blue','MRR : '+money(d.mrr))
+      +kpi(d.recouvr+' %','Taux de recouvrement',(d.recouvr>=80?'fs-good':d.recouvr>=50?'fs-warn':'fs-bad'))
+      +'</div>';
+    return '<div class="card fs-card"><div class="card-h"><h2>🩺 Santé financière</h2>'
+      +'<span class="sub" style="margin-left:auto">Vue consolidée — encaissé, dû, potentiel, récurrent</span></div>'
+      +'<div class="card-b">'+kpis+funnel+'</div></div>';
+  };
+
+  /* Greffe : tout en haut du tableau de bord (avant le pipeline) */
+  if(typeof window.pageDash==='function'){var _pd=window.pageDash;window.pageDash=function(){var h=_pd();try{return finSanteCard()+h;}catch(e){return h;}};}
+
+  if(!document.getElementById('finsante-css')){var st=document.createElement('style');st.id='finsante-css';
+    st.textContent='.fs-card{margin-bottom:16px}'
+      +'.fs-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}'
+      +'@media(max-width:900px){.fs-kpis{grid-template-columns:repeat(2,1fr)}}'
+      +'@media(max-width:520px){.fs-kpis{grid-template-columns:1fr}}'
+      +'.fs-kpi{background:var(--paper-2,#f6efe0);border:1px solid var(--line-soft,#f0e9da);border-radius:10px;padding:11px 13px}'
+      +'.fs-v{font-size:18px;font-weight:800;color:var(--ink,#302c24)}'
+      +'.fs-l{font-size:11px;color:var(--ink-3,#9c9078);margin-top:2px}'
+      +'.fs-sub{font-size:10.5px;color:var(--ink-3,#9c9078);margin-top:3px;opacity:.85}'
+      +'.fs-kpi.fs-good .fs-v{color:#2e7d5b}.fs-kpi.fs-bad .fs-v{color:#c0392b}.fs-kpi.fs-warn .fs-v{color:#b45309}.fs-kpi.fs-blue .fs-v{color:#2f6bbf}'
+      +'.fs-funnel{display:flex;flex-direction:column;gap:9px}'
+      +'.fs-seg-h{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-2,#5a5344);margin-bottom:3px}'
+      +'.fs-seg-h b{color:var(--ink,#302c24)}'
+      +'.fs-bar{height:12px;background:var(--paper-2,#efe7d6);border-radius:7px;overflow:hidden}'
+      +'.fs-bar-f{display:block;height:100%;border-radius:7px}'
+      +'.fs-bar-f.fs-pot{background:linear-gradient(90deg,#8fb0e0,#5f86c4)}'
+      +'.fs-bar-f.fs-fac{background:linear-gradient(90deg,#dcae63,#c48f3f)}'
+      +'.fs-bar-f.fs-enc{background:linear-gradient(90deg,#7dbb8e,#4f9c67)}';
     document.head.appendChild(st);}
 })();
 </script>
