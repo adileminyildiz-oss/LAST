@@ -770,10 +770,25 @@ const r = await page.evaluate(async () => {
   const suiviHistCardOk = /Historique des réattributions/.test(pageSuivi()) && /suivi-hist-row/.test(pageSuivi());
   const suiviFluxOk = /suivi-flux/.test(pageSuivi());
   window.suiviHistOpen = false; const suiviHistCollapse = !/suivi-hist-list/.test(pageSuivi());
+  // rééquilibrage automatique : surchargé → collègue sous la cible (jamais vers inactif)
+  DB.users = (DB.users || []).filter((u) => u.role !== 'collab');
+  DB.users.push({ id: 'RB-OV', nom: 'Charge', role: 'collab', login: 'rbov', actif: true, pwdHash: 'x' });
+  DB.users.push({ id: 'RB-LO', nom: 'Libre', role: 'collab', login: 'rblo', actif: true, pwdHash: 'x' });
+  DB.users.push({ id: 'RB-OFF', nom: 'Off', role: 'collab', login: 'rboff', actif: false, pwdHash: 'x' });
+  DB.demandes = (DB.demandes || []).map((d) => ({ ...d, assigneA: '' }));
+  DB.dossiers = (DB.dossiers || []).map((d) => ({ ...d, assigneA: '' }));
+  for (let i = 1; i <= 4; i++) DB.demandes.push({ id: 'RB-D' + i, clientNom: 'C' + i, assigneA: 'RB-OV', service: 'SAS' });
+  DB.reassignments = []; suiviSetCible(2);
+  const rbPlan = suiviRebalancePlan();
+  const suiviRebalPlan = rbPlan.moves.length === 2 && rbPlan.moves.every((m) => m.fromId === 'RB-OV' && m.toId === 'RB-LO');
+  window.__suiviPlan = rbPlan.moves; suiviDoRebalance();
+  const suiviRebalApply = DB.demandes.filter((d) => d.assigneA === 'RB-OV').length === 2 && DB.demandes.filter((d) => d.assigneA === 'RB-LO').length === 2 && suiviRebalancePlan().moves.length === 0;
+  const suiviRebalBtn = /suiviRebalance\(\)/.test(pageSuivi()) && typeof suiviRebalance === 'function' && typeof suiviDoRebalance === 'function';
   out.suivi = typeof pageSuivi === 'function' && typeof suiviExportCSV === 'function' && typeof suiviSet === 'function'
     && suiviInPages && suiviOk && suiviRendered && suiviCollabBlocked && suiviToolbar && suiviPeriode && suiviExport
     && suiviReassignFns && suiviCibleSet && suiviCibleUI && suiviOverload && suiviReassignWorks
-    && suiviHistStore && suiviHistCardOk && suiviFluxOk && suiviHistCollapse;
+    && suiviHistStore && suiviHistCardOk && suiviFluxOk && suiviHistCollapse
+    && suiviRebalPlan && suiviRebalApply && suiviRebalBtn;
 
   // Toutes les pages se rendent sans erreur
   let pageErr = '';

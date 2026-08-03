@@ -161,7 +161,11 @@ sélecteur de collaborateur (demande ou dossier reassigné, journalisé dans l'a
 charge/cible par collaborateur passant en rouge « ⚠ » au-delà de la cible ;
 **historique des réattributions** — registre structuré (objet, ancien → nouvel assigné,
 date, auteur), carte repliable en tête du suivi filtrée par période, et mini-compteur
-« reçues / cédées » par collaborateur sur la période)
+« reçues / cédées » par collaborateur sur la période ;
+**rééquilibrage automatique** — bouton « Rééquilibrer » qui propose des réattributions
+des collaborateurs surchargés vers les collègues sous la charge cible — tâches non
+démarrées déplacées en priorité, jamais vers un compte inactif — avec aperçu du plan
+avant application en un clic)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test

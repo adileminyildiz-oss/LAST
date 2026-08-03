@@ -4056,7 +4056,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=210;
+var LAST_VER=211;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11756,21 +11756,67 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
   };
   function uName(uid){var u=((DB&&DB.users)||[]).find(function(x){return x.id===uid;});return u?u.nom:(uid?'?':'Non assigné');}
-  window.suiviDoReassign=function(kind,id,uid){
-    if(typeof isCollab==='function'&&isCollab())return;
+  function taskNom(kind,it){return (kind==='demande')?nomDem(it):((it.ref||'Dossier')+((typeof dossierClients==='function')?(' · '+dossierClients(it)):''));}
+  /* Cœur de réattribution : applique + journalise (sans toast/render). Retourne true si effectué. */
+  function _reassignCore(kind,id,uid,via){
     var arr=(kind==='demande')?((DB&&DB.demandes)||[]):((DB&&DB.dossiers)||[]);
-    var it=arr.find(function(x){return x.id===id;});if(!it)return;
-    var fromId=it.assigneA||'';var fromNom=uName(fromId);
-    var to=((DB&&DB.users)||[]).find(function(u){return u.id===uid;});var toNom=to?to.nom:'Non assigné';
-    var nom=(kind==='demande')?nomDem(it):((it.ref||'Dossier')+((typeof dossierClients==='function')?(' · '+dossierClients(it)):''));
-    if(fromId===(uid||'')){if(typeof toast==='function')toast('Déjà attribué à '+toNom+'.');return;}
+    var it=arr.find(function(x){return x.id===id;});if(!it)return false;
+    var fromId=it.assigneA||'';if(fromId===(uid||''))return false;
+    var fromNom=uName(fromId),toNom=uName(uid||''),nom=taskNom(kind,it);
     it.assigneA=uid||'';
     DB.reassignments=DB.reassignments||[];
     DB.reassignments.unshift({ts:Date.now(),kind:kind,id:id,nom:nom,fromId:fromId,fromNom:fromNom,toId:uid||'',toNom:toNom,by:((typeof auditUser==='function')?auditUser():'Admin')});
     if(DB.reassignments.length>500)DB.reassignments.length=500;
-    if(typeof logAudit==='function')try{logAudit('Réattribution',(kind==='demande'?'Demande':'Dossier')+' « '+nom+' » : '+fromNom+' → '+toNom);}catch(e){}
+    if(typeof logAudit==='function')try{logAudit('Réattribution',(kind==='demande'?'Demande':'Dossier')+' « '+nom+' » : '+fromNom+' → '+toNom+(via||''));}catch(e){}
+    return true;
+  }
+  window.suiviDoReassign=function(kind,id,uid){
+    if(typeof isCollab==='function'&&isCollab())return;
+    var arr=(kind==='demande')?((DB&&DB.demandes)||[]):((DB&&DB.dossiers)||[]);
+    var it=arr.find(function(x){return x.id===id;});if(!it)return;
+    var toNom=uName(uid||'');
+    if((it.assigneA||'')===(uid||'')){if(typeof toast==='function')toast('Déjà attribué à '+toNom+'.');return;}
+    if(_reassignCore(kind,id,uid,'')){if(typeof save==='function')save();if(typeof closeModal==='function')closeModal();if(typeof toast==='function')toast('Réattribué à '+toNom+'.');if(typeof render==='function')render();}
+  };
+
+  /* Rééquilibrage : propose de déplacer des tâches des surchargés vers les collègues sous la cible */
+  function suiviRebalancePlan(){
+    var cible=suiviCible();
+    var collabs=((DB&&DB.users)||[]).filter(function(u){return u.role==='collab';});
+    var recvs=collabs.filter(function(u){return u.actif!==false;});
+    var load={},pool={},nameOf={};
+    collabs.forEach(function(u){var m=metrics(u,0);load[u.id]=m.charge;nameOf[u.id]=u.nom;
+      var tasks=[];
+      m.demOuv.forEach(function(d){tasks.push({kind:'demande',id:d.id,nom:nomDem(d),pri:(etat(d)==='nouveau'?0:1)});});
+      m.dosOuv.forEach(function(d){tasks.push({kind:'dossier',id:d.id,nom:taskNom('dossier',d),pri:2});});
+      tasks.sort(function(a,b){return a.pri-b.pri;});pool[u.id]=tasks;});
+    var over=collabs.filter(function(u){return load[u.id]>cible;}).sort(function(a,b){return load[b.id]-load[a.id];});
+    var moves=[],guard=0;
+    for(var oi=0;oi<over.length;oi++){var src=over[oi];
+      while(load[src.id]>cible&&pool[src.id].length&&guard<2000){guard++;
+        var best=null;
+        recvs.forEach(function(rc){if(rc.id===src.id)return;if(load[rc.id]>=cible)return;if(!best||load[rc.id]<load[best.id])best=rc;});
+        if(!best)break;
+        var t=pool[src.id].shift();load[src.id]--;load[best.id]++;
+        moves.push({kind:t.kind,id:t.id,nom:t.nom,fromId:src.id,fromNom:nameOf[src.id],toId:best.id,toNom:best.nom});}
+    }
+    return {cible:cible,moves:moves};
+  }
+  window.suiviRebalancePlan=suiviRebalancePlan;
+  window.suiviRebalance=function(){
+    if(typeof isCollab==='function'&&isCollab())return;if(typeof openModal!=='function')return;
+    var plan=suiviRebalancePlan();window.__suiviPlan=plan.moves;
+    if(!plan.moves.length){openModal('Rééquilibrage de la charge','<p class="hint" style="margin:0">La charge est déjà équilibrée : aucun collaborateur au-dessus de la cible ('+plan.cible+') ne peut être délesté vers un collègue disponible.</p>','<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');return;}
+    var rows=plan.moves.map(function(m){return '<div class="suivi-hist-row"><span class="suivi-hist-kind '+(m.kind==='demande'?'d':'o')+'">'+(m.kind==='demande'?'Demande':'Dossier')+'</span><span class="suivi-hist-nom">'+E(m.nom)+'</span><span class="suivi-hist-move"><i>'+E(m.fromNom)+'</i> → <b>'+E(m.toNom)+'</b></span></div>';}).join('');
+    openModal('Proposition de rééquilibrage','<p class="hint" style="margin:0 0 10px">'+plan.moves.length+' réattribution(s) proposée(s) pour ramener les collaborateurs surchargés vers la cible ('+plan.cible+' tâches). Les tâches non démarrées sont déplacées en priorité.</p><div class="suivi-hist-list" style="max-height:340px;border:1px solid var(--line-2,#e2d9c6);border-radius:9px">'+rows+'</div>','<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-accent" onclick="suiviDoRebalance()">Appliquer '+plan.moves.length+' réattribution(s)</button>');
+  };
+  window.suiviDoRebalance=function(){
+    if(typeof isCollab==='function'&&isCollab())return;
+    var moves=window.__suiviPlan||[],n=0;
+    moves.forEach(function(m){if(_reassignCore(m.kind,m.id,m.toId,' (rééquilibrage)'))n++;});
+    window.__suiviPlan=null;
     if(typeof save==='function')save();if(typeof closeModal==='function')closeModal();
-    if(typeof toast==='function')toast('Réattribué à '+toNom+'.');
+    if(typeof toast==='function')toast(n+' réattribution(s) appliquée(s).');
     if(typeof render==='function')render();
   };
 
@@ -11875,7 +11921,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<div class="suivi-tb-grp"><span>Période</span><div class="suivi-segs">'+seg('periode',PERIODES,st.periode)+'</div></div>'
       +'<div class="suivi-tb-grp"><span>Trier</span><div class="suivi-segs">'+seg('tri',TRIS,st.tri)+'</div></div>'
       +'<div class="suivi-tb-grp"><span>Charge cible</span><input type="number" min="1" class="suivi-cible-in" value="'+suiviCible()+'" onchange="suiviSetCible(this.value)" title="Objectif de tâches en cours par collaborateur"></div>'
-      +'<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="suiviExportCSV()">⤓ Export CSV</button>'
+      +'<button class="btn btn-sm btn-accent" style="margin-left:auto" onclick="suiviRebalance()" title="Proposer des réattributions pour équilibrer la charge">⇄ Rééquilibrer</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="suiviExportCSV()">⤓ Export CSV</button>'
       +'</div>';
     var body=mets.length?('<div class="suivi-grid">'+mets.map(collabCard).join('')+'</div>'):'<div class="card"><div class="card-b"><div class="empty">Aucun collaborateur. Ajoutez-en dans Paramètres → Équipe, puis définissez leur accès.</div></div></div>';
     return head+kpis+'<div style="height:12px"></div>'+toolbar+suiviHistCard(cutoff)+'<div style="height:12px"></div>'+body;
