@@ -52,7 +52,11 @@ pièces, point d'avancement, relance — pré-remplies avec le numéro de
 série), **notification en barre latérale** (le badge « Demandes » passe
 au rouge quand des demandes dépassent le délai SLA) et **auto-cochage
 des étapes** (demander les pièces coche automatiquement l'étape
-« Collecte des pièces ») — le tout sans erreur JavaScript.
+« Collecte des pièces ») et **classement automatique des pièces jointes**
+(reconnaissance du type de chaque pièce reçue — CNI, domicile, K-bis,
+statuts, RIB… — d'après son nom, correction manuelle, couverture des
+pièces requises par la formalité, et aperçu inline image/PDF sans quitter
+la fiche) — le tout sans erreur JavaScript.
 
 ## Lancer
 

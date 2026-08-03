@@ -3924,7 +3924,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=184;
+var LAST_VER=185;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9322,6 +9322,100 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.chk-lbl{font-size:12.5px}'
       +'.chk-row.on .chk-lbl{text-decoration:line-through;color:var(--ink-3,#8a7f6c)}'
       +'.rep-bar{display:flex;flex-wrap:wrap;gap:6px}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="demclass-mod">
+/* ===================================================================
+   CLASSEMENT AUTOMATIQUE DES PIÈCES JOINTES + APERÇU INLINE
+   Reconnaît le type de chaque pièce reçue (CNI, domicile, K-bis,
+   statuts, RIB…) d'après son nom, montre la couverture des pièces
+   requises par la formalité, et permet un aperçu inline (image / PDF).
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  var CATS=[
+    {key:'cni',label:"Pièce d'identité",emo:'🪪',rx:/cni|carte.?identite|\bidentite\b|passeport|titre.?sejour|permis/},
+    {key:'domicile',label:'Justificatif de domicile',emo:'🏠',rx:/domicile|justif.?dom|facture.?(edf|engie|mobile|telephone|electri|gaz|eau|internet)|loyer|quittance|\bfree\b|orange|\bsfr\b|bouygues/},
+    {key:'kbis',label:'K-bis / extrait',emo:'📜',rx:/kbis|k-?bis|extrait|immatricul/},
+    {key:'statuts',label:'Statuts',emo:'📗',rx:/statut/},
+    {key:'rib',label:'RIB / IBAN',emo:'🏦',rx:/(?:^|[^a-z0-9])rib(?:[^a-z0-9]|$)|iban|releve.?identite/},
+    {key:'capital',label:'Dépôt de capital',emo:'💰',rx:/capital|depot.?(de.?)?fonds|attestation.?depot/},
+    {key:'annonce',label:'Annonce légale',emo:'📰',rx:/annonce|\bjal\b|journal.?annonce|publication.?legale/},
+    {key:'dnc',label:'Non-condamnation',emo:'✍️',rx:/non.?condamn|\bdnc\b|declaration.?(sur.?l)?honneur/},
+    {key:'bail',label:'Bail / domiciliation',emo:'🏢',rx:/\bbail\b|domicili|contrat.?(de.?)?location/},
+    {key:'facture',label:'Facture / devis',emo:'🧾',rx:/facture|invoice|\bdevis\b/}
+  ];
+  var AUTRE={key:'autre',label:'À classer',emo:'📎'};
+  function catOf(key){for(var i=0;i<CATS.length;i++)if(CATS[i].key===key)return CATS[i];return AUTRE;}
+  window.demAttGuess=function(name){
+    var n=(''+(name||'')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    for(var i=0;i<CATS.length;i++){if(CATS[i].rx.test(n))return CATS[i];}
+    return AUTRE;
+  };
+  window.demAttCat=function(a){return (a&&a.cat)?catOf(a.cat):window.demAttGuess(a&&a.name);};
+  window.demAttSetCat=function(id,i,cat){var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return;var a=(d.attachments||[])[i];if(!a)return;a.cat=cat;if(typeof save==='function')save();if(typeof render==='function')render();};
+
+  window.demAttPreview=function(id,i){
+    var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return;var a=(d.attachments||[])[i];if(!a)return;
+    var box=document.getElementById('datt-prev-'+id+'-'+i);if(!box)return;
+    if(box.getAttribute('data-open')==='1'){box.style.display='none';box.setAttribute('data-open','0');box.innerHTML='';return;}
+    if(!a.dataB64){if(typeof demAttRecuperer==='function')demAttRecuperer(id);else if(typeof toast==='function')toast('Contenu non récupéré — cliquez sur « Récupérer les pièces jointes ».');return;}
+    var type=a.type||'';var url='data:'+(type||'application/octet-stream')+';base64,'+a.dataB64;var inner='';
+    if(/^image\//.test(type)||/\.(png|jpe?g|gif|webp|bmp)$/i.test(a.name||''))inner='<img src="'+url+'" alt="'+E(a.name||'')+'" style="max-width:100%;border-radius:8px;display:block">';
+    else if(/pdf/i.test(type)||/\.pdf$/i.test(a.name||''))inner='<iframe src="'+url+'" title="'+E(a.name||'')+'" style="width:100%;height:440px;border:1px solid var(--line-2,#e2d9c6);border-radius:8px"></iframe>';
+    else inner='<div class="hint">Aperçu non disponible pour ce format — utilisez « Télécharger ».</div>';
+    box.innerHTML=inner;box.style.display='block';box.setAttribute('data-open','1');
+  };
+
+  /* Couverture : quelles pièces requises par la formalité sont déjà reçues */
+  window.demAttCouverture=function(d){
+    var req=[];try{if(typeof piecesRequises==='function')req=piecesRequises(d)||[];}catch(e){}
+    var atts=(typeof demAttList==='function')?demAttList(d):((d&&d.attachments)||[]);
+    var present={};atts.forEach(function(a){var c=window.demAttCat(a);if(c&&c.key!=='autre')present[c.key]=true;});
+    return req.map(function(p){
+      var lab=(''+(p.label||p.k||'')).toLowerCase();
+      var hit=null;CATS.forEach(function(c){if(!hit&&(c.key===p.k||(c.rx&&c.rx.test(lab.normalize('NFD').replace(/[̀-ͯ]/g,'')))))hit=c;});
+      var ok=hit?!!present[hit.key]:false;
+      return {label:p.label||p.k,ok:ok};
+    });
+  };
+
+  /* Override de la carte des pièces jointes : + reconnaissance, correction, aperçu inline, couverture */
+  window.demAttBlock=function(id){
+    var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return '';
+    var a=(typeof demAttList==='function')?demAttList(d):((d&&d.attachments)||[]);if(!a.length)return '';
+    var manque=a.some(function(x){return x&&x.msgId&&!x.dataB64;});
+    var opts=function(sel){return CATS.concat([AUTRE]).map(function(c){return '<option value="'+c.key+'"'+(sel===c.key?' selected':'')+'>'+c.emo+' '+E(c.label)+'</option>';}).join('');};
+    var rows=a.map(function(x,i){var has=!!(x&&x.dataB64);var cat=window.demAttCat(x);
+      return '<div class="datt-row"><span class="datt-nm" title="'+E((x&&x.name)||'')+'">'+cat.emo+' '+E((x&&x.name)||'pièce jointe')+'</span>'
+        +'<select class="datt-cat" onchange="demAttSetCat(\''+id+'\','+i+',this.value)" title="Type de pièce (corrigez si besoin)">'+opts(cat.key)+'</select>'
+        +'<span class="datt-acts">'
+        +(has?('<button class="btn btn-sm" onclick="demAttPreview(\''+id+'\','+i+')">Aperçu</button>'
+              +'<a class="btn btn-sm btn-ghost" href="data:'+((x.type||'application/octet-stream'))+';base64,'+(x.dataB64)+'" download="'+E(x.name||('piece-'+(i+1)))+'">Télécharger</a>')
+           :'<span class="tag mut">à récupérer</span>')
+        +'</span></div>'
+        +'<div class="datt-prev" id="datt-prev-'+id+'-'+i+'" data-open="0" style="display:none"></div>';
+    }).join('');
+    var couv=window.demAttCouverture(d);
+    var covHTML=couv.length?('<div class="datt-cov"><span class="datt-cov-t">Couverture des pièces requises</span>'
+      +couv.map(function(c){return '<span class="datt-chip '+(c.ok?'ok':'no')+'">'+(c.ok?'✓':'○')+' '+E(c.label)+'</span>';}).join('')+'</div>'):'';
+    return '<div class="card"><div class="card-h"><h2>Pièces jointes reçues</h2><span class="sub" style="margin-left:auto">'+a.length+' fichier(s) · reconnues automatiquement</span></div>'
+      +'<div class="card-b"><div class="datt-list">'+rows+'</div>'
+      +covHTML
+      +(manque?'<button class="btn btn-sm btn-pri" style="margin-top:8px" onclick="demAttRecuperer(\''+id+'\')">⬇ Récupérer les pièces jointes</button>':'')
+      +'</div></div>';
+  };
+
+  if(!document.getElementById('demclass-css')){var st=document.createElement('style');st.id='demclass-css';
+    st.textContent='.datt-cat{font:inherit;font-size:11px;padding:3px 6px;border-radius:7px;border:1px solid var(--line-2,#e2d9c6);background:var(--paper,#fffef9);color:var(--ink,#302c24);flex:none;max-width:190px}'
+      +'.datt-prev{margin:2px 0 4px}'
+      +'.datt-cov{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:11px;padding-top:10px;border-top:1px solid var(--line-soft,#f0e9da)}'
+      +'.datt-cov-t{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3,#9c9078);width:100%}'
+      +'.datt-chip{font-size:11px;border-radius:20px;padding:2px 9px;border:1px solid}'
+      +'.datt-chip.ok{color:#3f7d54;background:#eef7f0;border-color:#cfe6d6}'
+      +'.datt-chip.no{color:var(--ink-3,#8a7f6c);background:var(--paper-2,#f6efe0);border-color:var(--line-2,#e2d9c6)}';
     document.head.appendChild(st);}
 })();
 </script>

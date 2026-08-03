@@ -429,6 +429,24 @@ const r = await page.evaluate(async () => {
   out.demNotifAuto = navLate && chkBefore === 0 && autoDid === true && chkAfter === 1 && autoAgain === false
     && typeof demChkAutoDone === 'function';
 
+  // Classement automatique des pièces jointes + couverture + aperçu inline
+  const g = n => demAttGuess(n).key;
+  const guessOk = g('CNI_recto.pdf') === 'cni' && g('facture-EDF.pdf') === 'domicile' && g('extrait-kbis.pdf') === 'kbis'
+    && g('statuts-signes.pdf') === 'statuts' && g('RIB_banque.pdf') === 'rib' && g('scan001.pdf') === 'autre';
+  DB.demandes.unshift({ id: 'dcl', code: 'DC-0800', clientNom: 'Léa', clientEmail: 'lea@ex.fr', canal: 'Formulaire du site', serviceSouhaite: 'Création SAS', statut: 'Nouveau', assigneA: '', date: '2026-08-01', lu: false,
+    attachments: [{ name: 'CNI_lea.png', type: 'image/png', dataB64: 'iVBORw0KGgoAAAANSUhEUg==', msgId: 'm1' }, { name: 'facture-mobile.pdf', type: 'application/pdf', dataB64: 'JVBERi0=', msgId: 'm1' }, { name: 'scan_x.pdf', type: 'application/pdf', dataB64: 'JVBERi0=', msgId: 'm1' }] });
+  const dCl = DB.demandes.find(d => d.id === 'dcl');
+  const cats = dCl.attachments.map(a => demAttCat(a).key);
+  const cov = demAttCouverture(dCl);
+  const cniCovered = cov.some(c => /identit/i.test(c.label) && c.ok);
+  const domCovered = cov.some(c => /domicile/i.test(c.label) && c.ok);
+  const blk = demAttBlock('dcl');
+  demAttSetCat('dcl', 2, 'statuts');
+  const catFixed = demAttCat(dCl.attachments[2]).key === 'statuts';
+  out.demClass = guessOk && cats[0] === 'cni' && cats[1] === 'domicile' && cniCovered && domCovered
+    && /Couverture des pièces requises/.test(blk) && /datt-cat/.test(blk) && catFixed
+    && typeof demAttGuess === 'function' && typeof demAttPreview === 'function' && typeof demAttCouverture === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
