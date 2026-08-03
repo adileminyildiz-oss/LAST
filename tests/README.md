@@ -158,7 +158,10 @@ l'activité, tri — par nom / charge / retard / avancement — et export CSV du
 la période courante ; **réattribution d'une tâche** — bouton ⇄ par tâche ouvrant un
 sélecteur de collaborateur (demande ou dossier reassigné, journalisé dans l'audit) — et
 **charge cible + alerte de surcharge** — objectif de tâches en cours réglable, badge
-charge/cible par collaborateur passant en rouge « ⚠ » au-delà de la cible)
+charge/cible par collaborateur passant en rouge « ⚠ » au-delà de la cible ;
+**historique des réattributions** — registre structuré (objet, ancien → nouvel assigné,
+date, auteur), carte repliable en tête du suivi filtrée par période, et mini-compteur
+« reçues / cédées » par collaborateur sur la période)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test

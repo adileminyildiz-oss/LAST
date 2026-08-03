@@ -764,9 +764,16 @@ const r = await page.evaluate(async () => {
   const demSv = (DB.demandes || []).find((d) => d.assigneA === 'u-sofia');
   let suiviReassignWorks = false;
   if (demSv) { const other = (DB.users || []).find((u) => u.role === 'collab' && u.id !== 'u-sofia'); if (other) { suiviDoReassign('demande', demSv.id, other.id); suiviReassignWorks = demSv.assigneA === other.id; suiviDoReassign('demande', demSv.id, 'u-sofia'); } }
+  // historique des réattributions : registre structuré + carte + compteurs flux
+  const suiviHistStore = Array.isArray(DB.reassignments) && DB.reassignments.length >= 1 && !!DB.reassignments[0].fromNom && !!DB.reassignments[0].toNom && !!DB.reassignments[0].nom;
+  window.suiviHistOpen = true;
+  const suiviHistCardOk = /Historique des réattributions/.test(pageSuivi()) && /suivi-hist-row/.test(pageSuivi());
+  const suiviFluxOk = /suivi-flux/.test(pageSuivi());
+  window.suiviHistOpen = false; const suiviHistCollapse = !/suivi-hist-list/.test(pageSuivi());
   out.suivi = typeof pageSuivi === 'function' && typeof suiviExportCSV === 'function' && typeof suiviSet === 'function'
     && suiviInPages && suiviOk && suiviRendered && suiviCollabBlocked && suiviToolbar && suiviPeriode && suiviExport
-    && suiviReassignFns && suiviCibleSet && suiviCibleUI && suiviOverload && suiviReassignWorks;
+    && suiviReassignFns && suiviCibleSet && suiviCibleUI && suiviOverload && suiviReassignWorks
+    && suiviHistStore && suiviHistCardOk && suiviFluxOk && suiviHistCollapse;
 
   // Toutes les pages se rendent sans erreur
   let pageErr = '';

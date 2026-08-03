@@ -4056,7 +4056,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=209;
+var LAST_VER=210;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11755,15 +11755,22 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     openModal('Réattribuer — '+E(nom),'<p class="hint" style="margin:0 0 10px">Choisissez le collaborateur qui prend en charge cette '+(kind==='demande'?'demande':'ce dossier')+'.</p><div class="suivi-reass-list">'+rows+'</div>',
       '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
   };
+  function uName(uid){var u=((DB&&DB.users)||[]).find(function(x){return x.id===uid;});return u?u.nom:(uid?'?':'Non assigné');}
   window.suiviDoReassign=function(kind,id,uid){
     if(typeof isCollab==='function'&&isCollab())return;
     var arr=(kind==='demande')?((DB&&DB.demandes)||[]):((DB&&DB.dossiers)||[]);
     var it=arr.find(function(x){return x.id===id;});if(!it)return;
-    var to=((DB&&DB.users)||[]).find(function(u){return u.id===uid;});
+    var fromId=it.assigneA||'';var fromNom=uName(fromId);
+    var to=((DB&&DB.users)||[]).find(function(u){return u.id===uid;});var toNom=to?to.nom:'Non assigné';
+    var nom=(kind==='demande')?nomDem(it):((it.ref||'Dossier')+((typeof dossierClients==='function')?(' · '+dossierClients(it)):''));
+    if(fromId===(uid||'')){if(typeof toast==='function')toast('Déjà attribué à '+toNom+'.');return;}
     it.assigneA=uid||'';
-    if(typeof logAudit==='function')try{logAudit('Réattribution',(kind==='demande'?'Demande':'Dossier')+' → '+(to?to.nom:'Non assigné'));}catch(e){}
+    DB.reassignments=DB.reassignments||[];
+    DB.reassignments.unshift({ts:Date.now(),kind:kind,id:id,nom:nom,fromId:fromId,fromNom:fromNom,toId:uid||'',toNom:toNom,by:((typeof auditUser==='function')?auditUser():'Admin')});
+    if(DB.reassignments.length>500)DB.reassignments.length=500;
+    if(typeof logAudit==='function')try{logAudit('Réattribution',(kind==='demande'?'Demande':'Dossier')+' « '+nom+' » : '+fromNom+' → '+toNom);}catch(e){}
     if(typeof save==='function')save();if(typeof closeModal==='function')closeModal();
-    if(typeof toast==='function')toast('Réattribué à '+(to?to.nom:'personne')+'.');
+    if(typeof toast==='function')toast('Réattribué à '+toNom+'.');
     if(typeof render==='function')render();
   };
 
@@ -11774,7 +11781,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var dosOuv=doss.filter(function(d){return d.statut!=='Clôturé';});
     var retard=lateOf(dems).length;
     var pct=doss.length?Math.round(dosClos/doss.length*100):0;
-    return {u:u,dems:dems,doss:doss,demOuv:demOuv,dosClos:dosClos,dosOuv:dosOuv,retard:retard,pct:pct,charge:demOuv.length+dosOuv.length,acts:actOf(u.nom,cutoff)};
+    var ra=((DB&&DB.reassignments)||[]).filter(function(r){return !cutoff||r.ts>=cutoff;});
+    var recu=ra.filter(function(r){return r.toId===u.id;}).length;
+    var cede=ra.filter(function(r){return r.fromId===u.id;}).length;
+    return {u:u,dems:dems,doss:doss,demOuv:demOuv,dosClos:dosClos,dosOuv:dosOuv,retard:retard,pct:pct,charge:demOuv.length+dosOuv.length,acts:actOf(u.nom,cutoff),recu:recu,cede:cede};
   }
 
   function collabCard(m){
@@ -11794,10 +11804,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +(acts.length?acts.map(function(a){return '<div class="suivi-act"><span>'+E(a.action)+(a.detail?(' · '+E(a.detail)):'')+'</span><time>'+frDT(a.ts)+'</time></div>';}).join(''):'<div class="suivi-act" style="border:0;color:var(--ink-3,#9c9078)">Aucune activité sur la période.</div>');
     var cible=suiviCible();var over=m.charge>cible;
     var chargeBadge='<span class="suivi-charge'+(over?' over':'')+'" title="Charge en cours vs objectif ('+cible+')">'+m.charge+'/'+cible+(over?' ⚠':'')+'</span>';
+    var flux=((m.recu||m.cede)?('<span class="suivi-flux" title="Réattributions sur la période — reçues / cédées">'+(m.recu?('<b class="in">+'+m.recu+'</b>'):'')+(m.recu&&m.cede?' ':'')+(m.cede?('<b class="out">−'+m.cede+'</b>'):'')+'</span>'):'');
     var left='<div class="suivi-left"><div class="suivi-head">'
       +'<span class="av" style="background:'+(u.couleur||'#4a4034')+'">'+((typeof initials==='function')?initials(u.nom):(u.nom||'?').slice(0,2))+'</span>'
       +'<div class="suivi-id"><b>'+E(u.nom)+'</b><span>Collaborateur '+(u.login?('· '+E(u.login)):'')+'</span></div>'
-      +'<span style="margin-left:auto;display:flex;align-items:center;gap:7px">'+chargeBadge+acces+'</span></div>'
+      +'<span style="margin-left:auto;display:flex;align-items:center;gap:7px">'+flux+chargeBadge+acces+'</span></div>'
       +'<div class="suivi-kpis">'
         +'<div class="suivi-k"><b>'+m.dems.length+'</b><span>Demandes</span></div>'
         +'<div class="suivi-k"><b>'+m.dosOuv.length+'</b><span>Dossiers en cours</span></div>'
@@ -11821,6 +11832,24 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     try{var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='suivi-collaborateurs-'+(new Date().toISOString().slice(0,10))+'.csv';document.body.appendChild(a);a.click();setTimeout(function(){try{URL.revokeObjectURL(a.href);a.remove();}catch(e){}},120);if(typeof toast==='function')toast('Export CSV téléchargé.');}catch(e){if(typeof toast==='function')toast('Export impossible.');}
   };
 
+  /* Historique des réattributions (repliable, filtré par période) */
+  window.suiviHistOpen=false;
+  window.suiviHistToggle=function(){window.suiviHistOpen=!window.suiviHistOpen;if(typeof render==='function')render();};
+  function histRelTs(ts){try{var d=Math.floor((Date.now()-ts)/1000);if(d<60)return 'à l\'instant';if(d<3600)return 'il y a '+Math.floor(d/60)+ ' min';if(d<86400)return 'il y a '+Math.floor(d/3600)+' h';return frDT(ts);}catch(e){return '';}}
+  function suiviHistCard(cutoff){
+    var all=((DB&&DB.reassignments)||[]).filter(function(r){return !cutoff||r.ts>=cutoff;});
+    var n=all.length;
+    var head='<button class="suivi-hist-h" onclick="suiviHistToggle()"><span class="suivi-hist-ic">'+(window.suiviHistOpen?'▾':'▸')+'</span><b>Historique des réattributions</b><span class="suivi-hist-n">'+n+'</span></button>';
+    if(!window.suiviHistOpen)return '<div class="card suivi-hist">'+head+'</div>';
+    var body=n?('<div class="suivi-hist-list">'+all.slice(0,40).map(function(r){
+      return '<div class="suivi-hist-row"><span class="suivi-hist-kind '+(r.kind==='demande'?'d':'o')+'">'+(r.kind==='demande'?'Demande':'Dossier')+'</span>'
+        +'<span class="suivi-hist-nom">'+E(r.nom||'')+'</span>'
+        +'<span class="suivi-hist-move"><i>'+E(r.fromNom||'Non assigné')+'</i> → <b>'+E(r.toNom||'Non assigné')+'</b></span>'
+        +'<time>'+histRelTs(r.ts)+'</time></div>';
+    }).join('')+(n>40?'<div class="hint" style="font-size:11px;padding:4px 2px">+'+(n-40)+' plus anciennes…</div>':'')+'</div>')
+      :'<div class="suivi-none" style="padding:14px 0">Aucune réattribution sur la période.</div>';
+    return '<div class="card suivi-hist open">'+head+body+'</div>';
+  }
   window.pageSuivi=function(){
     if(typeof isCollab==='function'&&isCollab())return '<div class="card"><div class="card-b"><div class="empty">Accès réservé à l\'administrateur.</div></div></div>';
     var st=suiviState(),cutoff=cutoffOf(st.periode);
@@ -11849,7 +11878,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="suiviExportCSV()">⤓ Export CSV</button>'
       +'</div>';
     var body=mets.length?('<div class="suivi-grid">'+mets.map(collabCard).join('')+'</div>'):'<div class="card"><div class="card-b"><div class="empty">Aucun collaborateur. Ajoutez-en dans Paramètres → Équipe, puis définissez leur accès.</div></div></div>';
-    return head+kpis+'<div style="height:12px"></div>'+toolbar+body;
+    return head+kpis+'<div style="height:12px"></div>'+toolbar+suiviHistCard(cutoff)+'<div style="height:12px"></div>'+body;
   };
 
   if(!document.getElementById('suivi-css')){var st=document.createElement('style');st.id='suivi-css';
@@ -11895,7 +11924,24 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.suivi-reass-opt{display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--line-2,#e2d9c6);border-radius:9px;background:var(--card,#fffdf7);cursor:pointer;font:inherit;font-size:13px;font-weight:600;color:var(--ink,#302c24);text-align:left}'
       +'.suivi-reass-opt:hover{border-color:var(--accent,#7a6e58)}'
       +'.suivi-reass-opt.on{border-color:var(--accent,#7a6e58);background:var(--paper-2,#f6efe0)}'
-      +'.suivi-reass-opt .av{flex:none}';
+      +'.suivi-reass-opt .av{flex:none}'
+      +'.suivi-flux{flex:none;display:inline-flex;gap:5px;font-size:10px;font-weight:800}'
+      +'.suivi-flux .in{color:#2e7d5b}.suivi-flux .out{color:#c0392b}'
+      +'.suivi-hist{padding:0;overflow:hidden}'
+      +'.suivi-hist-h{width:100%;display:flex;align-items:center;gap:9px;padding:12px 14px;border:none;background:none;font:inherit;cursor:pointer;text-align:left;color:var(--ink,#302c24)}'
+      +'.suivi-hist-h b{font-size:13px;font-weight:700}'
+      +'.suivi-hist-ic{font-size:11px;color:var(--ink-3,#9c9078);width:12px}'
+      +'.suivi-hist-n{margin-left:auto;font-size:11px;font-weight:800;background:var(--paper-2,#f1ead9);border:1px solid var(--line-2,#e2d9c6);border-radius:20px;padding:1px 9px;color:var(--ink-2,#5a5344)}'
+      +'.suivi-hist.open .suivi-hist-h{border-bottom:1px solid var(--line-soft,#f0e9da)}'
+      +'.suivi-hist-list{display:flex;flex-direction:column;max-height:300px;overflow:auto}'
+      +'.suivi-hist-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px dotted var(--line-soft,#f0e9da);font-size:12px}'
+      +'.suivi-hist-row:last-child{border-bottom:0}'
+      +'.suivi-hist-kind{flex:none;font-size:9.5px;font-weight:700;border-radius:5px;padding:2px 7px;background:var(--paper-2,#f1ead9);color:var(--ink-2,#5a5344)}'
+      +'.suivi-hist-kind.d{background:#eef3ec;color:#4f7a58}.suivi-hist-kind.o{background:#eef1f6;color:#516488}'
+      +'.suivi-hist-nom{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;color:var(--ink,#302c24)}'
+      +'.suivi-hist-move{flex:none;color:var(--ink-2,#5a5344)}.suivi-hist-move i{color:var(--ink-3,#9c9078);font-style:normal}.suivi-hist-move b{color:var(--ink,#302c24)}'
+      +'.suivi-hist-row time{flex:none;color:var(--ink-3,#9c9078);font-size:10.5px;min-width:74px;text-align:right}'
+      +'@media(max-width:640px){.suivi-hist-move,.suivi-hist-row time{display:none}}';
     document.head.appendChild(st);}
 })();
 </script>
