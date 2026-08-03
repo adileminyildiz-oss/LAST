@@ -588,6 +588,28 @@ const r = await page.evaluate(async () => {
     && /Recommandations/.test(piloPage) && /Rapport d.activité/.test(piloPage) && /Synthèse/.test(piloPage)
     && typeof pagePilotage === 'function' && typeof piloRapportGen === 'function' && typeof piloAutoHebdo === 'function' && typeof piloRecoCount === 'function';
 
+  // IA — transverse : barre IA + dictée sur les zones de texte, résumé demande/dossier
+  document.body.insertAdjacentHTML('beforeend', '<textarea id="trta">bonjour   ceci  est   un test.  deuxieme phrase longue ici. troisieme phrase.  quatrieme phrase finale.</textarea>');
+  iaDecorerTextareas();
+  const trBar = document.querySelector('.iatb[data-for="trta"]');
+  const trBarOk = !!trBar && /Corriger/.test(trBar.innerHTML) && /Raccourcir/.test(trBar.innerHTML) && /Plus pro/.test(trBar.innerHTML);
+  const trBefore = document.getElementById('trta').value.length;
+  iaTA('trta', 'raccourcir');
+  await new Promise(r => setTimeout(r, 450));
+  const trShort = document.getElementById('trta').value.length < trBefore && document.getElementById('trta').value.length > 0;
+  DB.demandes = DB.demandes || [];
+  DB.demandes.push({ id: 'trdem', clientNom: 'Résumé Prospect', clientEmail: 't@ex.fr', serviceSouhaite: 'Création SAS', message: 'Créer ma société', date: '2026-01-01' });
+  iaResumeDemande('trdem');
+  await new Promise(r => setTimeout(r, 450));
+  const trResD = /Résumé de la demande/.test((document.getElementById('ov-t') || {}).innerHTML || '') && (document.getElementById('iares-out') || {}).innerHTML.length > 20;
+  if (typeof closeModal === 'function') closeModal();
+  iaResumeDossier('d1'); // dossier créé plus haut dans la suite
+  await new Promise(r => setTimeout(r, 450));
+  const trResDoss = /Résumé du dossier/.test((document.getElementById('ov-t') || {}).innerHTML || '') && (document.getElementById('iares-out') || {}).innerHTML.length > 20;
+  if (typeof closeModal === 'function') closeModal();
+  out.iaTransverse = typeof iaTA === 'function' && typeof iaMic === 'function' && typeof iaResumeDemande === 'function' && typeof iaResumeDossier === 'function' && typeof iaDecorerTextareas === 'function'
+    && trBarOk && trShort && trResD && trResDoss;
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

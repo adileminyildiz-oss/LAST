@@ -3932,7 +3932,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=196;
+var LAST_VER=197;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10745,6 +10745,165 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   /* lancement de la génération hebdomadaire au démarrage (silencieux) */
   setTimeout(function(){try{piloAutoHebdo();}catch(e){}},1800);
+})();
+</script>
+
+<script id="ia-transverse-mod">
+/* ===================================================================
+   IA — Transverse : correcteur/reformulateur + dictée vocale sur les
+   zones de texte longues, et résumé de dossier/demande en un clic.
+   Objectif n°10 (dernier).
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function offToast(){if(typeof toast==='function')toast('Activez l\'IA (ou le mode démo) dans Paramètres → Assistant IA.');}
+  var SR=(typeof window!=='undefined')&&(window.SpeechRecognition||window.webkitSpeechRecognition);
+
+  /* ---- Transformations (démo hors-ligne) ---- */
+  function capFirst(t){t=(''+t).replace(/^\s+/,'');return t?(t.charAt(0).toUpperCase()+t.slice(1)):t;}
+  function demoCorr(t){var x=(''+t).replace(/[ \t]+/g,' ').replace(/ +\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();x=capFirst(x);if(x&&!/[.!?…]$/.test(x))x+='.';return x;}
+  function demoCourt(t){var seg=(''+t).split(/(?<=[.!?…])\s+/).filter(function(s){return s.trim();});if(seg.length<=1)return demoCorr(t);var n=Math.max(1,Math.ceil(seg.length*0.55));return seg.slice(0,n).join(' ').trim();}
+  function demoPro(t){var x=demoCorr(t);return x;}
+  var ACT={
+    corriger:{lbl:'Corriger',sys:'Corrige l\'orthographe, la grammaire et la ponctuation du texte, sans changer le sens ni le ton. Réponds UNIQUEMENT par le texte corrigé.',demo:demoCorr},
+    raccourcir:{lbl:'Raccourcir',sys:'Raccourcis ce texte d\'environ la moitié en gardant l\'essentiel et la clarté. Réponds UNIQUEMENT par le texte raccourci.',demo:demoCourt},
+    pro:{lbl:'Plus pro',sys:'Reformule ce texte dans un style professionnel, courtois et clair, propre à un cabinet, sans changer le fond. Réponds UNIQUEMENT par le texte reformulé.',demo:demoPro}
+  };
+
+  /* ---- Action sur une zone de texte ciblée ---- */
+  window.iaTA=function(taId,action){
+    var ta=document.getElementById(taId);if(!ta)return;
+    var a=ACT[action];if(!a)return;
+    var txt=ta.value||'';if(!txt.trim())return (typeof toast==='function')&&toast('La zone de texte est vide.');
+    if(typeof iaMode==='function'&&iaMode()==='off')return offToast();
+    if(typeof toast==='function')toast('IA : '+a.lbl.toLowerCase()+'…');
+    iaAsk({system:a.sys,user:txt,temperature:0.2,demo:function(){return a.demo(txt);}},function(r){
+      if(r&&r.ok&&r.text){ta.value=r.text;try{ta.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}if(typeof toast==='function')toast(r.demo?'Texte modifié (démo).':'Texte modifié par l\'IA.');}
+      else if(typeof toast==='function')toast('Échec : '+((r&&r.error)||'inconnu'));
+    });
+  };
+
+  /* ---- Dictée vocale (reconnaissance du navigateur, sans clé) ---- */
+  var _rec=null,_recTa=null;
+  window.iaMic=function(taId,btn){
+    if(!SR){if(typeof toast==='function')toast('Dictée non disponible sur ce navigateur.');return;}
+    var ta=document.getElementById(taId);if(!ta)return;
+    if(_rec){try{_rec.stop();}catch(e){}_rec=null;return;}
+    try{
+      _rec=new SR();_rec.lang='fr-FR';_rec.interimResults=true;_rec.continuous=true;_recTa=ta;
+      var base=ta.value?(ta.value+(/\s$/.test(ta.value)?'':' ')):'';
+      if(btn)btn.classList.add('ia-mic-on');
+      _rec.onresult=function(ev){var fin='',itr='';for(var i=ev.resultIndex;i<ev.results.length;i++){var tr=ev.results[i][0].transcript;if(ev.results[i].isFinal)fin+=tr;else itr+=tr;}
+        if(fin){base=base+fin+' ';}ta.value=base+itr;try{ta.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}};
+      _rec.onerror=function(){if(typeof toast==='function')toast('Dictée interrompue.');};
+      _rec.onend=function(){if(btn)btn.classList.remove('ia-mic-on');_rec=null;};
+      _rec.start();if(typeof toast==='function')toast('🎤 Parlez… (recliquez pour arrêter)');
+    }catch(e){_rec=null;if(typeof toast==='function')toast('Dictée indisponible.');}
+  };
+
+  /* ---- Barre IA sous une zone de texte ---- */
+  function barHTML(id){
+    var b='<div class="iatb" data-for="'+id+'"><span class="iatb-t">✨ IA</span>'
+      +'<button type="button" class="btn btn-sm btn-ghost" onclick="iaTA(\''+id+'\',\'corriger\')">Corriger</button>'
+      +'<button type="button" class="btn btn-sm btn-ghost" onclick="iaTA(\''+id+'\',\'raccourcir\')">Raccourcir</button>'
+      +'<button type="button" class="btn btn-sm btn-ghost" onclick="iaTA(\''+id+'\',\'pro\')">Plus pro</button>';
+    if(SR)b+='<button type="button" class="btn btn-sm btn-ghost ia-mic" onclick="iaMic(\''+id+'\',this)" title="Dicter">🎤</button>';
+    b+='</div>';return b;
+  }
+  var _uid=0;
+  function decorer(){
+    try{
+      var tas=document.querySelectorAll('textarea');
+      for(var i=0;i<tas.length;i++){var ta=tas[i];
+        if(ta.getAttribute('data-iatb'))continue;
+        if(ta.readOnly||ta.disabled)continue;
+        if(ta.hasAttribute('data-noia'))continue;
+        if(ta.id==='ml-corps')continue;                 /* déjà équipé (composeur) */
+        if(ta.closest&&ta.closest('.iatb'))continue;
+        ta.setAttribute('data-iatb','1');
+        if(!ta.id)ta.id='iata-'+(++_uid)+'-'+Date.now().toString(36);
+        var bar=document.createElement('div');bar.innerHTML=barHTML(ta.id);
+        var el=bar.firstChild;
+        if(ta.parentNode)ta.parentNode.insertBefore(el,ta.nextSibling);
+      }
+    }catch(e){}
+  }
+  window.iaDecorerTextareas=decorer;
+
+  /* Décorer après chaque rendu + observer les modales/vues ajoutées */
+  if(typeof window.render==='function'){var _r=window.render;window.render=function(){var o=_r.apply(this,arguments);try{setTimeout(decorer,0);}catch(e){}return o;};}
+  try{var _t=null;var mo=new MutationObserver(function(){if(_t)return;_t=setTimeout(function(){_t=null;decorer();},120);});
+    mo.observe(document.body,{childList:true,subtree:true});}catch(e){}
+  setTimeout(decorer,600);
+
+  /* ---- Résumé de dossier / demande ---- */
+  function ctxDemande(d){
+    var L=[];L.push('Type : demande entrante (prospect).');
+    L.push('Nom : '+((typeof demBestName==='function')?demBestName(d):(d.clientNom||'—')));
+    var em=(typeof demReplyTo==='function')?demReplyTo(d):(d.clientEmail||'');L.push('E-mail : '+(em||'—'));
+    L.push('Service souhaité : '+(d.serviceSouhaite||d.service||'—'));
+    L.push('État : '+((typeof demEtat==='function')?demEtat(d):'—'));
+    if(typeof demContexte==='function')L.push('Prochaine étape : '+demContexte(d));
+    L.push('Pièces jointes reçues : '+((d.attachments||[]).length));
+    var msg=(typeof IA!=='undefined'&&IA.objet)?'':'';var corps=d.message||d.corps||'';
+    if(corps)L.push('Message :\n"""\n'+(''+corps).slice(0,1200)+'\n"""');
+    return L.join('\n');
+  }
+  function ctxDossier(d){
+    var L=[];L.push('Type : dossier de formalité en traitement.');
+    L.push('Référence : '+(d.ref||'—')+' · Dénomination : '+(d.denom||'—')+' · Forme : '+(d.forme||'—'));
+    if(typeof dossierClients==='function')L.push('Client(s) : '+(dossierClients(d)||'—'));
+    var ft='';try{if(typeof formaliteType==='function'&&typeof FORMALITE_TEMPLATES!=='undefined'){var key=formaliteType(d);var t=FORMALITE_TEMPLATES.filter(function(x){return x.key===key;})[0];if(t)ft=t.label;}}catch(e){}
+    if(ft)L.push('Formalité : '+ft);
+    try{var recu=[],manq=[];(typeof ESP_PIECES!=='undefined'?ESP_PIECES:[]).forEach(function(pc){if(typeof espPieceState==='function'&&espPieceState(d,pc.k).recu)recu.push(pc.l);else manq.push(pc.l);});
+      L.push('Pièces reçues ('+recu.length+') : '+(recu.join(' ; ')||'aucune'));
+      L.push('Pièces manquantes ('+manq.length+') : '+(manq.join(' ; ')||'aucune'));}catch(e){}
+    try{var docs=Object.keys(d.docs||{}).filter(function(k){return d.docs[k]&&d.docs[k].genere;});if(docs.length)L.push('Documents générés : '+docs.join(', '));}catch(e){}
+    if(d.notes)L.push('Notes internes : '+(''+d.notes).slice(0,400));
+    return L.join('\n');
+  }
+  function demoResume(kind,ctx){
+    var lines=(''+ctx).split('\n');var get=function(p){var l=lines.filter(function(x){return x.indexOf(p)===0;})[0];return l?l.slice(p.length):'';};
+    if(kind==='dossier'){
+      var manq=get('Pièces manquantes ');
+      return 'Dossier '+(get('Référence : ').split(' · ')[0]||'')+(' — '+(get('Formalité : ')||'formalité en cours'))+'. '
+        +(/aucune/.test(manq)?'Toutes les pièces requises sont réunies : le dossier peut avancer.':('Il manque encore des pièces ('+manq.replace(/^\(\d+\)\s*:\s*/,'')+') — à réclamer au client.'))+' '
+        +'Prochaine étape : poursuivre la constitution puis le dépôt au Guichet unique. (résumé démo — activez l\'IA pour une synthèse détaillée)';
+    }
+    return 'Demande de '+(get('Nom : ')||'prospect')+' pour « '+(get('Service souhaité : ')||'—')+' ». '
+      +'État : '+(get('État : ')||'—')+'. Prochaine étape : '+(get('Prochaine étape : ')||'qualifier et répondre')+'. '
+      +'Pensez à accuser réception et à demander les pièces d\'identité et de domicile. (résumé démo — activez l\'IA pour une synthèse détaillée)';
+  }
+  function resumeGo(kind,ctx){
+    if(typeof openModal!=='function')return;
+    openModal('🧠 Résumé '+(kind==='dossier'?'du dossier':'de la demande'),
+      '<div class="iares" id="iares-out"><span class="hint">Analyse…</span></div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+    iaAsk({system:'Tu es l\'assistant du cabinet AEM CONSEIL. Résume la situation en 4 à 6 phrases claires : état actuel, ce qui est fait, ce qui manque, la prochaine étape et les points d\'attention. Un paragraphe, en français.',
+      user:ctx,temperature:0.3,demo:function(){return demoResume(kind,ctx);}},
+      function(r){var out=document.getElementById('iares-out');if(!out)return;
+        out.innerHTML=(r&&r.ok&&r.text)?E(r.text).replace(/\n/g,'<br>'):'<span class="hint">Échec : '+E((r&&r.error)||'inconnu')+'</span>';});
+  }
+  window.iaResumeDemande=function(id){var d=(DB.demandes||[]).filter(function(x){return x.id===id;})[0];if(!d)return;if(typeof iaMode==='function'&&iaMode()==='off')return offToast();resumeGo('demande',ctxDemande(d));};
+  window.iaResumeDossier=function(id){var d=(DB.dossiers||[]).filter(function(x){return x.id===id;})[0];if(!d)return;if(typeof iaMode==='function'&&iaMode()==='off')return offToast();resumeGo('dossier',ctxDossier(d));};
+
+  /* ---- Greffe des boutons « Résumer » ---- */
+  if(typeof window.demVueDetail==='function'){var _dv=window.demVueDetail;window.demVueDetail=function(id){var h=_dv(id);if(!h||h.indexOf('dem-view-grid')<0)return h;
+    var btn='<div class="ia-resume-bar"><button class="btn btn-sm btn-pri" onclick="iaResumeDemande(\''+id+'\')">🧠 Résumer la demande (IA)</button></div>';
+    return h.replace('<div class="dem-view-grid">',btn+'<div class="dem-view-grid">');};}
+  if(typeof window.espPanel==='function'){var _ep2=window.espPanel;window.espPanel=function(d,list,id){var h=_ep2(d,list,id);if(!h||h.indexOf('esp-main')<0)return h;
+    var btn='<div class="ia-resume-bar"><button class="btn btn-sm btn-pri" onclick="iaResumeDossier(\''+d.id+'\')">🧠 Résumer le dossier (IA)</button></div>';
+    return h.replace('<div class="esp-main">','<div class="esp-main">'+btn);};}
+
+  if(!document.getElementById('ia-transverse-css')){var st=document.createElement('style');st.id='ia-transverse-css';
+    st.textContent='.iatb{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 2px}'
+      +'.iatb-t{font-size:10px;font-weight:700;color:var(--accent,#7a6e58);letter-spacing:.3px}'
+      +'.iatb .btn{padding:3px 8px;font-size:11px}'
+      +'.ia-mic.ia-mic-on{background:#c0392b;color:#fff;border-color:#c0392b;animation:iaMicPulse 1s infinite}'
+      +'@keyframes iaMicPulse{0%,100%{opacity:1}50%{opacity:.55}}'
+      +'.ia-resume-bar{margin-bottom:10px}'
+      +'.iares{font-size:13.5px;line-height:1.55;color:var(--ink,#302c24);white-space:pre-wrap;background:var(--paper-2,#f6efe0);border-left:3px solid var(--accent,#7a6e58);border-radius:8px;padding:11px 13px;min-height:34px}';
+    document.head.appendChild(st);}
 })();
 </script>
 

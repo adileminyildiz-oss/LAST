@@ -97,7 +97,13 @@ manquantes — chacune avec un bouton menant à l'écran concerné ; et rapport
 d'activité — KPIs locaux (demandes reçues/finalisées, taux de conversion,
 CA facturé, impayés, âge moyen de la file, répartitions par canal/formalité)
 + synthèse rédigée par l'IA — généré automatiquement chaque semaine et à la
-demande sur la période choisie ; mode démonstration hors-ligne)
+demande sur la période choisie ; mode démonstration hors-ligne) et
+**IA — transverse** (barre IA — corriger, raccourcir, plus pro — greffée
+automatiquement sous chaque zone de texte longue, avec un bouton de dictée
+vocale 🎤 quand le navigateur le permet — la parole est transcrite dans le
+champ ; et résumé de situation en un clic dans la fiche demande et la fiche
+dossier — l'IA synthétise état, pièces reçues/manquantes, prochaine étape et
+points d'attention ; mode démonstration hors-ligne)
 — le tout sans erreur JavaScript.
 
 ## Lancer
