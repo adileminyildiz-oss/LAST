@@ -111,23 +111,38 @@ renseigner les secrets `MISTRAL_KEY`/`SHARED_KEY`, déployer, brancher LAST et
 tester la connexion ; rappel RGPD, clé serveur jamais exposée au navigateur)
 — le tout sans erreur JavaScript.
 
+## Deux niveaux de test
+
+- **`regression.mjs`** — vérifie des **invariants isolés** de chaque flux
+  (fonction par fonction). C'est le filet de sécurité principal.
+- **`e2e.mjs`** — rejoue un **parcours utilisateur de bout en bout** :
+  navigation de toutes les pages (dont Pilotage IA), puis exercice réel de
+  chaque fonction IA (analyse, réponse, signaux, pièces/vision, formalités,
+  facturation, copilote ⌘K, pilotage, transverse, guide proxy) et du cœur
+  métier (devis → facture), en surveillant **toute erreur JavaScript** (page
+  et console). L'IA tourne en mode démonstration (hors-ligne). Le bruit lié
+  au protocole `file://` (service worker, `version.json`) est filtré, et les
+  confirmations natives sont neutralisées (le headless refuse `confirm()`).
+
 ## Lancer
 
 ```bash
 # Depuis la racine du projet (là où se trouve index.html)
 npm i -D playwright          # une fois
 npx playwright install chromium
-node tests/regression.mjs
+node tests/regression.mjs     # invariants  → LAST regression: N/N OK
+node tests/e2e.mjs            # parcours réel → LAST e2e: N/N OK
 ```
 
-Sortie attendue : `LAST regression: N/N OK — tout vert` (code de sortie 0).
+Sortie attendue : `… N/N OK — tout vert` (code de sortie 0).
 En cas d'échec, chaque test en défaut est listé et le code de sortie est 1.
 
 Playwright est résolu automatiquement (node_modules). Pour pointer une
-installation spécifique : `PLAYWRIGHT_PKG=/chemin/vers/playwright node tests/regression.mjs`.
+installation spécifique : `PLAYWRIGHT_PKG=/chemin/vers/playwright node tests/e2e.mjs`.
 
 ## Après chaque modification de `index.html`
 
 1. Vérifier la syntaxe des `<script>` et l'équilibre des accolades CSS.
-2. Lancer `node tests/regression.mjs` — doit rester tout vert.
+2. Lancer `node tests/regression.mjs` **et** `node tests/e2e.mjs` — les deux
+   doivent rester tout vert.
 3. Incrémenter `LAST_VER` (index.html), `CACHE` (sw.js), `version.json`.
