@@ -103,7 +103,12 @@ automatiquement sous chaque zone de texte longue, avec un bouton de dictée
 vocale 🎤 quand le navigateur le permet — la parole est transcrite dans le
 champ ; et résumé de situation en un clic dans la fiche demande et la fiche
 dossier — l'IA synthétise état, pièces reçues/manquantes, prochaine étape et
-points d'attention ; mode démonstration hors-ligne)
+points d'attention ; mode démonstration hors-ligne) et
+**IA — guide de mise en service** (assistant pas à pas, depuis Paramètres →
+Assistant IA, pour passer du mode démonstration à l'IA réelle : obtenir la
+clé Mistral, créer le proxy Apps Script — code copiable en un clic —,
+renseigner les secrets `MISTRAL_KEY`/`SHARED_KEY`, déployer, brancher LAST et
+tester la connexion ; rappel RGPD, clé serveur jamais exposée au navigateur)
 — le tout sans erreur JavaScript.
 
 ## Lancer

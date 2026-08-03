@@ -610,6 +610,15 @@ const r = await page.evaluate(async () => {
   out.iaTransverse = typeof iaTA === 'function' && typeof iaMic === 'function' && typeof iaResumeDemande === 'function' && typeof iaResumeDossier === 'function' && typeof iaDecorerTextareas === 'function'
     && trBarOk && trShort && trResD && trResDoss;
 
+  // IA — guide de mise en service du proxy Mistral (bouton dans la carte + modale pas à pas)
+  const iaCard = iaConfigCard();
+  iaGuideProxy();
+  const guideBody = (document.getElementById('ov-b') || {}).innerHTML || '';
+  out.iaGuide = typeof iaGuideProxy === 'function' && typeof iaGuideCopierCode === 'function'
+    && /Guide de mise en service/.test(iaCard) && /iaGuideProxy\(\)/.test(iaCard)
+    && /console.mistral.ai/.test(guideBody) && /MISTRAL_KEY/.test(guideBody) && /SHARED_KEY/.test(guideBody) && /RGPD/.test(guideBody);
+  if (typeof closeModal === 'function') closeModal();
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
