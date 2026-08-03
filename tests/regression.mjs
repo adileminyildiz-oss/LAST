@@ -330,6 +330,20 @@ const r = await page.evaluate(async () => {
     && recR.count === 3 && recR.prochaine > isoM(0) && recMade2 === 0
     && recCardOk && typeof recCard === 'function' && typeof recModal === 'function';
 
+  // Palette de commandes (Ctrl/Cmd+K) + ouverture ciblée d'un dossier depuis la recherche
+  gsGo('dossier', 'dsarl');
+  const gsDoss = state.page === 'espace' && state.espaceDossier === 'dsarl';
+  cmdkOpen();
+  const cmdkShown = !!document.querySelector('#cmdk.show');
+  const cmdkGroups = [...document.querySelectorAll('#cmdk .cmdk-grp')].map(g => g.textContent);
+  const cmdkPages = [...document.querySelectorAll('#cmdk .cmdk-it b')].some(x => /Tableau de bord/.test(x.textContent));
+  const cmdkInp = document.getElementById('cmdk-input');
+  cmdkInp.value = 'DOS-SARL'; cmdkInp.dispatchEvent(new Event('input', { bubbles: true }));
+  const cmdkFound = [...document.querySelectorAll('#cmdk .cmdk-it b')].some(x => /DOS-SARL/.test(x.textContent));
+  cmdkClose();
+  out.cmdk = gsDoss && cmdkShown && cmdkFound && cmdkGroups.indexOf('Aller à') >= 0 && cmdkGroups.indexOf('Actions') >= 0
+    && cmdkPages && typeof cmdkOpen === 'function' && typeof cmdkClose === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

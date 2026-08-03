@@ -759,7 +759,7 @@ function gSearchRender(q){
 function gsGo(type,id){
   gsClose();var qel=document.getElementById('q');if(qel)qel.value='';state.q='';
   if(type==='client'){state.page='clients';render();setTimeout(function(){if(typeof modalClient==='function')modalClient(id);},30);}
-  else if(type==='dossier'){state.page='espace';render();}
+  else if(type==='dossier'){state.page='espace';state.espaceDossier=id;render();}
   else if(type==='devis'){state.page='devis';render();setTimeout(function(){if(typeof devisView==='function')devisView(id);},30);}
   else if(type==='facture'){state.page='facturation';render();setTimeout(function(){if(typeof fvView==='function')fvView(id);},30);}
   else if(type==='demande'){state.page='demandes';if(typeof window.demOuvrirVue==='function')window.demOuvrirVue(id);else render();}
@@ -769,6 +769,7 @@ document.addEventListener('click',function(e){var s=e.target.closest&&e.target.c
 /* ---------- Raccourcis clavier ---------- */
 function shortcutsHelp(){openModal('Raccourcis clavier',
   '<table class="cl-tbl" style="width:100%"><tbody>'
+  +'<tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd> <kbd>K</kbd></td><td>Palette de commandes (aller à, actions, recherche)</td></tr>'
   +'<tr><td><kbd>/</kbd></td><td>Rechercher (clients, dossiers, devis, factures…)</td></tr>'
   +'<tr><td><kbd>n</kbd></td><td>Nouveau devis</td></tr>'
   +'<tr><td><kbd>f</kbd></td><td>Nouvelle facture</td></tr>'
@@ -3916,7 +3917,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=178;
+var LAST_VER=179;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -8852,6 +8853,116 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       return _r.apply(this,arguments);
     };
   }
+})();
+</script>
+
+<script id="cmdk-mod">
+/* ===================================================================
+   PALETTE DE COMMANDES — Ctrl/Cmd+K
+   Navigation et recherche instantanées : pages, actions rapides,
+   clients, dossiers, devis, factures, demandes. Clavier : ↑/↓ + Entrée.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function norm(s){return (typeof gsNorm==='function')?gsNorm(s):(''+(s||'')).toLowerCase();}
+  function ico(k){try{return (typeof svg==='function'&&typeof IC!=='undefined'&&IC[k])?svg(IC[k]):'';}catch(e){return '';}}
+  var sel=0, items=[];
+
+  if(!document.getElementById('cmdk-css')){var st=document.createElement('style');st.id='cmdk-css';
+    st.textContent='#cmdk{position:fixed;inset:0;z-index:6000;display:none;align-items:flex-start;justify-content:center;background:rgba(20,16,10,.42);backdrop-filter:blur(2px)}'
+    +'#cmdk.show{display:flex}'
+    +'.cmdk-box{margin-top:11vh;width:min(640px,94vw);background:var(--card,#fffdf7);border:1px solid var(--line-2,#e2d9c6);border-radius:14px;box-shadow:0 24px 70px rgba(30,22,10,.34);overflow:hidden;display:flex;flex-direction:column;max-height:72vh}'
+    +'.cmdk-in{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line-soft,#f0e9da)}'
+    +'.cmdk-in svg{width:16px;height:16px;color:var(--ink-3,#9c9078);flex:none}'
+    +'.cmdk-in input{flex:1;border:0;background:transparent;font:inherit;font-size:15px;color:var(--ink,#302c24);outline:none}'
+    +'.cmdk-hint{font-size:10px;color:var(--ink-3,#9c9078);border:1px solid var(--line-2,#e2d9c6);border-radius:5px;padding:2px 6px;flex:none}'
+    +'.cmdk-list{overflow:auto;padding:6px}'
+    +'.cmdk-grp{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3,#9c9078);padding:9px 12px 4px}'
+    +'.cmdk-it{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:9px;cursor:pointer}'
+    +'.cmdk-it svg{width:15px;height:15px;color:var(--ink-3,#9c9078);flex:none}'
+    +'.cmdk-it .cmdk-emo{width:18px;text-align:center;flex:none;font-size:14px}'
+    +'.cmdk-it.on,.cmdk-it:hover{background:var(--accent,#7a6e58);color:#fff}'
+    +'.cmdk-it.on svg,.cmdk-it:hover svg{color:#fff}'
+    +'.cmdk-it b{font-size:13.5px;font-weight:600}'
+    +'.cmdk-main{min-width:0;flex:1}'
+    +'.cmdk-main b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    +'.cmdk-sub{font-size:11px;color:var(--ink-3,#9c9078);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    +'.cmdk-it.on .cmdk-sub,.cmdk-it:hover .cmdk-sub{color:rgba(255,255,255,.85)}'
+    +'.cmdk-empty{padding:22px 14px;text-align:center;color:var(--ink-3,#9c9078);font-size:13px}';
+    document.head.appendChild(st);}
+
+  function build(q){
+    q=norm(q);var out=[];
+    var PG=(typeof PAGES!=='undefined')?PAGES:[];
+    // Pages
+    PG.forEach(function(p){var hay=norm(p.lbl+' '+(p.sub||''));if(!q||hay.indexOf(q)>=0)out.push({grp:'Aller à',emo:'→',label:p.lbl,sub:p.sub||'',run:function(){if(typeof go==='function')go(p.id);}});});
+    // Actions rapides
+    var ACT=[
+      {k:'fv',emo:'🧾',label:'Nouvelle facture',sub:'Créer une facture de vente',fn:function(){if(typeof fvOpen==='function')fvOpen();},t:'nouvelle facture vente'},
+      {k:'dv',emo:'📝',label:'Nouveau devis',sub:'Créer un devis',fn:function(){if(typeof fvOpenDevis==='function')fvOpenDevis();else if(typeof go==='function')go('devis');},t:'nouveau devis'},
+      {k:'rec',emo:'🔁',label:'Facturation récurrente',sub:'Créer un abonnement',fn:function(){if(typeof recModal==='function'){if(typeof go==='function')go('facturation');setTimeout(function(){recModal();},40);}},t:'facturation recurrente abonnement'},
+      {k:'sync',emo:'🔄',label:'Synchroniser la boîte',sub:'Relever les demandes du site',fn:function(){if(typeof demSyncMails==='function')demSyncMails(false);},t:'synchroniser boite mail demandes'},
+      {k:'msg',emo:'📨',label:'Ouvrir la messagerie',sub:'Boîte de réception des demandes',fn:function(){state.page='demandes';state.demMode='messagerie';state.demView='';if(typeof render==='function')render();},t:'messagerie boite reception demandes'}
+    ];
+    ACT.forEach(function(a){var hay=norm(a.label+' '+a.sub+' '+(a.t||''));if(!q||hay.indexOf(q)>=0)out.push({grp:'Actions',emo:a.emo,label:a.label,sub:a.sub,run:a.fn});});
+    // Entités (uniquement si une recherche est saisie)
+    if(q&&q.length>=1){
+      var ent=[];
+      (DB.clients||[]).forEach(function(c){var n=((c.prenom||'')+' '+(c.nom||'')).trim();if(norm(n+' '+(c.email||'')+' '+(c.tel||'')).indexOf(q)>=0)ent.push({grp:'Clients',ic:'users',label:n||'(client)',sub:'Client'+(c.email?' · '+c.email:''),run:function(){gsGo('client',c.id);}});});
+      (DB.dossiers||[]).forEach(function(d){var dc=(typeof dossierClients==='function')?dossierClients(d):'';if(norm((d.ref||'')+' '+dc).indexOf(q)>=0)ent.push({grp:'Dossiers',ic:'espace',label:d.ref||'(dossier)',sub:'Dossier'+(dc?' · '+dc:''),run:function(){gsGo('dossier',d.id);}});});
+      (DB.devis||[]).forEach(function(d){if(norm((d.num||'')+' '+(d.tiers||'')).indexOf(q)>=0)ent.push({grp:'Devis',ic:'quote',label:(d.num||'')+' — '+(d.tiers||''),sub:'Devis · '+(d.statut||''),run:function(){gsGo('devis',d.id);}});});
+      (DB.factures||[]).filter(function(f){return f.type==='client';}).forEach(function(f){if(norm((f.num||'')+' '+(f.tiers||'')).indexOf(q)>=0)ent.push({grp:'Factures',ic:'card',label:(f.num||'')+' — '+(f.tiers||''),sub:'Facture · '+(f.statut||''),run:function(){gsGo('facture',f.id);}});});
+      (DB.demandes||[]).forEach(function(d){var nm=(typeof demBestName==='function')?demBestName(d):(d.clientNom||'');if(norm(nm+' '+(d.serviceSouhaite||'')+' '+(d.clientEmail||'')).indexOf(q)>=0)ent.push({grp:'Demandes',ic:'inbox',label:nm||'(demande)',sub:'Demande · '+(d.serviceSouhaite||''),run:function(){gsGo('demande',d.id);}});});
+      out=out.concat(ent.slice(0,30));
+    }
+    return out.slice(0,40);
+  }
+
+  function paint(q){
+    items=build(q);if(sel>=items.length)sel=items.length?items.length-1:0;if(sel<0)sel=0;
+    var listEl=document.getElementById('cmdk-list');if(!listEl)return;
+    if(!items.length){listEl.innerHTML='<div class="cmdk-empty">Aucun résultat'+(q?' pour « '+E(q)+' »':'')+'</div>';return;}
+    var html='',lastGrp='';
+    items.forEach(function(it,i){
+      if(it.grp!==lastGrp){html+='<div class="cmdk-grp">'+E(it.grp)+'</div>';lastGrp=it.grp;}
+      var icon=it.emo?('<span class="cmdk-emo">'+E(it.emo)+'</span>'):ico(it.ic);
+      html+='<div class="cmdk-it'+(i===sel?' on':'')+'" data-i="'+i+'" onmousemove="window.__cmdkHover('+i+')" onclick="window.__cmdkRun('+i+')">'+icon
+        +'<div class="cmdk-main"><b>'+E(it.label)+'</b>'+(it.sub?'<span class="cmdk-sub">'+E(it.sub)+'</span>':'')+'</div></div>';
+    });
+    listEl.innerHTML=html;
+    var on=listEl.querySelector('.cmdk-it.on');if(on&&on.scrollIntoView)on.scrollIntoView({block:'nearest'});
+  }
+  window.__cmdkHover=function(i){if(i!==sel){sel=i;var l=document.getElementById('cmdk-list');if(l){[].forEach.call(l.querySelectorAll('.cmdk-it'),function(el){el.classList.toggle('on',+el.getAttribute('data-i')===sel);});}}};
+  window.__cmdkRun=function(i){var it=items[i];cmdkClose();if(it&&it.run)try{it.run();}catch(e){}};
+
+  function cmdkOpen(){
+    if(document.getElementById('cmdk'))return cmdkFocus();
+    var ov=document.createElement('div');ov.id='cmdk';
+    ov.innerHTML='<div class="cmdk-box" role="dialog" aria-label="Palette de commandes">'
+      +'<div class="cmdk-in">'+ico('inbox')+'<input id="cmdk-input" type="text" placeholder="Rechercher ou aller à… (clients, dossiers, factures, demandes)" autocomplete="off">'
+      +'<span class="cmdk-hint">Échap</span></div>'
+      +'<div class="cmdk-list" id="cmdk-list"></div></div>';
+    ov.addEventListener('mousedown',function(e){if(e.target===ov)cmdkClose();});
+    document.body.appendChild(ov);
+    var inp=document.getElementById('cmdk-input');
+    inp.addEventListener('input',function(){sel=0;paint(this.value);});
+    inp.addEventListener('keydown',function(e){
+      if(e.key==='ArrowDown'){e.preventDefault();if(items.length){sel=(sel+1)%items.length;paint(inp.value);}}
+      else if(e.key==='ArrowUp'){e.preventDefault();if(items.length){sel=(sel-1+items.length)%items.length;paint(inp.value);}}
+      else if(e.key==='Enter'){e.preventDefault();window.__cmdkRun(sel);}
+      else if(e.key==='Escape'){e.preventDefault();cmdkClose();}
+    });
+    sel=0;paint('');cmdkFocus();
+  }
+  function cmdkFocus(){var ov=document.getElementById('cmdk');if(!ov)return;ov.classList.add('show');var inp=document.getElementById('cmdk-input');if(inp){inp.focus();inp.select();}}
+  function cmdkClose(){var ov=document.getElementById('cmdk');if(ov)ov.classList.remove('show');}
+  window.cmdkOpen=cmdkOpen;window.cmdkClose=cmdkClose;
+
+  document.addEventListener('keydown',function(e){
+    if((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();
+      var ov=document.getElementById('cmdk');
+      if(ov&&ov.classList.contains('show'))cmdkClose();else cmdkOpen();}
+  },true);
 })();
 </script>
 

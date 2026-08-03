@@ -30,7 +30,10 @@ la cadence — mensuelle, trimestrielle, semestrielle, annuelle) et
 **actes complémentaires** (feuille de présence avec quote-part par
 associé/actionnaire et registre des décisions/assemblées, adaptés à la
 forme juridique : actions vs parts sociales, associé unique vs
-assemblée générale) — le tout sans erreur JavaScript.
+assemblée générale) et **palette de commandes** (Ctrl/Cmd+K :
+navigation vers les pages, actions rapides et recherche instantanée
+des clients, dossiers, devis, factures et demandes ; ouverture ciblée
+d'un dossier depuis la recherche) — le tout sans erreur JavaScript.
 
 ## Lancer
 
