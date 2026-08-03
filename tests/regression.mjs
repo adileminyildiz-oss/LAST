@@ -558,6 +558,18 @@ const r = await page.evaluate(async () => {
     && /Désignation \(IA\)/.test(factPage) && /Lire une facture \(IA\)/.test(factPage)
     && typeof demDesignationIA === 'function' && typeof demRelanceIA === 'function' && typeof iaLireFacture === 'function' && typeof factAnomalies === 'function';
 
+  // IA — copilote (⌘K) : fonctions, affichage avec action, exécution avec confirmation
+  if (typeof iaCfg === 'function') { iaCfg().demo = true; iaCfg().enabled = false; }
+  iaCopiloteAfficher('quelles pièces pour une SAS ?', { reponse: 'Réponse test copilote', action: { type: 'go', page: 'clients' } });
+  const copBody = (document.getElementById('ov-b') || {}).innerHTML || '';
+  const copActionSet = !!(window.__iaCopAction && window.__iaCopAction.type === 'go');
+  // Exécution directe d'une action (navigation)
+  state.page = 'dash'; iaCopiloteExec({ type: 'go', page: 'facturation' });
+  const copExec = state.page === 'facturation';
+  if (typeof closeModal === 'function') closeModal();
+  out.iaCopilote = typeof iaCopilote === 'function' && typeof iaCopiloteExec === 'function' && typeof iaCopiloteAfficher === 'function' && typeof iaCopiloteConfirmer === 'function'
+    && /Réponse test copilote/.test(copBody) && /Action proposée/.test(copBody) && copActionSet && copExec;
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

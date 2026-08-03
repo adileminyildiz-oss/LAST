@@ -3930,7 +3930,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=194;
+var LAST_VER=195;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -8931,7 +8931,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     document.head.appendChild(st);}
 
   function build(q){
-    q=norm(q);var out=[];
+    var raw=(''+(q||'')).trim();q=norm(q);var out=[];
+    // Copilote IA (assistant) — répond / cherche / exécute
+    if(raw&&raw.length>=2&&typeof iaCopilote==='function'){var _q=raw;
+      out.push({grp:'Assistant IA',emo:'🤖',label:'Demander à l\'assistant',sub:'« '+raw+' »',run:function(){if(typeof cmdkClose==='function')cmdkClose();iaCopilote(_q);}});}
     var PG=(typeof PAGES!=='undefined')?PAGES:[];
     // Pages
     PG.forEach(function(p){var hay=norm(p.lbl+' '+(p.sub||''));if(!q||hay.indexOf(q)>=0)out.push({grp:'Aller à',emo:'→',label:p.lbl,sub:p.sub||'',run:function(){if(typeof go==='function')go(p.id);}});});
@@ -10379,6 +10382,161 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   if(!document.getElementById('ia-fact-css')){var st=document.createElement('style');st.id='ia-fact-css';
     st.textContent='.ia-desig-out{font-size:13px;line-height:1.5;background:var(--paper-2,#f6efe0);border-left:3px solid var(--accent,#7a6e58);border-radius:6px;padding:9px 11px}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="ia-copilote-mod">
+/* ===================================================================
+   IA — Copilote interne (⌘K) : répond aux questions métier, cherche
+   dans les données, et exécute des actions (avec confirmation).
+   Base de connaissances : formalités (pièces/étapes), tarifs, volumes.
+   Objectif n°8.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function money(n){return (typeof eur==='function')?eur(n):(''+n);}
+  function norm(s){return (typeof gsNorm==='function')?gsNorm(s):(''+(s||'')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+
+  /* ---- Base de connaissances transmise à l'IA ---- */
+  function connaissance(){
+    var L=[];
+    L.push('CABINET : AEM CONSEIL — formalités juridiques d\'entreprise (création, modifications, cessions, dissolution) et facturation.');
+    try{var T=(typeof FORMALITE_TEMPLATES!=='undefined')?FORMALITE_TEMPLATES:[];
+      if(T.length){L.push('FORMALITÉS et pièces requises :');
+        T.forEach(function(t){var pc=(t.pieces||[]).map(function(p){return p.label;}).join(' ; ');
+          var et=(t.etapes||[]).join(' → ');
+          L.push('- '+t.label+' | Pièces : '+pc+' | Étapes : '+et);});}
+    }catch(e){}
+    try{var S=(DB.services||[]).filter(function(s){return s.actif!==false;});
+      if(S.length){L.push('TARIFS (prestations, prix indicatifs) :');
+        S.slice(0,40).forEach(function(s){L.push('- '+s.nom+(s.prix?(' : '+money(s.prix)):'')+(s.famille?(' ('+s.famille+')'):''));});}
+    }catch(e){}
+    try{var nf=(DB.factures||[]).filter(function(f){return f.type==='client';});
+      var imp=nf.filter(function(f){return f.statut==='Impayée';});
+      var mtImp=imp.reduce(function(a,f){return a+(+f.ttc||0);},0);
+      L.push('VOLUMES : '+((DB.clients||[]).length)+' clients, '+((DB.dossiers||[]).length)+' dossiers, '+((DB.demandes||[]).length)+' demandes, '+((DB.devis||[]).length)+' devis, '+nf.length+' factures client (dont '+imp.length+' impayées — '+money(mtImp)+').');
+    }catch(e){}
+    return L.join('\n');
+  }
+
+  /* ---- Actions exécutables (avec confirmation) ---- */
+  function firstMatch(list,q,fn){q=norm(q);var hit=null;(list||[]).some(function(x){if(norm(fn(x)).indexOf(q)>=0){hit=x;return true;}return false;});return hit;}
+  function actionLabel(a){if(!a||!a.type)return '';
+    switch(a.type){
+      case 'go':return 'Ouvrir la page « '+(a.page||'')+' »';
+      case 'nouvelle_facture':return 'Créer une nouvelle facture';
+      case 'nouveau_devis':return 'Créer un nouveau devis';
+      case 'sync':return 'Synchroniser la boîte de réception';
+      case 'relances':return 'Aller aux factures échues à relancer';
+      case 'ouvrir':return 'Ouvrir '+(a.kind||'')+(a.query?(' « '+a.query+' »'):'');
+      default:return '';}
+  }
+  window.iaCopiloteExec=function(a){
+    if(!a||!a.type)return;
+    try{
+      if(a.type==='go'){var pg=a.page;if(typeof go==='function')go(pg);return;}
+      if(a.type==='nouvelle_facture'){if(typeof fvOpen==='function')fvOpen();else if(typeof go==='function')go('facturation');return;}
+      if(a.type==='nouveau_devis'){if(typeof fvOpenDevis==='function')fvOpenDevis();else if(typeof go==='function')go('devis');return;}
+      if(a.type==='sync'){if(typeof demSyncMails==='function')demSyncMails(false);return;}
+      if(a.type==='relances'){if(typeof go==='function')go('facturation');if(typeof toast==='function')setTimeout(function(){toast('Factures échues à relancer — section « À relancer ».');},60);return;}
+      if(a.type==='ouvrir'){var k=a.kind,q=a.query||'';var t;
+        if(k==='client'){t=firstMatch(DB.clients,q,function(c){return ((c.prenom||'')+' '+(c.nom||'')+' '+(c.email||''));});if(t)return gsGo('client',t.id);}
+        if(k==='dossier'){t=firstMatch(DB.dossiers,q,function(d){return (d.ref||'')+' '+((typeof dossierClients==='function')?dossierClients(d):'');});if(t)return gsGo('dossier',t.id);}
+        if(k==='facture'){t=firstMatch((DB.factures||[]).filter(function(f){return f.type==='client';}),q,function(f){return (f.num||'')+' '+(f.tiers||'');});if(t)return gsGo('facture',t.id);}
+        if(k==='demande'){t=firstMatch(DB.demandes,q,function(d){return ((typeof demBestName==='function')?demBestName(d):(d.clientNom||''))+' '+(d.serviceSouhaite||'')+' '+(d.clientEmail||'');});if(t)return gsGo('demande',t.id);}
+        if(typeof toast==='function')toast('Aucun '+(k||'élément')+' trouvé pour « '+q+' ».');return;}
+    }catch(e){if(typeof toast==='function')toast('Action impossible.');}
+  };
+
+  /* ---- Affichage de la réponse (modale) ---- */
+  window.iaCopiloteAfficher=function(query,r){
+    if(typeof openModal!=='function')return;
+    var rep=(r&&r.reponse)?(''+r.reponse):'';
+    var a=(r&&r.action&&r.action.type)?r.action:null;
+    var lbl=a?actionLabel(a):'';
+    window.__iaCopAction=a;
+    var body='<div class="iacop-q">'+E(query)+'</div>'
+      +'<div class="iacop-rep" id="iacop-rep">'+(rep?E(rep).replace(/\n/g,'<br>'):'<span class="hint">…</span>')+'</div>';
+    if(a&&lbl){body+='<div class="iacop-act"><span class="iacop-act-l">Action proposée</span><b>'+E(lbl)+'</b>'
+      +'<button class="btn btn-sm btn-pri" style="margin-left:auto" onclick="iaCopiloteConfirmer()">Exécuter</button></div>';}
+    body+='<p class="hint" style="margin:10px 0 0;font-size:11px">'+((typeof iaMode==='function'&&iaMode()==='demo')?'Mode démonstration — réponse simulée.':'Assistant IA — vérifiez avant d\'agir.')+'</p>';
+    openModal('🤖 Assistant IA', body, '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+  };
+  window.iaCopiloteConfirmer=function(){var a=window.__iaCopAction;if(!a)return;
+    if(typeof confirm==='function'&&!confirm('Confirmer : '+actionLabel(a)+' ?'))return;
+    if(typeof closeModal==='function')closeModal();
+    iaCopiloteExec(a);
+  };
+
+  /* ---- Point d'entrée (depuis ⌘K) ---- */
+  window.iaCopilote=function(query){
+    query=(''+(query||'')).trim();if(!query)return;
+    if(typeof iaMode==='function'&&iaMode()==='off'){if(typeof toast==='function')toast('Activez l\'IA (ou le mode démo) dans Paramètres → Assistant IA.');return;}
+    iaCopiloteAfficher(query,{reponse:''});
+    iaAsk({
+      system:'Tu es le copilote interne du cabinet AEM CONSEIL. Tu réponds aux questions métier (formalités, pièces, tarifs, procédures) et tu peux proposer UNE action à exécuter. '
+        +'Réponds STRICTEMENT en JSON : {"reponse":"texte clair et concis en français","action":null|{"type":"go|nouvelle_facture|nouveau_devis|sync|relances|ouvrir","page":"dash|clients|espace|facturation|devis|demandes|services","kind":"client|dossier|facture|demande","query":"terme de recherche"}}. '
+        +'Ne propose une action que si la demande l\'appelle clairement. Base-toi UNIQUEMENT sur le contexte fourni.\n\nCONTEXTE :\n'+connaissance(),
+      user:query,json:true,temperature:0.2,
+      demo:function(){return demoCopilote(query);}
+    },function(res){
+      if(res&&res.ok&&res.data){iaCopiloteAfficher(query,res.data);}
+      else if(res&&res.ok&&res.text){iaCopiloteAfficher(query,{reponse:res.text,action:null});}
+      else{var rep=document.getElementById('iacop-rep');if(rep)rep.innerHTML='<span class="hint">Échec : '+E((res&&res.error)||'inconnu')+'</span>';}
+    });
+  };
+
+  /* ---- Générateur de démonstration (hors-ligne) ---- */
+  function demoCopilote(q){
+    var low=norm(q);
+    /* Pièces / documents d'une formalité */
+    if(/piece|document|justificatif|fournir|besoin|dossier.*(creat|sas|sarl|sci)|quoi.*fourni/.test(low)){
+      try{var T=(typeof FORMALITE_TEMPLATES!=='undefined')?FORMALITE_TEMPLATES:[];
+        var t=null;T.some(function(x){var key=norm(x.label);if(low.indexOf('sasu')>=0&&norm(x.key).indexOf('sas')>=0){t=x;return true;}
+          var mots=key.split(/[ \/]+/).filter(function(w){return w.length>3;});if(mots.some(function(w){return low.indexOf(w)>=0;})){t=x;return true;}return false;});
+        if(!t&&/creat|constitu|sas|sarl|sci|eurl/.test(low))t=T[0];
+        if(t){var pc=(t.pieces||[]).map(function(p){return '• '+p.label;}).join('\n');
+          return {reponse:'Pour une '+t.label+', les pièces à réunir sont :\n'+pc,action:null};}
+      }catch(e){}
+    }
+    /* Tarifs / coût */
+    if(/tarif|prix|co[uû]t|combien|montant|honorai/.test(low)){
+      try{var S=(DB.services||[]).filter(function(s){return s.actif!==false;});
+        var hit=null;S.some(function(s){var mots=norm(s.nom).split(/\s+/).filter(function(w){return w.length>4;});if(mots.some(function(w){return low.indexOf(w)>=0;})){hit=s;return true;}return false;});
+        if(hit)return {reponse:'Tarif pour « '+hit.nom+' » : '+(hit.prix?money(hit.prix):'sur devis')+' (prix indicatif, modifiable).',action:null};
+        if(S.length)return {reponse:'Quelques tarifs indicatifs :\n'+S.slice(0,6).map(function(s){return '• '+s.nom+' : '+(s.prix?money(s.prix):'sur devis');}).join('\n'),action:null};
+      }catch(e){}
+    }
+    /* Relances impayés */
+    if(/relanc|impay|[ée]chu|recouvr/.test(low)){
+      try{var imp=(DB.factures||[]).filter(function(f){return f.type==='client'&&f.statut==='Impayée';});
+        var mt=imp.reduce(function(a,f){return a+(+f.ttc||0);},0);
+        return {reponse:imp.length?(imp.length+' facture(s) impayée(s) pour '+money(mt)+'. Je peux vous amener à la section « À relancer ».'):'Aucune facture impayée à ce jour. 👍',action:imp.length?{type:'relances'}:null};
+      }catch(e){}
+    }
+    /* Créer facture / devis */
+    if(/(cr[ée]e|nouvelle?|faire).*(facture)/.test(low))return {reponse:'J\'ouvre la création d\'une nouvelle facture de vente.',action:{type:'nouvelle_facture'}};
+    if(/(cr[ée]e|nouveau|faire).*(devis)/.test(low))return {reponse:'J\'ouvre la création d\'un nouveau devis.',action:{type:'nouveau_devis'}};
+    /* Synchro */
+    if(/synchro|relever|boite|bo[iî]te|nouveaux?.*mail|nouvelles?.*demande/.test(low))return {reponse:'Je relance la synchronisation de la boîte de réception des demandes.',action:{type:'sync'}};
+    /* Ouvrir une entité */
+    var mo=q.match(/ouvr(?:e|ir|ez)?\s+(?:la\s+|le\s+|l['’]\s*)?(client|dossier|facture|demande)\s+(.+)$/i);
+    if(mo){var kind={client:'client',dossier:'dossier',facture:'facture',demande:'demande'}[mo[1].toLowerCase()];
+      return {reponse:'J\'ouvre '+mo[1].toLowerCase()+' « '+mo[2].trim()+' ».',action:{type:'ouvrir',kind:kind,query:mo[2].trim()}};}
+    /* Navigation simple */
+    var NAV=[[/tableau|dashboard|accueil/,'dash','le tableau de bord'],[/client/,'clients','les clients'],[/facturation|facture/,'facturation','la facturation'],[/demande|messagerie|traitement/,'demandes','les demandes'],[/dossier|espace/,'espace','l\'espace dossiers'],[/service|prestation/,'services','les prestations']];
+    for(var i=0;i<NAV.length;i++){if(NAV[i][0].test(low))return {reponse:'J\'ouvre '+NAV[i][2]+'.',action:{type:'go',page:NAV[i][1]}};}
+    /* Général */
+    return {reponse:'Je suis l\'assistant du cabinet. Je peux répondre sur les pièces d\'une formalité, les tarifs, les impayés, ou ouvrir/créer un document. Reformulez votre demande (ex. « quelles pièces pour une SAS ? », « ouvrir client Durand », « créer une facture »).',action:null};
+  }
+
+  if(!document.getElementById('ia-cop-css')){var st=document.createElement('style');st.id='ia-cop-css';
+    st.textContent='.iacop-q{font-size:12px;color:var(--ink-3,#9c9078);border-left:3px solid var(--accent,#7a6e58);padding:2px 0 2px 9px;margin-bottom:10px}'
+      +'.iacop-rep{font-size:13.5px;line-height:1.55;color:var(--ink,#302c24);white-space:pre-wrap;background:var(--paper-2,#f6efe0);border-radius:8px;padding:11px 13px;min-height:34px}'
+      +'.iacop-act{display:flex;align-items:center;gap:9px;margin-top:11px;padding:9px 11px;border:1px dashed var(--line-2,#e2d9c6);border-radius:9px;background:var(--card,#fffdf7)}'
+      +'.iacop-act-l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3,#9c9078)}'
+      +'.iacop-act b{font-size:13px}';
     document.head.appendChild(st);}
 })();
 </script>

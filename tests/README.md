@@ -83,7 +83,14 @@ clauses pour les gabarits) et **IA — facturation** (désignation de
 prestation générée, relances d'impayés personnalisées à ton progressif,
 lecture de facture fournisseur par vision — fournisseur/date/HT/TVA/TTC —
 et détection d'anomalies : doublons et montants inhabituels, badge +
-liste) — le tout sans erreur JavaScript.
+liste) et **IA — copilote interne (⌘K)** (assistant intégré à la palette
+de commandes : répond aux questions métier — pièces d'une formalité,
+tarifs, procédures — cherche dans les données, et propose une action à
+**exécuter avec confirmation** : ouvrir une page, créer une facture/un
+devis, synchroniser la boîte, aller aux impayés, ou ouvrir un
+client/dossier/facture/demande ; base de connaissances tirée des modèles
+de formalités et des prestations, mode démonstration hors-ligne)
+— le tout sans erreur JavaScript.
 
 ## Lancer
 
