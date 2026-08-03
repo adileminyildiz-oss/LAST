@@ -4054,7 +4054,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=205;
+var LAST_VER=206;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11663,7 +11663,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   /* ---- Garde de rendu : redirige le collaborateur hors des pages interdites ---- */
   if(typeof window.render==='function'){var _rd=window.render;window.render=function(){
-    try{if(isCollab()&&typeof state!=='undefined'&&state&&!COLLAB_PAGES[state.page])state.page='demandes';}catch(e){}
+    try{if(isCollab()&&typeof state!=='undefined'&&state){
+      if(!COLLAB_PAGES[state.page])state.page='demandes';
+      /* le collaborateur n'a jamais de demandes « à traiter » (triage admin) → il atterrit sur SES demandes */
+      if(state.page==='demandes'&&(!state.demTab||state.demTab==='nouveau'))state.demTab='assigne';
+    }}catch(e){}
     return _rd.apply(this,arguments);
   };}
 
@@ -11671,7 +11675,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   if(typeof window.espDoss==='function'){var _ed=window.espDoss;window.espDoss=function(){var all=_ed?_ed():((DB&&DB.dossiers)||[]);return isCollab()?all.filter(function(d){return d.assigneA===uidCur();}):all;};}
   if(typeof window.pageDemandes==='function'){var _pd=window.pageDemandes;window.pageDemandes=function(){
     if(!isCollab())return _pd();
-    var saved=DB.demandes;try{DB.demandes=saved.filter(function(d){return d.assigneA===uidCur();});return _pd();}finally{DB.demandes=saved;}
+    var saved=DB.demandes,html;try{DB.demandes=saved.filter(function(d){return d.assigneA===uidCur();});html=_pd();}finally{DB.demandes=saved;}
+    var u=currentCollab();var nom=(u&&u.nom)||'';
+    var banner='<div class="collab-hello">👋 Bonjour '+E(nom.split(' ')[0]||nom)+' — voici <b>vos demandes assignées</b>. Traitez-les et envoyez vos réponses par mail.</div>';
+    return banner+html;
   };}
   if(typeof window.demVueDetail==='function'){var _dvd=window.demVueDetail;window.demVueDetail=function(id){
     if(isCollab()){var d=((DB&&DB.demandes)||[]).find(function(x){return x.id===id;});if(d&&d.assigneA!==uidCur())return '<div class="card"><div class="card-b"><div class="empty">Cette demande ne vous est pas assignée.</div></div></div>';}
@@ -11697,7 +11704,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'#last-gate .lg-tab{flex:1;border:none;background:none;padding:8px 10px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:700;color:#8a7d69;cursor:pointer}'
       +'#last-gate .lg-tab.on{background:#fff;color:#3b3d45;box-shadow:0 1px 3px rgba(60,50,20,.12)}'
       /* Masque, côté collaborateur, les commandes d\'administration résiduelles */
-      +'body[data-role="collab"] .mini-add,body[data-role="collab"] #adm-only,body[data-role="collab"] .admin-only{display:none !important}';
+      +'body[data-role="collab"] .mini-add,body[data-role="collab"] #adm-only,body[data-role="collab"] .admin-only{display:none !important}'
+      +'body[data-role="collab"] .dem-imp-btn{display:none !important}'                       /* synchro/config boîte, saisir dossier */
+      +'body[data-role="collab"] .dem-tabs .dem-tab:first-child{display:none !important}'      /* onglet « À traiter » (triage admin) */
+      +'.collab-hello{background:linear-gradient(135deg,#f3ecdc,#fbf7ee);border:1px solid #e7ddc4;border-left:3px solid var(--accent,#7a6e58);border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:13px;color:#5b5040}';
     document.head.appendChild(st);}
 })();
 </script>
