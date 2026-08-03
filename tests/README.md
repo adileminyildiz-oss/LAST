@@ -152,7 +152,10 @@ assignation, redirection hors des pages interdites) et **suivi des collaborateur
 (module d'administration dédié, invisible aux collaborateurs : présentation en liste —
 un collaborateur par ligne — avec ses tâches assignées — demandes + dossiers ouverts,
 cliquables —, ses compteurs, sa barre d'avancement des dossiers, ses retards SLA et
-son activité récente ; KPIs globaux collaborateurs actifs / tâches en cours / en retard)
+son activité récente ; KPIs globaux collaborateurs actifs / tâches en cours / en retard ;
+barre d'outils : filtre par période — tout / 7 jours / 30 jours / ce mois — appliqué à
+l'activité, tri — par nom / charge / retard / avancement — et export CSV du suivi sur
+la période courante)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test

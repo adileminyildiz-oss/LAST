@@ -745,7 +745,18 @@ const r = await page.evaluate(async () => {
   localStorage.setItem('last-role', 'collab'); localStorage.setItem('last-user', 'u-sofia'); state.page = 'suivi'; render();
   const suiviCollabBlocked = state.page !== 'suivi';
   localStorage.setItem('last-role', 'admin'); localStorage.removeItem('last-user'); state.page = 'dash'; render();
-  out.suivi = typeof pageSuivi === 'function' && suiviInPages && suiviOk && suiviRendered && suiviCollabBlocked;
+  // barre d'outils : période + tri + export
+  DB.audit = [{ ts: Date.now(), user: 'Sofia B.', action: 'Envoi mail', detail: 'ok' }, { ts: Date.now() - 40 * 86400000, user: 'Sofia B.', action: 'Vieille action', detail: 'x' }];
+  const suiviToolbar = /Période/.test(pageSuivi()) && /Trier/.test(pageSuivi()) && /Export CSV/.test(pageSuivi());
+  window.__suivi = { periode: '7j', tri: 'nom' };
+  const suiviPeriode = /Envoi mail/.test(pageSuivi()) && !/Vieille action/.test(pageSuivi());
+  window.__suivi = { periode: 'tout', tri: 'nom' };
+  let suiviCsvName = '', suiviCsvType = ''; const ocsu = URL.createObjectURL; URL.createObjectURL = (bl) => { suiviCsvType = bl.type; return 'blob:x'; };
+  const oclsu = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { suiviCsvName = this.download; };
+  suiviExportCSV(); URL.createObjectURL = ocsu; HTMLAnchorElement.prototype.click = oclsu;
+  const suiviExport = /suivi-collaborateurs-\d{4}-\d{2}-\d{2}\.csv/.test(suiviCsvName) && suiviCsvType.indexOf('text/csv') === 0;
+  out.suivi = typeof pageSuivi === 'function' && typeof suiviExportCSV === 'function' && typeof suiviSet === 'function'
+    && suiviInPages && suiviOk && suiviRendered && suiviCollabBlocked && suiviToolbar && suiviPeriode && suiviExport;
 
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
