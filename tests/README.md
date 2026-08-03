@@ -36,8 +36,13 @@ des clients, dossiers, devis, factures et demandes ; ouverture ciblée
 d'un dossier depuis la recherche) et **espace de travail par
 collaborateur** (identité active mémorisée « Je travaille en tant
 que… », filtre « Mes demandes » sur les demandes assignées, et
-auto-assignation rapide au collaborateur courant) — le tout sans
-erreur JavaScript.
+auto-assignation rapide au collaborateur courant) et **poste de travail
+des demandes** (numéro de série visible sur toutes les demandes, pièces
+jointes des mails transférées et rattachées à la demande — le parseur
+transporte le champ `att`, récupération automatique du contenu après
+synchro, affichage/téléchargement — et contexte : bandeau « Mon poste »
+avec la charge du collaborateur + prochaine étape par demande) —
+le tout sans erreur JavaScript.
 
 ## Lancer
 

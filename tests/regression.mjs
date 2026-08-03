@@ -364,6 +364,20 @@ const r = await page.evaluate(async () => {
   out.collab = meOk && mineSem && selfOk && chipOk
     && typeof meGet === 'function' && typeof demMineBtn === 'function' && typeof mePick === 'function' && typeof demMeAssigner === 'function';
 
+  // Poste de travail des demandes : n° de série, pièces jointes transférées, contexte
+  const payloadA = { mails: [{ id: 'mid-reg', from: 'AEM <submissions@formsubmit.co>', subject: 'Nouvelle soumission', date: '2026-08-02T09:15:00Z', body: 'via FormSubmit\n*Nom* Durand\n*Email* d@ex.fr\n*Message* Bonjour.', att: [{ name: 'kbis.pdf', size: 12000 }, { name: 'cni.jpg', size: 8000 }] }] };
+  const parsedA = demParseMails(JSON.stringify(payloadA));
+  const attCarried = parsedA[0] && parsedA[0].att && parsedA[0].att.length === 2;
+  demIngest(parsedA);
+  const dReg = DB.demandes.find(x => x.msgKey === 'mid-reg');
+  const attStored = dReg && (dReg.attachments || []).length === 2 && dReg.attachments.every(a => a.msgId === 'mid-reg');
+  const serieOk = /^DC-\d{4}$/.test(demSerie(dReg));
+  const attBlockOk = /Pièces jointes reçues/.test(demAttBlock(dReg.id)) && /kbis\.pdf/.test(demAttBlock(dReg.id));
+  const ctxOk = typeof demContexte(dReg) === 'string' && demContexte(dReg).length > 3;
+  const banOk = /Mon poste/.test(demPosteBanner());
+  out.demPoste = attCarried && attStored && serieOk && attBlockOk && ctxOk && banOk
+    && typeof demSerie === 'function' && typeof demAttBlock === 'function' && typeof demAutoFetchAtts === 'function' && typeof demPosteBanner === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
