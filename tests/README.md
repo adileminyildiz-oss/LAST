@@ -41,8 +41,11 @@ des demandes** (numéro de série visible sur toutes les demandes, pièces
 jointes des mails transférées et rattachées à la demande — le parseur
 transporte le champ `att`, récupération automatique du contenu après
 synchro, affichage/téléchargement — et contexte : bandeau « Mon poste »
-avec la charge du collaborateur + prochaine étape par demande) —
-le tout sans erreur JavaScript.
+avec la charge du collaborateur + prochaine étape par demande) et
+**file d'attente priorisée + SLA** (ancienneté de chaque demande,
+badge d'échéance vert/ambre/rouge au-delà d'un délai cible réglable,
+score de priorité et tri « file d'attente », compteur « en retard »
+dans le bandeau du poste) — le tout sans erreur JavaScript.
 
 ## Lancer
 

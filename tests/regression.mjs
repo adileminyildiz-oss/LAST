@@ -378,6 +378,27 @@ const r = await page.evaluate(async () => {
   out.demPoste = attCarried && attStored && serieOk && attBlockOk && ctxOk && banOk
     && typeof demSerie === 'function' && typeof demAttBlock === 'function' && typeof demAutoFetchAtts === 'function' && typeof demPosteBanner === 'function';
 
+  // File d'attente priorisée + SLA
+  const isoOff = (off) => { const dd = new Date(); dd.setDate(dd.getDate() + off); return dd.toISOString(); };
+  DB.demandes.push({ id: 'sla-old', code: 'DC-9001', clientNom: 'Old', canal: 'Formulaire du site', serviceSouhaite: 'X', statut: 'Nouveau', assigneA: '', dateTime: isoOff(-5), date: isoOff(-5).slice(0, 10), lu: false });
+  DB.demandes.push({ id: 'sla-mid', code: 'DC-9002', clientNom: 'Mid', canal: 'Formulaire du site', serviceSouhaite: 'Y', statut: 'Nouveau', assigneA: '', dateTime: isoOff(-2), date: isoOff(-2).slice(0, 10), lu: false });
+  DB.demandes.push({ id: 'sla-new', code: 'DC-9003', clientNom: 'New', canal: 'Formulaire du site', serviceSouhaite: 'Z', statut: 'Nouveau', assigneA: '', dateTime: isoOff(0), date: isoOff(0).slice(0, 10), lu: false });
+  demSetSla(2);
+  const stt = id => demSlaState(DB.demandes.find(d => d.id === id));
+  const slaLevels = stt('sla-old').level === 'late' && stt('sla-mid').level === 'warn' && stt('sla-new').level === 'ok';
+  const prioOrder = demPriority(DB.demandes.find(d => d.id === 'sla-old')) > demPriority(DB.demandes.find(d => d.id === 'sla-new'));
+  state.demSort = 'priorite';
+  const sortedIds = demSortApply([DB.demandes.find(d => d.id === 'sla-new'), DB.demandes.find(d => d.id === 'sla-old'), DB.demandes.find(d => d.id === 'sla-mid')]).map(d => d.id);
+  state.demSort = 'recent';
+  const sortOk = sortedIds[0] === 'sla-old' && sortedIds[2] === 'sla-new';
+  const badgeOk = /sla-late/.test(demSlaBadge(DB.demandes.find(d => d.id === 'sla-old'))) && /en retard/.test(demSlaBadge(DB.demandes.find(d => d.id === 'sla-old')));
+  const retardOk = demRetardCount() >= 1;
+  demSetSla(7);
+  const cfgOk = demSlaCfg() === 7 && demSlaState(DB.demandes.find(d => d.id === 'sla-old')).level !== 'late';
+  demSetSla(2);
+  out.demSla = slaLevels && prioOrder && sortOk && badgeOk && retardOk && cfgOk
+    && typeof demSlaState === 'function' && typeof demPriority === 'function' && typeof demSortApply === 'function' && typeof demSlaBadge === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
