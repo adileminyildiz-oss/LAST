@@ -2255,8 +2255,8 @@ function pageParams(){
     <div class="card"><div class="card-h"><h2>Équipe</h2><span class="sub">1 admin + collaborateurs</span></div><div class="card-b">
       ${DB.users.map(u=>`<div style="display:flex;align-items:center;gap:11px;padding:8px 0;border-bottom:1px solid var(--line)">
         <span class="av" style="background:${u.couleur}">${initials(u.nom)}</span>
-        <div style="flex:1"><b style="font-size:13px">${esc(u.nom)}</b><div class="tsub">${u.role==='admin'?'Administrateur':'Collaborateur'}</div></div>
-        ${u.role!=='admin'?`<button class="btn btn-sm btn-ghost" onclick="delUser('${u.id}')">Retirer</button>`:'<span class="tag blue">Admin</span>'}</div>`).join('')}
+        <div style="flex:1"><b style="font-size:13px">${esc(u.nom)}</b><div class="tsub">${u.role==='admin'?'Administrateur':'Collaborateur'+(u.login?(' · '+esc(u.login)+(u.actif===false?' (désactivé)':(u.pwdHash?' ✓':' — accès non défini'))):' — accès non défini')}</div></div>
+        ${u.role!=='admin'?`<button class="btn btn-sm btn-ghost" onclick="collabAccess('${u.id}')">Accès</button><button class="btn btn-sm btn-ghost" onclick="delUser('${u.id}')">Retirer</button>`:'<span class="tag blue">Admin</span>'}</div>`).join('')}
       <button class="mini-add" style="margin-top:12px" onclick="modalUser()">+ Collaborateur</button>
     </div></div>
     <div class="card"><div class="card-h"><h2>Réglages</h2></div><div class="card-b">
@@ -3903,7 +3903,17 @@ function lastBoot(){try{load();ensureData();migrateFormSubmitNames();purgeNonFor
 async function _sha256(s){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0');}).join('');}
 var _authPwd='';var _authSecret='';   /* en mémoire, le temps de la connexion */
 function _authErr(m){var e=document.getElementById('lg-err');if(e){e.textContent=m||'';e.style.display=m?'block':'none';}}
-function _authGranted(){try{localStorage.setItem('last-gate-ok','1');}catch(e){}_authOk();_authPwd='';_authSecret='';var g=document.getElementById('last-gate');if(g)g.remove();lastBoot();}
+function _authGranted(){try{localStorage.setItem('last-gate-ok','1');localStorage.setItem('last-role','admin');localStorage.removeItem('last-user');}catch(e){}_authOk();_authPwd='';_authSecret='';var g=document.getElementById('last-gate');if(g)g.remove();lastBoot();}
+/* Étape unique — connexion collaborateur (identifiant + mot de passe, sans 2FA) */
+async function lastGateCollabTry(ev){if(ev&&ev.preventDefault)ev.preventDefault();
+  if(_authLockLeft()>0){_authErr('Trop de tentatives — réessayez dans '+_authLockLeft()+' s.');return false;}
+  var login=(document.getElementById('lg-login')||{}).value||'';
+  var pwd=(document.getElementById('lg-cpwd')||{}).value||'';
+  var u=(typeof collabAuth==='function')?await collabAuth(login,pwd):null;
+  if(u){try{localStorage.setItem('last-gate-ok','1');localStorage.setItem('last-role','collab');localStorage.setItem('last-user',u.id);}catch(e){}_authOk();var g=document.getElementById('last-gate');if(g)g.remove();lastBoot();}
+  else{_authFail();var c=document.getElementById('lg-cpwd');if(c){c.value='';c.focus();}_authErr('Identifiant ou mot de passe incorrect.'+(_authLockLeft()?(' Verrouillé '+_authLockLeft()+' s.'):''));}
+  return false;
+}
 
 /* Étape 1 — mot de passe */
 async function lastGateTry(ev){if(ev&&ev.preventDefault)ev.preventDefault();
@@ -3940,7 +3950,7 @@ async function lastGateEnrollVerify(ev){if(ev&&ev.preventDefault)ev.preventDefau
 function lastGateAnchorDone(){_authGranted();}
 function lastLogout(){
   if(!window.confirm('Se déconnecter de LAST ?'))return;
-  try{localStorage.removeItem('last-gate-ok');}catch(e){}
+  try{localStorage.removeItem('last-gate-ok');localStorage.removeItem('last-role');localStorage.removeItem('last-user');}catch(e){}
   location.reload();
 }
 function lastGate(){
@@ -3976,12 +3986,27 @@ function lastGate(){
 function lastGateRender(stage,data){
   data=data||{};var b=document.getElementById('lg-body');if(!b)return;
   if(stage==='pwd'){
-    b.innerHTML='<form class="lg-form" onsubmit="return lastGateTry(event)">'
-      +'<div class="lg-step">Étape 1 / 2 · Mot de passe</div>'
-      +'<label>Mot de passe</label><input id="lg-pwd" type="password" autocomplete="current-password" autofocus placeholder="••••••••">'
-      +'<div id="lg-err" class="lg-err"></div>'
-      +'<button class="btn btn-pri" type="submit" style="width:100%;justify-content:center;margin-top:12px">Continuer</button></form>';
-    var i=document.getElementById('lg-pwd');if(i)i.focus();
+    var mode=(window.__lgMode==='collab')?'collab':'admin';
+    var tabs='<div class="lg-tabs"><button type="button" class="lg-tab'+(mode==='admin'?' on':'')+'" onclick="window.__lgMode=\'admin\';lastGateRender(\'pwd\')">Administrateur</button>'
+      +'<button type="button" class="lg-tab'+(mode==='collab'?' on':'')+'" onclick="window.__lgMode=\'collab\';lastGateRender(\'pwd\')">Collaborateur</button></div>';
+    if(mode==='collab'){
+      b.innerHTML='<div class="lg-form">'+tabs
+        +'<div class="lg-step">Espace collaborateur</div>'
+        +'<form onsubmit="return lastGateCollabTry(event)">'
+        +'<label>Identifiant</label><input id="lg-login" type="text" autocomplete="username" autofocus placeholder="prenom.n">'
+        +'<label style="margin-top:8px">Mot de passe</label><input id="lg-cpwd" type="password" autocomplete="current-password" placeholder="••••••••">'
+        +'<div id="lg-err" class="lg-err"></div>'
+        +'<button class="btn btn-pri" type="submit" style="width:100%;justify-content:center;margin-top:12px">Se connecter</button></form></div>';
+      var il=document.getElementById('lg-login');if(il)il.focus();
+    } else {
+      b.innerHTML='<div class="lg-form">'+tabs
+        +'<form onsubmit="return lastGateTry(event)">'
+        +'<div class="lg-step">Étape 1 / 2 · Mot de passe</div>'
+        +'<label>Mot de passe</label><input id="lg-pwd" type="password" autocomplete="current-password" autofocus placeholder="••••••••">'
+        +'<div id="lg-err" class="lg-err"></div>'
+        +'<button class="btn btn-pri" type="submit" style="width:100%;justify-content:center;margin-top:12px">Continuer</button></form></div>';
+      var i=document.getElementById('lg-pwd');if(i)i.focus();
+    }
   } else if(stage==='otp'){
     b.innerHTML='<form class="lg-form" onsubmit="return lastGateOtp(event)">'
       +'<div class="lg-step">Étape 2 / 2 · Code de sécurité</div>'
@@ -4029,7 +4054,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=204;
+var LAST_VER=205;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11552,6 +11577,127 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.sec-g>div>b{display:block}'
       +'.sec-gn{flex:none;width:24px;height:24px;border-radius:50%;background:var(--accent,#7a6e58);color:#fff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;margin-top:1px}'
       +'.sec-warn{font-size:11.5px;line-height:1.5;color:#8a5a12;background:#fdf4e3;border:1px solid #efd9a8;border-radius:9px;padding:9px 11px}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="role-mod">
+/* ===================================================================
+   COMPTES : ADMIN vs UTILISATEUR (collaborateur)
+   - Admin : mot de passe + 2FA → accès total.
+   - Collaborateur : identifiant + mot de passe (créés par l'admin),
+     travail uniquement (édition + envoi de mail) — aucune suppression,
+     ni finance, ni réglages. Voit uniquement SES demandes/dossiers.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function role(){try{return localStorage.getItem('last-role')||'admin';}catch(e){return 'admin';}}
+  function uidCur(){try{return localStorage.getItem('last-user')||'';}catch(e){return '';}}
+  window.lastRole=role;window.lastUserId=uidCur;
+  window.isAdmin=function(){return role()!=='collab';};
+  window.isCollab=function(){return role()==='collab';};
+  window.currentCollab=function(){var id=uidCur();return ((DB&&DB.users)||[]).find(function(u){return u.id===id;})||null;};
+
+  /* Pages autorisées aux collaborateurs (le reste est masqué) */
+  var COLLAB_PAGES={demandes:1,espace:1,clients:1};
+
+  /* ---- Authentification collaborateur ---- */
+  window.collabAuth=async function(login,pwd){
+    login=(''+(login||'')).trim().toLowerCase();
+    if(typeof DB==='undefined'||!DB||!DB.users){try{if(typeof load==='function')load();}catch(e){}}
+    if(!login||!pwd)return null;
+    var h=await _sha256(pwd);
+    return ((DB&&DB.users)||[]).find(function(u){return u.role==='collab'&&u.actif!==false&&(''+(u.login||'')).toLowerCase()===login&&u.pwdHash===h;})||null;
+  };
+
+  /* ---- Admin : gérer l'accès d'un collaborateur ---- */
+  window.collabAccess=function(id){
+    if(isCollab())return;var u=((DB&&DB.users)||[]).find(function(x){return x.id===id;});if(!u||typeof openModal!=='function')return;
+    openModal('Accès de '+E(u.nom),
+      '<p class="hint" style="margin:0 0 10px">Définissez l\'identifiant et le mot de passe de connexion de ce collaborateur. Il pourra <b>travailler</b> (édition + envoi de mails) sur <b>ses dossiers assignés</b> uniquement — sans suppression, finances ni réglages.</p>'
+      +'<label>Identifiant</label><input id="ca-login" value="'+E(u.login||'')+'" placeholder="prenom.n" autocomplete="off" style="width:100%">'
+      +'<label style="margin-top:8px">Mot de passe '+(u.pwdHash?'(laisser vide pour ne pas changer)':'')+'</label><input id="ca-pwd" type="text" placeholder="'+(u.pwdHash?'••••••••':'Mot de passe')+'" autocomplete="off" style="width:100%">'
+      +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:10px"><input type="checkbox" id="ca-actif" '+(u.actif!==false?'checked':'')+' style="width:auto;flex:none;margin:0"> Compte actif</label>'
+      +'<div id="ca-err" class="hint" style="color:#b0442f;display:none;margin-top:6px"></div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-pri" onclick="collabAccessSave(\''+id+'\')">Enregistrer</button>');
+    setTimeout(function(){var i=document.getElementById('ca-login');if(i)i.focus();},40);
+  };
+  window.collabAccessSave=async function(id){
+    if(isCollab())return;var u=((DB&&DB.users)||[]).find(function(x){return x.id===id;});if(!u)return;
+    var login=((document.getElementById('ca-login')||{}).value||'').trim();
+    var pwd=((document.getElementById('ca-pwd')||{}).value||'');
+    var actif=!!(document.getElementById('ca-actif')||{}).checked;
+    var err=document.getElementById('ca-err');
+    if(!login){if(err){err.textContent='Identifiant requis.';err.style.display='block';}return;}
+    var dup=((DB&&DB.users)||[]).find(function(x){return x.id!==id&&(''+(x.login||'')).toLowerCase()===login.toLowerCase();});
+    if(dup){if(err){err.textContent='Cet identifiant est déjà utilisé.';err.style.display='block';}return;}
+    if(!u.pwdHash&&!pwd){if(err){err.textContent='Définissez un mot de passe.';err.style.display='block';}return;}
+    if(pwd&&pwd.length<6){if(err){err.textContent='Mot de passe : 6 caractères minimum.';err.style.display='block';}return;}
+    u.login=login;u.actif=actif;if(pwd)u.pwdHash=await _sha256(pwd);
+    if(typeof save==='function')save();if(typeof closeModal==='function')closeModal();
+    if(typeof toast==='function')toast('Accès enregistré pour '+u.nom+'.');
+    if(typeof render==='function')render();
+  };
+
+  /* ---- Application du rôle (corps + barre utilisateur) ---- */
+  function applyRole(){
+    var r=role();try{document.body.setAttribute('data-role',r);}catch(e){}
+    var nm=document.getElementById('me-nom');
+    var sub=nm&&nm.parentNode?nm.parentNode.querySelector('span'):null;
+    var av=document.getElementById('me-av');
+    if(r==='collab'){var u=currentCollab();var nom=(u&&u.nom)||'Collaborateur';
+      if(nm)nm.textContent=nom;if(sub)sub.textContent='Collaborateur';if(av)av.textContent=(nom.charAt(0)||'C').toUpperCase();}
+  }
+
+  /* ---- Navigation filtrée pour le collaborateur ---- */
+  if(typeof window.buildNav==='function'){var _bn=window.buildNav;window.buildNav=function(){
+    if(isCollab()){
+      var nav=document.getElementById('nav');
+      if(nav&&typeof navBtn==='function'&&typeof PAGES!=='undefined'){
+        var allow=PAGES.filter(function(p){return COLLAB_PAGES[p.id];});
+        nav.innerHTML='<div class="nav-lbl">Mon travail</div>'+allow.map(function(p){return navBtn(p);}).join('');
+      }
+    } else { _bn(); }
+    applyRole();
+  };}
+
+  /* ---- Garde de rendu : redirige le collaborateur hors des pages interdites ---- */
+  if(typeof window.render==='function'){var _rd=window.render;window.render=function(){
+    try{if(isCollab()&&typeof state!=='undefined'&&state&&!COLLAB_PAGES[state.page])state.page='demandes';}catch(e){}
+    return _rd.apply(this,arguments);
+  };}
+
+  /* ---- Périmètre des données : le collaborateur ne voit que ce qui lui est assigné ---- */
+  if(typeof window.espDoss==='function'){var _ed=window.espDoss;window.espDoss=function(){var all=_ed?_ed():((DB&&DB.dossiers)||[]);return isCollab()?all.filter(function(d){return d.assigneA===uidCur();}):all;};}
+  if(typeof window.pageDemandes==='function'){var _pd=window.pageDemandes;window.pageDemandes=function(){
+    if(!isCollab())return _pd();
+    var saved=DB.demandes;try{DB.demandes=saved.filter(function(d){return d.assigneA===uidCur();});return _pd();}finally{DB.demandes=saved;}
+  };}
+  if(typeof window.demVueDetail==='function'){var _dvd=window.demVueDetail;window.demVueDetail=function(id){
+    if(isCollab()){var d=((DB&&DB.demandes)||[]).find(function(x){return x.id===id;});if(d&&d.assigneA!==uidCur())return '<div class="card"><div class="card-b"><div class="empty">Cette demande ne vous est pas assignée.</div></div></div>';}
+    return _dvd(id);
+  };}
+
+  /* ---- Garde de modification : le collaborateur ne peut ni supprimer, ni gérer finances/réglages ---- */
+  var BLOCK=['delClient','delDossier','delService','delUser','delAssoc','fournDel','devisDel','factDel','factAvoir','factStatutSave','marquerRegle','depotComptabiliser','recSave','recDel','modalService','saveService','modalUser','saveClient','saveDossier','demSaisieInterne','secChangePwdSave','sec2FAStart','secExportLock','iaSave','collabAccess','collabAccessSave','fluxFacturerDossier','devisTransformer'];
+  BLOCK.forEach(function(fn){
+    if(typeof window[fn]!=='function')return;var orig=window[fn];
+    window[fn]=function(){
+      if(isCollab()){if(typeof toast==='function')toast('🔒 Action réservée à l\'administrateur.');return;}
+      return orig.apply(this,arguments);
+    };
+  });
+
+  /* ---- Application initiale (le boot a pu déjà rendre avant ce module) ---- */
+  function init(){try{applyRole();if(document.getElementById('nav')&&typeof render==='function'&&localStorage.getItem('last-gate-ok')==='1')render();}catch(e){}}
+  if(document.readyState!=='loading')init();else document.addEventListener('DOMContentLoaded',init);
+
+  if(!document.getElementById('role-css')){var st=document.createElement('style');st.id='role-css';
+    st.textContent='#last-gate .lg-tabs{display:flex;gap:6px;margin-bottom:14px;background:#f1ead9;border:1px solid #e5dcc6;border-radius:10px;padding:3px}'
+      +'#last-gate .lg-tab{flex:1;border:none;background:none;padding:8px 10px;border-radius:8px;font:inherit;font-size:12.5px;font-weight:700;color:#8a7d69;cursor:pointer}'
+      +'#last-gate .lg-tab.on{background:#fff;color:#3b3d45;box-shadow:0 1px 3px rgba(60,50,20,.12)}'
+      /* Masque, côté collaborateur, les commandes d\'administration résiduelles */
+      +'body[data-role="collab"] .mini-add,body[data-role="collab"] #adm-only,body[data-role="collab"] .admin-only{display:none !important}';
     document.head.appendChild(st);}
 })();
 </script>

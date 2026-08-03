@@ -139,7 +139,16 @@ verrouillage temporaire anti-force-brute après cinq échecs) et
 statut 2FA, (re)configuration guidée de la double authentification — QR/clé +
 vérification —, changement de mot de passe — nouvelle empreinte SHA-256 stockée
 localement, prise en compte par le gate via un mot de passe modifiable —, affichage
-de la clé d'ancrage portable, et guide pas à pas d'enrôlement)
+de la clé d'ancrage portable, et guide pas à pas d'enrôlement) et
+**comptes Admin / Collaborateur** (deux formats d'accès : l'Admin — mot de passe +
+2FA — a tout pouvoir ; les collaborateurs se connectent avec un identifiant + mot
+de passe créés par l'Admin (carte Équipe → Accès), sans 2FA, et sont limités au
+travail : ils ne voient que les demandes/dossiers qui leur sont assignés, un menu
+restreint — Demandes, Traitement, Clients (consultation), documents — le reste
+masqué, et n'ont aucun pouvoir de modification structurelle — suppressions,
+finances, réglages bloqués — uniquement l'édition des dossiers et l'envoi de mails ;
+identifiant insensible à la casse, comptes activables/désactivables, périmètre par
+assignation, redirection hors des pages interdites)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test

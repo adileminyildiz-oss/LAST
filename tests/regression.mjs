@@ -710,6 +710,28 @@ const r = await page.evaluate(async () => {
   out.securite = typeof secCard === 'function' && typeof sec2FAStart === 'function' && typeof secChangePwdSave === 'function' && typeof secGuide === 'function' && typeof getPwdHash === 'function' && typeof secExportLock === 'function'
     && /Sécurité/.test(secCardHTML) && secInParams && pwdOverrideOk && pwdDefaultOk && lockOk;
 
+  // COMPTES admin/collaborateur — auth collab, périmètre assigné, nav restreinte, garde de modification
+  const sofia = (DB.users || []).find((u) => u.id === 'u-sofia');
+  sofia.login = 'sofia.b'; sofia.actif = true; sofia.pwdHash = await _sha256('travail2026');
+  const authGood = await collabAuth('SOFIA.B', 'travail2026'); // insensible à la casse
+  const authBad = await collabAuth('sofia.b', 'nope');
+  sofia.actif = false; const authInactif = await collabAuth('sofia.b', 'travail2026'); sofia.actif = true;
+  // bascule collaborateur
+  localStorage.setItem('last-role', 'collab'); localStorage.setItem('last-user', 'u-sofia');
+  DB.dossiers = [{ id: 'rda', ref: 'DOS-RA', clientIds: [], serviceIds: [], statut: 'En cours', assigneA: 'u-sofia' }, { id: 'rdb', ref: 'DOS-RB', clientIds: [], serviceIds: [], statut: 'En cours', assigneA: 'u-karim' }];
+  const scopeOk = espDoss().length === 1 && espDoss()[0].id === 'rda';
+  buildNav(); const navC = (document.getElementById('nav') || {}).innerHTML || '';
+  const navRestricted = /Demandes/.test(navC) && /Traitement/.test(navC) && /Clients/.test(navC) && !/Facturation|Rentabilité|Pilotage|Paramètres/.test(navC);
+  state.page = 'params'; render(); const redirectOk = state.page === 'demandes';
+  const dBefore = DB.dossiers.length; delDossier('rda'); const guardOk = DB.dossiers.length === dBefore; // suppression bloquée
+  const roleFlagsOk = isCollab() === true && isAdmin() === false && (currentCollab() || {}).id === 'u-sofia';
+  // restauration ADMIN (indispensable pour la suite des tests)
+  localStorage.setItem('last-role', 'admin'); localStorage.removeItem('last-user');
+  state.page = 'dash'; render();
+  out.comptes = typeof collabAuth === 'function' && typeof collabAccess === 'function' && typeof isCollab === 'function' && typeof lastRole === 'function'
+    && (authGood && authGood.id === 'u-sofia') && authBad === null && authInactif === null
+    && scopeOk && navRestricted && redirectOk && guardOk && roleFlagsOk && isAdmin() === true;
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
