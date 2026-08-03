@@ -3932,7 +3932,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=199;
+var LAST_VER=200;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11025,10 +11025,39 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     else if(typeof render==='function')render();
   };
 
+  /* ---- Anti-fuite DÉBOURS : les frais officiels (annonce légale, greffe/INPI)
+     doivent être refacturés au client. On détecte ceux qui manquent au dossier. ---- */
+  function svcDebours(rx){return (DB.services||[]).find(function(s){return s.type==='debours' && rx.test((s.nom||'').toLowerCase());});}
+  window.fluxDeboursRequis=function(d){
+    if(!d)return [];
+    var fam={};(d.serviceIds||[]).forEach(function(id){var s=(typeof svcById==='function')?svcById(id):null;if(s&&s.type!=='debours')fam[s.famille]=1;});
+    var need=[];
+    if(fam['Création']||fam['Modification']){need.push(/annonce/);need.push(/greffe|inpi/);}
+    else if(fam['Annuel']){need.push(/greffe|inpi/);}          /* dépôt des comptes */
+    var miss=[];var seen={};
+    need.forEach(function(rx){var s=svcDebours(rx);if(s && !(d.serviceIds||[]).includes(s.id) && !seen[s.id]){seen[s.id]=1;miss.push(s);}});
+    return miss;
+  };
+  window.fluxAjouterDebours=function(d,miss){
+    if(!d||!miss||!miss.length)return 0;
+    d.serviceIds=(d.serviceIds||[]).concat(miss.map(function(s){return s.id;}));
+    if(typeof save==='function')save();
+    return miss.length;
+  };
+
   /* ---- LEVIER 1 bis : facturer un dossier livré (lien dossier↔facture) ---- */
   window.fluxFacturerDossier=function(id){
     var d=(DB.dossiers||[]).find(function(x){return x.id===id;});if(!d)return;
     if(typeof FactureVente==='undefined')return (typeof toast==='function')&&toast('Module facture indisponible');
+    /* Refacturation des débours officiels manquants (marge préservée) */
+    var miss=fluxDeboursRequis(d);
+    if(miss.length){
+      var lbl=miss.map(function(s){return s.nom+' ('+money(s.debours)+')';}).join(', ');
+      if(typeof confirm!=='function' || confirm('Ce dossier n\'inclut pas ses débours officiels :\n'+lbl+'.\n\nLes ajouter à la facture (refacturés au client, marge préservée) ?')){
+        var n=fluxAjouterDebours(d,miss);
+        if(n&&typeof toast==='function')toast(n+' débours ajouté(s) — refacturé(s) au client.');
+      }
+    }
     var cid=(d.clientIds||[])[0];
     var lignes=(typeof devisLignesFromServices==='function')?devisLignesFromServices(d.serviceIds):undefined;
     window._devisClientNom=(typeof dossierClients==='function')?dossierClients(d):'';
@@ -11069,7 +11098,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var cDev=col('dev','📝','Devis en attente',t.devis,
       s.devis.slice(0,MAX).map(function(d){return {nom:(d.num||'')+' · '+(d.tiers||''),eur:+d.ttc||0,open:"gsGo('devis','"+d.id+"')",act:"devisTransformer('"+d.id+"')",lbl:'→ Facture',pri:true};}));
     var cFac=col('fac','📂','Dossiers à facturer',t.facturer,
-      s.facturer.slice(0,MAX).map(function(d){return {nom:(d.ref||'')+' · '+((typeof dossierClients==='function')?dossierClients(d):''),eur:dosMontant(d),open:"gsGo('dossier','"+d.id+"')",act:"fluxFacturerDossier('"+d.id+"')",lbl:'💶 Facturer',pri:true};}));
+      s.facturer.slice(0,MAX).map(function(d){var deb=fluxDeboursRequis(d).length;return {nom:(d.ref||'')+' · '+((typeof dossierClients==='function')?dossierClients(d):'')+(deb?' ⚠':''),eur:dosMontant(d),open:"gsGo('dossier','"+d.id+"')",act:"fluxFacturerDossier('"+d.id+"')",lbl:'💶 Facturer',pri:true};}));
     var cImp=col('imp','⏰','Impayés à relancer',t.impayes,
       s.impayes.slice(0,MAX).map(function(f){return {nom:(f.num||'')+' · '+(f.tiers||''),eur:+f.ttc||0,open:"gsGo('facture','"+f.id+"')",act:"factRelancer('"+f.id+"')",lbl:'Relancer',pri:false};}));
     return '<div class="card flux-card"><div class="card-h"><h2>💰 Pipeline commercial</h2>'

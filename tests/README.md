@@ -115,7 +115,11 @@ plus de devis oublié — et carte « Pipeline commercial » en tête du tableau
 bord : les quatre étapes du tunnel de vente — demandes à qualifier, devis en
 attente, dossiers à facturer, impayés — avec compteur, montant potentiel et
 action rapide par étape ; le lien dossier↔facture retire un dossier de « à
-facturer » dès qu'une facture lui est rattachée)
+facturer » dès qu'une facture lui est rattachée) et **anti-fuite débours**
+(détection des frais officiels manquants d'un dossier — annonce légale et
+frais de greffe/INPI selon la nature création/modification/annuelle — signalés
+par un ⚠ dans le pipeline et proposés à l'ajout au moment de facturer, pour
+qu'ils soient refacturés au client et ne rognent pas la marge)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test

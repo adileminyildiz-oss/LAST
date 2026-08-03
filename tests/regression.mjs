@@ -644,6 +644,21 @@ const r = await page.evaluate(async () => {
     && flxStagesOk && flxTotOk && flxCardOk && flxLinkOk;
   out.fluxAccepterDevis = typeof demAccepterDevis === 'function' && flxFicheBtn && flxAccepted;
 
+  // FLUX — anti-fuite débours : détection des frais officiels manquants + ajout
+  const svcCrea = (DB.services || []).find((s) => s.famille === 'Création' && s.type !== 'debours');
+  const dDeb = { id: 'flxdeb', ref: 'DOS-DEB', clientIds: [], serviceIds: svcCrea ? [svcCrea.id] : [], statut: 'Transmis greffe', createdAt: '2026-01-01', historique: [] };
+  DB.dossiers.push(dDeb);
+  const debMiss = fluxDeboursRequis(dDeb);
+  const debMissOk = debMiss.length === 2 && debMiss.some((s) => /annonce/i.test(s.nom)) && debMiss.some((s) => /greffe/i.test(s.nom));
+  const debBefore = (dDeb.serviceIds || []).length;
+  fluxAjouterDebours(dDeb, debMiss);
+  const debAddOk = (dDeb.serviceIds.length - debBefore) === 2 && fluxDeboursRequis(dDeb).length === 0;
+  const svcAnnuel = (DB.services || []).find((s) => s.famille === 'Annuel' && s.type !== 'debours');
+  const dAnn = { id: 'flxann', ref: 'DOS-ANN', clientIds: [], serviceIds: svcAnnuel ? [svcAnnuel.id] : [], statut: 'Clôturé' };
+  DB.dossiers.push(dAnn);
+  const debAnnualOk = svcAnnuel ? (fluxDeboursRequis(dAnn).length === 1 && /greffe/i.test(fluxDeboursRequis(dAnn)[0].nom)) : true;
+  out.fluxDebours = typeof fluxDeboursRequis === 'function' && typeof fluxAjouterDebours === 'function' && debMissOk && debAddOk && debAnnualOk;
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
