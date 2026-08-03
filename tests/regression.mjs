@@ -457,6 +457,21 @@ const r = await page.evaluate(async () => {
     && /Statistiques des demandes/.test(statView) && /stat-bar/.test(statView) && /stat-k/.test(statView)
     && typeof demStatsCard === 'function' && typeof demStatsView === 'function';
 
+  // Filtre de période + export CSV des statistiques
+  const nowD = new Date();
+  const thisMonthISO = new Date(nowD.getFullYear(), nowD.getMonth(), 5).toISOString();
+  const oldISO = new Date(nowD.getFullYear() - 2, 0, 1).toISOString();
+  DB.demandes.unshift({ id: 'permonth', code: 'DC-PM', clientNom: 'PM', canal: 'Formulaire du site', serviceSouhaite: 'Création SAS', statut: 'Nouveau', assigneA: '', dateTime: thisMonthISO, date: thisMonthISO.slice(0, 10), lu: false });
+  DB.demandes.unshift({ id: 'perold', code: 'DC-PO', clientNom: 'PO', canal: 'Formulaire du site', serviceSouhaite: 'Création SCI', statut: 'Nouveau', assigneA: '', dateTime: oldISO, date: oldISO.slice(0, 10), lu: false });
+  const totTout = demStats('tout').total, totMois = demStats('mois').total;
+  const perFilterOk = demInPeriode(DB.demandes.find(d => d.id === 'permonth'), 'mois') === true
+    && demInPeriode(DB.demandes.find(d => d.id === 'perold'), 'mois') === false && totMois <= totTout;
+  state.demStatsPeriode = 'mois';
+  const sv = demStatsView();
+  out.demPeriode = perFilterOk && /Exporter \(CSV\)/.test(sv) && /dem-nat-b/.test(sv) && /ce mois/.test(demPeriodeInfo('mois').label)
+    && typeof demStatsExport === 'function' && typeof demInPeriode === 'function' && typeof demStatsSetPeriode === 'function';
+  state.demStatsPeriode = 'tout';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

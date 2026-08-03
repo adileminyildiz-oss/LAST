@@ -58,8 +58,10 @@ statuts, RIB… — d'après son nom, correction manuelle, couverture des
 pièces requises par la formalité, et aperçu inline image/PDF sans quitter
 la fiche) et **statistiques du poste** (onglet dédié : volumes, taux de
 conversion demande→dossier, part traitée dans les délais SLA, âge moyen,
-et répartitions par canal / état / formalité / collaborateur) —
-le tout sans erreur JavaScript.
+et répartitions par canal / état / formalité / collaborateur ;
+**filtre de période** — tout / cette année / ce trimestre / ce mois —
+et **export CSV** des demandes de la période) — le tout sans erreur
+JavaScript.
 
 ## Lancer
 

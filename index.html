@@ -3924,7 +3924,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=186;
+var LAST_VER=187;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9431,8 +9431,22 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 (function(){
   function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
   function etatOf(d){return (typeof demEtat==='function')?demEtat(d):(d&&d.dossierId?'encours':(d&&d.assigneA?'assigne':'nouveau'));}
-  window.demStats=function(){
-    var all=(DB.demandes||[]);
+  var PERS=[['tout','Tout'],['annee','Cette année'],['trimestre','Ce trimestre'],['mois','Ce mois']];
+  window.demPeriodeInfo=function(periode){
+    var now=new Date();var y=now.getFullYear(),m=now.getMonth();
+    if(periode==='mois')return {from:new Date(y,m,1),label:'ce mois'};
+    if(periode==='trimestre'){var q=Math.floor(m/3)*3;return {from:new Date(y,q,1),label:'ce trimestre'};}
+    if(periode==='annee')return {from:new Date(y,0,1),label:'cette année'};
+    return {from:null,label:'tout l\'historique'};
+  };
+  window.demInPeriode=function(d,periode){
+    var info=window.demPeriodeInfo(periode);if(!info.from)return true;
+    var t=d&&(d.dateTime||d.date);if(!t)return false;var s=''+t;var dt=new Date(s.length<=10?(s+'T00:00:00'):s);
+    if(isNaN(dt.getTime()))return false;return dt.getTime()>=info.from.getTime();
+  };
+  window.demStats=function(periode){
+    periode=periode||state.demStatsPeriode||'tout';
+    var all=(DB.demandes||[]).filter(function(d){return window.demInPeriode(d,periode);});
     var vis=all.filter(function(d){return !d.archived;});
     var refus=all.length-vis.length;
     var byEtat={nouveau:0,assigne:0,encours:0,finalise:0};
@@ -9469,12 +9483,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   }
   function kpi(v,l,cls){return '<div class="stat-k'+(cls?' '+cls:'')+'"><b>'+v+'</b><span>'+l+'</span></div>';}
 
-  window.demStatsCard=function(){
-    var s=window.demStats();
+  window.demStatsCard=function(periode){
+    periode=periode||state.demStatsPeriode||'tout';
+    var s=window.demStats(periode);
+    var pl=window.demPeriodeInfo(periode).label;
     var etatLbl={nouveau:'À traiter',assigne:'Assignées',encours:'En cours',finalise:'Finalisées'};
     var etatObj={};Object.keys(s.byEtat).forEach(function(k){etatObj[etatLbl[k]||k]=s.byEtat[k];});
     var canalObj={'Site aemconseil.eu':s.site,'Autres (e-mail)':s.autres};
-    return '<div class="card"><div class="card-h"><h2>📊 Statistiques des demandes</h2><span class="sub" style="margin-left:auto">'+s.total+' demande(s)'+(s.refus?(' · '+s.refus+' refusée(s)'):'')+'</span></div>'
+    return '<div class="card"><div class="card-h"><h2>📊 Statistiques des demandes</h2><span class="sub" style="margin-left:auto">'+E(pl)+' · '+s.total+' demande(s)'+(s.refus?(' · '+s.refus+' refusée(s)'):'')+'</span></div>'
       +'<div class="card-b">'
       +'<div class="stat-kpis">'
       +kpi(s.total,'Demandes reçues','')
@@ -9491,8 +9507,32 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<div class="stat-col"><div class="stat-t">Par collaborateur</div>'+bars(s.byUser,'#6f8a7d')+'</div>'
       +'</div></div></div>';
   };
+  window.demStatsSetPeriode=function(p){state.demStatsPeriode=p;if(typeof render==='function')render();};
   window.demStatsView=function(){
-    return ((typeof demPosteBanner==='function')?demPosteBanner():'')+window.demStatsCard();
+    var per=state.demStatsPeriode||'tout';
+    var seg='<div class="dem-nat">'+PERS.map(function(p){return '<button class="dem-nat-b'+(per===p[0]?' on':'')+'" onclick="demStatsSetPeriode(\''+p[0]+'\')">'+E(p[1])+'</button>';}).join('')+'</div>';
+    var bar='<div class="dem-head"><div class="dem-head-row">'+seg
+      +'<div class="dem-acts"><button class="btn btn-sm dem-imp-btn" onclick="demStatsExport()">⬇ Exporter (CSV)</button></div></div></div>';
+    return ((typeof demPosteBanner==='function')?demPosteBanner():'')+bar+window.demStatsCard(per);
+  };
+  window.demStatsExport=function(){
+    var per=state.demStatsPeriode||'tout';
+    var rows=(DB.demandes||[]).filter(function(d){return !d.archived&&window.demInPeriode(d,per);});
+    var q=function(v){v=(''+(v==null?'':v)).replace(/"/g,'""');return '"'+v+'"';};
+    var head=['N° série','Date','Client','E-mail','Téléphone','Canal','Objet','Formalité','Statut','Assigné','En retard SLA','Dossier'];
+    var lines=[head.map(q).join(';')];
+    rows.forEach(function(d){
+      var u=(typeof userById==='function'&&d.assigneA)?userById(d.assigneA):null;
+      var forme='';try{if(typeof templateOf==='function'){var t=templateOf(d);forme=(t&&t.label)||'';}}catch(e){}
+      var late=(typeof demSlaState==='function'&&demSlaState(d).level==='late')?'oui':'non';
+      var objet=(typeof IA!=='undefined'&&IA.objet)?IA.objet(d):(d.serviceSouhaite||'');
+      lines.push([(typeof demCode==='function'?demCode(d):(d.code||'')),(d.date||''),(typeof demBestName==='function'?demBestName(d):(d.clientNom||'')),
+        (typeof demReplyTo==='function'?demReplyTo(d):(d.clientEmail||'')),(d.clientTel||''),(d.canal||''),objet,forme,(d.statut||''),((u&&u.nom)||''),late,(d.dossierId?'oui':'non')].map(q).join(';'));
+    });
+    var csv='﻿'+lines.join('\r\n');
+    try{var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');a.href=url;a.download='demandes-'+per+'-'+(new Date().toISOString().slice(0,10))+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},60000);
+      if(typeof toast==='function')toast(rows.length+' demande(s) exportée(s) — '+per);}catch(e){if(typeof toast==='function')toast('Export impossible.');}
   };
 
   if(!document.getElementById('demstats-css')){var st=document.createElement('style');st.id='demstats-css';
