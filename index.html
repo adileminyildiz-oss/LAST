@@ -4056,7 +4056,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=208;
+var LAST_VER=209;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11739,6 +11739,34 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   var TRIS=[['nom','Nom'],['charge','Charge'],['retard','Retard'],['avancement','Avancement']];
   function perLabel(k){var f=PERIODES.filter(function(p){return p[0]===k;})[0];return f?f[1]:k;}
 
+  /* Charge cible par collaborateur (alerte de surcharge) */
+  function suiviCible(){try{DB.parametres=DB.parametres||{};var n=DB.parametres.suiviCible;return (typeof n==='number'&&n>0)?n:5;}catch(e){return 5;}}
+  window.suiviSetCible=function(v){var n=parseInt(v,10);if(isNaN(n)||n<1)n=1;DB.parametres=DB.parametres||{};DB.parametres.suiviCible=n;if(typeof save==='function')save();if(typeof render==='function')render();};
+
+  /* Réattribution d'une tâche (demande ou dossier) à un autre collaborateur */
+  window.suiviReassign=function(kind,id){
+    if(typeof isCollab==='function'&&isCollab())return;
+    var arr=(kind==='demande')?((DB&&DB.demandes)||[]):((DB&&DB.dossiers)||[]);
+    var it=arr.find(function(x){return x.id===id;});if(!it||typeof openModal!=='function')return;
+    var nom=(kind==='demande')?nomDem(it):((it.ref||'Dossier')+((typeof dossierClients==='function')?(' · '+dossierClients(it)):''));
+    var collabs=((DB&&DB.users)||[]).filter(function(u){return u.role==='collab';});
+    var rows='<button class="suivi-reass-opt'+(!it.assigneA?' on':'')+'" onclick="suiviDoReassign(\''+kind+'\',\''+id+'\',\'\')">— Non assigné —</button>'
+      +collabs.map(function(u){return '<button class="suivi-reass-opt'+(it.assigneA===u.id?' on':'')+'" onclick="suiviDoReassign(\''+kind+'\',\''+id+'\',\''+u.id+'\')"><span class="av" style="background:'+(u.couleur||'#4a4034')+';width:22px;height:22px;font-size:9px">'+((typeof initials==='function')?initials(u.nom):'?')+'</span>'+E(u.nom)+(u.actif===false?' <span class="tag warm" style="font-size:9px">désactivé</span>':'')+'</button>';}).join('');
+    openModal('Réattribuer — '+E(nom),'<p class="hint" style="margin:0 0 10px">Choisissez le collaborateur qui prend en charge cette '+(kind==='demande'?'demande':'ce dossier')+'.</p><div class="suivi-reass-list">'+rows+'</div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+  };
+  window.suiviDoReassign=function(kind,id,uid){
+    if(typeof isCollab==='function'&&isCollab())return;
+    var arr=(kind==='demande')?((DB&&DB.demandes)||[]):((DB&&DB.dossiers)||[]);
+    var it=arr.find(function(x){return x.id===id;});if(!it)return;
+    var to=((DB&&DB.users)||[]).find(function(u){return u.id===uid;});
+    it.assigneA=uid||'';
+    if(typeof logAudit==='function')try{logAudit('Réattribution',(kind==='demande'?'Demande':'Dossier')+' → '+(to?to.nom:'Non assigné'));}catch(e){}
+    if(typeof save==='function')save();if(typeof closeModal==='function')closeModal();
+    if(typeof toast==='function')toast('Réattribué à '+(to?to.nom:'personne')+'.');
+    if(typeof render==='function')render();
+  };
+
   function metrics(u,cutoff){
     var dems=demOf(u.id),doss=dosOf(u.id);
     var demOuv=dems.filter(function(d){return etat(d)!=='finalise';});
@@ -11756,17 +11784,20 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     m.demOuv.forEach(function(d){tasks.push({t:'demande',id:d.id,nom:nomDem(d),sub:(d.serviceSouhaite||d.service||'Demande'),tag:({nouveau:'À traiter',assigne:'Assignée',encours:'En cours'}[etat(d)]||'En cours'),c:'#8a7b52',late:(typeof demSlaState==='function'&&demSlaState(d).level==='late')});});
     m.dosOuv.forEach(function(d){tasks.push({t:'dossier',id:d.id,nom:(d.ref||'Dossier')+((typeof dossierClients==='function')?(' · '+dossierClients(d)):''),sub:'Dossier',tag:(d.statut||'En cours'),c:SC[d.statut]||'#8a7b52',late:false});});
     var taskHTML=tasks.length?('<div class="suivi-tasks">'+tasks.slice(0,10).map(function(t){
-      return '<div class="suivi-task" onclick="gsGo(\''+t.t+'\',\''+t.id+'\')"><div class="suivi-task-main"><b>'+E(t.nom)+'</b><span>'+E(t.sub)+'</span></div>'
+      return '<div class="suivi-task"><div class="suivi-task-main" onclick="gsGo(\''+t.t+'\',\''+t.id+'\')"><b>'+E(t.nom)+'</b><span>'+E(t.sub)+'</span></div>'
         +(t.late?'<span class="tag hot" style="font-size:9px">retard</span>':'')
-        +'<span class="suivi-tag" style="color:'+t.c+';border-color:'+t.c+'55;background:'+t.c+'14">'+E(t.tag)+'</span></div>';
+        +'<span class="suivi-tag" style="color:'+t.c+';border-color:'+t.c+'55;background:'+t.c+'14">'+E(t.tag)+'</span>'
+        +'<button class="suivi-reassign" title="Réattribuer" onclick="event.stopPropagation();suiviReassign(\''+t.t+'\',\''+t.id+'\')">⇄</button></div>';
     }).join('')+(tasks.length>10?'<div class="hint" style="font-size:11px;padding:4px 2px">+'+(tasks.length-10)+' autre(s)…</div>':'')+'</div>'):'<div class="suivi-none">Aucune tâche en cours.</div>';
     var acts=m.acts.slice(0,6);
     var actHTML='<div class="suivi-act-t">Activité — '+E(perLabel(suiviState().periode))+' ('+m.acts.length+')</div>'
       +(acts.length?acts.map(function(a){return '<div class="suivi-act"><span>'+E(a.action)+(a.detail?(' · '+E(a.detail)):'')+'</span><time>'+frDT(a.ts)+'</time></div>';}).join(''):'<div class="suivi-act" style="border:0;color:var(--ink-3,#9c9078)">Aucune activité sur la période.</div>');
+    var cible=suiviCible();var over=m.charge>cible;
+    var chargeBadge='<span class="suivi-charge'+(over?' over':'')+'" title="Charge en cours vs objectif ('+cible+')">'+m.charge+'/'+cible+(over?' ⚠':'')+'</span>';
     var left='<div class="suivi-left"><div class="suivi-head">'
       +'<span class="av" style="background:'+(u.couleur||'#4a4034')+'">'+((typeof initials==='function')?initials(u.nom):(u.nom||'?').slice(0,2))+'</span>'
       +'<div class="suivi-id"><b>'+E(u.nom)+'</b><span>Collaborateur '+(u.login?('· '+E(u.login)):'')+'</span></div>'
-      +'<span style="margin-left:auto">'+acces+'</span></div>'
+      +'<span style="margin-left:auto;display:flex;align-items:center;gap:7px">'+chargeBadge+acces+'</span></div>'
       +'<div class="suivi-kpis">'
         +'<div class="suivi-k"><b>'+m.dems.length+'</b><span>Demandes</span></div>'
         +'<div class="suivi-k"><b>'+m.dosOuv.length+'</b><span>Dossiers en cours</span></div>'
@@ -11814,6 +11845,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var toolbar='<div class="suivi-toolbar">'
       +'<div class="suivi-tb-grp"><span>Période</span><div class="suivi-segs">'+seg('periode',PERIODES,st.periode)+'</div></div>'
       +'<div class="suivi-tb-grp"><span>Trier</span><div class="suivi-segs">'+seg('tri',TRIS,st.tri)+'</div></div>'
+      +'<div class="suivi-tb-grp"><span>Charge cible</span><input type="number" min="1" class="suivi-cible-in" value="'+suiviCible()+'" onchange="suiviSetCible(this.value)" title="Objectif de tâches en cours par collaborateur"></div>'
       +'<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="suiviExportCSV()">⤓ Export CSV</button>'
       +'</div>';
     var body=mets.length?('<div class="suivi-grid">'+mets.map(collabCard).join('')+'</div>'):'<div class="card"><div class="card-b"><div class="empty">Aucun collaborateur. Ajoutez-en dans Paramètres → Équipe, puis définissez leur accès.</div></div></div>';
@@ -11853,7 +11885,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.suivi-none{font-size:12px;color:var(--ink-3,#9c9078);padding:8px 0;text-align:center}'
       +'.suivi-act-t{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3,#9c9078);margin:12px 0 6px}'
       +'.suivi-act{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--ink-2,#5a5344);padding:3px 0;border-bottom:1px dotted var(--line-soft,#f0e9da)}'
-      +'.suivi-act time{color:var(--ink-3,#9c9078);flex:none}';
+      +'.suivi-act time{color:var(--ink-3,#9c9078);flex:none}'
+      +'.suivi-charge{flex:none;font-size:10px;font-weight:800;border-radius:20px;padding:2px 9px;background:var(--paper-2,#f1ead9);color:var(--ink-2,#5a5344);border:1px solid var(--line-2,#e2d9c6)}'
+      +'.suivi-charge.over{background:#fbe9e7;color:#c0392b;border-color:#e6a79f}'
+      +'.suivi-cible-in{width:56px;padding:5px 7px;border:1px solid var(--line-2,#e2d9c6);border-radius:7px;font:inherit;font-size:12px;font-weight:700;text-align:center;background:var(--card,#fffdf7);color:var(--ink,#302c24)}'
+      +'.suivi-reassign{flex:none;border:1px solid var(--line-2,#e2d9c6);background:var(--paper-2,#f6efe0);color:var(--ink-2,#5a5344);width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center}'
+      +'.suivi-reassign:hover{border-color:var(--accent,#7a6e58);color:var(--accent,#7a6e58)}'
+      +'.suivi-reass-list{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow:auto}'
+      +'.suivi-reass-opt{display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--line-2,#e2d9c6);border-radius:9px;background:var(--card,#fffdf7);cursor:pointer;font:inherit;font-size:13px;font-weight:600;color:var(--ink,#302c24);text-align:left}'
+      +'.suivi-reass-opt:hover{border-color:var(--accent,#7a6e58)}'
+      +'.suivi-reass-opt.on{border-color:var(--accent,#7a6e58);background:var(--paper-2,#f6efe0)}'
+      +'.suivi-reass-opt .av{flex:none}';
     document.head.appendChild(st);}
 })();
 </script>

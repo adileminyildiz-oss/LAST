@@ -155,7 +155,10 @@ cliquables —, ses compteurs, sa barre d'avancement des dossiers, ses retards S
 son activité récente ; KPIs globaux collaborateurs actifs / tâches en cours / en retard ;
 barre d'outils : filtre par période — tout / 7 jours / 30 jours / ce mois — appliqué à
 l'activité, tri — par nom / charge / retard / avancement — et export CSV du suivi sur
-la période courante)
+la période courante ; **réattribution d'une tâche** — bouton ⇄ par tâche ouvrant un
+sélecteur de collaborateur (demande ou dossier reassigné, journalisé dans l'audit) — et
+**charge cible + alerte de surcharge** — objectif de tâches en cours réglable, badge
+charge/cible par collaborateur passant en rouge « ⚠ » au-delà de la cible)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test

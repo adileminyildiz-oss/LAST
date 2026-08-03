@@ -755,8 +755,18 @@ const r = await page.evaluate(async () => {
   const oclsu = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { suiviCsvName = this.download; };
   suiviExportCSV(); URL.createObjectURL = ocsu; HTMLAnchorElement.prototype.click = oclsu;
   const suiviExport = /suivi-collaborateurs-\d{4}-\d{2}-\d{2}\.csv/.test(suiviCsvName) && suiviCsvType.indexOf('text/csv') === 0;
+  // réattribution + charge cible + alerte de surcharge (admin)
+  localStorage.setItem('last-role', 'admin'); localStorage.removeItem('last-user');
+  const suiviReassignFns = typeof suiviReassign === 'function' && typeof suiviDoReassign === 'function' && typeof suiviSetCible === 'function';
+  suiviSetCible(1); const suiviCibleSet = (DB.parametres && DB.parametres.suiviCible) === 1;
+  const suiviCibleUI = /suivi-cible-in/.test(pageSuivi());
+  const suiviOverload = /suivi-charge over/.test(pageSuivi());
+  const demSv = (DB.demandes || []).find((d) => d.assigneA === 'u-sofia');
+  let suiviReassignWorks = false;
+  if (demSv) { const other = (DB.users || []).find((u) => u.role === 'collab' && u.id !== 'u-sofia'); if (other) { suiviDoReassign('demande', demSv.id, other.id); suiviReassignWorks = demSv.assigneA === other.id; suiviDoReassign('demande', demSv.id, 'u-sofia'); } }
   out.suivi = typeof pageSuivi === 'function' && typeof suiviExportCSV === 'function' && typeof suiviSet === 'function'
-    && suiviInPages && suiviOk && suiviRendered && suiviCollabBlocked && suiviToolbar && suiviPeriode && suiviExport;
+    && suiviInPages && suiviOk && suiviRendered && suiviCollabBlocked && suiviToolbar && suiviPeriode && suiviExport
+    && suiviReassignFns && suiviCibleSet && suiviCibleUI && suiviOverload && suiviReassignWorks;
 
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
