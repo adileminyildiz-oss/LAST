@@ -63,7 +63,11 @@ et répartitions par canal / état / formalité / collaborateur ;
 et **export CSV** des demandes de la période) et **fondation IA**
 (moteur unifié `iaAsk` vers un proxy Mistral — clé côté serveur —
 avec mode démonstration hors-ligne, réglages dans Paramètres et code
-du proxy Apps Script fourni) — le tout sans erreur JavaScript.
+du proxy Apps Script fourni) et **IA — analyse de la demande entrante**
+(résumé + extraction structurée : contact, projet juridique, structure,
+commercial ; carte « Analyse IA » dans la fiche, analyse automatique,
+et pré-remplissage proposé puis validé avant application) — le tout
+sans erreur JavaScript.
 
 ## Lancer
 

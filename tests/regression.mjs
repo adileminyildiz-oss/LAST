@@ -486,6 +486,15 @@ const r = await page.evaluate(async () => {
     && /api\.mistral\.ai/.test(IA_PROXY_SRC) && /MISTRAL_KEY/.test(IA_PROXY_SRC)
     && typeof iaAsk === 'function' && typeof iaCfg === 'function' && typeof iaConfigCard === 'function' && typeof iaTest === 'function';
 
+  // IA — analyse de la demande entrante (carte fiche + rendu structuré)
+  DB.demandes.unshift({ id: 'iaAn', code: 'DC-IA', clientNom: 'Ana', canal: 'Formulaire du site', serviceSouhaite: 'Création SAS', statut: 'Nouveau', assigneA: '', date: '2026-08-01', lu: false, message: 'Créer une SAS' });
+  const dIA = DB.demandes.find(d => d.id === 'iaAn');
+  dIA.iaAnalyse = { data: { resume: 'Résumé test', nom: 'Ana', forme: 'SAS', type_formalite: 'création', urgence: 'moyenne', autres: 'note utile' }, ts: 1, demo: true };
+  const anaCard = demAnalyseCard('iaAn');
+  out.iaAnalyse = /Analyse IA/.test(anaCard) && /iana-resume/.test(anaCard) && /Résumé test/.test(anaCard)
+    && /Contact/.test(anaCard) && /Projet juridique/.test(anaCard) && /Proposer le pré-remplissage/.test(anaCard) && /note utile/.test(anaCard)
+    && typeof demAnalyse === 'function' && typeof demAnalyseCard === 'function' && typeof demAnalyseAppliquer === 'function' && typeof demAnalyseAuto === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

@@ -1195,7 +1195,8 @@ function demSyncMails(silent){var c=demSyncCfg();if(!c.url){if(!silent)demSyncCo
     var r=demIngest(demParseMails(JSON.stringify(j)));save();
     if(!silent||r.add)toast(r.add?(r.add+' nouveau(x) mail(s) transmis'+(r.dup?(' · '+r.dup+' déjà traité(s)'):'')):'Aucun nouveau mail'+(r.dup?(' ('+r.dup+' déjà traité(s))'):''));
     if(r.add){state.demTab='nouveau';state.demMode='messagerie';}render();
-    try{if(typeof demAutoFetchAtts==='function')demAutoFetchAtts();}catch(e){}}
+    try{if(typeof demAutoFetchAtts==='function')demAutoFetchAtts();}catch(e){}
+    try{if(r.add&&typeof demAnalyseAuto==='function')demAnalyseAuto();}catch(e){}}
   var settled=false;function once(j){if(settled)return;settled=true;finish(j);}
   try{fetch(base,{cache:'no-store'}).then(function(r){return r.text();}).then(function(txt){
     var j=null;try{j=JSON.parse(txt);}catch(e){}
@@ -3925,7 +3926,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=188;
+var LAST_VER=189;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4888,6 +4889,7 @@ window.demVueDetail=function(id){
         +mailFrame(d)
       +'</div></div>'
       +'<div class="dem-view-col">'
+      +((typeof demAnalyseCard==='function')?demAnalyseCard(d.id):'')
       +((typeof demChecklistCard==='function')?demChecklistCard(d.id):'')
       +((typeof demInfosCard==='function')?demInfosCard(d):'')
       +((typeof demAttBlock==='function')?demAttBlock(d.id):'')
@@ -9704,6 +9706,127 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
    "}"
   ].join('\n');
   window.IA_PROXY_SRC=IA_PROXY_SRC;
+})();
+</script>
+
+<script id="ia-dem-mod">
+/* ===================================================================
+   IA — Analyse de la demande entrante (résumé + extraction structurée)
+   Objectif n°2. Analyse automatique à l'ouverture de la fiche (résultat
+   mis en cache sur la demande), champs proposés puis validés avant
+   d'être appliqués (pré-remplissage du contact / dossier).
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function find(id){return (DB.demandes||[]).find(function(x){return x.id===id;});}
+  function safeParse(t){try{return JSON.parse(t);}catch(e){var m=(''+t).match(/\{[\s\S]*\}/);if(m){try{return JSON.parse(m[0]);}catch(_e){}}return null;}}
+
+  function demAnalyseDemo(d){
+    var F={};try{(typeof demFields==='function'?demFields(d):[]).forEach(function(f){F[f.key]=f.value;});}catch(e){}
+    var forme='';try{if(typeof templateOf==='function'){var t=templateOf(d);var lab=(t&&t.label)||'';var m=lab.match(/SAS|SARL|SCI|EURL|SASU/i);forme=m?m[0].toUpperCase():'';}}catch(e){}
+    var msg=(typeof mailDemande==='function'?mailDemande(d):d.message)||d.serviceSouhaite||'';
+    var nom=(typeof demBestName==='function'?demBestName(d):d.clientNom)||'';
+    return {
+      resume:(msg?('Le prospect '+nom+' sollicite le cabinet : '+msg.slice(0,170)+(msg.length>170?'…':'')):('Demande reçue via '+(d.canal||'le site')+'.')),
+      nom:F.nom||'',prenom:F.prenom||'',email:(typeof demReplyTo==='function'?demReplyTo(d):d.clientEmail)||F.email||'',telephone:d.clientTel||F.telephone||'',
+      forme:forme||F['type de societe']||'',type_formalite:(typeof IA!=='undefined'&&IA.objet?IA.objet(d):d.serviceSouhaite)||'',
+      activite:F.activite||'',objet_social:'',denomination:F.denomination||'',nb_associes:'',capital:F.capital||'',
+      budget:'',delai:'',urgence:(typeof demSlaState==='function'&&demSlaState(d).level==='late')?'haute':'moyenne',
+      autres:'(mode démonstration — analyse générée localement à partir des champs connus)'
+    };
+  }
+
+  window.demAnalyse=function(id,cb){
+    var d=find(id);if(!d){if(cb)cb(null);return;}
+    if(d.__iaBusy)return;d.__iaBusy=true;d.iaAnalyseErr='';
+    var known='';try{known=(typeof demFields==='function'?demFields(d):[]).map(function(f){return f.label+': '+f.value;}).join('\n');}catch(e){}
+    var msg=(typeof mailDemande==='function'?mailDemande(d):d.message)||d.serviceSouhaite||'';
+    var sys='Tu es l\'assistant d\'un cabinet français de création et de formalités d\'entreprise (AEM CONSEIL). Analyse la demande d\'un prospect et réponds UNIQUEMENT par un objet JSON valide, en français, sans aucun texte autour.';
+    var user='Demande reçue :\n"""\n'+msg+'\n"""\n'+(known?('Champs déjà connus :\n'+known+'\n'):'')
+      +'\nRenvoie exactement ce JSON (laisse vide si absent) : {"resume":"2 à 3 phrases résumant le besoin","nom":"","prenom":"","email":"","telephone":"","forme":"SAS|SARL|SCI|EURL|SASU|micro|autre ou vide","type_formalite":"création|transfert de siège|changement de dirigeant|cession|modification de capital|dénomination|objet|dissolution|autre","activite":"","objet_social":"","denomination":"","nb_associes":"","capital":"","budget":"","delai":"","urgence":"faible|moyenne|haute","autres":"toute autre information utile au traitement du dossier"}';
+    iaAsk({system:sys,user:user,json:true,temperature:0.1,demo:function(){return demAnalyseDemo(d);}},function(r){
+      d.__iaBusy=false;
+      if(r&&r.ok){var data=r.data||safeParse(r.text)||{};d.iaAnalyse={data:data,ts:Date.now(),demo:!!r.demo};if(typeof save==='function')save();}
+      else d.iaAnalyseErr=(r&&r.error)||'erreur';
+      if(typeof render==='function')render();if(cb)cb(d.iaAnalyse||null);
+    });
+  };
+
+  var GRP=[
+    {t:'Contact',ks:[['nom','Nom'],['prenom','Prénom'],['email','E-mail'],['telephone','Téléphone']]},
+    {t:'Projet juridique',ks:[['forme','Forme'],['type_formalite','Formalité'],['activite','Activité'],['objet_social','Objet social']]},
+    {t:'Structure',ks:[['denomination','Dénomination'],['nb_associes','Nb associés'],['capital','Capital']]},
+    {t:'Commercial',ks:[['budget','Budget'],['delai','Délai'],['urgence','Urgence']]}
+  ];
+  window.demAnalyseCard=function(id){
+    var d=find(id);if(!d)return '';
+    var mode=(typeof iaMode==='function')?iaMode():'off';
+    if(mode==='off'&&!d.iaAnalyse){
+      return '<div class="card"><div class="card-h"><h2>🤖 Analyse IA</h2><span class="sub" style="margin-left:auto">IA désactivée</span></div>'
+        +'<div class="card-b"><p class="hint" style="margin:0 0 8px">Activez l\'assistant IA (ou le mode démonstration) dans <b>Paramètres → Assistant IA</b> pour résumer et extraire automatiquement les informations de la demande.</p>'
+        +'<button class="btn btn-sm btn-ghost" onclick="state.page=\'params\';render()">Ouvrir les paramètres IA</button></div></div>';
+    }
+    if(!d.iaAnalyse&&!d.__iaBusy&&mode!=='off'){setTimeout(function(){demAnalyse(id);},60);}
+    var head='<div class="card-h"><h2>🤖 Analyse IA</h2><span class="sub" style="margin-left:auto">'
+      +(d.iaAnalyse?(d.iaAnalyse.demo?'<span class="tag warm">démo</span>':'<span class="tag green">Mistral</span>'):(d.__iaBusy?'analyse…':''))+'</span></div>';
+    if(d.__iaBusy&&!d.iaAnalyse)return '<div class="card">'+head+'<div class="card-b"><div class="hint">⏳ Analyse de la demande en cours…</div></div></div>';
+    if(!d.iaAnalyse){return '<div class="card">'+head+'<div class="card-b"><p class="hint">'+(d.iaAnalyseErr?('Échec de l\'analyse ('+E(d.iaAnalyseErr)+').'):'Analyse non disponible.')+'</p><button class="btn btn-sm btn-pri" onclick="demAnalyse(\''+id+'\')">Analyser</button></div></div>';}
+    var a=d.iaAnalyse.data||{};
+    var grps=GRP.map(function(g){
+      var rows=g.ks.map(function(kv){var v=(''+(a[kv[0]]||'')).trim();if(!v)return '';return '<div class="iana-row"><span class="iana-l">'+E(kv[1])+'</span><span class="iana-v">'+E(v)+'</span></div>';}).filter(Boolean).join('');
+      if(!rows)return '';return '<div class="iana-grp"><div class="iana-gt">'+E(g.t)+'</div>'+rows+'</div>';
+    }).filter(Boolean).join('');
+    var autres=(''+(a.autres||'')).trim();
+    return '<div class="card">'+head+'<div class="card-b">'
+      +(a.resume?'<div class="iana-resume">'+E(a.resume)+'</div>':'')
+      +'<div class="iana-grid">'+(grps||'<div class="hint">Aucune information structurée détectée.</div>')+'</div>'
+      +(autres?'<div class="iana-autres"><b>À noter :</b> '+E(autres)+'</div>':'')
+      +'<div class="iana-acts"><button class="btn btn-sm btn-pri" onclick="demAnalyseAppliquer(\''+id+'\')">✎ Proposer le pré-remplissage</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="demAnalyse(\''+id+'\')">↻ Ré-analyser</button></div>'
+      +'</div></div>';
+  };
+
+  window.demAnalyseAppliquer=function(id){
+    var d=find(id);if(!d||!d.iaAnalyse)return;var a=d.iaAnalyse.data||{};
+    var nomC=((a.prenom||'')+' '+(a.nom||'')).trim()||a.nom||'';
+    if(typeof openModal!=='function')return;
+    openModal('Pré-remplissage proposé par l\'IA',
+      '<p class="hint" style="margin:0 0 10px">Vérifiez et corrigez avant d\'appliquer. Ces informations mettront à jour le contact de la demande ; les éléments du projet (forme, activité…) seront rattachés pour la création du dossier.</p>'
+      +'<div class="frow"><div><label>Nom du contact</label><input id="iaa-nom" value="'+E(nomC)+'"></div>'
+      +'<div><label>E-mail</label><input id="iaa-email" value="'+E(a.email||'')+'"></div></div>'
+      +'<div class="frow"><div><label>Téléphone</label><input id="iaa-tel" value="'+E(a.telephone||'')+'"></div>'
+      +'<div><label>Forme envisagée</label><input id="iaa-forme" value="'+E(a.forme||'')+'"></div></div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>'
+      +'<button class="btn btn-pri" onclick="demAnalyseAppliquerOK(\''+id+'\')">Appliquer</button>');
+  };
+  window.demAnalyseAppliquerOK=function(id){
+    var d=find(id);if(!d)return;var g=function(x){var e=document.getElementById(x);return e?(''+e.value).trim():'';};
+    var nom=g('iaa-nom'),email=g('iaa-email'),tel=g('iaa-tel'),forme=g('iaa-forme');
+    if(nom)d.clientNom=nom;if(email)d.clientEmail=email;if(tel)d.clientTel=tel;
+    d.iaChamps=Object.assign({},d.iaChamps||{},(d.iaAnalyse&&d.iaAnalyse.data)||{},{forme:forme});
+    if(typeof save==='function')save();if(typeof closeModal==='function')closeModal();
+    if(typeof toast==='function')toast('Informations appliquées à la demande.');if(typeof render==='function')render();
+  };
+
+  /* Analyse automatique en arrière-plan des nouvelles demandes après une synchro (throttlé) */
+  window.demAnalyseAuto=function(){
+    if((typeof iaMode==='function'?iaMode():'off')==='off')return;
+    var todo=(DB.demandes||[]).filter(function(d){return !d.archived&&!d.iaAnalyse&&!d.__iaBusy;}).slice(0,6);
+    todo.forEach(function(d,i){setTimeout(function(){demAnalyse(d.id);},200+i*250);});
+  };
+
+  if(!document.getElementById('ia-dem-css')){var st=document.createElement('style');st.id='ia-dem-css';
+    st.textContent='.iana-resume{font-size:13px;line-height:1.5;color:var(--ink,#302c24);background:var(--paper-2,#f6efe0);border-left:3px solid var(--accent,#7a6e58);border-radius:6px;padding:9px 11px;margin-bottom:11px}'
+      +'.iana-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}'
+      +'@media(max-width:640px){.iana-grid{grid-template-columns:1fr}}'
+      +'.iana-grp{min-width:0}'
+      +'.iana-gt{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3,#9c9078);margin-bottom:5px}'
+      +'.iana-row{display:flex;gap:8px;font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--line-soft,#f0e9da)}'
+      +'.iana-l{flex:none;width:92px;color:var(--ink-3,#8a7f6c)}'
+      +'.iana-v{color:var(--ink,#302c24);word-break:break-word;font-weight:600}'
+      +'.iana-autres{margin-top:10px;font-size:12px;color:var(--ink-2,#5a5142);background:var(--paper,#fffef9);border:1px solid var(--line-2,#e2d9c6);border-radius:8px;padding:8px 10px}'
+      +'.iana-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}';
+    document.head.appendChild(st);}
 })();
 </script>
 
