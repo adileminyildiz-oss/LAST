@@ -2751,7 +2751,7 @@ function espEnvoyerMail(id){var d=espDoss().find(function(x){return x.id===id;})
 function espPanel(d,list,id){
   return '<div class="esp-shell">'
    +espMiniList(list,id)
-   +'<div class="esp-main">'+espMailCard(d)+espTraitementCard(d)+((typeof actesCard==='function')?actesCard(d):'')+espNotesCard(d)+espPiecesCard(d)+espDocsPretsCard(d)+'</div>'
+   +'<div class="esp-main">'+espMailCard(d)+espTraitementCard(d)+((typeof iaFormaliteCard==='function')?iaFormaliteCard(d):'')+((typeof actesCard==='function')?actesCard(d):'')+espNotesCard(d)+espPiecesCard(d)+espDocsPretsCard(d)+'</div>'
    +'</div>';
 }
 function espStatutsCard(d){
@@ -3927,7 +3927,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=192;
+var LAST_VER=193;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10114,6 +10114,140 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.datt-ck.ok{color:#3f7d54;background:#eef7f0;border-color:#cfe6d6}'
       +'.datt-ck.no{color:#be123c;background:#fff1f4;border-color:#f6cdd8}'
       +'.datt-ia-all{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 8px}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="ia-form-mod">
+/* ===================================================================
+   IA — Formalités : objet social (plusieurs formulations), relecture
+   de cohérence (bouton), aide aux clauses des gabarits.
+   Objectif n°6. Carte dans l'espace dossier.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function dossier(id){return (DB.dossiers||[]).find(function(x){return x.id===id;});}
+  function clientDe(d){return (typeof clientById==='function')?clientById((d.clientIds||[])[0]):null;}
+  function dd(d){try{return (typeof stDossData==='function')?stDossData(d):null;}catch(e){return null;}}
+  function forme(d){var x=dd(d);return (x&&x.forme)||(d&&d.forme)||'SAS';}
+  function dirigeantMot(f){f=(''+f).toUpperCase();return (f==='SARL'||f==='EURL'||f==='SCI')?'gérant':'Président';}
+
+  /* ---- Objet social : plusieurs formulations ---- */
+  window.demObjetSocial=function(dossierId){
+    var d=dossier(dossierId);if(!d)return;var c=clientDe(d)||{};
+    var mode=(typeof iaMode==='function')?iaMode():'off';if(mode==='off')return (typeof toast==='function')&&toast('Activez l\'IA (ou le mode démo) dans Paramètres.');
+    var act=((c.activites||[]).join(', '))||d.serviceSouhaite||'';var f=forme(d);
+    if(typeof toast==='function')toast('Rédaction d\'objets sociaux…');
+    iaAsk({system:'Tu es juriste en droit des sociétés. Rédige des objets sociaux clairs et juridiquement corrects pour une société française. Réponds UNIQUEMENT par un JSON.',
+      user:'Forme : '+f+'\nActivité(s) décrite(s) : "'+act+'"\nPropose 3 rédactions d\'objet social. Renvoie ce JSON : {"formulations":["version courte","version complète","version avec activités connexes et clause d\'extension"]}',
+      json:true,temperature:0.5,demo:function(){return {formulations:demObjetDemo(act)};}},
+      function(r){var arr=(r&&r.data&&r.data.formulations)||[];if(!arr.length&&r&&r.text){try{arr=JSON.parse(r.text).formulations||[];}catch(e){}}
+        if(!arr.length)return (typeof toast==='function')&&toast('Aucune proposition.');
+        demObjetModal(c.id||((d.clientIds||[])[0]),arr,!!(r&&r.demo));});
+  };
+  function demObjetDemo(act){
+    var a=(act||'toute activité').replace(/\.$/,'');
+    return [
+      'La société a pour objet : '+a+'.',
+      'La société a pour objet, en France et à l\'étranger : '+a+' ; ainsi que toutes prestations de services s\'y rapportant.',
+      'La société a pour objet : '+a+' ; et plus généralement toutes opérations industrielles, commerciales, financières, mobilières ou immobilières se rattachant directement ou indirectement à cet objet ou susceptibles d\'en faciliter l\'extension ou le développement.'
+    ];
+  }
+  function demObjetModal(clientId,arr,demo){
+    if(typeof openModal!=='function')return;
+    var body=(demo?'<span class="tag warm" style="margin-bottom:8px;display:inline-block">démo</span>':'')
+      +arr.map(function(t,i){return '<div class="ia-obj-opt"><div class="ia-obj-t">'+E(t)+'</div>'
+        +'<button class="btn btn-sm btn-pri" onclick="demObjetChoisir(\''+clientId+'\','+i+')">Choisir</button></div>';}).join('');
+    window.__iaObjets=arr;
+    openModal('Objet social — propositions IA',body,'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+  }
+  window.demObjetChoisir=function(clientId,i){var c=(typeof clientById==='function')?clientById(clientId):null;var arr=window.__iaObjets||[];if(!c||!arr[i])return;
+    c.objetSocial=arr[i];if(typeof save==='function')save();if(typeof closeModal==='function')closeModal();if(typeof toast==='function')toast('Objet social enregistré.');if(typeof render==='function')render();};
+
+  /* ---- Relecture de cohérence (bouton) ---- */
+  function coherenceLocale(d){
+    var x=dd(d)||{};var c=clientDe(d)||{};var out=[];var f=(''+forme(d)).toUpperCase();
+    var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
+    var parts=assoc.reduce(function(n,a){return n+(Number(a.parts)||0);},0);
+    var cap=Number(c.capital)||0;
+    if(!c.denomination)out.push({g:'warn',t:'Dénomination sociale manquante.'});
+    if(!cap)out.push({g:'warn',t:'Capital social non renseigné.'});
+    if(!assoc.length)out.push({g:'err',t:'Aucun associé renseigné.'});
+    if(assoc.length&&!parts)out.push({g:'warn',t:'Répartition des parts/actions non renseignée.'});
+    if((f==='EURL'||f==='SASU')&&assoc.length>1)out.push({g:'err',t:'Forme unipersonnelle ('+f+') mais plusieurs associés.'});
+    if((f==='SAS'||f==='SARL'||f==='SCI')&&assoc.length===1)out.push({g:'warn',t:'Un seul associé : envisager la forme unipersonnelle ('+(f==='SAS'?'SASU':(f==='SARL'?'EURL':'SCI'))+').'});
+    if(!c.siege&&!c.adresse)out.push({g:'warn',t:'Adresse du siège social manquante.'});
+    if(!(c.objetSocial||'').trim())out.push({g:'warn',t:'Objet social non rédigé (utilisez « Proposer un objet social »).'});
+    var pres=(c.president||(assoc[0]&&assoc[0].nom)||'').trim();
+    if(!pres)out.push({g:'warn',t:'Dirigeant ('+dirigeantMot(f)+') non désigné.'});
+    if(!out.length)out.push({g:'ok',t:'Aucune incohérence détectée sur les données du dossier.'});
+    return out;
+  }
+  window.demCoherence=function(dossierId){
+    var d=dossier(dossierId);if(!d)return;
+    var mode=(typeof iaMode==='function')?iaMode():'off';if(mode==='off')return (typeof toast==='function')&&toast('Activez l\'IA (ou le mode démo) dans Paramètres.');
+    var x=dd(d)||{};var c=clientDe(d)||{};
+    var resume='Forme: '+forme(d)+' | Dénomination: '+(c.denomination||'—')+' | Capital: '+(c.capital||'—')+' | Associés: '+((c.associes||[]).map(function(a){return (a.nom||'?')+'('+(a.parts||0)+')';}).join(', ')||'—')+' | Siège: '+(c.siege||c.adresse||'—')+' | Objet: '+((c.objetSocial||'').slice(0,120)||'—')+' | Dirigeant: '+(c.president||'—');
+    if(typeof toast==='function')toast('Relecture de cohérence…');
+    iaAsk({system:'Tu es juriste en formalités d\'entreprise. Relis la cohérence d\'un dossier de société et signale les incohérences, manques et mentions obligatoires à corriger. Réponds UNIQUEMENT par un JSON {"issues":[{"gravite":"err|warn|ok","texte":"…"}]}.',
+      user:'Dossier :\n'+resume+'\nVérifie notamment : cohérence forme/nombre d\'associés, capital renseigné, répartition des parts, dénomination, siège, objet social, dirigeant. Renvoie le JSON.',
+      json:true,temperature:0.1,demo:function(){return {issues:coherenceLocale(d).map(function(o){return {gravite:o.g,texte:o.t};})};}},
+      function(r){var iss=(r&&r.data&&r.data.issues)||coherenceLocale(d).map(function(o){return {gravite:o.g,texte:o.t};});
+        d.iaCoherence={issues:iss,ts:Date.now(),demo:!!(r&&r.demo)};if(typeof save==='function')save();if(typeof render==='function')render();});
+  };
+
+  /* ---- Aide aux clauses (compléter les gabarits) ---- */
+  window.demClauses=function(dossierId){
+    var d=dossier(dossierId);if(!d)return;var c=clientDe(d)||{};var f=forme(d);
+    var mode=(typeof iaMode==='function')?iaMode():'off';if(mode==='off')return (typeof toast==='function')&&toast('Activez l\'IA (ou le mode démo) dans Paramètres.');
+    if(typeof toast==='function')toast('Rédaction de clauses…');
+    iaAsk({system:'Tu es juriste en droit des sociétés. Rédige des clauses de statuts adaptées à la forme, prêtes à insérer dans un gabarit. Réponds en texte clair, une clause par bloc titré.',
+      user:'Forme : '+f+'\nDénomination : '+(c.denomination||'«…»')+'\nPropose les clauses variables clés (objet, capital et apports, direction ('+dirigeantMot(f)+'), décisions collectives, exercice social). Rédige-les prêtes à insérer.',
+      temperature:0.4,demo:function(){return demClausesDemo(f,c);}},
+      function(r){if(!(r&&r.ok))return (typeof toast==='function')&&toast('Échec.');
+        if(typeof openModal==='function')openModal('Clauses proposées ('+E(f)+')',
+          (r.demo?'<span class="tag warm" style="margin-bottom:8px;display:inline-block">démo</span>':'')+'<div class="ia-clauses">'+E(r.text)+'</div>',
+          '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="(function(){var t=document.querySelector(\'#ov .ia-clauses\');if(t){var r=document.createRange();r.selectNodeContents(t);var s=getSelection();s.removeAllRanges();s.addRange(r);document.execCommand(\'copy\');s.removeAllRanges();toast(\'Clauses copiées\');}})()">Copier</button>');});
+  };
+  function demClausesDemo(f,c){var dir=dirigeantMot(f);
+    return 'ARTICLE — OBJET\n'+((c.objetSocial||'La société a pour objet : «activité».'))+'\n\n'
+      +'ARTICLE — CAPITAL SOCIAL\nLe capital social est fixé à '+((c.capital?c.capital+' euros':'«montant» euros'))+', divisé en '+((c.associes||[]).reduce(function(n,a){return n+(Number(a.parts)||0);},0)||'«nombre»')+' '+((f==='SAS'||f==='SASU')?'actions':'parts sociales')+' de «valeur nominale» euros chacune, intégralement souscrites et libérées.\n\n'
+      +'ARTICLE — DIRECTION\nLa société est dirigée par un '+dir+', personne physique ou morale, associé ou non, nommé par les associés.\n\n'
+      +'ARTICLE — EXERCICE SOCIAL\nL\'exercice social commence le 1er janvier et se termine le 31 décembre de chaque année.\n\n(clauses générées en mode démonstration — activez l\'IA pour une rédaction sur-mesure)';
+  }
+
+  window.iaFormaliteCard=function(d){
+    if(!d)return '';var c=clientDe(d)||{};var f=forme(d);
+    var obj=(c.objetSocial||'').trim();
+    var coh=d.iaCoherence;
+    var cohHTML='';
+    if(coh&&coh.issues){cohHTML='<div class="ia-coh">'+(coh.demo?'<span class="tag warm">démo</span> ':'')
+      +coh.issues.map(function(x){var g=x.gravite||x.g||'warn';var cls=g==='err'?'no':(g==='ok'?'ok':'warn');var ic=g==='err'?'✕':(g==='ok'?'✓':'⚠');return '<div class="ia-coh-row '+cls+'"><span>'+ic+'</span> '+E(x.texte||x.t||'')+'</div>';}).join('')+'</div>';}
+    return '<div class="card"><div class="card-h"><h2>🤖 Assistant IA — formalités</h2><span class="sub" style="margin-left:auto">'+E(f)+'</span></div><div class="card-b">'
+      +'<div class="ia-form-sec"><div class="ia-form-t">Objet social</div>'
+      +(obj?'<div class="ia-form-obj">'+E(obj)+'</div>':'<p class="hint" style="margin:0 0 6px">Aucun objet social rédigé.</p>')
+      +'<button class="btn btn-sm btn-pri" onclick="demObjetSocial(\''+d.id+'\')">✨ Proposer un objet social (IA)</button></div>'
+      +'<div class="ia-form-sec"><div class="ia-form-t">Relecture de cohérence</div>'
+      +cohHTML
+      +'<button class="btn btn-sm '+(coh?'btn-ghost':'btn-pri')+'" onclick="demCoherence(\''+d.id+'\')">🔎 '+(coh?'Revérifier':'Vérifier la cohérence (IA)')+'</button></div>'
+      +'<div class="ia-form-sec"><div class="ia-form-t">Actes & statuts</div>'
+      +'<p class="hint" style="margin:0 0 6px">L\'IA propose les clauses adaptées à la forme, à insérer dans vos gabarits.</p>'
+      +'<button class="btn btn-sm btn-ghost" onclick="demClauses(\''+d.id+'\')">📝 Suggérer les clauses (IA)</button></div>'
+      +'</div></div>';
+  };
+
+  if(!document.getElementById('ia-form-css')){var st=document.createElement('style');st.id='ia-form-css';
+    st.textContent='.ia-form-sec{padding:10px 0;border-bottom:1px solid var(--line-soft,#f0e9da)}.ia-form-sec:last-child{border-bottom:0;padding-bottom:0}'
+      +'.ia-form-t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3,#9c9078);margin-bottom:7px}'
+      +'.ia-form-obj{font-size:12.5px;line-height:1.5;background:var(--paper-2,#f6efe0);border-left:3px solid var(--accent,#7a6e58);border-radius:6px;padding:8px 10px;margin-bottom:8px}'
+      +'.ia-obj-opt{border:1px solid var(--line-2,#e2d9c6);border-radius:9px;padding:10px 11px;margin-bottom:8px}'
+      +'.ia-obj-t{font-size:12.5px;line-height:1.5;margin-bottom:7px;color:var(--ink,#302c24)}'
+      +'.ia-coh{margin-bottom:8px;display:flex;flex-direction:column;gap:4px}'
+      +'.ia-coh-row{font-size:12px;padding:5px 9px;border-radius:7px;border:1px solid}'
+      +'.ia-coh-row.ok{color:#3f7d54;background:#eef7f0;border-color:#cfe6d6}'
+      +'.ia-coh-row.warn{color:#b45309;background:#fffaf0;border-color:#eed09a}'
+      +'.ia-coh-row.no{color:#be123c;background:#fff1f4;border-color:#f6cdd8}'
+      +'.ia-clauses{white-space:pre-wrap;font-size:12.5px;line-height:1.55;max-height:52vh;overflow:auto;background:var(--paper,#fffef9);border:1px solid var(--line-2,#e2d9c6);border-radius:8px;padding:11px}';
     document.head.appendChild(st);}
 })();
 </script>

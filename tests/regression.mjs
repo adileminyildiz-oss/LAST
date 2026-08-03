@@ -531,6 +531,16 @@ const r = await page.evaluate(async () => {
     && /Lire toutes les pièces/.test(blkPc) && /Utiliser ces infos/.test(blkPc) && /Lire \(IA\)/.test(blkPc)
     && typeof demPieceLire === 'function' && typeof demAttIAResult === 'function' && typeof demPieceAppliquer === 'function' && typeof demPieceLireToutes === 'function';
 
+  // IA — formalités : objet social, cohérence, clauses
+  DB.clients.push({ id: 'cfReg', prenom: 'Léa', nom: 'M', forme: 'EURL', denomination: 'BETA', capital: 1000, siege: 'x', ville: 'Paris', president: 'Léa M', activites: ['conseil'], associes: [{ nom: 'Léa M', parts: 100 }, { nom: 'Tom', parts: 100 }] });
+  DB.dossiers.push({ id: 'dfReg', ref: 'DOS-FR', clientIds: ['cfReg'], forme: 'EURL', docs: {}, piecesRecues: {} });
+  const dfR = DB.dossiers.find(d => d.id === 'dfReg');
+  dfR.iaCoherence = { issues: [{ gravite: 'err', texte: 'Forme unipersonnelle (EURL) mais plusieurs associés.' }, { gravite: 'warn', texte: 'Objet social non rédigé.' }], ts: 1, demo: true };
+  const fcard = iaFormaliteCard(dfR);
+  out.iaFormalite = /Assistant IA — formalités/.test(fcard) && /Proposer un objet social/.test(fcard) && /(Vérifier la cohérence|Revérifier)/.test(fcard) && /Suggérer les clauses/.test(fcard)
+    && /ia-coh-row/.test(fcard) && /Forme unipersonnelle/.test(fcard)
+    && typeof demObjetSocial === 'function' && typeof demCoherence === 'function' && typeof demClauses === 'function' && typeof iaFormaliteCard === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

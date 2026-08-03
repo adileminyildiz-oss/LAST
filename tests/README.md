@@ -76,7 +76,10 @@ urgence IA qui remonte la priorité de la file d'attente, et traduction
 française à la demande) et **IA — lecture des pièces (vision)** (bouton
 par pièce + global, extraction CNI/K-bis/domicile, contrôles de
 conformité — lisibilité, recto+verso, expiration, justificatif récent —
-et pré-remplissage proposé) — le tout sans erreur JavaScript.
+et pré-remplissage proposé) et **IA — formalités** (objet social en
+plusieurs formulations à choisir, relecture de cohérence du dossier sur
+bouton — forme/associés, capital, mentions manquantes — et suggestion de
+clauses pour les gabarits) — le tout sans erreur JavaScript.
 
 ## Lancer
 
