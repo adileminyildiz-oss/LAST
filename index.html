@@ -1516,7 +1516,8 @@ function demSmtpModal(to,sujet,corps){
     '<div class="hint" style="margin-bottom:10px">Le message part <b>directement du serveur SMTP de Gmail</b> (compte aemconseil.sas@gmail.com) — sans ouvrir Gmail. Vérifie le destinataire et le contenu puis envoie.</div>'
     +'<label>Destinataire</label><input id="ml-to" value="'+esc(to||'')+'" placeholder="client@email.fr">'
     +'<label style="margin-top:8px">Sujet</label><input id="ml-sujet" value="'+esc(sujet||'')+'">'
-    +'<label style="margin-top:8px">Message</label><textarea id="ml-corps" rows="12" style="width:100%;font:inherit">'+esc(corps||'')+'</textarea>',
+    +'<label style="margin-top:8px">Message</label><textarea id="ml-corps" rows="12" style="width:100%;font:inherit">'+esc(corps||'')+'</textarea>'
+    +((typeof iaReformBar==='function')?iaReformBar():''),
     '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>'
     +'<button class="btn btn-ghost" onclick="demSmtpGmail()">Ouvrir Gmail</button>'
     +'<button class="btn btn-pri" onclick="demQEnvoyerAuto()">📤 Envoyer maintenant</button>');
@@ -3926,7 +3927,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=189;
+var LAST_VER=190;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4901,7 +4902,8 @@ window.demVueDetail=function(id){
         +'<div class="dem-decide"><button class="btn btn-pri dem-accept" onclick="demAccepter(\''+id+'\')">✓ Accepter (prise en charge)</button>'
         +'<button class="btn dem-refuse" onclick="demRefuser(\''+id+'\')">✕ Refuser (mail d\'excuse)</button></div>'
         +'<button class="btn btn-pri" style="width:100%;justify-content:center;margin:12px 0 6px" onclick="demDemanderDocs(\''+id+'\')">✉ Demander les documents</button>'
-        +((typeof demReponsesBar==='function')?'<div class="section-t" style="margin-top:6px">Réponses types (1 clic)</div>'+demReponsesBar(id):'')
+        +((typeof demReponseIA==='function')?'<button class="btn btn-sm btn-pri" style="width:100%;justify-content:center;margin-top:8px" onclick="demReponseIA(\''+id+'\')">✨ Rédiger la réponse (IA)</button>':'')
+        +((typeof demReponsesBar==='function')?'<div class="section-t" style="margin-top:8px">Réponses types (1 clic)</div>'+demReponsesBar(id):'')
         +'<button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin:12px 0" onclick="demInstallerLogoSignature()">🖼 Ajouter le logo à ma signature Gmail</button>'
         +'<label>E-mail du client '+(mailEmail(d)==='—'?'<span style="color:#be123c;font-weight:700">(introuvable — saisissez-le)</span>':'<span style="color:#3f7d54">(récupéré automatiquement)</span>')+'</label>'
         +'<input id="dm-cliemail" type="email" value="'+esc(demReplyTo(d)||'')+'" placeholder="client@email.fr" oninput="demSetEmail(\''+id+'\',this.value)" style="width:100%;margin-bottom:12px'+(mailEmail(d)==='—'?';border-color:#e0a6b4;background:#fff1f4':'')+'">'
@@ -9826,6 +9828,84 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.iana-v{color:var(--ink,#302c24);word-break:break-word;font-weight:600}'
       +'.iana-autres{margin-top:10px;font-size:12px;color:var(--ink-2,#5a5142);background:var(--paper,#fffef9);border:1px solid var(--line-2,#e2d9c6);border-radius:8px;padding:8px 10px}'
       +'.iana-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="ia-rep-mod">
+/* ===================================================================
+   IA — Brouillon de réponse (ton chaleureux) + reformulation/correction
+   Objectif n°3. « Rédiger la réponse (IA) » depuis la fiche → composeur
+   pré-rempli ; barre IA dans le composeur (corriger, raccourcir, plus
+   pro, traduire) pour les mails sortants.
+   =================================================================== */
+(function(){
+  function find(id){return (DB.demandes||[]).find(function(x){return x.id===id;});}
+
+  /* Génération d'un brouillon de réponse chaleureux, contextualisé */
+  window.demReponseIA=function(id){
+    var d=find(id);if(!d)return;
+    var mode=(typeof iaMode==='function')?iaMode():'off';
+    if(mode==='off')return (typeof toast==='function')&&toast('Activez l\'IA (ou le mode démo) dans Paramètres → Assistant IA.');
+    var nom=(typeof demBestName==='function'?demBestName(d):d.clientNom)||'';var prenom=(nom.split(/\s+/)[0]||'').trim();
+    var serie=d.code||'';var msg=(typeof mailDemande==='function'?mailDemande(d):d.message)||d.serviceSouhaite||'';
+    var resume=(d.iaAnalyse&&d.iaAnalyse.data&&d.iaAnalyse.data.resume)||'';
+    var sys='Tu es un conseiller du cabinet AEM CONSEIL (création et formalités d\'entreprise en France). Rédige la réponse au prospect dans un ton CHALEUREUX et ACCESSIBLE, rassurant et humain, tout en restant professionnel. Vouvoie toujours. Écris en français. Termine par « Bien à vous, » puis une ligne « L\'équipe AEM CONSEIL ». Réponds UNIQUEMENT par le corps du message (pas d\'objet, pas de commentaire).';
+    var user='Prospect : '+nom+'\nRéférence du dossier : '+serie+'\nSa demande :\n"""\n'+msg+'\n"""\n'+(resume?('Résumé : '+resume+'\n'):'')
+      +'\nRédige une réponse chaleureuse qui : remercie et accuse réception, montre qu\'on a bien compris son projet, le rassure sur l\'accompagnement, indique qu\'un conseiller le recontacte très vite, et propose gentiment de transmettre ses pièces (pièce d\'identité, justificatif de domicile) pour gagner du temps.';
+    if(typeof toast==='function')toast('Rédaction de la réponse par l\'IA…');
+    iaAsk({system:sys,user:user,temperature:0.6,demo:function(){return demoReponse(nom,prenom,serie);}},function(r){
+      if(r&&r.ok&&r.text){
+        var sujet='Votre demande'+(serie?(' — réf. '+serie):'')+' — AEM CONSEIL';
+        var to=(typeof demReplyTo==='function'?demReplyTo(d):d.clientEmail)||'';
+        if(typeof demSmtpModal==='function')demSmtpModal(to,sujet,r.text);
+        else if(typeof demOuvrirMessagerie==='function')demOuvrirMessagerie(to,sujet,r.text);
+      } else if(typeof toast==='function')toast('Échec de la rédaction : '+((r&&r.error)||'inconnu'));
+    });
+  };
+  function demoReponse(nom,prenom,serie){
+    return 'Bonjour'+(prenom?(' '+prenom):'')+',\n\n'
+      +'Un grand merci pour votre message, et bienvenue chez AEM CONSEIL ! Nous avons bien reçu votre demande'+(serie?(' (référence '+serie+')'):'')+' et nous serons ravis de vous accompagner dans votre projet.\n\n'
+      +'Rassurez-vous : nous nous occupons de toutes les démarches avec vous, étape par étape, sans jargon inutile. Un conseiller revient vers vous très rapidement pour faire le point et répondre à toutes vos questions.\n\n'
+      +'Pour gagner du temps, vous pouvez déjà nous transmettre, en réponse à cet e-mail, votre pièce d\'identité et un justificatif de domicile de moins de 3 mois (photo nette ou PDF). Rien d\'obligatoire pour l\'instant — uniquement si cela vous arrange.\n\n'
+      +'À très vite,\n\nBien à vous,\nL\'équipe AEM CONSEIL\n\n(brouillon généré en mode démonstration — activez l\'IA pour une rédaction sur-mesure)';
+  }
+
+  /* Reformulation / correction du mail en cours (composeur) */
+  window.iaReformBar=function(){
+    return '<div class="ia-reform"><span class="ia-reform-t">✨ IA</span>'
+      +'<button type="button" class="btn btn-sm btn-ghost" onclick="iaReformuler(\'corriger\')">Corriger</button>'
+      +'<button type="button" class="btn btn-sm btn-ghost" onclick="iaReformuler(\'raccourcir\')">Raccourcir</button>'
+      +'<button type="button" class="btn btn-sm btn-ghost" onclick="iaReformuler(\'pro\')">Plus pro</button>'
+      +'<button type="button" class="btn btn-sm btn-ghost" onclick="iaReformuler(\'traduire\')">Traduire (EN)</button></div>';
+  };
+  var TR={
+    corriger:{sys:'Corrige l\'orthographe, la grammaire et la ponctuation du texte suivant, sans en changer le sens ni le ton. Réponds UNIQUEMENT par le texte corrigé.',demo:function(t){return demoCorriger(t);}},
+    raccourcir:{sys:'Raccourcis ce message d\'environ la moitié, en gardant l\'essentiel, la clarté et la politesse. Réponds UNIQUEMENT par le texte raccourci.',demo:function(t){return demoRaccourcir(t);}},
+    pro:{sys:'Reformule ce message dans un style professionnel, courtois et clair, propre à un cabinet, sans changer le fond. Réponds UNIQUEMENT par le texte reformulé.',demo:function(t){return demoPro(t);}},
+    traduire:{sys:'Traduis ce message en anglais, en conservant le ton et la mise en forme. Réponds UNIQUEMENT par la traduction.',demo:function(t){return demoTrad(t);}}
+  };
+  window.iaReformuler=function(action){
+    var ta=document.getElementById('ml-corps');if(!ta)return;
+    var txt=ta.value||'';if(!txt.trim())return (typeof toast==='function')&&toast('Le message est vide.');
+    var m=TR[action];if(!m)return;
+    var mode=(typeof iaMode==='function')?iaMode():'off';
+    if(mode==='off')return (typeof toast==='function')&&toast('Activez l\'IA (ou le mode démo) dans Paramètres.');
+    if(typeof toast==='function')toast('IA : '+action+'…');
+    iaAsk({system:m.sys,user:txt,temperature:0.2,demo:function(){return m.demo(txt);}},function(r){
+      if(r&&r.ok&&r.text){ta.value=r.text;ta.dispatchEvent(new Event('input',{bubbles:true}));if(typeof toast==='function')toast(r.demo?'Texte modifié (démo).':'Texte modifié par l\'IA.');}
+      else if(typeof toast==='function')toast('Échec : '+((r&&r.error)||'inconnu'));
+    });
+  };
+  /* Transformations simulées (mode démo) — déterministes et visibles */
+  function demoCorriger(t){var s=(''+t).replace(/[ \t]{2,}/g,' ').replace(/\s+([,.;:!?])/g,'$1').replace(/([.!?])\s*([a-zà-ÿ])/g,function(_,p,c){return p+' '+c.toUpperCase();});return s.replace(/(^|\n)\s*([a-zà-ÿ])/g,function(_,n,c){return n+c.toUpperCase();});}
+  function demoRaccourcir(t){var ph=(''+t).replace(/\n{2,}/g,'\n').split(/(?<=[.!?])\s+/);return ph.slice(0,Math.max(2,Math.ceil(ph.length/2))).join(' ').trim();}
+  function demoPro(t){var s=(''+t).trim();if(!/^(bonjour|madame|monsieur|cher)/i.test(s))s='Madame, Monsieur,\n\n'+s;if(!/cordialement|bien à vous/i.test(s))s+='\n\nBien à vous,\nL\'équipe AEM CONSEIL';return s;}
+  function demoTrad(t){return '[EN — traduction indisponible en mode démonstration, activez l\'IA]\n\n'+t;}
+
+  if(!document.getElementById('ia-rep-css')){var st=document.createElement('style');st.id='ia-rep-css';
+    st.textContent='.ia-reform{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft,#f0e9da)}'
+      +'.ia-reform-t{font-size:11px;font-weight:700;color:var(--accent,#8a6d3b)}';
     document.head.appendChild(st);}
 })();
 </script>

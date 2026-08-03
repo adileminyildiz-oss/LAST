@@ -495,6 +495,16 @@ const r = await page.evaluate(async () => {
     && /Contact/.test(anaCard) && /Projet juridique/.test(anaCard) && /Proposer le pré-remplissage/.test(anaCard) && /note utile/.test(anaCard)
     && typeof demAnalyse === 'function' && typeof demAnalyseCard === 'function' && typeof demAnalyseAppliquer === 'function' && typeof demAnalyseAuto === 'function';
 
+  // IA — brouillon de réponse + reformulation dans le composeur
+  DB.demandes.unshift({ id: 'drepReg', code: 'DC-REP', clientNom: 'Rep', canal: 'Formulaire du site', serviceSouhaite: 'Création SARL', statut: 'Nouveau', assigneA: '', date: '2026-08-01', lu: false, message: 'test' });
+  const ficheHTML = demVueDetail('drepReg');
+  const reformBar = iaReformBar();
+  demSmtpModal('x@y.fr', 'S', 'C');
+  const compReform = !!document.querySelector('#ov .ia-reform') && document.querySelectorAll('#ov .ia-reform button').length === 4 && !!document.getElementById('ml-corps');
+  closeModal();
+  out.iaReponse = /Rédiger la réponse \(IA\)/.test(ficheHTML) && /ia-reform/.test(reformBar) && (reformBar.match(/<button/g) || []).length === 4 && compReform
+    && typeof demReponseIA === 'function' && typeof iaReformuler === 'function' && typeof iaReformBar === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
