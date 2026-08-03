@@ -570,6 +570,24 @@ const r = await page.evaluate(async () => {
   out.iaCopilote = typeof iaCopilote === 'function' && typeof iaCopiloteExec === 'function' && typeof iaCopiloteAfficher === 'function' && typeof iaCopiloteConfirmer === 'function'
     && /Réponse test copilote/.test(copBody) && /Action proposée/.test(copBody) && copActionSet && copExec;
 
+  // IA — pilotage : page dédiée, recommandations (signaux) + rapport (KPIs + synthèse)
+  DB.factures.push({ id: 'pilf', type: 'client', num: 'FV-PILO', tiers: 'PILRET', statut: 'Impayée', ech: '2020-01-01', ttc: 1500 });
+  DB.devis = DB.devis || []; DB.devis.push({ id: 'pildv', num: 'DV-PILO', tiers: 'X', statut: 'Émis', date: '2020-01-01', ttc: 900 });
+  const piloInPages = PAGES.some(x => x.id === 'pilotage');
+  const piloSig = piloSignaux();
+  const piloReco = piloSig.impayes.n >= 1 && piloSig.devisSansSuite.n >= 1;
+  const piloK = piloKPIs('annee');
+  const piloKok = typeof piloK.recues === 'number' && typeof piloK.tauxConversion === 'number' && typeof piloK.caEmis === 'number';
+  piloRapportGen('mois', true);
+  await new Promise(r => setTimeout(r, 500)); // laisse la synthèse démo se remplir
+  const piloRap = piloCfg().rapports.find(x => x.periode === 'mois'); // (le rapport hebdo auto peut coexister)
+  const piloRapOk = !!(piloRap && piloRap.kpis && piloRap.synthese && piloRap.synthese.length > 10);
+  state.page = 'pilotage'; render();
+  const piloPage = (document.getElementById('view') || {}).innerHTML || '';
+  out.iaPilotage = piloInPages && piloReco && piloKok && piloRapOk
+    && /Recommandations/.test(piloPage) && /Rapport d.activité/.test(piloPage) && /Synthèse/.test(piloPage)
+    && typeof pagePilotage === 'function' && typeof piloRapportGen === 'function' && typeof piloAutoHebdo === 'function' && typeof piloRecoCount === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

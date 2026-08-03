@@ -89,7 +89,15 @@ tarifs, procédures — cherche dans les données, et propose une action à
 **exécuter avec confirmation** : ouvrir une page, créer une facture/un
 devis, synchroniser la boîte, aller aux impayés, ou ouvrir un
 client/dossier/facture/demande ; base de connaissances tirée des modèles
-de formalités et des prestations, mode démonstration hors-ligne)
+de formalités et des prestations, mode démonstration hors-ligne) et
+**IA — pilotage** (page dédiée « Pilotage IA » : recommandations d'actions
+« à faire maintenant » sur quatre signaux — impayés échus à relancer,
+demandes en retard SLA, devis sans suite, dossiers bloqués par des pièces
+manquantes — chacune avec un bouton menant à l'écran concerné ; et rapport
+d'activité — KPIs locaux (demandes reçues/finalisées, taux de conversion,
+CA facturé, impayés, âge moyen de la file, répartitions par canal/formalité)
++ synthèse rédigée par l'IA — généré automatiquement chaque semaine et à la
+demande sur la période choisie ; mode démonstration hors-ligne)
 — le tout sans erreur JavaScript.
 
 ## Lancer
