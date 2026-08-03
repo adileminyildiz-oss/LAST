@@ -415,6 +415,20 @@ const r = await page.evaluate(async () => {
     && demReponses.length >= 3 && repBuilt.every(m => /DC-0500/.test(m.c)) && /Accusé/.test(demReponsesBar('dchk'))
     && typeof demChecklistCard === 'function' && typeof demReponseType === 'function' && typeof demReponsesBar === 'function';
 
+  // Notification barre latérale (retard) + auto-cochage des étapes
+  const isoN = (off) => { const dd = new Date(); dd.setDate(dd.getDate() + off); return dd.toISOString(); };
+  DB.demandes.unshift({ id: 'navlate', code: 'DC-0700', clientNom: 'Retard', canal: 'Formulaire du site', serviceSouhaite: 'Création SAS', statut: 'Nouveau', assigneA: '', dateTime: isoN(-5), date: isoN(-5).slice(0, 10), lu: false });
+  demSetSla(2);
+  buildNav();
+  const navLate = !!document.querySelector('#nav .nav-badge-late');
+  const dNav = DB.demandes.find(d => d.id === 'navlate');
+  const chkBefore = demChkProgress(dNav).done;
+  const autoDid = demChkAutoDone('navlate', /collecte|pi[eè]ce|document/i);
+  const chkAfter = demChkProgress(dNav).done;
+  const autoAgain = demChkAutoDone('navlate', /collecte|pi[eè]ce|document/i);
+  out.demNotifAuto = navLate && chkBefore === 0 && autoDid === true && chkAfter === 1 && autoAgain === false
+    && typeof demChkAutoDone === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {

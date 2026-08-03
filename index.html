@@ -821,8 +821,14 @@ function buildNav(){
 }
 function navBtn(p){
   const n=navBadgeCount(p.id);
-  const ttl=p.id==='facturation'?`${n} facture(s) à relancer`:`${n} demande(s) à traiter`;
-  const badge=n?`<span class="nav-badge" title="${ttl}">${n}</span>`:'';
+  let cls='nav-badge',ttl=p.id==='facturation'?`${n} facture(s) à relancer`:`${n} demande(s) à traiter`;
+  if(p.id==='demandes'){
+    const late=(typeof demRetardCount==='function')?demRetardCount():0;
+    const unread=(typeof demNonLus==='function')?demNonLus():0;
+    if(late>0){cls+=' nav-badge-late';ttl=`${n} à traiter · ${late} en retard`;}
+    else if(unread>0)ttl=`${n} à traiter · ${unread} non lu(s)`;
+  }
+  const badge=n?`<span class="${cls}" title="${ttl}">${n}</span>`:'';
   const soon=p.soon?`<span class="nav-soon">bientôt</span>`:'';
   return `<button class="nav-btn ${state.page===p.id?'on':''}" onclick="go('${p.id}')">${svg(IC[p.ic])}<span class="nav-btn-lbl">${p.lbl}</span>${badge||soon}</button>`;
 }
@@ -3918,7 +3924,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=183;
+var LAST_VER=184;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9228,7 +9234,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.sla-warn{color:#b45309;background:#fffaf0;border-color:#eed09a}'
       +'.sla-late{color:#be123c;background:#fff1f4;border-color:#f6cdd8}'
       +'.sla-done{color:var(--ink-3,#8a7f6c);background:var(--paper-2,#f6efe0);border-color:var(--line-2,#e2d9c6)}'
-      +'.dem-tbl .sla{margin-left:6px}';
+      +'.dem-tbl .sla{margin-left:6px}'
+      +'.nav-badge.nav-badge-late{background:linear-gradient(135deg,#e11d48,#9f1239)!important;color:#fff!important;box-shadow:0 2px 8px rgba(225,29,72,.45)!important}';
     document.head.appendChild(st);}
 })();
 </script>
@@ -9277,13 +9284,26 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     {k:'relance',label:'Relance (sans réponse)',build:function(d){return {s:'Relance — votre dossier '+serie(d)+' — AEM CONSEIL',
       c:'Bonjour'+(prenom(d)?(' '+prenom(d)):'')+',\n\nSauf erreur de notre part, nous restons en attente des éléments nécessaires pour avancer sur votre dossier '+serie(d)+'.\n\nPourriez-vous nous les faire parvenir en réponse à cet e-mail ? Nous restons bien entendu disponibles si vous avez la moindre question.\n\nBien cordialement,'};}}
   ];
+  /* Auto-cochage : coche la 1re étape correspondant au motif (si pas déjà faite) */
+  window.demChkAutoDone=function(id,rx){
+    var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return false;
+    var e=window.demEtapes(d);
+    for(var i=0;i<e.length;i++){if(rx.test(e[i])){var k=window.demChkKey(e[i]);d.checklist=d.checklist||{};if(!d.checklist[k]){d.checklist[k]=true;if(typeof save==='function')save();return true;}return false;}}
+    return false;
+  };
   window.demReponseType=function(id,key){
     var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return;
     var tpl=null;window.demReponses.forEach(function(x){if(x.k===key)tpl=x;});if(!tpl)return;
     var m=tpl.build(d);var to=(typeof demReplyTo==='function')?demReplyTo(d):((d.clientEmail)||'');
+    if(key==='pieces')window.demChkAutoDone(id,/collecte|pi[eè]ce|document/i);
     if(!to&&typeof toast==='function')toast('Adresse e-mail du client introuvable — vérifiez la demande avant d\'envoyer.');
     if(typeof demOuvrirMessagerie==='function')demOuvrirMessagerie(to||'',m.s,m.c);
   };
+  /* La demande de documents (bouton principal) coche aussi l'étape « pièces » */
+  if(typeof window.demDemanderDocs==='function'&&!window.__demDocsHook){window.__demDocsHook=1;
+    var _dd=window.demDemanderDocs;
+    window.demDemanderDocs=function(id){try{window.demChkAutoDone(id,/collecte|pi[eè]ce|document/i);}catch(e){}return _dd.apply(this,arguments);};
+  }
   window.demReponsesBar=function(id){
     return '<div class="rep-bar">'+window.demReponses.map(function(t){return '<button class="btn btn-sm btn-ghost" onclick="demReponseType(\''+id+'\',\''+t.k+'\')">'+E(t.label)+'</button>';}).join('')+'</div>';
   };

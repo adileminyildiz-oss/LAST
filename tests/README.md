@@ -49,7 +49,10 @@ dans le bandeau du poste) et **checklist de traitement par formalité +
 réponses types** (étapes cochables tirées du modèle de la formalité avec
 progression %, et réponses en 1 clic — accusé de réception, demande de
 pièces, point d'avancement, relance — pré-remplies avec le numéro de
-série) — le tout sans erreur JavaScript.
+série), **notification en barre latérale** (le badge « Demandes » passe
+au rouge quand des demandes dépassent le délai SLA) et **auto-cochage
+des étapes** (demander les pièces coche automatiquement l'étape
+« Collecte des pièces ») — le tout sans erreur JavaScript.
 
 ## Lancer
 
