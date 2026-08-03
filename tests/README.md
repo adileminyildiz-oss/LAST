@@ -73,7 +73,10 @@ barre IA dans le composeur : corriger, raccourcir, plus pro, traduire)
 et **IA — signaux & traduction** (détection urgence/intention(spam)/
 sentiment/langue affichée en pastilles dans la fiche et la messagerie,
 urgence IA qui remonte la priorité de la file d'attente, et traduction
-française à la demande) — le tout sans erreur JavaScript.
+française à la demande) et **IA — lecture des pièces (vision)** (bouton
+par pièce + global, extraction CNI/K-bis/domicile, contrôles de
+conformité — lisibilité, recto+verso, expiration, justificatif récent —
+et pré-remplissage proposé) — le tout sans erreur JavaScript.
 
 ## Lancer
 

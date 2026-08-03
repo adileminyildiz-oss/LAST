@@ -3927,7 +3927,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=191;
+var LAST_VER=192;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9403,7 +9403,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
         +(has?('<button class="btn btn-sm" onclick="demAttPreview(\''+id+'\','+i+')">Aperçu</button>'
               +'<a class="btn btn-sm btn-ghost" href="data:'+((x.type||'application/octet-stream'))+';base64,'+(x.dataB64)+'" download="'+E(x.name||('piece-'+(i+1)))+'">Télécharger</a>')
            :'<span class="tag mut">à récupérer</span>')
+        +((has&&typeof demAttIABtn==='function')?demAttIABtn(id,i):'')
         +'</span></div>'
+        +((typeof demAttIAResult==='function')?demAttIAResult(id,i):'')
         +'<div class="datt-prev" id="datt-prev-'+id+'-'+i+'" data-open="0" style="display:none"></div>';
     }).join('');
     var couv=window.demAttCouverture(d);
@@ -9411,6 +9413,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +couv.map(function(c){return '<span class="datt-chip '+(c.ok?'ok':'no')+'">'+(c.ok?'✓':'○')+' '+E(c.label)+'</span>';}).join('')+'</div>'):'';
     return '<div class="card"><div class="card-h"><h2>Pièces jointes reçues</h2><span class="sub" style="margin-left:auto">'+a.length+' fichier(s) · reconnues automatiquement</span></div>'
       +'<div class="card-b"><div class="datt-list">'+rows+'</div>'
+      +((typeof demAttIAall==='function')?demAttIAall(id):'')
       +covHTML
       +(manque?'<button class="btn btn-sm btn-pri" style="margin-top:8px" onclick="demAttRecuperer(\''+id+'\')">⬇ Récupérer les pièces jointes</button>':'')
       +'</div></div>';
@@ -9980,6 +9983,137 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.iana-trad{background:var(--paper,#fffef9);border:1px solid var(--line-2,#e2d9c6);border-radius:8px;padding:9px 11px;margin-bottom:11px;font-size:12.5px;line-height:1.5;white-space:pre-wrap}'
       +'.iana-trad b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3,#9c9078);margin-bottom:4px}'
       +'.msg-top .sig{margin-left:2px}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="ia-piece-mod">
+/* ===================================================================
+   IA — Lecture des pièces (vision) + contrôle de conformité
+   Objectif n°5. Bouton par pièce (+ global) → extraction des données
+   (CNI/K-bis/domicile) et contrôles (lisibilité, recto+verso, expiration,
+   justificatif récent). Données affichées puis pré-remplissage proposé.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function find(id){return (DB.demandes||[]).find(function(x){return x.id===id;});}
+  function catOf(a){return (typeof window.demAttCat==='function')?window.demAttCat(a).key:'autre';}
+
+  var SPEC={
+    cni:{label:'pièce d\'identité',fields:[['nom','Nom'],['prenom','Prénom'],['date_naissance','Naissance'],['numero','N°'],['date_validite','Validité']],
+      json:'{"type_piece":"CNI|passeport|titre de séjour","nom":"","prenom":"","date_naissance":"JJ/MM/AAAA","lieu_naissance":"","numero":"","date_validite":"JJ/MM/AAAA","face":"recto|verso|recto-verso","lisible":true,"expiree":false}'},
+    kbis:{label:'extrait K-bis',fields:[['denomination','Dénomination'],['siren','SIREN'],['dirigeant','Dirigeant'],['date','Date']],
+      json:'{"denomination":"","siren":"","dirigeant":"","forme":"","date":"JJ/MM/AAAA","lisible":true}'},
+    domicile:{label:'justificatif de domicile',fields:[['type','Type'],['adresse','Adresse'],['date_document','Date']],
+      json:'{"type":"facture EDF|téléphone|loyer|…","titulaire":"","adresse":"","date_document":"JJ/MM/AAAA","recent":true,"lisible":true}'},
+    autre:{label:'pièce',fields:[['resume','Contenu']],json:'{"resume":"description brève du document","lisible":true}'}
+  };
+  function spec(cat){return SPEC[cat]||SPEC.autre;}
+
+  function pieceDemo(d,a,cat){
+    var F={};try{(typeof demFields==='function'?demFields(d):[]).forEach(function(f){F[f.key]=f.value;});}catch(e){}
+    var nom=(typeof demBestName==='function'?demBestName(d):d.clientNom)||'';var parts=nom.split(/\s+/);
+    if(cat==='cni'){var nb=(d.attachments||[]).filter(function(x){return catOf(x)==='cni';}).length;
+      return {type_piece:'CNI',nom:(F.nom||parts.slice(-1)[0]||'').toUpperCase(),prenom:F.prenom||parts[0]||'',date_naissance:'01/01/1990',lieu_naissance:'Paris',numero:'XX'+String(Math.abs((a.name||'').length*7%9999)).padStart(4,'0'),date_validite:'01/01/2031',face:nb>=2?'recto-verso':'recto',lisible:true,expiree:false,_demo:true};}
+    if(cat==='kbis')return {denomination:(F.denomination||'SOCIÉTÉ EXEMPLE').toUpperCase(),siren:'900123456',dirigeant:nom,forme:F['type de societe']||'SAS',date:'15/01/2026',lisible:true,_demo:true};
+    if(cat==='domicile')return {type:'facture mobile',titulaire:nom,adresse:'12 rue Exemple, 75000 Paris',date_document:'10/07/2026',recent:true,lisible:true,_demo:true};
+    return {resume:'Document '+(a.name||'')+' (lecture simulée en mode démonstration).',lisible:true,_demo:true};
+  }
+
+  window.demPieceLire=function(id,idx){
+    var d=find(id);if(!d)return;var a=(d.attachments||[])[idx];if(!a)return;
+    if(!a.dataB64){if(typeof demAttRecuperer==='function')demAttRecuperer(id);else if(typeof toast==='function')toast('Récupérez d\'abord la pièce.');return;}
+    var mode=(typeof iaMode==='function')?iaMode():'off';if(mode==='off')return (typeof toast==='function')&&toast('Activez l\'IA (ou le mode démo) dans Paramètres.');
+    var cat=catOf(a);var sp=spec(cat);
+    var isImg=/^image\//.test(a.type||'')||/\.(png|jpe?g|gif|webp|bmp)$/i.test(a.name||'');
+    var dataUri='data:'+(a.type||'image/jpeg')+';base64,'+a.dataB64;
+    a.__iaBusy=true;a.iaLuErr='';if(typeof render==='function')render();
+    if(typeof toast==='function')toast('Lecture de la pièce par l\'IA…');
+    iaAsk({system:'Tu es un assistant de cabinet de formalités. On te fournit une '+sp.label+'. Lis-la attentivement et réponds UNIQUEMENT par un objet JSON valide (en français), sans commentaire.',
+      user:'Extrais les informations de cette '+sp.label+' et contrôle sa conformité. Renvoie exactement ce JSON (laisse vide si illisible) : '+sp.json,
+      json:true,temperature:0,model:'pixtral-12b-latest',images:isImg?[dataUri]:[],
+      demo:function(){return pieceDemo(d,a,cat);}},
+      function(r){a.__iaBusy=false;
+        if(r&&r.ok){a.iaLu={data:r.data||{},cat:cat,ts:Date.now(),demo:!!r.demo};if(typeof save==='function')save();}
+        else a.iaLuErr=(r&&r.error)||'erreur';
+        if(typeof render==='function')render();});
+  };
+  window.demPieceLireToutes=function(id){
+    var d=find(id);if(!d)return;var atts=(d.attachments||[]);var n=0;
+    atts.forEach(function(a,i){if(a&&a.dataB64&&!a.iaLu&&!a.__iaBusy){setTimeout(function(){demPieceLire(id,i);},n*400);n++;}});
+    if(!n&&typeof toast==='function')toast('Aucune pièce à lire (déjà lues ou contenu non récupéré).');
+  };
+
+  /* Contrôles de conformité déduits de la lecture */
+  function checks(a){
+    var lu=(a.iaLu&&a.iaLu.data)||{};var cat=a.iaLu&&a.iaLu.cat;var out=[];
+    out.push(lu.lisible===false?{ok:false,label:'Illisible — à renvoyer'}:{ok:true,label:'Lisible'});
+    if(cat==='cni'){
+      var face=(''+(lu.face||'')).toLowerCase();var two=face.indexOf('recto')>=0&&face.indexOf('verso')>=0;
+      out.push(two?{ok:true,label:'Recto + verso'}:{ok:false,label:'Verso manquant ?'});
+      out.push(lu.expiree===true?{ok:false,label:'Pièce expirée'}:{ok:true,label:'En cours de validité'});
+    }
+    if(cat==='domicile')out.push(lu.recent===false?{ok:false,label:'Justificatif > 3 mois'}:{ok:true,label:'Justificatif récent (< 3 mois)'});
+    return out;
+  }
+
+  window.demAttIABtn=function(id,i){
+    var d=find(id);if(!d)return '';var a=(d.attachments||[])[i];if(!a)return '';
+    if(a.__iaBusy)return '<span class="tag mut">lecture…</span>';
+    if(a.iaLu)return '<button class="btn btn-sm btn-ghost" onclick="demPieceLire(\''+id+'\','+i+')" title="Relire">↻</button>';
+    return '<button class="btn btn-sm btn-pri" onclick="demPieceLire(\''+id+'\','+i+')">🔍 Lire (IA)</button>';
+  };
+  window.demAttIAResult=function(id,i){
+    var d=find(id);if(!d)return '';var a=(d.attachments||[])[i];if(!a)return '';
+    if(a.__iaBusy)return '<div class="datt-ia"><span class="hint">⏳ Lecture en cours…</span></div>';
+    if(!a.iaLu){return a.iaLuErr?('<div class="datt-ia"><span class="hint">Échec ('+E(a.iaLuErr)+').</span></div>'):'';}
+    var lu=a.iaLu.data||{};var sp=spec(a.iaLu.cat);
+    var fields=sp.fields.map(function(kv){var v=(''+(lu[kv[0]]||'')).trim();if(!v)return '';return '<span class="datt-f"><b>'+E(kv[1])+'</b> '+E(v)+'</span>';}).filter(Boolean).join('');
+    var ch=checks(a).map(function(c){return '<span class="datt-ck '+(c.ok?'ok':'no')+'">'+(c.ok?'✓':'⚠')+' '+E(c.label)+'</span>';}).join('');
+    return '<div class="datt-ia">'+(a.iaLu.demo?'<span class="tag warm" style="margin-bottom:5px">démo</span> ':'')
+      +(fields?'<div class="datt-fields">'+fields+'</div>':'')
+      +(ch?'<div class="datt-checks">'+ch+'</div>':'')
+      +'<button class="btn btn-sm btn-ghost" style="margin-top:6px" onclick="demPieceAppliquer(\''+id+'\','+i+')">✎ Utiliser ces infos</button>'
+      +'</div>';
+  };
+  window.demAttIAall=function(id){
+    var d=find(id);if(!d)return '';var atts=(d.attachments||[]);
+    var lisibles=atts.filter(function(a){return a&&a.dataB64;}).length;var lus=atts.filter(function(a){return a&&a.iaLu;}).length;
+    if(!lisibles)return '';
+    return '<div class="datt-ia-all"><button class="btn btn-sm btn-pri" onclick="demPieceLireToutes(\''+id+'\')">🔍 Lire toutes les pièces (IA)</button>'
+      +'<span class="hint" style="margin:0">'+lus+'/'+lisibles+' lue(s)</span></div>';
+  };
+
+  window.demPieceAppliquer=function(id,i){
+    var d=find(id);if(!d)return;var a=(d.attachments||[])[i];if(!a||!a.iaLu)return;var lu=a.iaLu.data||{};
+    var nomC=((lu.prenom||'')+' '+(lu.nom||'')).trim()||lu.dirigeant||lu.titulaire||'';
+    if(typeof openModal!=='function')return;
+    openModal('Utiliser les infos de la pièce',
+      '<p class="hint" style="margin:0 0 10px">Vérifiez avant d\'appliquer. Ces informations mettront à jour la demande et seront rattachées au dossier.</p>'
+      +'<div class="frow"><div><label>Nom / contact</label><input id="iap-nom" value="'+E(nomC)+'"></div>'
+      +'<div><label>Adresse</label><input id="iap-adr" value="'+E(lu.adresse||'')+'"></div></div>'
+      +(lu.siren?'<div class="frow"><div><label>SIREN</label><input id="iap-siren" value="'+E(lu.siren)+'"></div><div><label>Dénomination</label><input id="iap-denom" value="'+E(lu.denomination||'')+'"></div></div>':''),
+      '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>'
+      +'<button class="btn btn-pri" onclick="demPieceAppliquerOK(\''+id+'\','+i+')">Appliquer</button>');
+  };
+  window.demPieceAppliquerOK=function(id,i){
+    var d=find(id);if(!d)return;var g=function(x){var e=document.getElementById(x);return e?(''+e.value).trim():'';};
+    var nom=g('iap-nom'),adr=g('iap-adr'),siren=g('iap-siren'),denom=g('iap-denom');
+    if(nom)d.clientNom=nom;
+    d.iaChamps=Object.assign({},d.iaChamps||{},{adresse:adr,siren:siren,denomination:denom});
+    if(typeof save==='function')save();if(typeof closeModal==='function')closeModal();
+    if(typeof toast==='function')toast('Informations de la pièce appliquées.');if(typeof render==='function')render();
+  };
+
+  if(!document.getElementById('ia-piece-css')){var st=document.createElement('style');st.id='ia-piece-css';
+    st.textContent='.datt-ia{margin:4px 0 8px;padding:8px 11px;background:var(--paper-2,#f6efe0);border:1px solid var(--line-2,#e2d9c6);border-radius:9px}'
+      +'.datt-fields{display:flex;flex-wrap:wrap;gap:5px 12px;margin-bottom:6px}'
+      +'.datt-f{font-size:12px;color:var(--ink,#302c24)}.datt-f b{color:var(--ink-3,#8a7f6c);font-size:10px;text-transform:uppercase;letter-spacing:.3px;margin-right:4px}'
+      +'.datt-checks{display:flex;flex-wrap:wrap;gap:6px}'
+      +'.datt-ck{font-size:10.5px;font-weight:700;border-radius:20px;padding:1px 8px;border:1px solid}'
+      +'.datt-ck.ok{color:#3f7d54;background:#eef7f0;border-color:#cfe6d6}'
+      +'.datt-ck.no{color:#be123c;background:#fff1f4;border-color:#f6cdd8}'
+      +'.datt-ia-all{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 8px}';
     document.head.appendChild(st);}
 })();
 </script>

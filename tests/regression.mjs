@@ -521,6 +521,16 @@ const r = await page.evaluate(async () => {
     && priU > priS && /Traduire en français/.test(cardU)
     && typeof demSignaux === 'function' && typeof demTraduire === 'function' && typeof demSignauxHTML === 'function';
 
+  // IA — lecture des pièces (vision) + conformité + apply
+  DB.demandes.unshift({ id: 'dpcReg', code: 'DC-PC', clientNom: 'Julie Bernard', canal: 'Formulaire du site', serviceSouhaite: 'Création SAS', statut: 'Nouveau', assigneA: '', date: '2026-08-01', lu: false,
+    attachments: [
+      { name: 'CNI.jpg', type: 'image/jpeg', dataB64: 'x', msgId: 'm', cat: 'cni', iaLu: { data: { nom: 'BERNARD', prenom: 'Julie', face: 'recto-verso', lisible: true, expiree: false }, cat: 'cni', ts: 1, demo: true } },
+      { name: 'edf.pdf', type: 'application/pdf', dataB64: 'y', msgId: 'm', cat: 'domicile' }] });
+  const blkPc = demAttBlock('dpcReg');
+  out.iaPiece = /datt-fields/.test(blkPc) && /BERNARD/.test(blkPc) && /Recto \+ verso/.test(blkPc) && /En cours de validité/.test(blkPc) && /Lisible/.test(blkPc)
+    && /Lire toutes les pièces/.test(blkPc) && /Utiliser ces infos/.test(blkPc) && /Lire \(IA\)/.test(blkPc)
+    && typeof demPieceLire === 'function' && typeof demAttIAResult === 'function' && typeof demPieceAppliquer === 'function' && typeof demPieceLireToutes === 'function';
+
   // Toutes les pages se rendent sans erreur
   let pageErr = '';
   ['dash', 'demandes', 'espace', 'clients', 'facturation', 'devis', 'marge', 'params'].forEach(function (pg) {
