@@ -784,11 +784,25 @@ const r = await page.evaluate(async () => {
   window.__suiviPlan = rbPlan.moves; suiviDoRebalance();
   const suiviRebalApply = DB.demandes.filter((d) => d.assigneA === 'RB-OV').length === 2 && DB.demandes.filter((d) => d.assigneA === 'RB-LO').length === 2 && suiviRebalancePlan().moves.length === 0;
   const suiviRebalBtn = /suiviRebalance\(\)/.test(pageSuivi()) && typeof suiviRebalance === 'function' && typeof suiviDoRebalance === 'function';
+  // réattribution en masse par filtre (De / Type / Service / Vers)
+  DB.demandes = [
+    { id: 'BM1', clientNom: 'C1', assigneA: 'RB-OV', serviceSouhaite: 'Création SASU' },
+    { id: 'BM2', clientNom: 'C2', assigneA: 'RB-OV', serviceSouhaite: 'Création SARL' },
+    { id: 'BM3', clientNom: 'C3', assigneA: 'RB-OV', serviceSouhaite: 'SASU modif' },
+  ];
+  DB.dossiers = [];
+  document.body.insertAdjacentHTML('beforeend', '<input id="sb-from" value="RB-OV"><select id="sb-type"><option value="demande" selected>d</option></select><input id="sb-q" value="sasu"><select id="sb-to"><option value="RB-LO" selected>t</option></select><b id="sb-count"></b><div id="sb-list"></div><button id="sb-apply"></button>');
+  const bulkMatch = suiviBulkMatch(); const suiviBulkMatchOk = bulkMatch.length === 2 && bulkMatch.every((m) => m.id === 'BM1' || m.id === 'BM3');
+  suiviBulkApply();
+  const suiviBulkApplyOk = DB.demandes.find((d) => d.id === 'BM1').assigneA === 'RB-LO' && DB.demandes.find((d) => d.id === 'BM3').assigneA === 'RB-LO' && DB.demandes.find((d) => d.id === 'BM2').assigneA === 'RB-OV';
+  ['sb-from', 'sb-type', 'sb-q', 'sb-to', 'sb-count', 'sb-list', 'sb-apply'].forEach((id) => { const e = document.getElementById(id); if (e) e.remove(); });
+  const suiviBulkBtn = /suiviBulk\(\)/.test(pageSuivi()) && typeof suiviBulk === 'function' && typeof suiviBulkMatch === 'function';
   out.suivi = typeof pageSuivi === 'function' && typeof suiviExportCSV === 'function' && typeof suiviSet === 'function'
     && suiviInPages && suiviOk && suiviRendered && suiviCollabBlocked && suiviToolbar && suiviPeriode && suiviExport
     && suiviReassignFns && suiviCibleSet && suiviCibleUI && suiviOverload && suiviReassignWorks
     && suiviHistStore && suiviHistCardOk && suiviFluxOk && suiviHistCollapse
-    && suiviRebalPlan && suiviRebalApply && suiviRebalBtn;
+    && suiviRebalPlan && suiviRebalApply && suiviRebalBtn
+    && suiviBulkMatchOk && suiviBulkApplyOk && suiviBulkBtn;
 
   // Toutes les pages se rendent sans erreur
   let pageErr = '';

@@ -165,7 +165,11 @@ date, auteur), carte repliable en tête du suivi filtrée par période, et mini-
 **rééquilibrage automatique** — bouton « Rééquilibrer » qui propose des réattributions
 des collaborateurs surchargés vers les collègues sous la charge cible — tâches non
 démarrées déplacées en priorité, jamais vers un compte inactif — avec aperçu du plan
-avant application en un clic)
+avant application en un clic ;
+**réattribution en masse par filtre** — bouton « En masse » ouvrant un sélecteur
+De (collaborateur source ou tous) / Type (demandes, dossiers, les deux) / Service ou
+formalité contient / Vers (collaborateur cible actif), avec aperçu en direct du nombre
+et de la liste des tâches ouvertes correspondantes, puis réattribution groupée)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test

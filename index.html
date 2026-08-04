@@ -4056,7 +4056,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=211;
+var LAST_VER=212;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11820,6 +11820,48 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(typeof render==='function')render();
   };
 
+  /* Réattribution en masse par filtre (De / Type / Service / Vers) */
+  function sbVal(id){var e=document.getElementById(id);return e?e.value:'';}
+  window.suiviBulkMatch=function(){
+    var from=sbVal('sb-from'),type=sbVal('sb-type')||'both',q=(sbVal('sb-q')||'').trim().toLowerCase(),to=sbVal('sb-to');
+    var okQ=function(s){return !q||((''+s).toLowerCase().indexOf(q)>=0);};var res=[];
+    if(type==='demande'||type==='both')((DB&&DB.demandes)||[]).forEach(function(d){if(d.archived)return;if(etat(d)==='finalise')return;if(from&&(d.assigneA||'')!==from)return;if(to&&(d.assigneA||'')===to)return;var svc=(d.serviceSouhaite||d.service||'');if(!okQ(svc+' '+nomDem(d)))return;res.push({kind:'demande',id:d.id,nom:nomDem(d),svc:svc,fromId:d.assigneA||''});});
+    if(type==='dossier'||type==='both')((DB&&DB.dossiers)||[]).forEach(function(d){if(d.archived)return;if(d.statut==='Clôturé')return;if(from&&(d.assigneA||'')!==from)return;if(to&&(d.assigneA||'')===to)return;var svc=(d.type||d.formalite||'');if(!okQ(svc+' '+taskNom('dossier',d)))return;res.push({kind:'dossier',id:d.id,nom:taskNom('dossier',d),svc:svc,fromId:d.assigneA||''});});
+    return res;
+  };
+  window.suiviBulkPreview=function(){
+    var to=sbVal('sb-to'),list=suiviBulkMatch();
+    var box=document.getElementById('sb-list'),cnt=document.getElementById('sb-count'),btn=document.getElementById('sb-apply');
+    if(cnt)cnt.textContent=list.length;
+    if(box)box.innerHTML=list.length?(list.slice(0,60).map(function(m){return '<div class="suivi-hist-row"><span class="suivi-hist-kind '+(m.kind==='demande'?'d':'o')+'">'+(m.kind==='demande'?'Demande':'Dossier')+'</span><span class="suivi-hist-nom">'+E(m.nom)+(m.svc?(' · '+E(m.svc)):'')+'</span><span class="suivi-hist-move"><i>'+E(uName(m.fromId))+'</i></span></div>';}).join('')+(list.length>60?'<div class="hint" style="font-size:11px;padding:4px 2px">+'+(list.length-60)+' de plus…</div>':'')):'<div class="suivi-none" style="padding:12px 0">Aucune tâche ouverte ne correspond.</div>';
+    if(btn){var ok=to&&list.length;btn.disabled=!ok;btn.style.opacity=ok?'':'.5';btn.style.pointerEvents=ok?'':'none';}
+  };
+  window.suiviBulk=function(){
+    if(typeof isCollab==='function'&&isCollab())return;if(typeof openModal!=='function')return;
+    var collabs=((DB&&DB.users)||[]).filter(function(u){return u.role==='collab';});
+    var actifs=collabs.filter(function(u){return u.actif!==false;});
+    var opt=function(u){return '<option value="'+u.id+'">'+E(u.nom)+(u.actif===false?' (désactivé)':'')+'</option>';};
+    var svcs={};((DB&&DB.demandes)||[]).forEach(function(d){var s=(d.serviceSouhaite||d.service||'').trim();if(s)svcs[s]=1;});
+    var dl='<datalist id="sb-q-list">'+Object.keys(svcs).sort().map(function(s){return '<option value="'+E(s)+'">';}).join('')+'</datalist>';
+    var body='<div class="sb-form">'
+      +'<label>De<select id="sb-from" onchange="suiviBulkPreview()"><option value="">Tous les collaborateurs</option>'+collabs.map(opt).join('')+'</select></label>'
+      +'<label>Type<select id="sb-type" onchange="suiviBulkPreview()"><option value="both">Demandes &amp; dossiers</option><option value="demande">Demandes</option><option value="dossier">Dossiers</option></select></label>'
+      +'<label>Service / formalité contient<input id="sb-q" list="sb-q-list" placeholder="ex. SASU, SARL…" oninput="suiviBulkPreview()">'+dl+'</label>'
+      +'<label>Vers<select id="sb-to" onchange="suiviBulkPreview()"><option value="">— Choisir —</option>'+actifs.map(opt).join('')+'</select></label>'
+      +'</div>'
+      +'<div class="hint" style="margin:10px 0 6px"><b id="sb-count">0</b> tâche(s) ouverte(s) correspondante(s) :</div>'
+      +'<div id="sb-list" class="suivi-hist-list" style="max-height:280px;border:1px solid var(--line-2,#e2d9c6);border-radius:9px"></div>';
+    openModal('Réattribution en masse',body,'<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button id="sb-apply" class="btn btn-accent" disabled style="opacity:.5;pointer-events:none" onclick="suiviBulkApply()">Réattribuer</button>');
+    setTimeout(suiviBulkPreview,20);
+  };
+  window.suiviBulkApply=function(){
+    if(typeof isCollab==='function'&&isCollab())return;var to=sbVal('sb-to');if(!to)return;
+    var list=suiviBulkMatch(),n=0;list.forEach(function(m){if(_reassignCore(m.kind,m.id,to,' (masse)'))n++;});
+    if(typeof save==='function')save();if(typeof closeModal==='function')closeModal();
+    if(typeof toast==='function')toast(n+' tâche(s) réattribuée(s) à '+uName(to)+'.');
+    if(typeof render==='function')render();
+  };
+
   function metrics(u,cutoff){
     var dems=demOf(u.id),doss=dosOf(u.id);
     var demOuv=dems.filter(function(d){return etat(d)!=='finalise';});
@@ -11921,7 +11963,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<div class="suivi-tb-grp"><span>Période</span><div class="suivi-segs">'+seg('periode',PERIODES,st.periode)+'</div></div>'
       +'<div class="suivi-tb-grp"><span>Trier</span><div class="suivi-segs">'+seg('tri',TRIS,st.tri)+'</div></div>'
       +'<div class="suivi-tb-grp"><span>Charge cible</span><input type="number" min="1" class="suivi-cible-in" value="'+suiviCible()+'" onchange="suiviSetCible(this.value)" title="Objectif de tâches en cours par collaborateur"></div>'
-      +'<button class="btn btn-sm btn-accent" style="margin-left:auto" onclick="suiviRebalance()" title="Proposer des réattributions pour équilibrer la charge">⇄ Rééquilibrer</button>'
+      +'<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="suiviBulk()" title="Réattribuer plusieurs tâches d\'un coup selon un filtre">☰ En masse</button>'
+      +'<button class="btn btn-sm btn-accent" onclick="suiviRebalance()" title="Proposer des réattributions pour équilibrer la charge">⇄ Rééquilibrer</button>'
       +'<button class="btn btn-sm btn-ghost" onclick="suiviExportCSV()">⤓ Export CSV</button>'
       +'</div>';
     var body=mets.length?('<div class="suivi-grid">'+mets.map(collabCard).join('')+'</div>'):'<div class="card"><div class="card-b"><div class="empty">Aucun collaborateur. Ajoutez-en dans Paramètres → Équipe, puis définissez leur accès.</div></div></div>';
@@ -11988,7 +12031,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.suivi-hist-nom{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;color:var(--ink,#302c24)}'
       +'.suivi-hist-move{flex:none;color:var(--ink-2,#5a5344)}.suivi-hist-move i{color:var(--ink-3,#9c9078);font-style:normal}.suivi-hist-move b{color:var(--ink,#302c24)}'
       +'.suivi-hist-row time{flex:none;color:var(--ink-3,#9c9078);font-size:10.5px;min-width:74px;text-align:right}'
-      +'@media(max-width:640px){.suivi-hist-move,.suivi-hist-row time{display:none}}';
+      +'@media(max-width:640px){.suivi-hist-move,.suivi-hist-row time{display:none}}'
+      +'.sb-form{display:grid;grid-template-columns:1fr 1fr;gap:11px}'
+      +'@media(max-width:560px){.sb-form{grid-template-columns:1fr}}'
+      +'.sb-form label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;color:var(--ink-2,#5a5344)}'
+      +'.sb-form select,.sb-form input{padding:8px 9px;border:1px solid var(--line-2,#e2d9c6);border-radius:8px;font:inherit;font-size:13px;font-weight:400;background:var(--card,#fffdf7);color:var(--ink,#302c24)}';
     document.head.appendChild(st);}
 })();
 </script>
