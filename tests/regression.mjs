@@ -642,14 +642,19 @@ const r = await page.evaluate(async () => {
   const flxLinkOk = !fluxStages().facturer.some((x) => x.id === 'flxo');
   out.fluxPipeline = typeof fluxPipelineCard === 'function' && typeof fluxStages === 'function' && typeof fluxTotals === 'function' && typeof fluxFacturerDossier === 'function'
     && flxStagesOk && flxTotOk && flxCardOk && flxLinkOk;
-  // Tableau de bord — cartes KPI enrichies (.kpi2, 3 compteurs opérationnels) + ordre + cockpit non dupliqué + pas de doublon financier
+  // Tableau de bord — résultats (missions complétées, ventes, missions clôturées) + tableaux opérationnels déplacés vers Pilotage IA + pleine largeur
+  DB.dossiers = (DB.dossiers || []).concat([{ id: 'DBCLOS', ref: 'DOS-DBCLOS', clientIds: [], serviceIds: [], statut: 'Clôturé', clotureDate: '2026-07-15' }]);
   const dashRefHTML = pageDash();
-  const dashKpi2 = (dashRefHTML.match(/class="kpi2/g) || []).length === 3 && /k2-sub/.test(dashRefHTML) && /k2-ic/.test(dashRefHTML);
+  const dashKpi2 = (dashRefHTML.match(/class="kpi2/g) || []).length === 4 && /k2-sub/.test(dashRefHTML) && /k2-ic/.test(dashRefHTML);
   const dashOnce = (dashRefHTML.match(/Santé financière/g) || []).length === 1 && (dashRefHTML.match(/Pipeline commercial/g) || []).length === 1;
-  const dashNoDup = dashRefHTML.indexOf('Facturé (ventes TTC)') < 0; // rangée financière redondante retirée (déjà dans Santé financière)
+  const dashResults = /Missions complétées/.test(dashRefHTML) && /Ventes réalisées/.test(dashRefHTML) && /Dernières missions clôturées/.test(dashRefHTML) && /DOS-DBCLOS/.test(dashRefHTML);
+  const dashNoOps = !/>À relancer</.test(dashRefHTML) && !/Échéances à venir/.test(dashRefHTML) && !/Dernières demandes/.test(dashRefHTML);
   const gi = dashRefHTML.indexOf('en un coup'), gb = dashRefHTML.indexOf('Nouveau devis'), gs = dashRefHTML.indexOf('Santé financière'), gk = dashRefHTML.indexOf('kpi2');
   const dashOrder = gi >= 0 && gi < gb && gb < gs && gs < gk;
-  out.dashRefresh = dashKpi2 && dashOnce && dashNoDup && dashOrder;
+  const piloTbl = typeof piloTablesHTML === 'function' && typeof pagePilotage === 'function';
+  const piloHTML = piloTbl ? pagePilotage() : '';
+  const piloHasTables = />À relancer</.test(piloHTML) && /Échéances à venir/.test(piloHTML) && /Dernières demandes/.test(piloHTML);
+  out.dashRefresh = dashKpi2 && dashOnce && dashResults && dashNoOps && dashOrder && piloTbl && piloHasTables;
   out.fluxAccepterDevis = typeof demAccepterDevis === 'function' && flxFicheBtn && flxAccepted;
 
   // FLUX — anti-fuite débours : détection des frais officiels manquants + ajout
