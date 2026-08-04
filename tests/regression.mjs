@@ -707,8 +707,18 @@ const r = await page.evaluate(async () => {
   const lockOk = /var LAST_PWD_HASH='[0-9a-f]{64}'/.test(lockBody) && /var LAST_2FA_ENC='[^']{20,}'/.test(lockBody);
   if (typeof closeModal === 'function') closeModal();
   localStorage.removeItem('last-2fa');
+  // bannière d'état du verrouillage universel : non activé / local en attente / universel actif
+  window.LAST_2FA_ENC = '';
+  const lockNone = /sec-lock warn/.test(secCard());
+  localStorage.setItem('last-2fa', 'enc' + 'A'.repeat(48));
+  const lockPend = /sec-lock pend/.test(secCard()) && /btn-pri" onclick="secExportLock/.test(secCard());
+  window.LAST_2FA_ENC = 'enc' + 'A'.repeat(48);
+  const lockCommit = /sec-lock ok/.test(secCard());
+  window.LAST_2FA_ENC = ''; localStorage.removeItem('last-2fa');
+  const dlFn = typeof secDownloadLock === 'function';
   out.securite = typeof secCard === 'function' && typeof sec2FAStart === 'function' && typeof secChangePwdSave === 'function' && typeof secGuide === 'function' && typeof getPwdHash === 'function' && typeof secExportLock === 'function'
-    && /Sécurité/.test(secCardHTML) && secInParams && pwdOverrideOk && pwdDefaultOk && lockOk;
+    && /Sécurité/.test(secCardHTML) && secInParams && pwdOverrideOk && pwdDefaultOk && lockOk
+    && lockNone && lockPend && lockCommit && dlFn;
 
   // COMPTES admin/collaborateur — auth collab, périmètre assigné, nav restreinte, garde de modification
   const sofia = (DB.users || []).find((u) => u.id === 'u-sofia');

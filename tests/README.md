@@ -139,7 +139,12 @@ verrouillage temporaire anti-force-brute après cinq échecs) et
 statut 2FA, (re)configuration guidée de la double authentification — QR/clé +
 vérification —, changement de mot de passe — nouvelle empreinte SHA-256 stockée
 localement, prise en compte par le gate via un mot de passe modifiable —, affichage
-de la clé d'ancrage portable, et guide pas à pas d'enrôlement) et
+de la clé d'ancrage portable, et guide pas à pas d'enrôlement ;
+**verrouillage universel** : bannière d'état à trois niveaux — non activé /
+actif sur cet appareil en attente / verrouillé sur tous les appareils —, bouton
+« Code de verrouillage » mis en avant tant qu'il reste local, produisant les deux
+lignes source — empreinte du mot de passe + secret 2FA chiffré, aucun secret en
+clair — copiables ou téléchargeables en .txt pour les graver dans le code) et
 **comptes Admin / Collaborateur** (deux formats d'accès : l'Admin — mot de passe +
 2FA — a tout pouvoir ; les collaborateurs se connectent avec un identifiant + mot
 de passe créés par l'Admin (carte Équipe → Accès), sans 2FA, et sont limités au

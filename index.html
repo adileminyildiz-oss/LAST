@@ -4056,7 +4056,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=213;
+var LAST_VER=214;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11445,14 +11445,18 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var committed=(typeof LAST_2FA_ENC!=='undefined'&&LAST_2FA_ENC&&LAST_2FA_ENC.length>20);
     var pwdChanged=false;try{pwdChanged=(localStorage.getItem('last-pwd')||'').length===64;}catch(e){}
     var badge=on?'<span class="tag green">Activée ✅</span>':'<span class="tag warm">Non activée</span>';
+    var lockState=!on?'<div class="sec-lock warn"><b>⚠ Double authentification non activée</b><span>Activez-la pour être le seul à pouvoir vous connecter.</span></div>'
+      :(committed?'<div class="sec-lock ok"><b>🔒 Verrouillage universel actif</b><span>La 2FA est exigée sur <b>tous les appareils</b> — inscrite dans le code.</span></div>'
+      :'<div class="sec-lock pend"><b>⏳ Verrouillage universel en attente</b><span>La 2FA protège <b>cet appareil</b>. Cliquez « Code de verrouillage », transmettez les 2 lignes pour l\'exiger <b>partout</b>.</span></div>');
     return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>🔒 Sécurité &amp; accès</h2><span class="sub" style="margin-left:auto">'+badge+'</span></div><div class="card-b">'
       +'<p class="hint" style="margin:0 0 10px">Accès <b>strictement personnel</b>. La connexion exige votre <b>mot de passe</b> puis un <b>code à 6 chiffres</b> d\'une application d\'authentification (Google Authenticator / Authy). '+(on?(committed?'Verrouillée sur <b>tous les appareils</b>.':'Active sur <b>cet appareil</b> — pensez à la clé d\'ancrage pour tous vos appareils.'):'À activer dès maintenant.')+'</p>'
+      +lockState
       +'<div class="sec-row">'
         +'<button class="btn btn-sm btn-pri" onclick="sec2FAStart()">'+(on?'🔁 Reconfigurer la double authentification':'🔒 Activer la double authentification')+'</button>'
         +'<button class="btn btn-sm btn-ghost" onclick="secChangePwdModal()">🔑 Changer le mot de passe'+(pwdChanged?' (modifié)':'')+'</button>'
         +'<button class="btn btn-sm btn-ghost" onclick="secGuide()">📘 Marche à suivre</button>'
       +(on?'<button class="btn btn-sm btn-ghost" onclick="secShowAnchor()">🗝 Clé d\'ancrage</button>':'')
-      +(on?'<button class="btn btn-sm btn-ghost" onclick="secExportLock()">🔧 Code de verrouillage (tous appareils)</button>':'')
+      +(on?'<button class="btn btn-sm '+(committed?'btn-ghost':'btn-pri')+'" onclick="secExportLock()">🔧 Code de verrouillage (tous appareils)</button>':'')
       +'</div>'
       +'<p class="hint" style="margin:10px 0 0;font-size:11px">Après 5 codes ou mots de passe erronés, l\'accès est <b>temporairement verrouillé</b> (anti-intrusion). Tout se calcule <b>hors-ligne</b> sur votre appareil — aucun secret n\'est exposé.</p>'
       +'</div></div>';
@@ -11520,7 +11524,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'Elles ne contiennent <b>aucun secret en clair</b> : le mot de passe est une <b>empreinte</b> et la clé 2FA est <b>chiffrée par votre mot de passe</b> — inexploitables sans lui.</p>'
       +'<textarea readonly onclick="this.select()" style="width:100%;height:96px;font-family:ui-monospace,monospace;font-size:11px;border:1px solid var(--line-2,#e2d9c6);border-radius:8px;padding:9px;box-sizing:border-box">'+E(lines)+'</textarea>'
       +'<p class="hint" style="margin:8px 0 0;font-size:11px">Une fois gravées, un appareil neuf exigera <b>votre mot de passe + votre code d\'authentification</b> — l\'auto-inscription d\'un autre téléphone devient impossible.</p>',
-      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="(function(){var t=document.querySelector(\'#ov textarea\');if(t){t.select();try{document.execCommand(\'copy\');toast(\'Code copié\');}catch(e){}}})()">Copier les 2 lignes</button>');
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-ghost" onclick="secDownloadLock()">⬇ Télécharger (.txt)</button><button class="btn btn-pri" onclick="(function(){var t=document.querySelector(\'#ov textarea\');if(t){t.select();try{document.execCommand(\'copy\');toast(\'Code copié\');}catch(e){}}})()">Copier les 2 lignes</button>');
+  };
+  window.secDownloadLock=function(){
+    var enc=(function(){try{return localStorage.getItem('last-2fa')||LAST_2FA_ENC||'';}catch(e){return LAST_2FA_ENC||'';}})();
+    if(!enc)return (typeof toast==='function')&&toast('Activez d\'abord la double authentification.');
+    var lines="var LAST_PWD_HASH='"+getPwdHash()+"';\nvar LAST_2FA_ENC='"+enc+"';\n";
+    try{var blob=new Blob([lines],{type:'text/plain;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='last-verrouillage-2fa.txt';document.body.appendChild(a);a.click();setTimeout(function(){try{URL.revokeObjectURL(a.href);a.remove();}catch(e){}},120);if(typeof toast==='function')toast('Fichier de verrouillage téléchargé.');}catch(e){if(typeof toast==='function')toast('Téléchargement impossible.');}
   };
 
   /* ---- Changement de mot de passe ---- */
@@ -11578,7 +11588,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.sec-g{display:flex;gap:11px;align-items:flex-start;font-size:13px;line-height:1.5}'
       +'.sec-g>div>b{display:block}'
       +'.sec-gn{flex:none;width:24px;height:24px;border-radius:50%;background:var(--accent,#7a6e58);color:#fff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;margin-top:1px}'
-      +'.sec-warn{font-size:11.5px;line-height:1.5;color:#8a5a12;background:#fdf4e3;border:1px solid #efd9a8;border-radius:9px;padding:9px 11px}';
+      +'.sec-warn{font-size:11.5px;line-height:1.5;color:#8a5a12;background:#fdf4e3;border:1px solid #efd9a8;border-radius:9px;padding:9px 11px}'
+      +'.sec-lock{display:flex;flex-direction:column;gap:2px;border-radius:10px;padding:10px 12px;margin:0 0 12px;font-size:12px;line-height:1.45;border:1px solid}'
+      +'.sec-lock b{font-size:12.5px}.sec-lock span{color:inherit;opacity:.92}'
+      +'.sec-lock.ok{background:#eaf5ee;border-color:#bfe0cb;color:#1f6b45}'
+      +'.sec-lock.pend{background:#fdf4e3;border-color:#efd9a8;color:#8a5a12}'
+      +'.sec-lock.warn{background:#fbe9e7;border-color:#e6a79f;color:#a23b2c}';
     document.head.appendChild(st);}
 })();
 </script>
