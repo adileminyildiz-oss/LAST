@@ -797,12 +797,24 @@ const r = await page.evaluate(async () => {
   const suiviBulkApplyOk = DB.demandes.find((d) => d.id === 'BM1').assigneA === 'RB-LO' && DB.demandes.find((d) => d.id === 'BM3').assigneA === 'RB-LO' && DB.demandes.find((d) => d.id === 'BM2').assigneA === 'RB-OV';
   ['sb-from', 'sb-type', 'sb-q', 'sb-to', 'sb-count', 'sb-list', 'sb-apply'].forEach((id) => { const e = document.getElementById(id); if (e) e.remove(); });
   const suiviBulkBtn = /suiviBulk\(\)/.test(pageSuivi()) && typeof suiviBulk === 'function' && typeof suiviBulkMatch === 'function';
+  // cible individuelle par collaborateur (temps partiel) : override + reset + impact rééquilibrage
+  DB.demandes = []; DB.dossiers = [];
+  for (let i = 1; i <= 3; i++) { DB.demandes.push({ id: 'CI-O' + i, clientNom: 'o' + i, assigneA: 'RB-OV', service: 'X' }); DB.demandes.push({ id: 'CI-L' + i, clientNom: 'l' + i, assigneA: 'RB-LO', service: 'X' }); }
+  suiviSetCible(5);
+  const ciDefault = suiviRebalancePlan().moves.length === 0; // 3<5 both → rien
+  const ovU = DB.users.find((u) => u.id === 'RB-OV');
+  suiviSetCibleOf('RB-OV', 2);
+  const ciStored = ovU.chargeCible === 2 && /suivi-cible-mini/.test(pageSuivi()) && /↺ défaut/.test(pageSuivi());
+  const ciPlan = suiviRebalancePlan().moves; const ciRebal = ciPlan.length === 1 && ciPlan[0].fromId === 'RB-OV' && ciPlan[0].toId === 'RB-LO';
+  suiviSetCibleOf('RB-OV', ''); const ciReset = ovU.chargeCible === undefined && suiviRebalancePlan().moves.length === 0;
+  const suiviCibleIndiv = typeof suiviSetCibleOf === 'function' && ciDefault && ciStored && ciRebal && ciReset;
   out.suivi = typeof pageSuivi === 'function' && typeof suiviExportCSV === 'function' && typeof suiviSet === 'function'
     && suiviInPages && suiviOk && suiviRendered && suiviCollabBlocked && suiviToolbar && suiviPeriode && suiviExport
     && suiviReassignFns && suiviCibleSet && suiviCibleUI && suiviOverload && suiviReassignWorks
     && suiviHistStore && suiviHistCardOk && suiviFluxOk && suiviHistCollapse
     && suiviRebalPlan && suiviRebalApply && suiviRebalBtn
-    && suiviBulkMatchOk && suiviBulkApplyOk && suiviBulkBtn;
+    && suiviBulkMatchOk && suiviBulkApplyOk && suiviBulkBtn
+    && suiviCibleIndiv;
 
   // Toutes les pages se rendent sans erreur
   let pageErr = '';

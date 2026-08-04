@@ -4056,7 +4056,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=212;
+var LAST_VER=213;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11742,6 +11742,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   /* Charge cible par collaborateur (alerte de surcharge) */
   function suiviCible(){try{DB.parametres=DB.parametres||{};var n=DB.parametres.suiviCible;return (typeof n==='number'&&n>0)?n:5;}catch(e){return 5;}}
   window.suiviSetCible=function(v){var n=parseInt(v,10);if(isNaN(n)||n<1)n=1;DB.parametres=DB.parametres||{};DB.parametres.suiviCible=n;if(typeof save==='function')save();if(typeof render==='function')render();};
+  /* Cible individuelle par collaborateur (temps partiel…) ; sinon la cible globale */
+  function suiviCibleOf(u){var n=u&&u.chargeCible;return (typeof n==='number'&&n>0)?n:suiviCible();}
+  window.suiviSetCibleOf=function(uid,v){if(typeof isCollab==='function'&&isCollab())return;var u=((DB&&DB.users)||[]).find(function(x){return x.id===uid;});if(!u)return;var n=parseInt(v,10);if(isNaN(n)||n<1){delete u.chargeCible;}else{u.chargeCible=n;}if(typeof save==='function')save();if(typeof render==='function')render();};
 
   /* Réattribution d'une tâche (demande ou dossier) à un autre collaborateur */
   window.suiviReassign=function(kind,id){
@@ -11781,26 +11784,25 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   /* Rééquilibrage : propose de déplacer des tâches des surchargés vers les collègues sous la cible */
   function suiviRebalancePlan(){
-    var cible=suiviCible();
     var collabs=((DB&&DB.users)||[]).filter(function(u){return u.role==='collab';});
     var recvs=collabs.filter(function(u){return u.actif!==false;});
-    var load={},pool={},nameOf={};
-    collabs.forEach(function(u){var m=metrics(u,0);load[u.id]=m.charge;nameOf[u.id]=u.nom;
+    var load={},pool={},nameOf={},cibleOf={};
+    collabs.forEach(function(u){var m=metrics(u,0);load[u.id]=m.charge;nameOf[u.id]=u.nom;cibleOf[u.id]=suiviCibleOf(u);
       var tasks=[];
       m.demOuv.forEach(function(d){tasks.push({kind:'demande',id:d.id,nom:nomDem(d),pri:(etat(d)==='nouveau'?0:1)});});
       m.dosOuv.forEach(function(d){tasks.push({kind:'dossier',id:d.id,nom:taskNom('dossier',d),pri:2});});
       tasks.sort(function(a,b){return a.pri-b.pri;});pool[u.id]=tasks;});
-    var over=collabs.filter(function(u){return load[u.id]>cible;}).sort(function(a,b){return load[b.id]-load[a.id];});
+    var over=collabs.filter(function(u){return load[u.id]>cibleOf[u.id];}).sort(function(a,b){return (load[b.id]-cibleOf[b.id])-(load[a.id]-cibleOf[a.id]);});
     var moves=[],guard=0;
     for(var oi=0;oi<over.length;oi++){var src=over[oi];
-      while(load[src.id]>cible&&pool[src.id].length&&guard<2000){guard++;
+      while(load[src.id]>cibleOf[src.id]&&pool[src.id].length&&guard<2000){guard++;
         var best=null;
-        recvs.forEach(function(rc){if(rc.id===src.id)return;if(load[rc.id]>=cible)return;if(!best||load[rc.id]<load[best.id])best=rc;});
+        recvs.forEach(function(rc){if(rc.id===src.id)return;if(load[rc.id]>=cibleOf[rc.id])return;if(!best||(cibleOf[rc.id]-load[rc.id])>(cibleOf[best.id]-load[best.id]))best=rc;});
         if(!best)break;
         var t=pool[src.id].shift();load[src.id]--;load[best.id]++;
         moves.push({kind:t.kind,id:t.id,nom:t.nom,fromId:src.id,fromNom:nameOf[src.id],toId:best.id,toNom:best.nom});}
     }
-    return {cible:cible,moves:moves};
+    return {cible:suiviCible(),moves:moves};
   }
   window.suiviRebalancePlan=suiviRebalancePlan;
   window.suiviRebalance=function(){
@@ -11890,8 +11892,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var acts=m.acts.slice(0,6);
     var actHTML='<div class="suivi-act-t">Activité — '+E(perLabel(suiviState().periode))+' ('+m.acts.length+')</div>'
       +(acts.length?acts.map(function(a){return '<div class="suivi-act"><span>'+E(a.action)+(a.detail?(' · '+E(a.detail)):'')+'</span><time>'+frDT(a.ts)+'</time></div>';}).join(''):'<div class="suivi-act" style="border:0;color:var(--ink-3,#9c9078)">Aucune activité sur la période.</div>');
-    var cible=suiviCible();var over=m.charge>cible;
-    var chargeBadge='<span class="suivi-charge'+(over?' over':'')+'" title="Charge en cours vs objectif ('+cible+')">'+m.charge+'/'+cible+(over?' ⚠':'')+'</span>';
+    var cible=suiviCibleOf(u);var over=m.charge>cible;var perso=(typeof u.chargeCible==='number'&&u.chargeCible>0);
+    var chargeBadge='<span class="suivi-charge'+(over?' over':'')+'" title="Charge en cours vs objectif ('+cible+(perso?', individuel':', par défaut')+')">'+m.charge+'/'+cible+(over?' ⚠':'')+'</span>';
     var flux=((m.recu||m.cede)?('<span class="suivi-flux" title="Réattributions sur la période — reçues / cédées">'+(m.recu?('<b class="in">+'+m.recu+'</b>'):'')+(m.recu&&m.cede?' ':'')+(m.cede?('<b class="out">−'+m.cede+'</b>'):'')+'</span>'):'');
     var left='<div class="suivi-left"><div class="suivi-head">'
       +'<span class="av" style="background:'+(u.couleur||'#4a4034')+'">'+((typeof initials==='function')?initials(u.nom):(u.nom||'?').slice(0,2))+'</span>'
@@ -11904,6 +11906,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
         +'<div class="suivi-k good"><b>'+m.dosClos+'</b><span>Clôturés</span></div>'
       +'</div>'
       +'<div class="suivi-prog"><div class="suivi-prog-h"><span>Avancement des dossiers</span><b>'+m.pct+' %</b></div><div class="suivi-bar"><span style="width:'+m.pct+'%"></span></div></div>'
+      +'<div class="suivi-cible-row"><span>Objectif de charge</span><input type="number" min="1" class="suivi-cible-mini" value="'+cible+'" onchange="suiviSetCibleOf(\''+u.id+'\',this.value)" title="Objectif individuel de tâches en cours (laisser vide = cible par défaut)">'+(perso?'<button class="suivi-cible-reset" onclick="suiviSetCibleOf(\''+u.id+'\',\'\')" title="Revenir à la cible par défaut ('+suiviCible()+')">↺ défaut</button>':'<span class="suivi-cible-def">par défaut</span>')+'</div>'
       +'</div>';
     var right='<div class="suivi-right"><div class="suivi-right-t">Tâches en cours ('+tasks.length+')</div>'+taskHTML+actHTML+'</div>';
     return '<div class="card suivi-card">'+left+right+'</div>';
@@ -11914,8 +11917,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(typeof isCollab==='function'&&isCollab())return;
     var st=suiviState(),cutoff=cutoffOf(st.periode);
     var collabs=((DB&&DB.users)||[]).filter(function(u){return u.role==='collab';});
-    var rows=[['Collaborateur','Identifiant','Accès','Demandes assignées','Dossiers en cours','Dossiers clôturés','En retard','Avancement %','Actions ('+perLabel(st.periode)+')']];
-    collabs.forEach(function(u){var m=metrics(u,cutoff);rows.push([u.nom,u.login||'',(u.actif===false?'désactivé':(u.pwdHash?'actif':'non défini')),m.dems.length,m.dosOuv.length,m.dosClos,m.retard,m.pct,m.acts.length]);});
+    var rows=[['Collaborateur','Identifiant','Accès','Demandes assignées','Dossiers en cours','Charge en cours','Objectif','Dossiers clôturés','En retard','Avancement %','Reçues','Cédées','Actions ('+perLabel(st.periode)+')']];
+    collabs.forEach(function(u){var m=metrics(u,cutoff);rows.push([u.nom,u.login||'',(u.actif===false?'désactivé':(u.pwdHash?'actif':'non défini')),m.dems.length,m.dosOuv.length,m.charge,suiviCibleOf(u),m.dosClos,m.retard,m.pct,m.recu,m.cede,m.acts.length]);});
     var csv='﻿'+rows.map(function(r){return r.map(function(c){c=''+c;return /[";\n]/.test(c)?('"'+c.replace(/"/g,'""')+'"'):c;}).join(';');}).join('\n');
     try{var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='suivi-collaborateurs-'+(new Date().toISOString().slice(0,10))+'.csv';document.body.appendChild(a);a.click();setTimeout(function(){try{URL.revokeObjectURL(a.href);a.remove();}catch(e){}},120);if(typeof toast==='function')toast('Export CSV téléchargé.');}catch(e){if(typeof toast==='function')toast('Export impossible.');}
   };
@@ -12035,7 +12038,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.sb-form{display:grid;grid-template-columns:1fr 1fr;gap:11px}'
       +'@media(max-width:560px){.sb-form{grid-template-columns:1fr}}'
       +'.sb-form label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;color:var(--ink-2,#5a5344)}'
-      +'.sb-form select,.sb-form input{padding:8px 9px;border:1px solid var(--line-2,#e2d9c6);border-radius:8px;font:inherit;font-size:13px;font-weight:400;background:var(--card,#fffdf7);color:var(--ink,#302c24)}';
+      +'.sb-form select,.sb-form input{padding:8px 9px;border:1px solid var(--line-2,#e2d9c6);border-radius:8px;font:inherit;font-size:13px;font-weight:400;background:var(--card,#fffdf7);color:var(--ink,#302c24)}'
+      +'.suivi-cible-row{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-2,#5a5344)}'
+      +'.suivi-cible-row>span{font-weight:600}'
+      +'.suivi-cible-mini{width:52px;padding:4px 6px;border:1px solid var(--line-2,#e2d9c6);border-radius:6px;font:inherit;font-size:12px;font-weight:700;text-align:center;background:var(--card,#fffdf7);color:var(--ink,#302c24)}'
+      +'.suivi-cible-reset{border:1px solid var(--line-2,#e2d9c6);background:var(--paper-2,#f6efe0);color:var(--ink-2,#5a5344);border-radius:6px;padding:3px 8px;font:inherit;font-size:10.5px;font-weight:700;cursor:pointer}'
+      +'.suivi-cible-reset:hover{border-color:var(--accent,#7a6e58);color:var(--accent,#7a6e58)}'
+      +'.suivi-cible-def{font-size:10px;color:var(--ink-3,#9c9078);font-style:italic}';
     document.head.appendChild(st);}
 })();
 </script>

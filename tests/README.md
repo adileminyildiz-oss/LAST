@@ -169,7 +169,11 @@ avant application en un clic ;
 **réattribution en masse par filtre** — bouton « En masse » ouvrant un sélecteur
 De (collaborateur source ou tous) / Type (demandes, dossiers, les deux) / Service ou
 formalité contient / Vers (collaborateur cible actif), avec aperçu en direct du nombre
-et de la liste des tâches ouvertes correspondantes, puis réattribution groupée)
+et de la liste des tâches ouvertes correspondantes, puis réattribution groupée ;
+**charge cible individuelle** — objectif de charge propre à chaque collaborateur
+(temps partiel…) réglable dans sa carte, sinon la cible globale par défaut, pris en
+compte pour l'alerte de surcharge et le rééquilibrage — qui déleste chacun selon SA
+cible et remplit en priorité les collègues avec le plus de capacité restante)
 — le tout sans erreur JavaScript.
 
 ## Deux niveaux de test
