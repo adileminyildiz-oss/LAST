@@ -642,6 +642,14 @@ const r = await page.evaluate(async () => {
   const flxLinkOk = !fluxStages().facturer.some((x) => x.id === 'flxo');
   out.fluxPipeline = typeof fluxPipelineCard === 'function' && typeof fluxStages === 'function' && typeof fluxTotals === 'function' && typeof fluxFacturerDossier === 'function'
     && flxStagesOk && flxTotOk && flxCardOk && flxLinkOk;
+  // Tableau de bord — cartes KPI enrichies (.kpi2, 3 compteurs opérationnels) + ordre + cockpit non dupliqué + pas de doublon financier
+  const dashRefHTML = pageDash();
+  const dashKpi2 = (dashRefHTML.match(/class="kpi2/g) || []).length === 3 && /k2-sub/.test(dashRefHTML) && /k2-ic/.test(dashRefHTML);
+  const dashOnce = (dashRefHTML.match(/Santé financière/g) || []).length === 1 && (dashRefHTML.match(/Pipeline commercial/g) || []).length === 1;
+  const dashNoDup = dashRefHTML.indexOf('Facturé (ventes TTC)') < 0; // rangée financière redondante retirée (déjà dans Santé financière)
+  const gi = dashRefHTML.indexOf('en un coup'), gb = dashRefHTML.indexOf('Nouveau devis'), gs = dashRefHTML.indexOf('Santé financière'), gk = dashRefHTML.indexOf('kpi2');
+  const dashOrder = gi >= 0 && gi < gb && gb < gs && gs < gk;
+  out.dashRefresh = dashKpi2 && dashOnce && dashNoDup && dashOrder;
   out.fluxAccepterDevis = typeof demAccepterDevis === 'function' && flxFicheBtn && flxAccepted;
 
   // FLUX — anti-fuite débours : détection des frais officiels manquants + ajout

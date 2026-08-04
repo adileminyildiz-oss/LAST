@@ -129,7 +129,11 @@ le moteur de génération automatique des factures d'abonnement reste inchangé)
 **cockpit santé financière** (bandeau en tête du tableau de bord consolidant tout
 l'argent : encaissé total et du mois, reste dû, potentiel du pipeline, revenu
 récurrent MRR/ARR, taux de recouvrement, plus un entonnoir visuel potentiel →
-facturé → encaissé) et **double authentification (2FA)** (accès verrouillé au
+facturé → encaissé) et **tableau de bord rafraîchi** (ordre de lecture remis à
+plat — accueil → actions → alertes → cockpit santé → pipeline → compteurs → tables ;
+cartes KPI repensées — pastille d'icône teintée, valeur proéminente, sous-ligne de
+contexte, barre d'accent et relief au survol ; suppression de la rangée financière
+redondante déjà couverte par le cockpit santé) et **double authentification (2FA)** (accès verrouillé au
 titulaire : mot de passe — étape 1 — puis code TOTP à 6 chiffres d'une
 application d'authentification — étape 2 ; TOTP conforme RFC 6238/4226 calculé
 hors-ligne via WebCrypto, secret 2FA chiffré par le mot de passe — AES-256-GCM +

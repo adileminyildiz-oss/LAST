@@ -1236,26 +1236,28 @@ function pageDash(){
   var imp=fv.filter(function(f){return f.statut==='Impayée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
   var devisAtt=(DB.devis||[]).filter(function(d){return d.statut==='Émis';});
   var echues=fv.filter(function(f){return f.statut==='Impayée'&&relanceEnRetard(f);}).sort(function(a,b){return (a.ech||'').localeCompare(b.ech||'');});
+  var unassigned=dem.filter(function(d){return !d.assigneA;}).length;
+  var dossEnCours=doss.filter(function(d){return d.statut!=='Clôturé';}).length;
+  var dossClos=doss.length-dossEnCours;
+  var devisTtc=devisAtt.reduce(function(s,d){return s+(+d.ttc||0);},0);
+  function k2(ic,val,lbl,cls,sub){return '<div class="kpi2 '+(cls||'')+'"><span class="k2-ic">'+svg(IC[ic])+'</span><div class="k2-val">'+val+'</div><div class="k2-lbl">'+lbl+'</div>'+(sub?'<div class="k2-sub">'+sub+'</div>':'')+'</div>';}
   var greet=(function(){var h=new Date().getHours();return h<12?'Bonjour':h<18?'Bon après-midi':'Bonsoir';})();
   var cab=(DB.params&&DB.params.cabinet)||'AEM CONSEIL';
-  var out='<div class="flow-note" style="margin-bottom:14px">'+svg(IC.dash)+'<div><b>'+greet+'</b> — voici l\'activité de <b>'+esc(cab)+'</b> en un coup d\'œil.</div></div>';
-  out+=backupBannerHTML();
-  if(echues.length){var mtEch=echues.reduce(function(s,f){return s+(+f.ttc||0);},0);
-    out+='<div class="dash-alert"><span class="da-ic">!</span><div class="da-txt"><b>'+echues.length+' facture'+(echues.length>1?'s':'')+' échue'+(echues.length>1?'s':'')+'</b> — '+eur(mtEch)+' à recouvrer.</div>'
-      +'<button class="btn btn-sm btn-pri" onclick="relancerToutesEchues()">Tout relancer</button></div>';}
+  var out='<div class="flow-note" style="margin-bottom:12px">'+svg(IC.dash)+'<div><b>'+greet+'</b> — voici l\'activité de <b>'+esc(cab)+'</b> en un coup d\'œil.</div></div>';
   out+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
     +'<button class="btn btn-pri btn-sm" onclick="fvOpenDevis()">'+svg(IC.plus)+'Nouveau devis</button>'
     +'<button class="btn btn-sm" onclick="fvOpen()">'+svg(IC.plus)+'Nouvelle facture</button>'
     +'<button class="btn btn-sm btn-ghost" onclick="go(\'demandes\')">Voir les demandes</button></div>';
-  out+='<div class="grid g3">'
-    +kpi('inbox',dem.length,'Demandes à traiter',dem.length?'warm':'')
-    +kpi('espace',doss.length,'Dossiers en cours','blue')
-    +kpi('quote',devisAtt.length,'Devis en attente',devisAtt.length?'warm':'')
-    +'</div>';
-  out+='<div class="grid g3" style="margin-top:12px">'
-    +kpi('card',eur(caFact),'Facturé (ventes TTC)')
-    +kpi('euro',eur(enc),'Encaissé','ok')
-    +kpi('trend',eur(imp),'Impayé',imp?'hot':'')
+  if(echues.length){var mtEch=echues.reduce(function(s,f){return s+(+f.ttc||0);},0);
+    out+='<div class="dash-alert"><span class="da-ic">!</span><div class="da-txt"><b>'+echues.length+' facture'+(echues.length>1?'s':'')+' échue'+(echues.length>1?'s':'')+'</b> — '+eur(mtEch)+' à recouvrer.</div>'
+      +'<button class="btn btn-sm btn-pri" onclick="relancerToutesEchues()">Tout relancer</button></div>';}
+  out+=backupBannerHTML();
+  out+=(typeof finSanteCard==='function'?finSanteCard():'');
+  out+=(typeof fluxPipelineCard==='function'?fluxPipelineCard():'');
+  out+='<div class="grid g3 dash-kpis">'
+    +k2('inbox',dem.length,'Demandes à traiter',dem.length?'warm':'',unassigned?('<b>'+unassigned+'</b> non assignée'+(unassigned>1?'s':'')):'toutes assignées ✓')
+    +k2('espace',dossEnCours,'Dossiers en cours','blue',dossClos?(dossClos+' clôturé'+(dossClos>1?'s':'')):'aucun clôturé')
+    +k2('quote',devisAtt.length,'Devis en attente',devisAtt.length?'warm':'',devisTtc?(eur(devisTtc)+' à convertir'):'—')
     +'</div>';
   // À relancer
   out+='<div class="card" style="margin-top:16px"><div class="card-h"><h2>À relancer</h2><span class="sub" style="margin-left:auto">'+echues.length+' facture(s) échue(s)</span></div><div class="card-b" style="padding:0">';
@@ -4056,7 +4058,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=214;
+var LAST_VER=215;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -8904,6 +8906,34 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 })();
 </script>
 
+<script id="dash-refresh-mod">
+/* ===================================================================
+   TABLEAU DE BORD — rafraîchissement visuel des cartes KPI
+   Cartes .kpi2 : barre d'accent, pastille d'icône teintée, valeur
+   proéminente, sous-ligne de contexte, relief au survol.
+   =================================================================== */
+(function(){
+  if(document.getElementById('dash-refresh-css'))return;
+  var st=document.createElement('style');st.id='dash-refresh-css';
+  st.textContent=
+     'body[data-page="dash"] .dash-kpis{gap:10px}'
+    +'.kpi2{position:relative;padding:13px 15px 12px;border-radius:13px;background:var(--card,#fffdf8);border:1px solid var(--line-soft,#efe7d6);box-shadow:0 8px 22px -17px rgba(90,68,30,.4);transition:transform .14s ease,box-shadow .14s ease;overflow:hidden}'
+    +'.kpi2:hover{transform:translateY(-2px);box-shadow:0 15px 32px -18px rgba(90,68,30,.5)}'
+    +'.kpi2::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:4px;border-radius:0 4px 4px 0;background:#cbb896}'
+    +'.kpi2.blue::before{background:#3f78c4}.kpi2.ok::before{background:#4f9c67}.kpi2.hot::before{background:#d15b4a}.kpi2.warm::before{background:#d6a24a}'
+    +'.k2-ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:#f1ead9;color:#8a7b52;margin-bottom:9px}'
+    +'.k2-ic svg{width:15px;height:15px}'
+    +'.kpi2.blue .k2-ic{background:#e8f0fb;color:#3f78c4}.kpi2.ok .k2-ic{background:#e7f4ec;color:#3f8c5e}.kpi2.hot .k2-ic{background:#fbe9e6;color:#c65441}.kpi2.warm .k2-ic{background:#fbf1de;color:#b8862f}'
+    +'.k2-val{font-size:21px;font-weight:800;color:var(--ink,#302c24);letter-spacing:.1px;font-variant-numeric:tabular-nums;line-height:1.12}'
+    +'.k2-lbl{font-size:11px;color:var(--ink-2,#5a5344);margin-top:3px;font-weight:600}'
+    +'.k2-sub{font-size:10.5px;color:var(--ink-3,#9c9078);margin-top:5px;line-height:1.3}'
+    +'.k2-sub b{color:var(--ink-2,#5a5344);font-weight:800}'
+    +'body[data-page="dash"] .card{box-shadow:0 10px 26px -20px rgba(90,68,30,.4)}'
+    +'body[data-page="dash"] .card-h h2{font-size:12px}';
+  document.head.appendChild(st);
+})();
+</script>
+
 <script id="recurrence-mod">
 /* ===================================================================
    FACTURATION RÉCURRENTE AUTOMATIQUE
@@ -11233,7 +11263,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   };
 
   /* ---- Greffes ---- */
-  if(typeof window.pageDash==='function'){var _pd=window.pageDash;window.pageDash=function(){var h=_pd();try{return fluxPipelineCard()+h;}catch(e){return h;}};}
+  /* Pipeline désormais rendu par pageDash lui-même (ordre : greeting → actions → cockpit → KPIs). */
   if(typeof window.demVueDetail==='function'){var _dv=window.demVueDetail;window.demVueDetail=function(id){var h=_dv(id);if(!h||h.indexOf('dem-decide')<0)return h;
     var btn='<button class="btn btn-pri flux-accdev" onclick="demAccepterDevis(\''+id+'\')">🧾 Accepter &amp; établir le devis</button>';
     return h.replace('<div class="dem-decide">',btn+'<div class="dem-decide">');};}
@@ -11406,7 +11436,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   };
 
   /* Greffe : tout en haut du tableau de bord (avant le pipeline) */
-  if(typeof window.pageDash==='function'){var _pd=window.pageDash;window.pageDash=function(){var h=_pd();try{return finSanteCard()+h;}catch(e){return h;}};}
+  /* Santé financière désormais rendue par pageDash lui-même (ordre maîtrisé). */
 
   if(!document.getElementById('finsante-css')){var st=document.createElement('style');st.id='finsante-css';
     st.textContent='.fs-card{margin-bottom:16px}'
