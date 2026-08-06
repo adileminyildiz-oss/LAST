@@ -336,7 +336,7 @@ const r = await page.evaluate(async () => {
   cmdkOpen();
   const cmdkShown = !!document.querySelector('#cmdk.show');
   const cmdkGroups = [...document.querySelectorAll('#cmdk .cmdk-grp')].map(g => g.textContent);
-  const cmdkPages = [...document.querySelectorAll('#cmdk .cmdk-it b')].some(x => /Tableau de bord/.test(x.textContent));
+  const cmdkPages = [...document.querySelectorAll('#cmdk .cmdk-it b')].some(x => /Pilotage IA/.test(x.textContent)) && ![...document.querySelectorAll('#cmdk .cmdk-it b')].some(x => /Tableau de bord/.test(x.textContent));
   const cmdkInp = document.getElementById('cmdk-input');
   cmdkInp.value = 'DOS-SARL'; cmdkInp.dispatchEvent(new Event('input', { bubbles: true }));
   const cmdkFound = [...document.querySelectorAll('#cmdk .cmdk-it b')].some(x => /DOS-SARL/.test(x.textContent));
@@ -564,7 +564,7 @@ const r = await page.evaluate(async () => {
   const copBody = (document.getElementById('ov-b') || {}).innerHTML || '';
   const copActionSet = !!(window.__iaCopAction && window.__iaCopAction.type === 'go');
   // Exécution directe d'une action (navigation)
-  state.page = 'dash'; iaCopiloteExec({ type: 'go', page: 'facturation' });
+  state.page = 'demandes'; iaCopiloteExec({ type: 'go', page: 'facturation' });
   const copExec = state.page === 'facturation';
   if (typeof closeModal === 'function') closeModal();
   out.iaCopilote = typeof iaCopilote === 'function' && typeof iaCopiloteExec === 'function' && typeof iaCopiloteAfficher === 'function' && typeof iaCopiloteConfirmer === 'function'
@@ -629,7 +629,7 @@ const r = await page.evaluate(async () => {
   const flxStagesOk = flxStages.demandes.some((x) => x.id === 'flxd') && flxStages.devis.some((x) => x.id === 'flxv') && flxStages.facturer.some((x) => x.id === 'flxo') && flxStages.impayes.some((x) => x.id === 'flxi');
   const flxTot = fluxTotals();
   const flxTotOk = flxTot.impayes.eur >= 600 && flxTot.facturer.n >= 1 && typeof flxTot.demandes.eur === "number";
-  state.page = 'dash'; render();
+  state.page = 'pilotage'; render();
   const dashHTML = (document.getElementById('view') || {}).innerHTML || '';
   const flxCardOk = /Pipeline commercial/.test(dashHTML) && /Demandes à qualifier/.test(dashHTML) && /Dossiers à facturer/.test(dashHTML) && /Impayés à relancer/.test(dashHTML);
   const flxFicheBtn = /flux-accdev/.test(demVueDetail('flxd')) && /demAccepterDevis\('flxd'\)/.test(demVueDetail('flxd'));
@@ -643,18 +643,13 @@ const r = await page.evaluate(async () => {
   out.fluxPipeline = typeof fluxPipelineCard === 'function' && typeof fluxStages === 'function' && typeof fluxTotals === 'function' && typeof fluxFacturerDossier === 'function'
     && flxStagesOk && flxTotOk && flxCardOk && flxLinkOk;
   // Tableau de bord — résultats (missions complétées, ventes, missions clôturées) + tableaux opérationnels déplacés vers Pilotage IA + pleine largeur
-  DB.dossiers = (DB.dossiers || []).concat([{ id: 'DBCLOS', ref: 'DOS-DBCLOS', clientIds: [], serviceIds: [], statut: 'Clôturé', clotureDate: '2026-07-15' }]);
-  const dashRefHTML = pageDash();
-  const dashKpi2 = (dashRefHTML.match(/class="kpi2/g) || []).length === 4 && /k2-sub/.test(dashRefHTML) && /k2-ic/.test(dashRefHTML);
-  const dashOnce = (dashRefHTML.match(/Santé financière/g) || []).length === 1 && (dashRefHTML.match(/Pipeline commercial/g) || []).length === 1;
-  const dashResults = /Missions complétées/.test(dashRefHTML) && /Ventes réalisées/.test(dashRefHTML) && /Dernières missions clôturées/.test(dashRefHTML) && /DOS-DBCLOS/.test(dashRefHTML);
-  const dashNoOps = !/>À relancer</.test(dashRefHTML) && !/Échéances à venir/.test(dashRefHTML) && !/Dernières demandes/.test(dashRefHTML);
-  const gi = dashRefHTML.indexOf('en un coup'), gb = dashRefHTML.indexOf('Nouveau devis'), gs = dashRefHTML.indexOf('Santé financière'), gk = dashRefHTML.indexOf('kpi2');
-  const dashOrder = gi >= 0 && gi < gb && gb < gs && gs < gk;
+  // Module « Tableau de bord » supprimé : absent de la nav/route ; contenu clé relocalisé dans Pilotage IA
+  const noDashInPages = !PAGES.some((x) => x.id === 'dash');
+  state.page = 'dash'; render(); const dashFallback = state.page === 'demandes';
   const piloTbl = typeof piloTablesHTML === 'function' && typeof pagePilotage === 'function';
   const piloHTML = piloTbl ? pagePilotage() : '';
-  const piloHasTables = />À relancer</.test(piloHTML) && /Échéances à venir/.test(piloHTML) && /Dernières demandes/.test(piloHTML);
-  out.dashRefresh = dashKpi2 && dashOnce && dashResults && dashNoOps && dashOrder && piloTbl && piloHasTables;
+  const piloHasAll = /Santé financière/.test(piloHTML) && /Pipeline commercial/.test(piloHTML) && />À relancer</.test(piloHTML) && /Échéances à venir/.test(piloHTML) && /Dernières demandes/.test(piloHTML) && /Revenus récurrents/.test(piloHTML);
+  out.dashRefresh = noDashInPages && dashFallback && piloTbl && piloHasAll;
   out.fluxAccepterDevis = typeof demAccepterDevis === 'function' && flxFicheBtn && flxAccepted;
 
   // FLUX — anti-fuite débours : détection des frais officiels manquants + ajout
@@ -684,7 +679,7 @@ const r = await page.evaluate(async () => {
   const oppHas = recOpportunites().some((x) => /Nadia Recur/.test(x.nom));
   DB.recurrences.push({ id: 'rr3', clientNom: 'Nadia Recur', ht: 150, taux: 20, cadence: 'annuelle', prochaine: '2099-01-01', actif: true });
   const oppExcl = !recOpportunites().some((x) => /Nadia Recur/.test(x.nom));
-  state.page = 'dash'; render();
+  state.page = 'pilotage'; render();
   const dashRec = (document.getElementById('view') || {}).innerHTML || '';
   const recDashOk = /Revenus récurrents/.test(dashRec) && /MRR/.test(dashRec);
   out.recurrence = typeof recMRR === 'function' && typeof recOpportunites === 'function' && typeof recFromClient === 'function' && typeof recOpportunitesCard === 'function'
@@ -750,7 +745,7 @@ const r = await page.evaluate(async () => {
   const roleFlagsOk = isCollab() === true && isAdmin() === false && (currentCollab() || {}).id === 'u-sofia';
   // restauration ADMIN (indispensable pour la suite des tests)
   localStorage.setItem('last-role', 'admin'); localStorage.removeItem('last-user');
-  state.page = 'dash'; render();
+  state.page = 'demandes'; render();
   out.comptes = typeof collabAuth === 'function' && typeof collabAccess === 'function' && typeof isCollab === 'function' && typeof lastRole === 'function'
     && (authGood && authGood.id === 'u-sofia') && authBad === null && authInactif === null
     && scopeOk && navRestricted && redirectOk && guardOk && roleFlagsOk && isAdmin() === true;
@@ -767,7 +762,7 @@ const r = await page.evaluate(async () => {
   // admin-only : un collaborateur est redirigé hors de 'suivi'
   localStorage.setItem('last-role', 'collab'); localStorage.setItem('last-user', 'u-sofia'); state.page = 'suivi'; render();
   const suiviCollabBlocked = state.page !== 'suivi';
-  localStorage.setItem('last-role', 'admin'); localStorage.removeItem('last-user'); state.page = 'dash'; render();
+  localStorage.setItem('last-role', 'admin'); localStorage.removeItem('last-user'); state.page = 'demandes'; render();
   // barre d'outils : période + tri + export
   DB.audit = [{ ts: Date.now(), user: 'Sofia B.', action: 'Envoi mail', detail: 'ok' }, { ts: Date.now() - 40 * 86400000, user: 'Sofia B.', action: 'Vieille action', detail: 'x' }];
   const suiviToolbar = /Période/.test(pageSuivi()) && /Trier/.test(pageSuivi()) && /Export CSV/.test(pageSuivi());

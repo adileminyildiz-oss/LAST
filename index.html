@@ -723,7 +723,6 @@ const nivTag=n=>`<span class="tag ${n==='chaud'?'hot':n==='tiède'?'warm':'mut'}
    ROUTER / RENDER
    ================================================================= */
 const PAGES=[
-  {id:'dash',lbl:'Tableau de bord',ic:'dash',sub:'Vue d\'ensemble'},
   {id:'demandes',lbl:'Demandes',ic:'inbox',sub:'Réception & qualification IA'},
   {id:'espace',lbl:'Traitement',ic:'espace',sub:'Travail & génération des dossiers'},
   {id:'clients',lbl:'Clients',ic:'users',sub:'Fiches & informations'},
@@ -735,7 +734,7 @@ const PAGES=[
   {id:'suivi',lbl:'Suivi collaborateurs',ic:'users',sub:'Tâches & avancement par collaborateur'},
   {id:'params',lbl:'Paramètres',ic:'gear',sub:'Équipe & réglages'}
 ];
-const state={page:'dash',q:''};
+const state={page:'demandes',q:''};
 function toggleNav(o){document.getElementById('side').classList.toggle('open',o);document.getElementById('scrim').classList.toggle('show',o);}
 function go(p){state.page=p;state.demView='';toggleNav(false);render();window.scrollTo(0,0);}
 function onSearch(v){state.q=v.trim().toLowerCase();if(['clients','dossiers','demandes'].includes(state.page))render();gSearchRender(state.q);}
@@ -794,7 +793,7 @@ document.addEventListener('keydown',function(e){
   if(ovOpen)return;
   var now=Date.now();
   if(chord==='g'&&(now-chordT)<900){chord=null;
-    if(e.key==='d'){e.preventDefault();go('dash');return;}
+    if(e.key==='d'){e.preventDefault();go('demandes');return;}
     if(e.key==='c'){e.preventDefault();go('clients');return;}
     if(e.key==='t'){e.preventDefault();go('espace');return;}
     if(e.key==='r'){e.preventDefault();go('marge');return;}
@@ -836,15 +835,17 @@ function navBtn(p){
 }
 function render(){
   buildNav();
+  var p=PAGES.find(x=>x.id===state.page);
+  if(!p){ state.page=PAGES[0].id; p=PAGES[0]; }
   document.body.dataset.page=state.page;
-  const p=PAGES.find(x=>x.id===state.page);
   document.getElementById('ptitle').firstChild.textContent=p.lbl;
   document.getElementById('psub').textContent=p.sub;
   const V=document.getElementById('view');
-  V.innerHTML=({dash:pageDash,demandes:pageDemandes,clients:pageClientsEspace,espace:pageEspace,
+  var __bb=(typeof backupBannerHTML==='function')?backupBannerHTML():'';
+  V.innerHTML=__bb+({demandes:pageDemandes,clients:pageClientsEspace,espace:pageEspace,
     services:pageServices,devis:pageDevis,facturation:pageFacturation,rappro:pageRappro,marge:pageMarge,
-    pilotage:(typeof pagePilotage==='function'?pagePilotage:pageDash),
-    suivi:(typeof pageSuivi==='function'?pageSuivi:pageDash),params:pageParams}[state.page]||pageDemandes)();
+    pilotage:(typeof pagePilotage==='function'?pagePilotage:pageDemandes),
+    suivi:(typeof pageSuivi==='function'?pageSuivi:pageDemandes),params:pageParams}[state.page]||pageDemandes)();
   wireCards();
 }
 
@@ -3690,7 +3691,7 @@ function fournDel(id){if(!confirm('Supprimer ce fournisseur ?'))return;var i=DB.
   toastUndo('Fournisseur supprimé',function(){DB.fournisseurs.splice(Math.min(i,DB.fournisseurs.length),0,item);save();render();toast('Suppression annulée');});render();}
 
 function pageSoon(){
-  const p=PAGES.find(x=>x.id===state.page);
+  const p=PAGES.find(x=>x.id===state.page)||PAGES[0];
   return `<div class="card"><div class="card-b" style="text-align:center;padding:56px 24px">
     <div class="kpi" style="display:inline-flex;flex-direction:column;align-items:center;border:none;box-shadow:none;background:none">
       <div class="ic" style="width:56px;height:56px">${svg(IC[p.ic])}</div></div>
@@ -4043,7 +4044,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=216;
+var LAST_VER=217;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10666,7 +10667,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(mo){var kind={client:'client',dossier:'dossier',facture:'facture',demande:'demande'}[mo[1].toLowerCase()];
       return {reponse:'J\'ouvre '+mo[1].toLowerCase()+' « '+mo[2].trim()+' ».',action:{type:'ouvrir',kind:kind,query:mo[2].trim()}};}
     /* Navigation simple */
-    var NAV=[[/tableau|dashboard|accueil/,'dash','le tableau de bord'],[/client/,'clients','les clients'],[/facturation|facture/,'facturation','la facturation'],[/demande|messagerie|traitement/,'demandes','les demandes'],[/dossier|espace/,'espace','l\'espace dossiers'],[/service|prestation/,'services','les prestations']];
+    var NAV=[[/pilotage|tableau|dashboard|accueil/,'pilotage','le pilotage IA'],[/client/,'clients','les clients'],[/facturation|facture/,'facturation','la facturation'],[/demande|messagerie|traitement/,'demandes','les demandes'],[/dossier|espace/,'espace','l\'espace dossiers'],[/service|prestation/,'services','les prestations']];
     for(var i=0;i<NAV.length;i++){if(NAV[i][0].test(low))return {reponse:'J\'ouvre '+NAV[i][2]+'.',action:{type:'go',page:NAV[i][1]}};}
     /* Général */
     return {reponse:'Je suis l\'assistant du cabinet. Je peux répondre sur les pièces d\'une formalité, les tarifs, les impayés, ou ouvrir/créer un document. Reformulez votre demande (ex. « quelles pièces pour une SAS ? », « ouvrir client Durand », « créer une facture »).',action:null};
@@ -10877,12 +10878,18 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     return out;
   };
   window.pagePilotage=function(){
+    var sante=(typeof finSanteCard==='function')?finSanteCard():'';
+    var pipe=(typeof fluxPipelineCard==='function')?fluxPipelineCard():'';
+    var recOpp=(typeof recOpportunitesCard==='function')?recOpportunitesCard():'';
     return '<div class="pilo-wrap">'
-      +'<p class="flow-note" style="margin-bottom:14px">'+((typeof svg==='function'&&typeof IC!=='undefined'&&IC.dash)?svg(IC.dash):'')+'<span><b>Pilotage IA</b> — vos priorités du jour, le bilan d\'activité et les tableaux de suivi (à relancer, échéances, dernières demandes). Le rapport hebdomadaire se génère automatiquement ; vous pouvez aussi le regénérer sur la période de votre choix.</span></p>'
+      +'<p class="flow-note" style="margin-bottom:14px">'+((typeof svg==='function'&&typeof IC!=='undefined'&&IC.dash)?svg(IC.dash):'')+'<span><b>Pilotage IA</b> — votre centre de pilotage : santé financière, pipeline commercial, priorités du jour, bilan d\'activité, tableaux de suivi (à relancer, échéances, dernières demandes) et revenus récurrents. Le rapport hebdomadaire se génère automatiquement.</span></p>'
+      +sante
+      +pipe
       +recoHTML()
       +'<div style="height:14px"></div>'
       +rapportHTML()
       +piloTablesHTML()
+      +recOpp
       +'</div>';
   };
 
