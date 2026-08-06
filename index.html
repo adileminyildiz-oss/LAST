@@ -1199,7 +1199,7 @@ function demSyncMails(silent){var c=demSyncCfg();if(!c.url){if(!silent)demSyncCo
     if(j.error){if(!silent)toast(j.error==='unauthorized'?'Clé secrète incorrecte.':('Erreur du script : '+j.error));return;}
     var r=demIngest(demParseMails(JSON.stringify(j)));save();
     if(!silent||r.add)toast(r.add?(r.add+' nouveau(x) mail(s) transmis'+(r.dup?(' · '+r.dup+' déjà traité(s)'):'')):'Aucun nouveau mail'+(r.dup?(' ('+r.dup+' déjà traité(s))'):''));
-    if(r.add){state.demTab='nouveau';state.demMode='messagerie';}render();
+    if(r.add){state.demTab='nouveau';state.demMode='reception';}render();
     try{if(typeof demAutoFetchAtts==='function')demAutoFetchAtts();}catch(e){}
     try{if(r.add&&typeof demAnalyseAuto==='function')demAnalyseAuto();}catch(e){}}
   var settled=false;function once(j){if(settled)return;settled=true;finish(j);}
@@ -4044,7 +4044,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=217;
+var LAST_VER=218;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -4898,15 +4898,21 @@ window.demMessagerieView=function(){
 };
 window.pageDemandes=function(){
  if(state.demView){var dv=DB.demandes.find(function(x){return x.id===state.demView;});if(dv)return demVueDetail(state.demView);state.demView='';}
- var mode=state.demMode||'traitement';
+ var mode=state.demMode||'reception';
+ if(mode==='messagerie')mode='reception';
+ if(mode==='traitement')mode='qualification';
+ if(mode==='stats')mode='qualification';
  var nl=window.demNonLus();
+ var tb=function(k,lbl,n){return '<button class="dem-mode-b'+(mode===k?' on':'')+'" onclick="state.demMode=\''+k+'\';render()">'+lbl+(n?'<span class="dem-mode-n">'+n+'</span>':'')+'</button>';};
  var modeBar='<div class="dem-mode">'
-   +'<button class="dem-mode-b'+(mode==='messagerie'?' on':'')+'" onclick="state.demMode=\'messagerie\';render()">📨 Messagerie'+(nl?'<span class="dem-mode-n">'+nl+'</span>':'')+'</button>'
-   +'<button class="dem-mode-b'+(mode==='traitement'?' on':'')+'" onclick="state.demMode=\'traitement\';render()">🗂 Traitement des demandes</button>'
-   +'<button class="dem-mode-b'+(mode==='stats'?' on':'')+'" onclick="state.demMode=\'stats\';render()">📊 Statistiques</button>'
+   +tb('reception','📨 Réception',nl)
+   +tb('qualification','🗂 Qualification',0)
+   +tb('envoi','✉ Envoi des mails',0)
+   +tb('pieces','📎 Réception des pièces',0)
    +'</div>';
- if(mode==='messagerie')return modeBar+window.demMessagerieView();
- if(mode==='stats'&&typeof window.demStatsView==='function')return modeBar+window.demStatsView();
+ if(mode==='reception')return modeBar+window.demMessagerieView();
+ if(mode==='envoi'&&typeof window.demEnvoiView==='function')return modeBar+window.demEnvoiView();
+ if(mode==='pieces'&&typeof window.demPiecesView==='function')return modeBar+window.demPiecesView();
  return modeBar+window.demTraitementView();
 };
 window.demTraitementView=function(){
@@ -12118,6 +12124,92 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.suivi-cible-reset{border:1px solid var(--line-2,#e2d9c6);background:var(--paper-2,#f6efe0);color:var(--ink-2,#5a5344);border-radius:6px;padding:3px 8px;font:inherit;font-size:10.5px;font-weight:700;cursor:pointer}'
       +'.suivi-cible-reset:hover{border-color:var(--accent,#7a6e58);color:var(--accent,#7a6e58)}'
       +'.suivi-cible-def{font-size:10px;color:var(--ink-3,#9c9078);font-style:italic}';
+    document.head.appendChild(st);}
+})();
+</script>
+
+<script id="dem-tabs-mod">
+/* ===================================================================
+   DEMANDES — onglets : Réception · Qualification · Envoi des mails ·
+   Réception des pièces. Deux vues ajoutées (envoi & pièces) réutilisant
+   les réponses types (accusé / pièces / avancement / relance) et les
+   pièces requises par formalité.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function ic(){return (typeof svg==='function'&&typeof IC!=='undefined'&&IC.inbox)?svg(IC.inbox):'';}
+  function objetDe(d){return (typeof IA!=='undefined'&&IA.objet)?IA.objet(d):(d.serviceSouhaite||'');}
+  function nomDe(d){return (typeof demBestName==='function')?demBestName(d):(d.clientNom||'');}
+  function codeDe(d){return (typeof demCode==='function')?demCode(d):'';}
+  function actifs(){
+    var vis=(DB.demandes||[]).filter(function(d){return !d.archived;});
+    if(typeof demMineFilter==='function')vis=demMineFilter(vis);
+    return vis;
+  }
+  function filt(list){var q=(state.q||'').toLowerCase();if(!q)return list;return list.filter(function(d){return (nomDe(d)+' '+objetDe(d)+' '+(d.serviceSouhaite||'')).toLowerCase().indexOf(q)>=0;});}
+  function searchBar(ph){return '<div class="dem-search">'+ic()+'<input value="'+E(state.q||'')+'" oninput="state.q=this.value.toLowerCase();render()" placeholder="'+E(ph||'Rechercher…')+'"></div>';}
+  function poste(){return (typeof demPosteBanner==='function')?demPosteBanner():'';}
+
+  /* --- Envoi des mails --- */
+  window.demEnvoiView=function(){
+    var list=filt(actifs());
+    var tpls=(window.demReponses||[]);
+    var rows=list.map(function(d){
+      var to=(typeof demReplyTo==='function'?demReplyTo(d):'')||d.clientEmail||'';
+      var btns=tpls.map(function(t){return '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();demReponseType(\''+d.id+'\',\''+t.k+'\')">'+E(t.label)+'</button>';}).join('');
+      var mailTag=to?('<span class="tag mut">'+E(to)+'</span>'):'<span class="tag warm">✉ e-mail manquant</span>';
+      return '<tr onclick="demOuvrirVue(\''+d.id+'\')" style="cursor:pointer">'
+        +'<td><div class="tname"><span class="dem-code">'+E(codeDe(d))+'</span> '+E(nomDe(d))+'</div><div class="tsub">'+mailTag+'</div></td>'
+        +'<td><span class="tag blue">'+E(objetDe(d))+'</span></td>'
+        +'<td onclick="event.stopPropagation()"><div class="dem-mailbtns">'+btns+'</div></td>'
+        +'</tr>';
+    }).join('');
+    var body=list.length?('<table class="dem-tbl"><thead><tr><th>Client</th><th>Objet</th><th>Envoyer un e-mail</th></tr></thead><tbody>'+rows+'</tbody></table>'):'<div class="empty">Aucune demande active.</div>';
+    return poste()
+      +'<div class="flow-note" style="margin:0 0 12px">'+ic()+'<div>Envoyez un e-mail au client en un clic — <b>accusé de réception</b>, <b>demande de pièces</b>, <b>point d\'avancement</b> ou <b>relance</b>. L\'e-mail s\'ouvre pré-rempli, prêt à envoyer.</div></div>'
+      +'<div class="dem-head"><div class="dem-head-row">'+searchBar('Rechercher un client, un objet…')+'</div></div>'
+      +'<div class="card"><div class="card-b" style="padding:0">'+body+'</div></div>';
+  };
+
+  /* --- Réception des pièces --- */
+  window.demPiecesView=function(){
+    var list=filt(actifs());
+    var totReq=0,totRecu=0;
+    var rows=list.map(function(d){
+      var pieces=(typeof piecesRequises==='function')?piecesRequises(d):[];
+      var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d;dm.docs=dm.docs||{};dm.piecesRecues=dm.piecesRecues||{};
+      var recu=function(p){return ((dm.docs[p.k]||[]).length>0)||dm.piecesRecues[p.k]===true;};
+      var nb=pieces.filter(recu).length,total=pieces.length;totReq+=total;totRecu+=nb;
+      var atts=(typeof demAtt==='function')?demAtt(d).length:0;
+      var pct=total?Math.round(nb/total*100):0;
+      var cls=pct>=100?'ok':(pct>0?'warm':'mut');
+      return '<tr onclick="demOuvrirVue(\''+d.id+'\')" style="cursor:pointer">'
+        +'<td><div class="tname"><span class="dem-code">'+E(codeDe(d))+'</span> '+E(nomDe(d))+'</div><div class="tsub">'+E(objetDe(d))+'</div></td>'
+        +'<td>'+(atts?('<span class="tag warm">📎 '+atts+' jointe'+(atts>1?'s':'')+'</span>'):'<span class="tag mut">—</span>')+'</td>'
+        +'<td><div class="dem-pcbar"><span class="dem-pcbar-f '+cls+'" style="width:'+pct+'%"></span></div><span class="dem-pctxt">'+nb+'/'+total+'</span></td>'
+        +'<td onclick="event.stopPropagation()"><button class="btn btn-sm btn-ghost" onclick="demReponseType(\''+d.id+'\',\'pieces\')">📎 Demander</button> <button class="btn btn-sm btn-ghost" onclick="demOuvrirVue(\''+d.id+'\')">Gérer</button></td>'
+        +'</tr>';
+    }).join('');
+    var glob=totReq?Math.round(totRecu/totReq*100):0;
+    var kpi='<div class="grid g3" style="margin-bottom:12px">'
+      +'<div class="kpi"><div class="val">'+totRecu+'/'+totReq+'</div><div class="lbl">Pièces reçues / attendues</div></div>'
+      +'<div class="kpi"><div class="val blue">'+list.length+'</div><div class="lbl">Demandes suivies</div></div>'
+      +'<div class="kpi"><div class="val '+(totReq&&totRecu>=totReq?'ok':'')+'">'+glob+' %</div><div class="lbl">Complétude globale</div></div>'
+      +'</div>';
+    var body=list.length?('<table class="dem-tbl"><thead><tr><th>Client / Objet</th><th>Jointes</th><th>Complétude</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody></table>'):'<div class="empty">Aucune demande active.</div>';
+    return poste()
+      +'<div class="flow-note" style="margin:0 0 12px">'+ic()+'<div>Suivez les <b>pièces reçues</b> de chaque client et réclamez les manquantes. « <b>Gérer</b> » ouvre la demande pour cocher/téléverser les pièces ; « <b>Demander</b> » envoie l\'e-mail de demande de documents.</div></div>'
+      +'<div class="dem-head"><div class="dem-head-row">'+searchBar('Rechercher un client, un objet…')+'</div></div>'
+      +kpi
+      +'<div class="card"><div class="card-b" style="padding:0">'+body+'</div></div>';
+  };
+
+  if(!document.getElementById('dem-tabs-css')){var st=document.createElement('style');st.id='dem-tabs-css';
+    st.textContent='.dem-mailbtns{display:flex;flex-wrap:wrap;gap:5px}'
+      +'.dem-pcbar{display:inline-block;width:90px;height:8px;background:var(--paper-2,#efe7d6);border-radius:5px;overflow:hidden;vertical-align:middle;margin-right:7px}'
+      +'.dem-pcbar-f{display:block;height:100%;border-radius:5px;background:#c9b79a}'
+      +'.dem-pcbar-f.ok{background:linear-gradient(90deg,#7dbb8e,#4f9c67)}.dem-pcbar-f.warm{background:linear-gradient(90deg,#e6c06a,#cf9f3f)}'
+      +'.dem-pctxt{font-size:12px;font-weight:700;color:var(--ink-2,#5a5344)}';
     document.head.appendChild(st);}
 })();
 </script>

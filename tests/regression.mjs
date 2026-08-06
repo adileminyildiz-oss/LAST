@@ -315,6 +315,19 @@ const r = await page.evaluate(async () => {
     && typeof demMessagerieView === 'function' && typeof demInfosCard === 'function';
   state.demMode = 'traitement'; state.demCanal = 'tous'; state.demView = '';
 
+  // Demandes — 4 onglets : Réception · Qualification · Envoi des mails · Réception des pièces
+  if (!DB.demandes.some((d) => !d.archived)) DB.demandes.push({ id: 'DTG', code: 'DEM-DTG', clientNom: 'Tab G', clientEmail: 'g@ex.fr', serviceSouhaite: 'Création SAS', statut: 'Nouveau', date: '2026-08-01' });
+  state.page = 'demandes'; state.demView = ''; state.demMode = 'reception'; render();
+  const demBar = document.querySelectorAll('#view .dem-mode-b').length;
+  const demBarTxt = (document.querySelector('#view .dem-mode') || {}).textContent || '';
+  const demTabsOk = demBar === 4 && /Réception/.test(demBarTxt) && /Qualification/.test(demBarTxt) && /Envoi des mails/.test(demBarTxt) && /Réception des pièces/.test(demBarTxt);
+  state.demMode = 'envoi'; render();
+  const demEnvoiOk = typeof demEnvoiView === 'function' && [...document.querySelectorAll('#view .dem-tbl th')].some((h) => /Envoyer un e-mail/.test(h.textContent)) && /demReponseType\([^)]*'accuse'\)/.test(document.querySelector('#view').innerHTML);
+  state.demMode = 'pieces'; render();
+  const demPiecesOk = typeof demPiecesView === 'function' && /Complétude globale/.test(document.querySelector('#view').innerHTML) && !!document.querySelector('#view .dem-pcbar');
+  state.demMode = 'traitement'; state.demView = '';
+  out.demTabs = demTabsOk && demEnvoiOk && demPiecesOk;
+
   // Facturation récurrente automatique (abonnement → génération des échéances dues)
   const isoM = (off) => { const d = new Date(); d.setMonth(d.getMonth() + off); return d.toISOString().slice(0, 10); };
   const fBefore = DB.factures.length;

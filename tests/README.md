@@ -135,7 +135,14 @@ l'application ouvre par défaut sur Demandes, et tout le contenu d'ensemble est 
 dans Pilotage IA — santé financière, pipeline commercial, recommandations, rapport
 d'activité, tableaux opérationnels (à relancer, échéances, dernières demandes) et revenus
 récurrents ; pleine largeur de page ; rappel de sauvegarde affiché en tête de toute page ;
-lookup de titre robuste à une page inconnue) et **double authentification (2FA)** (accès verrouillé au
+lookup de titre robuste à une page inconnue) et **onglets de la page Demandes** (la barre de la page Demandes propose quatre onglets —
+Réception (boîte de réception des demandes/mails entrants), Qualification (tri par
+nature/état, assignation, qualification IA), Envoi des mails (liste des demandes avec
+envoi en un clic d'un accusé de réception / demande de pièces / point d'avancement /
+relance, e-mail pré-rempli) et Réception des pièces (suivi des pièces reçues vs requises
+par formalité, barre de complétude, réclamation des pièces manquantes et gestion par
+demande) ; ouverture par défaut sur Réception) et
+**double authentification (2FA)** (accès verrouillé au
 titulaire : mot de passe — étape 1 — puis code TOTP à 6 chiffres d'une
 application d'authentification — étape 2 ; TOTP conforme RFC 6238/4226 calculé
 hors-ligne via WebCrypto, secret 2FA chiffré par le mot de passe — AES-256-GCM +
