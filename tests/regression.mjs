@@ -328,6 +328,15 @@ const r = await page.evaluate(async () => {
   state.demMode = 'traitement'; state.demView = '';
   out.demTabs = demTabsOk && demEnvoiOk && demPiecesOk;
 
+  // Vue détail réorganisée : mail + analyse en haut, cartes de travail en maçonnerie pleine largeur
+  const dvId = (DB.demandes.find((d) => !d.archived) || {}).id || '';
+  state.page = 'demandes'; state.demView = dvId; render();
+  const dvTop = document.querySelector('#view .dem-view-top');
+  const dvCards = document.querySelector('#view .dem-view-cards');
+  const dvOk = !!dvTop && !!dvCards && dvTop.children.length >= 1 && dvCards.children.length >= 1 && !document.querySelector('#view .dem-view-grid');
+  state.demView = '';
+  out.demDetail = dvOk;
+
   // Facturation récurrente automatique (abonnement → génération des échéances dues)
   const isoM = (off) => { const d = new Date(); d.setMonth(d.getMonth() + off); return d.toISOString().slice(0, 10); };
   const fBefore = DB.factures.length;

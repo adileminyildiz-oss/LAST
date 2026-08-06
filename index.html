@@ -4044,7 +4044,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=218;
+var LAST_VER=219;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -5009,15 +5009,13 @@ window.demVueDetail=function(id){
       +((typeof demContexte==='function')?'<span class="tag" title="Prochaine étape">→ '+esc(demContexte(d))+'</span>':'')
       +nav
     +'</div>'
-    +'<div class="dem-view-grid">'
-      +'<div class="card"><div class="card-h"><h2>Mail reçu</h2><span class="sub" style="margin-left:auto">Objet : '+esc(IA.objet(d))+'</span></div><div class="card-b">'
+    +'<div class="dem-view-top">'
+      +'<div class="card dem-mail-card"><div class="card-h"><h2>Mail reçu</h2><span class="sub" style="margin-left:auto">Objet : '+esc(IA.objet(d))+'</span></div><div class="card-b">'
         +mailFrame(d)
       +'</div></div>'
-      +'<div class="dem-view-col">'
       +((typeof demAnalyseCard==='function')?demAnalyseCard(d.id):'')
-      +((typeof demChecklistCard==='function')?demChecklistCard(d.id):'')
-      +((typeof demInfosCard==='function')?demInfosCard(d):'')
-      +((typeof demAttBlock==='function')?demAttBlock(d.id):'')
+    +'</div>'
+    +'<div class="dem-view-cards">'
       +'<div class="card"><div class="card-h"><h2>Traitement</h2>'
         +'<span class="dem-nat-tog" style="margin-left:auto">'
         +'<button class="dem-nat-t'+(demNature(d)==='creation'?' on':'')+'" onclick="demSetNature(\''+id+'\',\'creation\')">🏗 Création</button>'
@@ -5040,8 +5038,10 @@ window.demVueDetail=function(id){
           +'<button class="btn" onclick="demOuvrirDossier(\''+id+'\')">Ouvrir le dossier</button>'
         +'</div>'
       +'</div></div>'
+      +((typeof demChecklistCard==='function')?demChecklistCard(d.id):'')
+      +((typeof demInfosCard==='function')?demInfosCard(d):'')
+      +((typeof demAttBlock==='function')?demAttBlock(d.id):'')
       +demDocsSection(id)
-      +'</div>'
     +'</div>'
   +'</div>';
 };
@@ -7067,6 +7067,13 @@ window.modalDemandeView=function(id){
 .dem-view-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;align-items:start}
 .dem-view-col{display:flex;flex-direction:column;gap:14px;min-width:0}
 @media(max-width:900px){.dem-view-grid{grid-template-columns:1fr}}
+/* Vue détail réorganisée : mail + analyse en haut, cartes de travail en maçonnerie pleine largeur */
+.dem-view-top{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;align-items:start;margin-bottom:14px}
+@media(max-width:900px){.dem-view-top{grid-template-columns:1fr}}
+.dem-mail-card>.card-b{max-height:74vh;overflow:auto}
+.dem-view-cards{column-width:340px;column-gap:14px}
+.dem-view-cards>*{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid;margin:0 0 14px;display:block;width:100%}
+@media(max-width:640px){.dem-view-cards{column-width:auto;column-count:1}}
 .dem-view-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .dem-view-acts .btn{padding:9px 14px}
 .dem-decide{display:grid;grid-template-columns:1fr 1fr;gap:8px}

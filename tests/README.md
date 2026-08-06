@@ -141,7 +141,11 @@ nature/état, assignation, qualification IA), Envoi des mails (liste des demande
 envoi en un clic d'un accusé de réception / demande de pièces / point d'avancement /
 relance, e-mail pré-rempli) et Réception des pièces (suivi des pièces reçues vs requises
 par formalité, barre de complétude, réclamation des pièces manquantes et gestion par
-demande) ; ouverture par défaut sur Réception) et
+demande) ; ouverture par défaut sur Réception) et **fiche de demande réorganisée**
+(l'espace inutilisé — mail seul à gauche, six cartes empilées dans une colonne étroite à
+droite — est corrigé : « Mail reçu » (hauteur bornée, défilement interne) et « Analyse IA »
+côte à côte en haut, puis les cartes de travail — Traitement, Étapes, Informations, Pièces
+reçues, Documents — réparties en maçonnerie sur toute la largeur) et
 **double authentification (2FA)** (accès verrouillé au
 titulaire : mot de passe — étape 1 — puis code TOTP à 6 chiffres d'une
 application d'authentification — étape 2 ; TOTP conforme RFC 6238/4226 calculé
