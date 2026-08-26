@@ -89,8 +89,8 @@ const r = await page.evaluate(async () => {
   out.echeancier = ech.some(e => e.num === 'FV-A' && e.jours >= 4 && e.jours <= 6) && !ech.some(e => e.num === 'FV-9');
 
   // Filtres + tri facturation
-  state.factFilter = 'avoirs'; render();
-  out.filtreAvoirs = /AV-/.test(document.querySelector('#view').innerHTML);
+  state.factFilter = 'avoirs';
+  out.filtreAvoirs = /AV-/.test(pageFacturation());
   state.factFilter = 'tous'; state.factSort = null; factSort('ttc'); factSort('ttc');
   out.tri = (state.factSort.col === 'ttc' && state.factSort.dir === 1);
 
@@ -337,6 +337,17 @@ const r = await page.evaluate(async () => {
   state.demView = '';
   out.demDetail = dvOk;
 
+  // Navigation réduite : uniquement Demandes, Traitement, Paramètres (les autres pages retirées redirigent)
+  const navIds = PAGES.map((x) => x.id).sort().join(',');
+  buildNav();
+  const navLbls = [...document.querySelectorAll('#nav .nav-btn-lbl')].map((x) => x.textContent);
+  const navTrimOk = navIds === 'demandes,espace,params'
+    && navLbls.length === 3 && navLbls.indexOf('Demandes') >= 0 && navLbls.indexOf('Traitement') >= 0 && navLbls.indexOf('Paramètres') >= 0
+    && !['Clients', 'Facturation', 'Devis', 'Rentabilité', 'Pilotage IA', 'Suivi collaborateurs', 'Rapprochement'].some((l) => navLbls.indexOf(l) >= 0);
+  state.page = 'facturation'; render(); const navRemovedRedirect = state.page === 'demandes';
+  state.page = 'demandes';
+  out.navTrim = navTrimOk && navRemovedRedirect;
+
   // Facturation récurrente automatique (abonnement → génération des échéances dues)
   const isoM = (off) => { const d = new Date(); d.setMonth(d.getMonth() + off); return d.toISOString().slice(0, 10); };
   const fBefore = DB.factures.length;
@@ -358,7 +369,7 @@ const r = await page.evaluate(async () => {
   cmdkOpen();
   const cmdkShown = !!document.querySelector('#cmdk.show');
   const cmdkGroups = [...document.querySelectorAll('#cmdk .cmdk-grp')].map(g => g.textContent);
-  const cmdkPages = [...document.querySelectorAll('#cmdk .cmdk-it b')].some(x => /Pilotage IA/.test(x.textContent)) && ![...document.querySelectorAll('#cmdk .cmdk-it b')].some(x => /Tableau de bord/.test(x.textContent));
+  const cmdkPages = [...document.querySelectorAll('#cmdk .cmdk-it b')].some(x => /Traitement/.test(x.textContent)) && ![...document.querySelectorAll('#cmdk .cmdk-it b')].some(x => /Pilotage IA/.test(x.textContent));
   const cmdkInp = document.getElementById('cmdk-input');
   cmdkInp.value = 'DOS-SARL'; cmdkInp.dispatchEvent(new Event('input', { bubbles: true }));
   const cmdkFound = [...document.querySelectorAll('#cmdk .cmdk-it b')].some(x => /DOS-SARL/.test(x.textContent));
@@ -586,8 +597,8 @@ const r = await page.evaluate(async () => {
   const copBody = (document.getElementById('ov-b') || {}).innerHTML || '';
   const copActionSet = !!(window.__iaCopAction && window.__iaCopAction.type === 'go');
   // Exécution directe d'une action (navigation)
-  state.page = 'demandes'; iaCopiloteExec({ type: 'go', page: 'facturation' });
-  const copExec = state.page === 'facturation';
+  state.page = 'demandes'; iaCopiloteExec({ type: 'go', page: 'espace' });
+  const copExec = state.page === 'espace';
   if (typeof closeModal === 'function') closeModal();
   out.iaCopilote = typeof iaCopilote === 'function' && typeof iaCopiloteExec === 'function' && typeof iaCopiloteAfficher === 'function' && typeof iaCopiloteConfirmer === 'function'
     && /Réponse test copilote/.test(copBody) && /Action proposée/.test(copBody) && copActionSet && copExec;
@@ -595,7 +606,7 @@ const r = await page.evaluate(async () => {
   // IA — pilotage : page dédiée, recommandations (signaux) + rapport (KPIs + synthèse)
   DB.factures.push({ id: 'pilf', type: 'client', num: 'FV-PILO', tiers: 'PILRET', statut: 'Impayée', ech: '2020-01-01', ttc: 1500 });
   DB.devis = DB.devis || []; DB.devis.push({ id: 'pildv', num: 'DV-PILO', tiers: 'X', statut: 'Émis', date: '2020-01-01', ttc: 900 });
-  const piloInPages = PAGES.some(x => x.id === 'pilotage');
+  const piloInPages = typeof pagePilotage === 'function';
   const piloSig = piloSignaux();
   const piloReco = piloSig.impayes.n >= 1 && piloSig.devisSansSuite.n >= 1;
   const piloK = piloKPIs('annee');
@@ -604,8 +615,7 @@ const r = await page.evaluate(async () => {
   await new Promise(r => setTimeout(r, 500)); // laisse la synthèse démo se remplir
   const piloRap = piloCfg().rapports.find(x => x.periode === 'mois'); // (le rapport hebdo auto peut coexister)
   const piloRapOk = !!(piloRap && piloRap.kpis && piloRap.synthese && piloRap.synthese.length > 10);
-  state.page = 'pilotage'; render();
-  const piloPage = (document.getElementById('view') || {}).innerHTML || '';
+  const piloPage = pagePilotage();
   out.iaPilotage = piloInPages && piloReco && piloKok && piloRapOk
     && /Recommandations/.test(piloPage) && /Rapport d.activité/.test(piloPage) && /Synthèse/.test(piloPage)
     && typeof pagePilotage === 'function' && typeof piloRapportGen === 'function' && typeof piloAutoHebdo === 'function' && typeof piloRecoCount === 'function';
@@ -651,8 +661,7 @@ const r = await page.evaluate(async () => {
   const flxStagesOk = flxStages.demandes.some((x) => x.id === 'flxd') && flxStages.devis.some((x) => x.id === 'flxv') && flxStages.facturer.some((x) => x.id === 'flxo') && flxStages.impayes.some((x) => x.id === 'flxi');
   const flxTot = fluxTotals();
   const flxTotOk = flxTot.impayes.eur >= 600 && flxTot.facturer.n >= 1 && typeof flxTot.demandes.eur === "number";
-  state.page = 'pilotage'; render();
-  const dashHTML = (document.getElementById('view') || {}).innerHTML || '';
+  const dashHTML = pagePilotage();
   const flxCardOk = /Pipeline commercial/.test(dashHTML) && /Demandes à qualifier/.test(dashHTML) && /Dossiers à facturer/.test(dashHTML) && /Impayés à relancer/.test(dashHTML);
   const flxFicheBtn = /flux-accdev/.test(demVueDetail('flxd')) && /demAccepterDevis\('flxd'\)/.test(demVueDetail('flxd'));
   demAccepterDevis('flxd');
@@ -701,8 +710,7 @@ const r = await page.evaluate(async () => {
   const oppHas = recOpportunites().some((x) => /Nadia Recur/.test(x.nom));
   DB.recurrences.push({ id: 'rr3', clientNom: 'Nadia Recur', ht: 150, taux: 20, cadence: 'annuelle', prochaine: '2099-01-01', actif: true });
   const oppExcl = !recOpportunites().some((x) => /Nadia Recur/.test(x.nom));
-  state.page = 'pilotage'; render();
-  const dashRec = (document.getElementById('view') || {}).innerHTML || '';
+  const dashRec = pagePilotage();
   const recDashOk = /Revenus récurrents/.test(dashRec) && /MRR/.test(dashRec);
   out.recurrence = typeof recMRR === 'function' && typeof recOpportunites === 'function' && typeof recFromClient === 'function' && typeof recOpportunitesCard === 'function'
     && mrrOk && oppHas && oppExcl && recDashOk;
@@ -761,7 +769,7 @@ const r = await page.evaluate(async () => {
   DB.dossiers = [{ id: 'rda', ref: 'DOS-RA', clientIds: [], serviceIds: [], statut: 'En cours', assigneA: 'u-sofia' }, { id: 'rdb', ref: 'DOS-RB', clientIds: [], serviceIds: [], statut: 'En cours', assigneA: 'u-karim' }];
   const scopeOk = espDoss().length === 1 && espDoss()[0].id === 'rda';
   buildNav(); const navC = (document.getElementById('nav') || {}).innerHTML || '';
-  const navRestricted = /Demandes/.test(navC) && /Traitement/.test(navC) && /Clients/.test(navC) && !/Facturation|Rentabilité|Pilotage|Paramètres/.test(navC);
+  const navRestricted = /Demandes/.test(navC) && /Traitement/.test(navC) && !/Clients|Facturation|Rentabilité|Pilotage|Paramètres/.test(navC);
   state.page = 'params'; render(); const redirectOk = state.page === 'demandes';
   const dBefore = DB.dossiers.length; delDossier('rda'); const guardOk = DB.dossiers.length === dBefore; // suppression bloquée
   const roleFlagsOk = isCollab() === true && isAdmin() === false && (currentCollab() || {}).id === 'u-sofia';
@@ -776,11 +784,11 @@ const r = await page.evaluate(async () => {
   DB.demandes = [{ id: 'svd', clientNom: 'Client Suivi', assigneA: 'u-sofia', serviceSouhaite: 'Création SARL', date: '2020-01-01' }];
   DB.dossiers = [{ id: 'svo1', ref: 'DOS-SV1', clientIds: [], serviceIds: [], statut: 'En cours', assigneA: 'u-sofia' }, { id: 'svo2', ref: 'DOS-SV2', clientIds: [], serviceIds: [], statut: 'Clôturé', assigneA: 'u-sofia' }];
   DB.audit = [{ ts: Date.now(), user: 'Sofia B.', action: 'Relance facture', detail: 'FV-9' }];
-  const suiviInPages = PAGES.some((x) => x.id === 'suivi');
+  const suiviInPages = typeof pageSuivi === 'function';
   const suiviHTML = pageSuivi();
   const suiviOk = /Suivi des collaborateurs/.test(suiviHTML) && /Sofia B\./.test(suiviHTML) && /DOS-SV1/.test(suiviHTML) && /Client Suivi/.test(suiviHTML) && /Relance facture/.test(suiviHTML) && /En retard/.test(suiviHTML);
   // dispatch : rendu via render() sans erreur
-  state.page = 'suivi'; render(); const suiviRendered = /Suivi des collaborateurs/.test((document.getElementById('view') || {}).innerHTML || '');
+  const suiviRendered = /Suivi des collaborateurs/.test(pageSuivi());
   // admin-only : un collaborateur est redirigé hors de 'suivi'
   localStorage.setItem('last-role', 'collab'); localStorage.setItem('last-user', 'u-sofia'); state.page = 'suivi'; render();
   const suiviCollabBlocked = state.page !== 'suivi';

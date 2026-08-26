@@ -725,13 +725,6 @@ const nivTag=n=>`<span class="tag ${n==='chaud'?'hot':n==='tiède'?'warm':'mut'}
 const PAGES=[
   {id:'demandes',lbl:'Demandes',ic:'inbox',sub:'Réception & qualification IA'},
   {id:'espace',lbl:'Traitement',ic:'espace',sub:'Travail & génération des dossiers'},
-  {id:'clients',lbl:'Clients',ic:'users',sub:'Fiches & informations'},
-  {id:'facturation',lbl:'Facturation',ic:'card',sub:'Factures de vente'},
-  {id:'rappro',lbl:'Rapprochement',ic:'euro',sub:'Encaissements & lettrage'},
-  {id:'devis',lbl:'Devis',ic:'quote',sub:'Devis automatiques'},
-  {id:'marge',lbl:'Rentabilité',ic:'trend',sub:'Rentabilité par dossier'},
-  {id:'pilotage',lbl:'Pilotage IA',ic:'dash',sub:'Recommandations & rapport d\'activité'},
-  {id:'suivi',lbl:'Suivi collaborateurs',ic:'users',sub:'Tâches & avancement par collaborateur'},
   {id:'params',lbl:'Paramètres',ic:'gear',sub:'Équipe & réglages'}
 ];
 const state={page:'demandes',q:''};
@@ -810,15 +803,12 @@ function navBadgeCount(id){
   return 0;
 }
 function buildNav(){
+  const act=PAGES.filter(p=>p.id==='demandes'||p.id==='espace');
+  const sys=PAGES.filter(p=>p.id==='params');
   document.getElementById('nav').innerHTML=
     `<div class="nav-lbl">Activité</div>`+
-    PAGES.slice(0,3).map(p=>navBtn(p)).join('')+
-    `<div class="nav-lbl">Référentiel</div>`+
-    PAGES.slice(3,4).map(p=>navBtn(p)).join('')+
-    `<div class="nav-lbl">Facturation</div>`+
-    PAGES.slice(4,7).map(p=>navBtn(p)).join('')+
-    `<div class="nav-lbl">Système</div>`+
-    PAGES.slice(7).map(p=>navBtn(p)).join('');
+    act.map(p=>navBtn(p)).join('')+
+    (sys.length?(`<div class="nav-lbl">Système</div>`+sys.map(p=>navBtn(p)).join('')):'');
 }
 function navBtn(p){
   const n=navBadgeCount(p.id);
@@ -4044,7 +4034,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=219;
+var LAST_VER=220;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11687,7 +11677,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   window.currentCollab=function(){var id=uidCur();return ((DB&&DB.users)||[]).find(function(u){return u.id===id;})||null;};
 
   /* Pages autorisées aux collaborateurs (le reste est masqué) */
-  var COLLAB_PAGES={demandes:1,espace:1,clients:1};
+  var COLLAB_PAGES={demandes:1,espace:1};
 
   /* ---- Authentification collaborateur ---- */
   window.collabAuth=async function(login,pwd){

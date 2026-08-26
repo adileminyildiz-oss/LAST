@@ -168,8 +168,7 @@ const pi = await page.evaluate(async () => {
   piloRapportGen('mois', true); await new Promise((r) => setTimeout(r, 450));
   const rap = piloCfg().rapports.find((x) => x.periode === 'mois');
   o.rapport = !!(rap && rap.synthese && rap.synthese.length > 10);
-  state.page = 'pilotage'; render();
-  o.page = /Recommandations/.test((document.getElementById('view') || {}).innerHTML || '');
+  o.page = /Recommandations/.test(pagePilotage());
   return o;
 });
 ok('Pilotage — recommandations', pi.reco);
