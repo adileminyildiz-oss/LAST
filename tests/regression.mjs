@@ -663,7 +663,7 @@ const r = await page.evaluate(async () => {
   const flxTotOk = flxTot.impayes.eur >= 600 && flxTot.facturer.n >= 1 && typeof flxTot.demandes.eur === "number";
   const dashHTML = pagePilotage();
   const flxCardOk = /Pipeline commercial/.test(dashHTML) && /Demandes à qualifier/.test(dashHTML) && /Dossiers à facturer/.test(dashHTML) && /Impayés à relancer/.test(dashHTML);
-  const flxFicheBtn = /flux-accdev/.test(demVueDetail('flxd')) && /demAccepterDevis\('flxd'\)/.test(demVueDetail('flxd'));
+  const flxFicheBtn = !/flux-accdev/.test(demVueDetail('flxd')); // bouton « établir le devis » retiré de la fiche
   demAccepterDevis('flxd');
   const flxAccepted = (DB.demandes.find((x) => x.id === 'flxd') || {}).decision === 'accepte';
   if (typeof closeModal === 'function') closeModal();

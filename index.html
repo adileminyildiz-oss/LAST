@@ -764,13 +764,9 @@ document.addEventListener('click',function(e){var s=e.target.closest&&e.target.c
 function shortcutsHelp(){openModal('Raccourcis clavier',
   '<table class="cl-tbl" style="width:100%"><tbody>'
   +'<tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd> <kbd>K</kbd></td><td>Palette de commandes (aller à, actions, recherche)</td></tr>'
-  +'<tr><td><kbd>/</kbd></td><td>Rechercher (clients, dossiers, devis, factures…)</td></tr>'
-  +'<tr><td><kbd>n</kbd></td><td>Nouveau devis</td></tr>'
-  +'<tr><td><kbd>f</kbd></td><td>Nouvelle facture</td></tr>'
-  +'<tr><td><kbd>g</kbd> <kbd>d</kbd></td><td>Aller au Tableau de bord</td></tr>'
-  +'<tr><td><kbd>g</kbd> <kbd>c</kbd></td><td>Aller aux Clients</td></tr>'
+  +'<tr><td><kbd>/</kbd></td><td>Rechercher (dossiers, demandes…)</td></tr>'
+  +'<tr><td><kbd>g</kbd> <kbd>d</kbd></td><td>Aller aux Demandes</td></tr>'
   +'<tr><td><kbd>g</kbd> <kbd>t</kbd></td><td>Aller au Traitement</td></tr>'
-  +'<tr><td><kbd>g</kbd> <kbd>r</kbd></td><td>Aller à la Rentabilité</td></tr>'
   +'<tr><td><kbd>Échap</kbd></td><td>Fermer la fenêtre / la recherche</td></tr>'
   +'<tr><td><kbd>?</kbd></td><td>Afficher cette aide</td></tr>'
   +'</tbody></table>','<button class="btn btn-pri" onclick="closeModal()">Fermer</button>');}
@@ -4034,7 +4030,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=220;
+var LAST_VER=221;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -5023,7 +5019,6 @@ window.demVueDetail=function(id){
         +((typeof demMeAssigner==='function')?'<button class="btn btn-sm btn-ghost" style="margin-top:6px" onclick="demMeAssigner(\''+id+'\')">👤 Me l\'assigner</button>':'')
         +'<div class="dem-view-acts">'
           +'<button class="btn" onclick="assignDemande(\''+id+'\')">Assigner</button>'
-          +'<button class="btn" onclick="demDevis(\''+id+'\')">Devis</button>'
           +'<button class="btn" onclick="demQuestionnaire(\''+id+'\')">Questionnaire</button>'
           +'<button class="btn" onclick="demOuvrirDossier(\''+id+'\')">Ouvrir le dossier</button>'
         +'</div>'
@@ -6019,8 +6014,6 @@ window.modalDemandeView=function(id){
      +'<div class="tr-grid">'
      +'<button class="tr-b" onclick="espFicheTechnique(\''+d.id+'\')">'+TR_IC.fiche+'<span>Fiche technique</span></button>'
      +'<button class="tr-b" onclick="espFicheOpen(\''+d.id+'\')">'+TR_IC.mail+'<span>Mail au client</span></button>'
-     +'<button class="tr-b" onclick="espDevis(\''+d.id+'\')">'+TR_IC.devis+'<span>Devis</span></button>'
-     +'<button class="tr-b" onclick="espFacture(\''+d.id+'\')">'+TR_IC.facture+'<span>Facture</span></button>'
      +'<button class="tr-b" onclick="coutModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.6a3.5 3.5 0 1 0 .2 5M8 11h5M8 13.4h5"/></svg><span>Estimer le coût</span></button>'
      +'<button class="tr-b" onclick="annonceModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 8h3v9a2 2 0 0 1-2 2M8 9h6M8 12h6M8 15h4"/></svg><span>Annonce légale</span></button>'
      +'<button class="tr-b" onclick="acteModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span>Acte de modification</span></button>'
@@ -11295,9 +11288,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   /* ---- Greffes ---- */
   /* Pipeline désormais rendu par pageDash lui-même (ordre : greeting → actions → cockpit → KPIs). */
-  if(typeof window.demVueDetail==='function'){var _dv=window.demVueDetail;window.demVueDetail=function(id){var h=_dv(id);if(!h||h.indexOf('dem-decide')<0)return h;
-    var btn='<button class="btn btn-pri flux-accdev" onclick="demAccepterDevis(\''+id+'\')">🧾 Accepter &amp; établir le devis</button>';
-    return h.replace('<div class="dem-decide">',btn+'<div class="dem-decide">');};}
+  /* Bouton « Accepter & établir le devis » retiré : la facturation/devis n'est plus dans la navigation. */
 
   if(!document.getElementById('flux-css')){var st=document.createElement('style');st.id='flux-css';
     st.textContent='.flux-card{margin-bottom:16px}'

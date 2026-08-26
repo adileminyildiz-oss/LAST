@@ -149,8 +149,11 @@ reçues, Documents — réparties en maçonnerie sur toute la largeur) et
 **navigation réduite** (le logiciel est recentré sur trois pages — Demandes, Traitement et
 Paramètres ; Clients, Facturation, Rapprochement, Devis, Rentabilité, Pilotage IA et Suivi
 collaborateurs sont retirés de la navigation, et toute tentative d'y accéder redirige vers
-Demandes ; le code de ces modules reste présent mais inaccessible depuis l'interface) et
-**double authentification (2FA)** (accès verrouillé au
+Demandes ; le code de ces modules reste présent mais inaccessible depuis l'interface ;
+les boutons internes menant à ces fonctions retirées sont masqués — « Devis » et
+« Accepter & établir le devis » dans la fiche de demande, « Devis » et « Facture » dans la
+barre d'outils du Traitement — et les raccourcis clavier documentés sont nettoyés en
+conséquence) et **double authentification (2FA)** (accès verrouillé au
 titulaire : mot de passe — étape 1 — puis code TOTP à 6 chiffres d'une
 application d'authentification — étape 2 ; TOTP conforme RFC 6238/4226 calculé
 hors-ligne via WebCrypto, secret 2FA chiffré par le mot de passe — AES-256-GCM +
