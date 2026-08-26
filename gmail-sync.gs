@@ -6,7 +6,7 @@
  * JSON + JSONP (?callback=) pour appel navigateur sans blocage CORS.
  */
 
-var TOKEN = '0310132025080282';        // clé (identique à celle de LAST)
+var TOKEN = 'CHANGE-MOI';   // ⚠ Mettez ici VOTRE jeton secret (long, aléatoire), identique à la clé saisie dans LAST (Paramètres → Configurer la boîte). Ne committez jamais le vrai jeton dans un dépôt public.
 var QUERY = 'in:inbox newer_than:60d';
 var MAX   = 120;
 
