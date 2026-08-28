@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=245;
+var LAST_VER=246;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10815,6 +10815,61 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.mo-grp{border:1px solid var(--line,#e7ddc9);border-radius:12px;padding:6px 12px 10px;margin-bottom:10px;border-left-width:4px}.mo-grp.mo-risque{border-left-color:#b0442f}.mo-grp.mo-attention{border-left-color:#b98029}.mo-grp.mo-conseil{border-left-color:#3d6b3d}'
       +'.mo-t{font-weight:700;font-size:12.5px;margin:6px 0 4px}.mo-item{padding:7px 0;border-top:1px solid var(--line,#eee)}.mo-item:first-of-type{border-top:none}.mo-item b{display:block;font-size:12.5px}.mo-item span{display:block;font-size:12px;color:var(--ink2,#5b5040);margin-top:2px}'
       +'.mo-form{border:1px dashed var(--line,#e7ddc9);border-radius:10px;padding:8px 12px}.mo-li{font-size:12px;color:var(--ink2,#5b5040);padding:2px 0}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="pieces-config-mod">
+/* ===== Pièces à demander configurables (par type de formalité) ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function types(){return (window.FORMALITE_TEMPLATES||[]);}
+  function tplPieces(type){var t=types().filter(function(x){return x.key===type;})[0];return t?t.pieces.map(function(p){return {k:p.k,label:p.label};}):[];}
+  function store(){DB.parametres=DB.parametres||{};DB.parametres.piecesConfig=DB.parametres.piecesConfig||{};return DB.parametres.piecesConfig;}
+  function cfgOf(type){var s=store();return s[type]||null;}
+  function ensureCfg(type){var s=store();if(!s[type])s[type]=tplPieces(type);return s[type];}
+  function slug(l){var b=(''+l).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'').slice(0,12);return (b||'piece')+'_'+Math.random().toString(36).slice(2,6);}
+  window.pcfgEffective=function(type){var c=cfgOf(type);return c?c.slice():tplPieces(type);};
+
+  /* piecesRequises lit la configuration si elle existe, sinon le modèle */
+  if(typeof window.piecesRequises==='function'){var _pr=window.piecesRequises;
+    window.piecesRequises=function(d){try{var type=(typeof formaliteType==='function')?formaliteType(d):null;var c=type?cfgOf(type):null;if(c&&c.length)return c.map(function(p){return {k:p.k,label:p.label};});}catch(e){}return _pr(d);};}
+
+  window.pcfgSetType=function(v){window.__pcfgType=v;if(typeof render==='function')render();};
+  window.pcfgRemove=function(type,i){var a=ensureCfg(type);a.splice(i,1);if(typeof save==='function')save();if(typeof render==='function')render();};
+  window.pcfgAdd=function(type){var inp=document.getElementById('pcfg-add');var l=inp?(''+inp.value).trim():'';if(!l)return;var a=ensureCfg(type);a.push({k:slug(l),label:l});if(typeof save==='function')save();if(typeof render==='function')render();};
+  window.pcfgReset=function(type){var s=store();delete s[type];if(typeof save==='function')save();if(typeof toast==='function')toast('Pièces réinitialisées au modèle');if(typeof render==='function')render();};
+
+  window.piecesConfigCard=function(){
+    var T=types();if(!T.length)return '';
+    var type=window.__pcfgType||T[0].key;
+    var perso=!!cfgOf(type);
+    var list=window.pcfgEffective(type);
+    var opts=T.map(function(t){var p=!!cfgOf(t.key);return '<option value="'+t.key+'" '+(t.key===type?'selected':'')+'>'+E(t.label)+(p?' — personnalisé':'')+'</option>';}).join('');
+    var rows=list.map(function(p,i){return '<div class="pcfg-row"><span class="pcfg-l">'+E(p.label)+'</span><button class="btn btn-sm btn-ghost" onclick="pcfgRemove(\''+type+'\','+i+')">✕ Retirer</button></div>';}).join('')
+      ||'<div class="pcfg-empty">Aucune pièce demandée pour ce type.</div>';
+    return '<div class="card" id="pcfg-card" style="margin-top:14px"><div class="card-h"><h2>Pièces à demander</h2><span class="sub" style="margin-left:auto">'+(perso?'<span class="tag ok">Personnalisé</span>':'<span class="tag mut">Modèle standard</span>')+'</span></div><div class="card-b">'
+      +'<p class="hint" style="margin:0 0 10px">Choisissez, par type de formalité, les pièces réclamées au client (e-mail de demande, portail de dépôt, checklist). Sans personnalisation, le modèle standard s\'applique.</p>'
+      +'<label>Type de formalité</label><select onchange="pcfgSetType(this.value)">'+opts+'</select>'
+      +'<div class="pcfg-list">'+rows+'</div>'
+      +'<div class="pcfg-add"><input id="pcfg-add" placeholder="Ajouter une pièce (ex. Kbis de la société mère)"><button class="btn btn-sm btn-pri" onclick="pcfgAdd(\''+type+'\')">＋ Ajouter</button>'
+      +(perso?('<button class="btn btn-sm btn-ghost" onclick="pcfgReset(\''+type+'\')">↺ Réinitialiser au modèle</button>'):'')+'</div>'
+      +'</div></div>';
+  };
+
+  /* Greffe sur la page Paramètres */
+  if(typeof window.pageParams==='function'||typeof pageParams==='function'){
+    var _pp=(typeof window.pageParams==='function')?window.pageParams:pageParams;
+    window.pageParams=function(){var h=_pp.apply(this,arguments);
+      if(h.indexOf('id="pcfg-card"')<0){var note=h.lastIndexOf('<div class="flow-note"');
+        if(note>=0){h=h.slice(0,note)+window.piecesConfigCard()+h.slice(note);}else{h+=window.piecesConfigCard();}}
+      return h;};
+  }
+
+  try{ if(!document.getElementById('pcfg-css')){var st=document.createElement('style');st.id='pcfg-css';
+    st.textContent='.pcfg-list{margin:10px 0}.pcfg-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line,#e7ddc9)}.pcfg-row:first-child{border-top:none}.pcfg-l{flex:1;font-size:13px}'
+      +'.pcfg-empty{color:var(--ink3,#8a7d69);font-size:13px;padding:8px 0}'
+      +'.pcfg-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}.pcfg-add input{flex:1;min-width:220px}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
