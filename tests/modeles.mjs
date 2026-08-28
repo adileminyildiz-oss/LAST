@@ -77,6 +77,22 @@ const r = await page.evaluate(() => {
   // 6. ESP_DOCS contient le nouveau document (opt-in)
   out.espDoc = (typeof ESP_DOCS !== 'undefined') && ESP_DOCS.some(x => x.k === 'acceptation');
 
+  // 6b. Étape 5 — documents manquants désormais générables
+  out.e5keys = ['lettremission', 'convention', 'filiation', 'rbe'].every(k => (window.DOC_MODELS[k] || []).length >= 1);
+  out.e5esp = ['lettremission', 'convention', 'filiation', 'rbe'].every(k => ESP_DOCS.some(x => x.k === k));
+  out.lettreMission = /LETTRE DE MISSION/.test(lettreMissionHTML(d)) && /Honoraires/.test(lettreMissionHTML(d));
+  out.lettreMissionModif = /Modification/.test(lettreMissionModifHTML(d));
+  out.lmMulti = (window.DOC_MODELS.lettremission || []).length === 2;
+  out.convention = /CONVENTION DE PRESTATION/.test(conventionPrestationHTML(d)) && /RGPD/.test(conventionPrestationHTML(d));
+  out.filiation = /ATTESTATION DE FILIATION/.test(attestationFiliationHTML(d)) && /père/.test(attestationFiliationHTML(d));
+  // rendu via le registre (respecte le modèle)
+  out.e5render = /LETTRE DE MISSION/.test(espDocRender(d, 'lettremission')) && /CONVENTION/.test(espDocRender(d, 'convention'));
+  // RBE générable via le registre
+  out.rbeDoc = /BÉNÉFICIAIRES EFFECTIFS/.test(espDocRender(d, 'rbe'));
+  // génération marque d.docs (détecté par la GED)
+  espDocGen(d.id, 'lettremission'); espDocGen(d.id, 'convention');
+  out.gedDetect = !!(d.docs && (d.docs.lettremission || d.docs.lettreMission) && d.docs.convention);
+
   // 7. Sélecteur injecté dans l'aperçu de vérification
   d.verif = d.verif || {}; d.verif.docSel = 'pouvoir';
   espVerifRender(d.id);
@@ -106,6 +122,15 @@ check('modèle acceptation Président + variante DG', r.acceptPres && r.acceptDG
 check('défaut suit la forme (SAS→sas, SARL→sarl, SCI→sci)', r.defSas && r.defSarl && r.defSci);
 check('acceptation Gérant pour une SARL', r.acceptGerant);
 check('nouveau document dans ESP_DOCS (opt-in)', r.espDoc);
+check('Étape 5 : lettre de mission / convention / filiation / RBE enregistrés', r.e5keys);
+check('Étape 5 : documents dans ESP_DOCS (opt-in)', r.e5esp);
+check('Lettre de mission générée (honoraires)', r.lettreMission && r.lmMulti);
+check('Lettre de mission — variante modification', r.lettreMissionModif);
+check('Convention de prestation générée (RGPD)', r.convention);
+check('Attestation de filiation générée', r.filiation);
+check('rendu Étape 5 via le registre', r.e5render);
+check('RBE générable comme document', r.rbeDoc);
+check('génération détectée par la GED (d.docs)', r.gedDetect);
 check('sélecteur de modèle injecté dans l’aperçu de vérification', r.overlaySel);
 check('aucun pageerror', perr.length === 0);
 

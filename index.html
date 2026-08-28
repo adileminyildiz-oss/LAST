@@ -3103,7 +3103,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=232;
+var LAST_VER=233;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9453,7 +9453,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       {folder:'Identité',emo:'🪪',items:[ it('Dirigeant : '+((c.president)||'—'), !!c.president, [pres.naissance,pres.nationalite].filter(Boolean).join(' · ')), it("Pièce d'identité", !!(pieces.identite&&pieces.identite.data)), it('Justificatif de domicile', !!(pieces.edf&&pieces.edf.data)), it("Avis d'impôt", !!(pieces.impot&&pieces.impot.data)) ]},
       {folder:'Statuts',emo:'📜',items:[ it('Projet de statuts', !!(c.denomination&&c.capital), (sig.statuts&&sig.statuts.statut==='signe')?'signé':'') ]},
       {folder:'Signatures',emo:'✍️',items:sigDocs.map(function(s){var st=sig[s[0]]||{};return it(s[1], st.statut==='signe', (typeof sigStatutAffiche==='function')?sigStatutAffiche(st):(st.statut||''));}) },
-      {folder:'Facturation',emo:'💶',items:[ it('Lettre de mission', !!(d.docs&&d.docs.lettreMission)), it('Convention de prestation', !!(d.docs&&d.docs.convention)) ]},
+      {folder:'Facturation',emo:'💶',items:[ it('Lettre de mission', !!(d.docs&&(d.docs.lettremission||d.docs.lettreMission))), it('Convention de prestation', !!(d.docs&&d.docs.convention)) ]},
       {folder:'Formalités',emo:'🗂️',items:[ it('Pouvoir (RCS)', true, (sig.pouvoir&&sig.pouvoir.statut==='signe')?'signé':''), it('Déclaration de non-condamnation', true), it('Registre des bénéficiaires effectifs', (typeof rbeBeneficiaires==='function')?rbeBeneficiaires(d).length>0:false), it('Dépôt Guichet unique', !!(d.inpi&&(d.inpi.reference||d.inpi.status)), d.inpi?('réf. '+(d.inpi.reference||d.inpi.status)):(d.statut==='Prêt au dépôt'?'prêt':'')) ]},
       {folder:'Archive',emo:'🗄️',items:[ it('Dossier complet assemblé', (typeof depotPackage==='function')?depotPackage(d).filter(function(x){return x.present;}).length>0:false, (typeof depotPackage==='function')?(depotPackage(d).filter(function(x){return x.present;}).length+' pièce(s)'):''), it('Clôturé le '+((d.clotureLe)||'—'), !!d.clotureLe) ]}
     ];
@@ -9683,6 +9683,117 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       document.head.appendChild(st);
     }
   }catch(e){}
+})();
+</script>
+
+<script id="doc-etape5-mod">
+/* ===== Étape 5 — documents manquants : Lettre de mission, Convention de prestation, Attestation de filiation, RBE ===== */
+(function(){
+  var DM=window.DOC_MODELS; if(!DM) return;
+  function X(d){return stDossData(d);}
+  function isPart(f){return f==='SARL'||f==='EURL'||f==='SCI';}
+  function cabInfo(x){var s=x.s||{};
+    return {nom:((s.raison||'AEM CONSEIL')+'').trim(),
+      adr:((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«adresse du cabinet»',
+      rep:((s.representant||s.dirigeant||'')+'').trim()||'«représentant du cabinet»',
+      siren:((s.siren||'')+'').trim()};}
+  function euros(n){return (typeof stNum==='function')?stNum(n):(''+n);}
+
+  /* ---------- LETTRE DE MISSION (création / modification) ---------- */
+  function lettreMissionDoc(d,type){
+    var x=X(d);var cab=cabInfo(x);
+    var client=x.president;
+    var honos=(typeof espDocsTotal==='function')?espDocsTotal(d):0;
+    var hTxt=honos>0?(euros(honos)+' € HT'):'«montant» € HT';
+    var objet=(type==='modification')
+      ? 'la modification statutaire de la société <b>'+esc(x.denom)+'</b> (« nature de la modification : transfert de siège / changement de dirigeant / cession de titres / modification de l\'objet »)'
+      : 'la constitution et l\'immatriculation de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?euros(x.cap):'«…»')+' euros';
+    var missions=(type==='modification')
+      ? ['rédaction du procès-verbal d\'assemblée et des actes modificatifs,','mise à jour des statuts,','rédaction et publication de l\'avis de modification au support d\'annonces légales,','dépôt de la formalité au guichet unique des formalités d\'entreprises (INPI) et suivi jusqu\'à l\'inscription modificative.']
+      : ['recueil des informations et pièces nécessaires à la constitution,','rédaction des statuts et des actes annexes (pouvoir, déclaration de non-condamnation, liste des souscripteurs, déclaration des bénéficiaires effectifs),','rédaction et publication de l\'avis de constitution au support d\'annonces légales,','dépôt de la formalité de création au guichet unique des formalités d\'entreprises (INPI) et suivi jusqu\'à l\'immatriculation au registre national des entreprises.'];
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-hdr"><b>'+esc(cab.nom)+'</b><div class="sub">'+esc(cab.adr)+'</div>'+(cab.siren?('<div class="sub">SIREN '+esc(cab.siren)+'</div>'):'')+'</div>'
+      +'<div class="st-titre">LETTRE DE MISSION</div>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">('+(type==='modification'?'Modification':'Constitution')+' de société)</p>'
+      +'<p><b>Entre :</b> le cabinet '+esc(cab.nom)+', représenté par '+esc(cab.rep)+', ci-après « le Cabinet »,</p>'
+      +'<p><b>Et :</b> '+esc(client)+', agissant '+(type==='modification'?'en qualité de '+stQualite(x.forme)+' de la société '+esc(x.denom):'en qualité de fondateur de la société '+esc(x.denom)+' en cours de constitution')+', ci-après « le Client ».</p>'
+      +'<p style="margin-top:8px"><b>Article 1 — Objet de la mission.</b> Le Client confie au Cabinet, qui accepte, '+objet+'.</p>'
+      +'<p><b>Article 2 — Diligences.</b> Le Cabinet réalisera les diligences suivantes :</p>'
+      +missions.map(function(m){return '<p style="margin-left:14px">• '+m+'</p>';}).join('')
+      +'<p><b>Article 3 — Obligations du Client.</b> Le Client s\'engage à transmettre l\'ensemble des pièces et informations exactes nécessaires à la mission, dans les meilleurs délais, et à signer les actes établis.</p>'
+      +'<p><b>Article 4 — Honoraires.</b> Les honoraires du Cabinet sont fixés à '+hTxt+', hors frais et débours (annonce légale, frais de greffe, INPI) refacturés au réel.</p>'
+      +'<p><b>Article 5 — Durée.</b> La présente mission prend effet à sa signature et s\'achève à l\'accomplissement de la formalité, sauf résiliation anticipée par l\'une des parties.</p>'
+      +'<p><b>Article 6 — Confidentialité & données personnelles.</b> Le Cabinet traite les données transmises dans le seul cadre de la mission, conformément au RGPD, et les conserve pendant la durée légale.</p>'
+      +'<div class="st-fin" style="margin-top:24px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+', en deux exemplaires.</p>'
+      +'<div class="st-sign"><div class="sg"><b>'+esc(cab.rep)+'</b>Pour le Cabinet — « Lu et approuvé »</div><div class="sg"><b>'+esc(client)+'</b>Le Client — « Lu et approuvé »</div></div></div>'
+      +'</div></div>';
+  }
+  window.lettreMissionHTML=function(d){return lettreMissionDoc(d,'creation');};
+  window.lettreMissionModifHTML=function(d){return lettreMissionDoc(d,'modification');};
+
+  /* ---------- CONVENTION DE PRESTATION DE SERVICES ---------- */
+  window.conventionPrestationHTML=function(d){
+    var x=X(d);var cab=cabInfo(x);var client=x.president;
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-hdr"><b>'+esc(cab.nom)+'</b><div class="sub">'+esc(cab.adr)+'</div></div>'
+      +'<div class="st-titre">CONVENTION DE PRESTATION DE SERVICES</div>'
+      +'<p><b>Entre les soussignés :</b></p>'
+      +'<p><b>Le Prestataire :</b> '+esc(cab.nom)+', dont le siège est situé '+esc(cab.adr)+', représenté par '+esc(cab.rep)+' ;</p>'
+      +'<p><b>Le Client :</b> la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?euros(x.cap):'«…»')+' euros, dont le siège social est situé '+esc(x.siegeComplet)+', représentée par '+esc(client)+', son '+stQualite(x.forme)+' ;</p>'
+      +'<p style="margin-top:8px"><b>Article 1 — Objet.</b> Le Prestataire s\'engage à réaliser, au profit du Client, les prestations d\'assistance administrative, juridique et de secrétariat des formalités décrites en annexe (« nature des prestations »).</p>'
+      +'<p><b>Article 2 — Modalités d\'exécution.</b> Les prestations sont exécutées selon les règles de l\'art, dans le respect des délais convenus. Le Prestataire est tenu d\'une obligation de moyens.</p>'
+      +'<p><b>Article 3 — Prix et règlement.</b> En contrepartie, le Client verse une rémunération de « montant » euros HT, payable « à réception de facture / mensuellement ». Tout retard de paiement entraîne l\'application des pénalités légales et d\'une indemnité forfaitaire de recouvrement de 40 euros.</p>'
+      +'<p><b>Article 4 — Durée.</b> La présente convention est conclue pour une durée de « … », renouvelable par tacite reconduction, sauf dénonciation par l\'une des parties avec un préavis de « … ».</p>'
+      +'<p><b>Article 5 — Confidentialité & RGPD.</b> Chaque partie s\'engage à la confidentialité des informations échangées. Les données personnelles sont traitées conformément au règlement (UE) 2016/679.</p>'
+      +'<p><b>Article 6 — Résiliation.</b> En cas de manquement grave non réparé dans un délai de quinze jours après mise en demeure, la convention pourra être résiliée de plein droit.</p>'
+      +'<p><b>Article 7 — Litiges.</b> À défaut d\'accord amiable, tout litige relève des tribunaux compétents du siège du Prestataire.</p>'
+      +'<div class="st-fin" style="margin-top:22px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+', en deux exemplaires originaux.</p>'
+      +'<div class="st-sign"><div class="sg"><b>'+esc(cab.rep)+'</b>Le Prestataire</div><div class="sg"><b>'+esc(client)+'</b>Le Client</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---------- ATTESTATION DE FILIATION ---------- */
+  window.attestationFiliationHTML=function(d){
+    var x=X(d);var dcl=x.assoc.filter(function(a){return (''+(a.nom||'')).trim()===(''+x.president).trim();})[0]||x.assoc[0]||{};
+    var nom=esc((dcl.nom||x.president||'').trim())||'«nom prénom»';
+    var naiss=dcl.naissance?esc(dcl.naissance):'«date de naissance»';
+    var lieu=dcl.lieuNaissance?esc(dcl.lieuNaissance):'«lieu de naissance»';
+    var nat=dcl.nationalite?esc(dcl.nationalite):'«nationalité»';
+    var pere=x.pere?esc(x.pere):'«nom et prénom du père»';
+    var mere=x.mere?esc(x.mere):'«nom et prénom de la mère»';
+    var q=stQualite(x.forme);
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">ATTESTATION DE FILIATION</div>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(Établie en vue de l\'immatriculation au Registre du commerce et des sociétés)</p>'
+      +'<p style="margin-top:14px">Je soussigné(e) <b>'+nom+'</b>, né(e) le '+naiss+' à '+lieu+', de nationalité '+nat+',</p>'
+      +'<p style="margin-top:10px">agissant en qualité de '+q+' de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+' dont le siège social est situé '+esc(x.siegeComplet)+',</p>'
+      +'<p style="margin-top:10px"><b>atteste sur l\'honneur</b> être :</p>'
+      +'<p style="margin-left:14px">• le fils / la fille de '+pere+', mon père ;</p>'
+      +'<p style="margin-left:14px">• et de '+mere+', ma mère.</p>'
+      +'<p style="margin-top:10px">La présente attestation est établie pour servir et valoir ce que de droit.</p>'
+      +'<div class="st-fin" style="margin-top:32px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+nom+'</b>Signature (précédée de « Lu et approuvé »)</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---------- Enregistrement des modèles + documents ---------- */
+  DM.lettremission=[
+    {id:'creation',label:'Lettre de mission — création de société',fn:function(d){return lettreMissionHTML(d);}},
+    {id:'modification',label:'Lettre de mission — modification',fn:function(d){return lettreMissionModifHTML(d);}}
+  ];
+  DM.convention=[{id:'standard',label:'Convention de prestation de services',fn:function(d){return conventionPrestationHTML(d);}}];
+  DM.filiation=[{id:'standard',label:'Attestation de filiation',fn:function(d){return attestationFiliationHTML(d);}}];
+  if(typeof rbeHTML==='function'){ DM.rbe=[{id:'standard',label:'Déclaration des bénéficiaires effectifs (RBE)',fn:function(d){return rbeHTML(d);}}]; }
+
+  try{ if(typeof ESP_DOCS!=='undefined'){
+    var add=[
+      {k:'lettremission',l:'Lettre de mission',prix:0,optional:true},
+      {k:'convention',l:'Convention de prestation de services',prix:0,optional:true},
+      {k:'filiation',l:'Attestation de filiation',prix:0,optional:true}
+    ];
+    if(DM.rbe) add.push({k:'rbe',l:'Déclaration des bénéficiaires effectifs (RBE)',prix:0,optional:true});
+    add.forEach(function(e){ if(!ESP_DOCS.some(function(x){return x.k===e.k;})) ESP_DOCS.push(e); });
+  } }catch(e){}
 })();
 </script>
 
