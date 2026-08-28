@@ -3103,7 +3103,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=227;
+var LAST_VER=228;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9309,6 +9309,52 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   if(typeof espVerifRender==='function'){ var _r=espVerifRender; espVerifRender=window.espVerifRender=function(id){ _r(id); try{ var head=document.querySelector('#esp-verif .ev-head .ev-transmit'); if(head&&!document.getElementById('ag-qc-btn')){ var b=document.createElement('button'); b.id='ag-qc-btn'; b.className='btn btn-sm btn-ghost'; b.textContent='🤖 Contrôle qualité'; b.setAttribute('onclick','ouvrirControleQualite(\''+id+'\')'); head.parentNode.insertBefore(b,head); } }catch(e){} }; }
 
   var st=document.createElement('style'); st.textContent='.ag-wrap{max-height:70vh;overflow:auto}.ag-verdict{padding:10px 12px;border-radius:10px;margin-bottom:12px;font-size:13px}.ag-verdict.ok{background:#e7f2e3;color:#2f6b3a}.ag-verdict.warn{background:#fbf1dd;color:#8a5e0d}.ag-verdict.ko{background:#fbe6e0;color:#a63a22}.ag-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}@media(max-width:820px){.ag-grid{grid-template-columns:1fr}}.ag-col{border:1px solid var(--line,#e7ddc9);border-radius:12px;overflow:hidden;background:#fffdf8}.ag-h{padding:9px 12px;font-weight:700;font-size:13px;background:#f6f0e2;color:#5b5040;display:flex;align-items:center;gap:8px}.ag-h .pc-badge{margin-left:auto}'; document.head.appendChild(st);
+})();
+</script>
+
+<script id="signature-mod">
+/* Phase 6 — signature électronique : suivi par acte (Envoyé → Ouvert → Signé → Relancé).
+   S'appuie sur Yousign quand configuré, sinon workflow interne. 100% additif. */
+(function(){
+  var SIGN_DOCS=[{k:'statuts',l:'Statuts'},{k:'pouvoir',l:'Pouvoir (formalités RCS)'},{k:'dnc',l:'Déclaration de non-condamnation'},{k:'souscripteurs',l:'Liste des souscripteurs'}];
+  window.sigDocsList=function(){return SIGN_DOCS.slice();};
+  function cli(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
+  window.sigSigner=function(d){var c=cli(d);return {nom:(c.president||((c.prenom||'')+' '+(c.nom||''))).trim()||'Signataire',email:(c.email||'')};}
+  window.sigState=function(d,k){ d.signDossier=d.signDossier||{}; if(!d.signDossier[k])d.signDossier[k]={statut:'a_envoyer',relances:0}; return d.signDossier[k]; };
+  window.sigStatutAffiche=function(s){ if(!s)return 'À envoyer'; if(s.statut==='signe')return 'Signé'; if((s.relances||0)>0&&(s.statut==='envoye'||s.statut==='ouvert'))return 'Relancé'; return {a_envoyer:'À envoyer',envoye:'Envoyé',ouvert:'Ouvert'}[s.statut]||s.statut; };
+  function now(){return Date.now();}
+  window.sigEnvoyer=function(id,k){ var d=espDoss().find(function(x){return x.id===id;}); if(!d)return; var s=window.sigState(d,k); var sg=window.sigSigner(d);
+    s.statut='envoye'; s.sentAt=now(); s.relances=0; s.signer=sg.nom; s.email=sg.email; s.canal=(typeof ysActif==='function'&&ysActif())?'yousign':'interne';
+    if(typeof save==='function')save();
+    if(typeof toast==='function')toast('« '+(SIGN_DOCS.filter(function(x){return x.k===k;})[0]||{l:k}).l+' » envoyé pour signature'+(s.canal==='yousign'?' (Yousign)':'')+(sg.email?(' à '+sg.email):''));
+    sigRefresh(id); };
+  window.sigEnvoyerTous=function(id){ var d=espDoss().find(function(x){return x.id===id;}); if(!d)return; var n=0; SIGN_DOCS.forEach(function(dc){ var s=window.sigState(d,dc.k); if(s.statut!=='signe'){ s.statut='envoye'; s.sentAt=now(); s.relances=0; var sg=window.sigSigner(d); s.signer=sg.nom; s.email=sg.email; n++; } }); if(typeof save==='function')save(); if(typeof toast==='function')toast(n+' document(s) envoyé(s) pour signature'); sigRefresh(id); };
+  window.sigAvancer=function(id,k){ var d=espDoss().find(function(x){return x.id===id;}); if(!d)return; var s=window.sigState(d,k); var order=['a_envoyer','envoye','ouvert','signe']; var i=order.indexOf(s.statut); if(i<0)i=0; if(i<order.length-1){ s.statut=order[i+1]; if(s.statut==='ouvert')s.openedAt=now(); if(s.statut==='signe')s.signedAt=now(); if(typeof save==='function')save(); } sigRefresh(id); };
+  window.sigSigne=function(id,k){ var d=espDoss().find(function(x){return x.id===id;}); if(!d)return; var s=window.sigState(d,k); s.statut='signe'; s.signedAt=now(); if(typeof save==='function')save(); sigRefresh(id); };
+  window.sigRelancer=function(id,k){ var d=espDoss().find(function(x){return x.id===id;}); if(!d)return; var s=window.sigState(d,k); if(s.statut==='signe'){ if(typeof toast==='function')toast('Déjà signé.'); return; } if(s.statut==='a_envoyer'){ return window.sigEnvoyer(id,k); } s.relances=(s.relances||0)+1; s.lastRelance=now(); if(typeof save==='function')save(); if(typeof toast==='function')toast('Relance envoyée'+(s.email?(' à '+s.email):'')+' ('+s.relances+')'); sigRefresh(id); };
+  window.sigProgress=function(d){ var t=SIGN_DOCS.length,sg=0; SIGN_DOCS.forEach(function(dc){ if(((d.signDossier||{})[dc.k]||{}).statut==='signe')sg++; }); return {signes:sg,total:t,tous:sg===t}; };
+
+  function frDT(ts){ if(!ts)return ''; try{var d=new Date(ts);return d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}catch(e){return '';} }
+  function badge(s){ var lbl=window.sigStatutAffiche(s); var cls={'Signé':'ok','Envoyé':'warn','Ouvert':'warn','Relancé':'ko','À envoyer':'mut'}[lbl]||'mut'; return '<span class="sg-b sg-'+cls+'">'+esc(lbl)+'</span>'; }
+  window.signaturesHTML=function(d){
+    var p=window.sigProgress(d), sg=window.sigSigner(d);
+    var head='<div class="sg-head"><div>Signataire : <b>'+esc(sg.nom)+'</b>'+(sg.email?(' · '+esc(sg.email)):' · <span style="color:#b0442f">e-mail manquant</span>')+'</div>'
+      +'<div class="sg-prog">'+p.signes+' / '+p.total+' signés'+(p.tous?' ✓':'')+'</div></div>';
+    var rows=SIGN_DOCS.map(function(dc){ var s=window.sigState(d,dc.k); var det=[]; if(s.sentAt)det.push('Envoyé '+frDT(s.sentAt)); if(s.openedAt)det.push('Ouvert '+frDT(s.openedAt)); if(s.signedAt)det.push('Signé '+frDT(s.signedAt)); if(s.relances)det.push(s.relances+' relance(s)');
+      var act=''; if(s.statut==='a_envoyer')act='<button class="btn btn-sm btn-pri" onclick="sigEnvoyer(\''+d.id+'\',\''+dc.k+'\')">Envoyer</button>';
+        else if(s.statut!=='signe')act='<button class="btn btn-sm btn-ghost" onclick="sigRelancer(\''+d.id+'\',\''+dc.k+'\')">Relancer</button><button class="btn btn-sm btn-ghost" onclick="sigAvancer(\''+d.id+'\',\''+dc.k+'\')">Étape ›</button><button class="btn btn-sm" onclick="sigSigne(\''+d.id+'\',\''+dc.k+'\')">✓ Signé</button>';
+        else act='<span class="sg-done">✓ Acte signé</span>';
+      return '<div class="sg-row"><div class="sg-doc"><b>'+esc(dc.l)+'</b><span>'+esc(det.join(' · '))+'</span></div><div class="sg-act">'+badge(s)+act+'</div></div>';
+    }).join('');
+    return '<div class="sg-wrap">'+head+'<div class="sg-actions"><button class="btn btn-sm btn-pri" onclick="sigEnvoyerTous(\''+d.id+'\')">📤 Tout envoyer à la signature</button></div>'+rows+'</div>';
+  };
+  function sigRefresh(id){ var ov=document.getElementById('sg-modal'); if(ov){ var d=espDoss().find(function(x){return x.id===id;}); var b=document.getElementById('sg-body'); if(d&&b)b.innerHTML=window.signaturesHTML(d); } }
+  window.ouvrirSignatures=function(id){ var d=espDoss().find(function(x){return x.id===id;}); if(!d||typeof openModal!=='function')return; openModal('✍️ Signature électronique — '+esc((typeof dossierClients==='function')?dossierClients(d):''), '<div id="sg-body">'+window.signaturesHTML(d)+'</div>', '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'); var ov=document.getElementById('ov'); if(ov)ov.setAttribute('data-sg','1'); var box=document.getElementById('ov-b'); if(box&&!document.getElementById('sg-modal')){var m=document.createElement('span');m.id='sg-modal';m.style.display='none';box.appendChild(m);} };
+
+  // bouton dans la Vérification
+  if(typeof espVerifRender==='function'){ var _r=espVerifRender; espVerifRender=window.espVerifRender=function(id){ _r(id); try{ var head=document.querySelector('#esp-verif .ev-head .ev-transmit'); if(head&&!document.getElementById('sg-qc-btn')){ var b=document.createElement('button'); b.id='sg-qc-btn'; b.className='btn btn-sm btn-ghost'; b.textContent='✍️ Signatures'; b.setAttribute('onclick','ouvrirSignatures(\''+id+'\')'); head.parentNode.insertBefore(b,head); } }catch(e){} }; }
+
+  var st=document.createElement('style'); st.textContent='.sg-wrap{max-height:70vh;overflow:auto}.sg-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;padding:10px 12px;background:#f6f0e2;border-radius:10px;margin-bottom:10px}.sg-prog{font-weight:700;color:#5b5040}.sg-actions{margin-bottom:10px}.sg-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line,#e7ddc9);border-radius:10px;margin-bottom:8px;flex-wrap:wrap}.sg-doc b{display:block;font-size:13px}.sg-doc span{font-size:11.5px;color:#8a7d69}.sg-act{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.sg-b{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}.sg-ok{background:#e7f2e3;color:#3d6b3d}.sg-warn{background:#fbf1dd;color:#96650f}.sg-ko{background:#fbe6e0;color:#b0442f}.sg-mut{background:#eee7d7;color:#8a7d69}.sg-done{font-size:12px;color:#3d6b3d;font-weight:700}'; document.head.appendChild(st);
 })();
 </script>
 
