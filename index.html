@@ -3104,7 +3104,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=239;
+var LAST_VER=240;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10284,7 +10284,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var bar='<div class="pr-ready"><div class="pr-ready-h"><b>Système prêt pour le mode réel</b><span class="pr-ready-pct">'+R.reel+' / '+R.total+' prestataires actifs · '+R.pct+' %</span></div>'
       +'<div class="pr-bar"><span style="width:'+R.pct+'%;background:'+barCol+'"></span></div>'
       +'<div class="tsub" style="margin-top:6px">Chaque capacité fonctionne dès aujourd\'hui <b>en simulation</b>. Renseignez le prestataire correspondant pour la faire passer en <b>mode réel</b> — aucune autre modification n\'est nécessaire.</div></div>';
-    return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Prestataires &amp; activation du mode réel</h2><span class="sub" style="margin-left:auto">Branchements externes</span></div><div class="card-b">'
+    return '<div class="card" id="mep-prest" style="margin-top:14px"><div class="card-h"><h2>Prestataires &amp; activation du mode réel</h2><span class="sub" style="margin-left:auto">Branchements externes</span></div><div class="card-b">'
       +bar+rows+'</div></div>';
   };
 
@@ -10305,6 +10305,90 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.pr-bar{height:10px;border-radius:6px;background:#efe7d5;overflow:hidden;margin-top:8px}.pr-bar>span{display:block;height:100%;border-radius:6px;transition:width .4s}'
       +'.pr-cat{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--ink3,#8a7d69);font-weight:700;margin:12px 0 4px}'
       +'.pr-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line,#e7ddc9)}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="mise-en-place-mod">
+/* ===== Mise en place du logiciel interne — checklist guidée + paramètres de production ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function soc(){return DB.societe||{};}
+  function endpointOk(){try{var s=demSyncCfg();return !!(s&&s.url);}catch(e){return false;}}
+  window.mepGo=function(id){var el=document.getElementById(id);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});try{el.classList.add('mep-flash');setTimeout(function(){el.classList.remove('mep-flash');},1400);}catch(e){}}};
+
+  window.mepEtat=function(){
+    var s=soc();
+    var reel=(typeof systemeReadiness==='function')?systemeReadiness():{reel:0};
+    var backup=(typeof backupJours==='function')?backupJours():null;
+    var steps=[
+      {k:'cabinet',l:'Identité du cabinet',d:'Dénomination + SIRET renseignés',done:!!((''+(s.raison||'')).trim()&&(''+(s.siret||'')).trim()),go:'so-siret'},
+      {k:'rib',l:'Coordonnées bancaires (RIB)',d:'IBAN pour l\'encaissement et les factures',done:!!(''+(s.iban||'')).trim(),go:'so-iban'},
+      {k:'services',l:'Catalogue des prestations',d:'Au moins une prestation définie',done:((DB.services||[]).length>0),go:null},
+      {k:'serveur',l:'Serveur & envoi automatique',d:'Proxy Apps Script configuré',done:endpointOk(),go:'mep-prest'},
+      {k:'reel',l:'Mode réel activé',d:'Au moins un prestataire branché',done:(reel.reel>0),go:'mep-prest'},
+      {k:'sauvegarde',l:'Sauvegarde des données',d:'Une sauvegarde a été effectuée',done:(backup!==null),go:null}
+    ];
+    var done=steps.filter(function(x){return x.done;}).length;
+    return {steps:steps,done:done,total:steps.length,pct:Math.round(done/steps.length*100)};
+  };
+
+  window.mepCard=function(){
+    var e=window.mepEtat();
+    var col=e.pct>=100?'#3d6b3d':(e.pct>=50?'#b98029':'#b0442f');
+    var rows=e.steps.map(function(x){
+      var ic=x.done?'<span class="mep-ck ok">✓</span>':'<span class="mep-ck">○</span>';
+      var btn=(!x.done&&x.go)?('<button class="btn btn-sm btn-ghost" onclick="mepGo(\''+x.go+'\')">Configurer</button>'):(x.done?'<span class="tag ok">Fait</span>':'<span class="tag mut">À faire</span>');
+      return '<div class="mep-row">'+ic+'<div class="mep-main"><b>'+E(x.l)+'</b><span class="mep-d">'+E(x.d)+'</span></div>'+btn+'</div>';
+    }).join('');
+    var titre=e.pct>=100?'Mise en place terminée 🎉':'Mise en place du logiciel';
+    return '<div class="card mep-card" style="margin-bottom:14px"><div class="card-h"><h2>🚀 '+titre+'</h2><span class="sub" style="margin-left:auto">'+e.done+'/'+e.total+' · '+e.pct+' %</span></div><div class="card-b">'
+      +'<div class="mep-bar"><span style="width:'+e.pct+'%;background:'+col+'"></span></div>'
+      +'<p class="hint" style="margin:8px 0 10px">Suivez ces étapes pour rendre le logiciel opérationnel. Chaque capacité fonctionne déjà en simulation ; ces réglages préparent le passage en réel.</p>'
+      +rows+'</div></div>';
+  };
+
+  /* ---- Paramètres de production (relances & délai cible) ---- */
+  window.prodParamsCard=function(){
+    var p=(DB.parametres=DB.parametres||{});p.relance=p.relance||{};
+    var r={delai1:(p.relance.delai1||3),delaiSuiv:(p.relance.delaiSuiv||4),max:(p.relance.max||3)};
+    var sla=(typeof demSlaCfg==='function')?demSlaCfg():((p.slaJours)||2);
+    var opt=function(v,cur){return '<option value="'+v+'"'+(v===cur?' selected':'')+'>'+v+' j</option>';};
+    return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Paramètres de production</h2><span class="sub" style="margin-left:auto">Relances & délais</span></div><div class="card-b">'
+      +'<p class="hint" style="margin:0 0 10px">Cadence des relances automatiques (Agent Relance) et délai de traitement cible des demandes.</p>'
+      +'<div class="grid g2">'
+      +'<div><label>Délai avant la 1ᵉ relance (jours)</label><input type="number" min="1" id="pp-delai1" value="'+r.delai1+'"></div>'
+      +'<div><label>Cadence des relances suivantes (jours)</label><input type="number" min="1" id="pp-delaisuiv" value="'+r.delaiSuiv+'"></div>'
+      +'</div>'
+      +'<div class="grid g2">'
+      +'<div><label>Nombre maximum de relances</label><input type="number" min="1" max="9" id="pp-max" value="'+r.max+'"></div>'
+      +'<div><label>Délai de traitement cible (SLA)</label><select id="pp-sla">'+[1,2,3,5,7].map(function(n){return opt(n,sla);}).join('')+'</select></div>'
+      +'</div>'
+      +'<div style="margin-top:12px"><button class="btn btn-sm btn-pri" onclick="prodParamsSave()">Enregistrer</button></div>'
+      +'</div></div>';
+  };
+  window.prodParamsSave=function(){var p=(DB.parametres=DB.parametres||{});p.relance=p.relance||{};
+    var gi=function(x,def){var e=document.getElementById(x);var n=e?parseInt(e.value,10):NaN;return (!isNaN(n)&&n>0)?n:def;};
+    p.relance.delai1=gi('pp-delai1',3);p.relance.delaiSuiv=gi('pp-delaisuiv',4);p.relance.max=Math.min(9,gi('pp-max',3));
+    var slaEl=document.getElementById('pp-sla');if(slaEl){if(typeof demSetSla==='function')demSetSla(slaEl.value);else p.slaJours=parseInt(slaEl.value,10)||2;}
+    if(typeof save==='function')save();if(typeof toast==='function')toast('Paramètres de production enregistrés');if(typeof render==='function')render();};
+
+  /* Greffe sur la page Paramètres : checklist en tête + paramètres de production */
+  if(typeof window.pageParams==='function'||typeof pageParams==='function'){
+    var _pp=(typeof window.pageParams==='function')?window.pageParams:pageParams;
+    window.pageParams=function(){var h=_pp.apply(this,arguments);
+      if(h.indexOf('mep-card')<0){h=window.mepCard()+h;}
+      if(h.indexOf('id="pp-delai1"')<0){var note=h.lastIndexOf('<div class="flow-note"');
+        if(note>=0){h=h.slice(0,note)+window.prodParamsCard()+h.slice(note);}else{h+=window.prodParamsCard();}}
+      return h;};
+  }
+
+  try{ if(!document.getElementById('mep-css')){var st=document.createElement('style');st.id='mep-css';
+    st.textContent='.mep-bar{height:12px;border-radius:7px;background:#efe7d5;overflow:hidden}.mep-bar>span{display:block;height:100%;border-radius:7px;transition:width .4s}'
+      +'.mep-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line,#e7ddc9)}.mep-row:first-of-type{border-top:none}'
+      +'.mep-ck{flex:0 0 22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;background:#efe7d5;color:#8a7d69}'
+      +'.mep-ck.ok{background:#d6ecc9;color:#2f6b3a}.mep-main{flex:1;min-width:0}.mep-d{display:block;font-size:12px;color:var(--ink3,#8a7d69)}'
+      +'.mep-card{border-color:#d9ccb2}.mep-flash{outline:2px solid #c9a13c;outline-offset:3px;border-radius:12px;transition:outline .3s}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
