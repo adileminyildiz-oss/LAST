@@ -3104,7 +3104,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=235;
+var LAST_VER=236;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9869,6 +9869,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       if(scored.length){var sum=0;scored.forEach(function(d){try{sum+=(controleQualite(d).score||0);}catch(_){}});s.conformite=Math.round(sum/scored.length);s.conformiteNb=scored.length;}
       else{s.conformite=0;s.conformiteNb=0;}
     } else {s.conformite=0;s.conformiteNb=0;}
+    s.aRelancer=(typeof relanceCount==='function')?relanceCount():0;
     return s;
   };
 
@@ -9881,6 +9882,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +K('bolt',s.encours,'En cours de traitement')
       +K('check',s.complets,'Dossiers complets','ok')
       +K('idcard',s.signes,'Signés','ok')
+      +K('mail',s.aRelancer,'À relancer',(s.aRelancer?'warn':''))
       +K('trend',s.deposes,'Déposés (Guichet unique)')
       +'</div>';
     var caCard='<div class="card pil-half"><div class="card-h"><h2>💶 Chiffre d\'affaires estimé</h2></div><div class="card-b">'
@@ -9919,6 +9921,115 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.pil-fbar>span{display:block;height:100%;background:linear-gradient(90deg,#7a6a49,#c9a13c);border-radius:6px}.pil-frow b{flex:0 0 30px;text-align:right}'
       +'.pil-cf{font-variant-numeric:tabular-nums}.pil-cf.ok{color:#3d6b3d}.pil-cf.warn{color:#b0442f}'
       +'.ag-scorepill{display:inline-block;margin-right:10px;padding:2px 9px;border-radius:20px;font-weight:800;font-size:12px;background:rgba(0,0,0,.06)}.ag-scorepill.ok{background:#d6ecc9;color:#2f6b3a}.ag-scorepill.warn{background:#f6e4c2;color:#8a5e0d}.ag-scorepill.ko{background:#f5d5cb;color:#a63a22}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="agent-relance-mod">
+/* ===== Étape 3 / Agents — Agent Relance : relances automatiques des pièces manquantes ===== */
+(function(){
+  function cfg(){var p=(DB.parametres=DB.parametres||{});p.relance=p.relance||{};
+    return {delai1:(p.relance.delai1||3),delaiSuiv:(p.relance.delaiSuiv||4),max:(p.relance.max||3)};}
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function jours(ts){if(!ts)return null;return Math.floor((Date.now()-ts)/86400000);}
+  function ents(){return (DB.demandes||[]).filter(function(d){return !d.archived&&d.statut!=='Clôturé'&&d.statut!=='Refusé';});}
+
+  window.relancePiecesManquantes=function(d){
+    var pieces=(typeof piecesRequises==='function')?piecesRequises(d):[];
+    d.docs=d.docs||{};d.piecesRecues=d.piecesRecues||{};
+    return pieces.filter(function(p){return !(((d.docs[p.k]||[]).length>0)||d.piecesRecues[p.k]===true);});
+  };
+  /* État de relance d'une demande : niveau déjà envoyé, dernière action, prochaine due */
+  window.relanceEtat=function(d){
+    var c=cfg();var manque=window.relancePiecesManquantes(d);
+    var rl=(d.relances||[]);var niveau=rl.length;
+    var demandeLe=d.docsMailSent||0;
+    if(!demandeLe){return {applicable:false,manque:manque,niveau:niveau,due:false};} /* pièces jamais demandées */
+    var lastTs=rl.length?rl[rl.length-1].ts:demandeLe;
+    var jSince=jours(lastTs);
+    var seuil=(niveau===0)?c.delai1:c.delaiSuiv;
+    var due=(manque.length>0)&&(niveau<c.max)&&(jSince!=null&&jSince>=seuil);
+    return {applicable:manque.length>0&&niveau<c.max,manque:manque,niveau:niveau,jSince:jSince,seuil:seuil,due:due,demandeLe:demandeLe};
+  };
+  window.relanceCandidats=function(){
+    return ents().map(function(d){return {d:d,e:window.relanceEtat(d)};})
+      .filter(function(x){return x.e.due;})
+      .sort(function(a,b){return (b.e.jSince||0)-(a.e.jSince||0);});
+  };
+  window.relanceCount=function(){return window.relanceCandidats().length;};
+
+  window.relanceEmail=function(d,niveau){
+    var nom=(typeof demBestName==='function'?demBestName(d):'')||'';
+    var prenom=(nom.split(/\s+/)[0]||'').trim();
+    var manque=window.relancePiecesManquantes(d);
+    var liste=manque.map(function(p){return '  • '+(p.label||p.k);}).join('\n')||'  • (pièces demandées)';
+    var lien='';try{if(typeof depotLien==='function')lien=depotLien(d);}catch(e){}
+    var ser=(typeof serie==='function')?serie(d):(d.numeroDossier||'');
+    var ouv='Bonjour'+(prenom?(' '+prenom):'')+',\n\n';
+    var pied=(lien?('\nPour plus de simplicité, vous pouvez aussi déposer vos pièces en ligne, en toute sécurité :\n'+lien+'\n'):'')
+      +'\nDès réception, nous poursuivons les démarches de création de votre société.\n\nBien cordialement,';
+    if(niveau<=1){
+      return {sujet:'Rappel — documents attendus pour votre création — AEM CONSEIL',
+        corps:ouv+'Sauf erreur de notre part, nous n\'avons pas encore reçu les documents nécessaires au démarrage de votre dossier. Merci de nous transmettre :\n\n'+liste+'\n'+pied};
+    }
+    if(niveau===2){
+      return {sujet:'2ᵉ rappel — votre dossier est en attente — AEM CONSEIL',
+        corps:ouv+'Votre dossier de création reste en attente des pièces suivantes, sans lesquelles nous ne pouvons pas avancer :\n\n'+liste+'\n\nNous vous remercions de nous les faire parvenir dans les meilleurs délais.\n'+pied};
+    }
+    return {sujet:'Dernier rappel — dossier en attente — AEM CONSEIL',
+      corps:ouv+'Malgré nos précédents messages, les pièces suivantes nous manquent toujours :\n\n'+liste+'\n\nSans retour de votre part sous quelques jours, votre dossier sera mis en veille. N\'hésitez pas à nous contacter pour toute difficulté.\n'+pied};
+  };
+
+  /* Envoi d'une relance : silencieux si passerelle configurée, sinon ouvre la messagerie pré-remplie */
+  window.relanceEnvoyer=function(id,silent){
+    var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return;
+    var st=window.relanceEtat(d);var niveau=st.niveau+1;
+    var m=window.relanceEmail(d,niveau);
+    var to=(typeof demReplyTo==='function')?demReplyTo(d):(d.clientEmail||'');
+    var envoye=false;
+    if(to&&typeof demEnvoiSilencieux==='function'){envoye=demEnvoiSilencieux(to,m.sujet,m.corps);}
+    if(!envoye&&!silent&&typeof demOuvrirMessagerie==='function'){demOuvrirMessagerie(to,m.sujet,m.corps);}
+    d.relances=d.relances||[];d.relances.push({ts:Date.now(),niveau:niveau,auto:!!silent,envoye:envoye});
+    (d.historique=d.historique||[]).push({d:(typeof today==='function'?today():''),t:'Relance n°'+niveau+' — pièces manquantes'+(envoye?' (envoyée)':'')});
+    if(typeof save==='function')save();if(typeof render==='function')render();
+    if(typeof toast==='function')toast(envoye?('Relance n°'+niveau+' envoyée'):('Relance n°'+niveau+' préparée'));
+    return {niveau:niveau,envoye:envoye};
+  };
+  /* Relance groupée de tous les dossiers dus */
+  window.relanceTout=function(){
+    var list=window.relanceCandidats();if(!list.length){if(typeof toast==='function')toast('Aucune relance à envoyer.');return 0;}
+    var n=0;list.forEach(function(x){window.relanceEnvoyer(x.d.id,true);n++;});
+    if(typeof toast==='function')toast(n+' relance(s) traitée(s).');return n;};
+
+  /* Carte tableau de bord */
+  window.relanceCard=function(){
+    var list=window.relanceCandidats();
+    var nom=(typeof demBestName==='function')?demBestName:function(d){return d.clientNom||d.numeroDossier||'—';};
+    var head='<div class="card-h"><h2>🔔 Agent Relance — pièces manquantes</h2>'
+      +'<span class="sub" style="margin-left:auto">'+list.length+' client(s) à relancer</span></div>';
+    if(!list.length){return '<div class="card" style="margin-top:16px">'+head+'<div class="card-b"><div class="rl-empty">Aucune relance en attente — tous les clients ayant reçu une demande de pièces sont à jour.</div></div></div>';}
+    var rows=list.map(function(x){var d=x.d,e=x.e;var pcs=e.manque.map(function(p){return E(p.label||p.k);}).join(', ');
+      return '<div class="rl-row"><div class="rl-main"><b>'+E(nom(d))+'</b><span class="rl-meta">n°'+(e.niveau+1)+' · demandé il y a '+ (e.jSince==null?'—':e.jSince+' j') +'</span>'
+        +'<div class="rl-pcs">Manque : '+pcs+'</div></div>'
+        +'<button class="btn btn-sm btn-pri" onclick="relanceEnvoyer(\''+d.id+'\')">✉ Relancer (n°'+(e.niveau+1)+')</button></div>';}).join('');
+    return '<div class="card" style="margin-top:16px">'+head+'<div class="card-b">'
+      +'<div class="rl-top"><button class="btn btn-sm" onclick="relanceTout()">⚡ Tout relancer</button>'
+      +'<span class="rl-note">Relance auto : 1ᵉ après '+cfg().delai1+' j, puis tous les '+cfg().delaiSuiv+' j, max '+cfg().max+'.</span></div>'
+      +rows+'</div></div>';
+  };
+
+  /* Greffe sur le Pilotage + KPI */
+  function hook(){ if(typeof window.pagePilotage!=='function'){ setTimeout(hook,200); return; } if(window.pagePilotage.__rl)return;
+    var _pp=window.pagePilotage; var w=function(){ var h=_pp.apply(this,arguments); try{ h+=window.relanceCard(); }catch(e){} return h; }; w.__rl=true;
+    if(_pp.__cf)w.__cf=true; window.pagePilotage=w; }
+  hook();
+
+  try{ if(!document.getElementById('relance-css')){var st=document.createElement('style');st.id='relance-css';
+    st.textContent='.rl-empty{color:var(--ink3,#8a7d69);font-size:13px}'
+      +'.rl-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}.rl-note{font-size:11px;color:var(--ink3,#8a7d69)}'
+      +'.rl-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line,#e7ddc9)}'
+      +'.rl-main{flex:1;min-width:0}.rl-meta{font-size:11px;color:var(--ink3,#8a7d69);margin-left:8px}'
+      +'.rl-pcs{font-size:12px;color:var(--ink2,#5b5040);margin-top:3px}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
