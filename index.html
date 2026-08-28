@@ -3103,7 +3103,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=226;
+var LAST_VER=227;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9212,6 +9212,103 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   if(typeof espVerifUpload==='function'){ var _u=espVerifUpload; espVerifUpload=window.espVerifUpload=function(id,k,inp){ _u(id,k,inp); if(k==='identite'){ setTimeout(function(){ try{ var d=espDoss().find(function(x){return x.id===id;}); extractFromPiece(d,function(){ if(typeof espVerifRender==='function')espVerifRender(id); notify(id); }); }catch(e){} },300); } else setTimeout(function(){notify(id);},200); }; }
 
   var st=document.createElement('style'); st.textContent='.pc-panel{margin:10px 14px;border:1px solid var(--line,#e7ddc9);border-radius:12px;background:#fffdf8;overflow:hidden}.pc-h{padding:9px 12px;font-size:12.5px;font-weight:700;color:#5b5040;background:#f6f0e2;display:flex;align-items:center;gap:10px}.pc-badge{margin-left:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}.pc-badge.ok{background:#e7f2e3;color:#3d6b3d}.pc-badge.warn{background:#fbf1dd;color:#96650f}.pc-badge.ko{background:#fbe6e0;color:#b0442f}.pc-row{display:flex;gap:10px;padding:8px 12px;border-top:1px solid #f0e9d8;align-items:flex-start}.pc-ic{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;color:#fff}.pc-ok .pc-ic{background:#5c8a52}.pc-warn .pc-ic{background:#c69a3a}.pc-ko .pc-ic{background:#c0553a}.pc-txt{font-size:12.5px}.pc-txt b{display:block}.pc-txt span{color:#8a7d69}'; document.head.appendChild(st);
+})();
+</script>
+
+<script id="agents-ia-mod">
+/* Phase 5 — 3 agents IA de contrôle qualité du dossier (Juridique / Formalités / Fiscal).
+   Cœur de règles déterministes + synthèse IA optionnelle. 100% additif. */
+(function(){
+  function C(cli){ return (typeof clientById==='function'&&clientById((cli.clientIds||[])[0]))||{}; }
+  function num(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.]/g,''));return isNaN(n)?null:n;}
+  function assocList(c){return (c.associes||[]).filter(function(a){return (''+(a.nom||'')).trim();});}
+  function chk(label,statut,detail){return {label:label,statut:statut,detail:detail||''};}
+
+  window.agentJuridique=function(d){
+    var c=C(d),forme=(c.forme||d.forme||'').toUpperCase(),A=assocList(c),cap=num(c.capital),out=[];
+    out.push(chk('Dénomination sociale', c.denomination?'ok':'ko', c.denomination?('« '+c.denomination+' »'):'Dénomination manquante.'));
+    out.push(chk('Objet social', (c.activites&&c.activites[0])?'ok':'ko', (c.activites&&c.activites[0])?'Objet renseigné.':'Objet social manquant.'));
+    out.push(chk('Siège social', c.siege?'ok':'ko', c.siege?([c.siege,c.cp,c.ville].filter(Boolean).join(' ')):'Adresse du siège manquante.'));
+    out.push(chk('Capital social', (cap!=null&&cap>0)?'ok':'ko', (cap!=null&&cap>0)?(cap+' €'):'Capital non renseigné ou nul.'));
+    // nombre d'associés selon la forme
+    var n=A.length;
+    if(/SASU|EURL/.test(forme)) out.push(chk('Nombre d\'associés', n===1?'ok':(n===0?'warn':'ko'), n===1?'1 associé unique (conforme).':(n===0?'Aucun associé saisi.':(forme+' = 1 seul associé (n='+n+').'))));
+    else if(/SAS|SARL|SCI/.test(forme)) out.push(chk('Nombre d\'associés', n>=2?(/SARL/.test(forme)&&n>100?'ko':'ok'):'warn', n>=2?((/SARL/.test(forme)&&n>100)?'SARL limitée à 100 associés (n='+n+').':(n+' associés.')):('≥ 2 associés attendus (n='+n+').')));
+    else out.push(chk('Associés', n>=1?'ok':'warn', n+' associé(s).'));
+    // répartition du capital
+    var withA=A.filter(function(a){return num(a.apport)!=null;});
+    if(cap!=null&&cap>0&&withA.length===A.length&&A.length){ var s=A.reduce(function(t,a){return t+(num(a.apport)||0);},0); out.push(chk('Répartition du capital', Math.abs(s-cap)<0.01?'ok':'warn', Math.abs(s-cap)<0.01?('Σ apports = capital ('+s+' €).'):('Σ apports ('+s+' €) ≠ capital ('+cap+' €).'))); }
+    else out.push(chk('Répartition du capital','warn','Apports par associé non renseignés — à compléter.'));
+    out.push(chk('Dirigeant désigné', c.president?'ok':'ko', c.president?('« '+c.president+' »'):'Aucun dirigeant désigné.'));
+    // identité du dirigeant (pour les statuts/DNC)
+    var pres=A.filter(function(a){return (''+(a.nom||'')).trim()===(''+(c.president||'')).trim();})[0]||A[0]||{};
+    var idOk=['naissance','nationalite','adresse'].filter(function(f){return (''+(pres[f]||'')).trim();}).length;
+    out.push(chk('Identité complète du dirigeant', idOk>=2?'ok':'warn', idOk>=2?'Naissance / nationalité / adresse renseignées.':'Informations d\'état civil incomplètes (naissance, nationalité, adresse).'));
+    return out;
+  };
+
+  window.agentFormalites=function(d){
+    var out=[], c=C(d);
+    // pièces (réutilise Phase 3)
+    if(typeof pieceControles==='function'){ pieceControles(d).forEach(function(x){ if(x.k==='manquantes'||x.k==='expiration')out.push(chk(x.label,x.statut,x.detail)); }); }
+    // documents juridiques générables
+    var docsOk=!!(c.denomination&&c.capital&&assocList(c).length);
+    out.push(chk('Documents juridiques', docsOk?'ok':'warn', docsOk?'Statuts, liste des souscripteurs, pouvoir et DNC prêts à générer.':'Fiche incomplète — certains actes ne pourront pas être générés.'));
+    // attestation de domiciliation si siège au domicile
+    if(/domicil/i.test(c.siegeType||'')) out.push(chk('Attestation de domiciliation', c.siege?'warn':'ko', 'Siège au domicile du dirigeant → attestation de domiciliation à joindre.'));
+    else if(/bail|local/i.test(c.siegeType||'')) out.push(chk('Justificatif du local', c.bailleur?'ok':'warn', c.bailleur?('Bailleur : '+c.bailleur):'Bail / mise à disposition à joindre.'));
+    // signatures (Phase 6)
+    out.push(chk('Signatures', 'warn', 'Signatures électroniques à recueillir avant dépôt (statuts, pouvoir, DNC).'));
+    return out;
+  };
+
+  window.agentFiscal=function(d){
+    var out=[], c=C(d),forme=(c.forme||d.forme||'').toUpperCase(),reg=(c.regime||'');
+    out.push(chk('Régime fiscal', reg?'ok':'warn', reg?('Choisi : '+reg):'Régime fiscal (IS / IR) non précisé.'));
+    // cohérence forme ↔ régime (indicatif)
+    if(reg){
+      var isIS=/IS|soci[ée]t[ée]s/i.test(reg), isIR=/IR|revenu/i.test(reg);
+      var defautIR=/EURL|SCI/.test(forme);
+      var atypique = (defautIR&&isIS) || (!defautIR&&isIR);
+      out.push(chk('Cohérence forme ↔ régime', atypique?'warn':'ok', atypique?(forme+' avec option '+(isIS?'IS':'IR')+' — vérifier l\'éligibilité et la durée de l\'option.'):(forme+' au '+(isIS?'IS':'IR')+' (régime usuel).')));
+    }
+    out.push(chk('TVA', 'warn', 'Régime de TVA à définir : franchise en base / réel simplifié / réel normal.'));
+    out.push(chk('Début d\'activité', c.dateDebut?'ok':'warn', c.dateDebut?('Le '+c.dateDebut):'Date de début d\'activité à préciser.'));
+    return out;
+  };
+
+  window.controleQualite=function(d){
+    var j=window.agentJuridique(d),f=window.agentFormalites(d),fi=window.agentFiscal(d);
+    var all=j.concat(f,fi);
+    var ko=all.filter(function(x){return x.statut==='ko';}).length, warn=all.filter(function(x){return x.statut==='warn';}).length, ok=all.filter(function(x){return x.statut==='ok';}).length;
+    var verdict=ko?'À corriger':(warn?'À vérifier':'Conforme');
+    return {juridique:j,formalites:f,fiscal:fi,ko:ko,warn:warn,ok:ok,total:all.length,verdict:verdict};
+  };
+
+  function agentCard(titre,emo,list){
+    var ko=list.filter(function(x){return x.statut==='ko';}).length, wa=list.filter(function(x){return x.statut==='warn';}).length;
+    var b=ko?('<span class="pc-badge ko">'+ko+' ✕</span>'):(wa?('<span class="pc-badge warn">'+wa+' ⚠</span>'):'<span class="pc-badge ok">✓</span>');
+    var rows=list.map(function(x){var ic=x.statut==='ok'?'✓':(x.statut==='ko'?'✕':'⚠');return '<div class="pc-row pc-'+x.statut+'"><span class="pc-ic">'+ic+'</span><div class="pc-txt"><b>'+esc(x.label)+'</b><span>'+esc(x.detail)+'</span></div></div>';}).join('');
+    return '<div class="ag-col"><div class="ag-h">'+emo+' '+esc(titre)+b+'</div>'+rows+'</div>';
+  }
+  window.controleQualiteHTML=function(d){
+    var r=window.controleQualite(d);
+    var vc=r.ko?'ko':(r.warn?'warn':'ok');
+    return '<div class="ag-verdict ag-'+vc+'">Verdict global : <b>'+esc(r.verdict)+'</b> — '+r.ok+' conforme(s), '+r.warn+' à vérifier, '+r.ko+' à corriger</div>'
+      +'<div class="ag-grid">'+agentCard('Agent Juridique','⚖️',r.juridique)+agentCard('Agent Formalités','🗂️',r.formalites)+agentCard('Agent Fiscal','📊',r.fiscal)+'</div>';
+  };
+  window.ouvrirControleQualite=function(id){
+    var d=espDoss().find(function(x){return x.id===id;}); if(!d)return;
+    if(typeof openModal!=='function')return;
+    openModal('🤖 Contrôle qualité — '+esc((typeof dossierClients==='function')?dossierClients(d):''),
+      '<div class="ag-wrap">'+window.controleQualiteHTML(d)+'</div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+  };
+
+  // bouton dans la fenêtre de Vérification (barre du haut)
+  if(typeof espVerifRender==='function'){ var _r=espVerifRender; espVerifRender=window.espVerifRender=function(id){ _r(id); try{ var head=document.querySelector('#esp-verif .ev-head .ev-transmit'); if(head&&!document.getElementById('ag-qc-btn')){ var b=document.createElement('button'); b.id='ag-qc-btn'; b.className='btn btn-sm btn-ghost'; b.textContent='🤖 Contrôle qualité'; b.setAttribute('onclick','ouvrirControleQualite(\''+id+'\')'); head.parentNode.insertBefore(b,head); } }catch(e){} }; }
+
+  var st=document.createElement('style'); st.textContent='.ag-wrap{max-height:70vh;overflow:auto}.ag-verdict{padding:10px 12px;border-radius:10px;margin-bottom:12px;font-size:13px}.ag-verdict.ok{background:#e7f2e3;color:#2f6b3a}.ag-verdict.warn{background:#fbf1dd;color:#8a5e0d}.ag-verdict.ko{background:#fbe6e0;color:#a63a22}.ag-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}@media(max-width:820px){.ag-grid{grid-template-columns:1fr}}.ag-col{border:1px solid var(--line,#e7ddc9);border-radius:12px;overflow:hidden;background:#fffdf8}.ag-h{padding:9px 12px;font-weight:700;font-size:13px;background:#f6f0e2;color:#5b5040;display:flex;align-items:center;gap:8px}.ag-h .pc-badge{margin-left:auto}'; document.head.appendChild(st);
 })();
 </script>
 
