@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=223;
+var LAST_VER=224;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9015,6 +9015,68 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.dem-pcbar-f.ok{background:linear-gradient(90deg,#7dbb8e,#4f9c67)}.dem-pcbar-f.warm{background:linear-gradient(90deg,#e6c06a,#cf9f3f)}'
       +'.dem-pctxt{font-size:12px;font-weight:700;color:var(--ink-2,#5a5344)}';
     document.head.appendChild(st);}
+})();
+</script>
+
+<script id="intake-mod">
+/* Phase 1 (1b) — lecture de la charge structurée du questionnaire du site (LAST_DATA)
+   → enrichit la demande + affiche une « Fiche prospect qualifiée ». 100% additif. */
+(function(){
+  var TYPE_LABELS={sasu:'Création SASU',sas:'Création SAS',eurl:'Création EURL',sarl:'Création SARL',sci:'Création SCI',association:'Création Association',modification:'Modification de société'};
+  function b64decode(s){ try{ return decodeURIComponent(escape(atob(s))); }catch(e){ try{ return atob(s); }catch(_){ return ''; } } }
+  window.lastIntakeParse=function(text){
+    text=''+(text||'');
+    var i=text.indexOf('LASTv1:'); if(i<0)return null;
+    var raw=text.slice(i+7).match(/^[A-Za-z0-9+/=\s]+/); if(!raw)return null;
+    var chars=raw[0].replace(/[\s=]/g,''); /* caractères de données base64 (padding et sauts retirés) */
+    for(var len=chars.length; len>=8; len--){
+      var b=chars.slice(0,len); while(b.length%4)b+='=';
+      try{ var json=b64decode(b); if(json&&json.charAt(0)==='{'){ var end=json.lastIndexOf('}'); if(end>0){ var o=JSON.parse(json.slice(0,end+1)); if(o&&o.version==='LASTv1')return o; } } }catch(e){}
+    }
+    return null;
+  };
+  window.lastEnrichDemande=function(d){
+    if(!d||d.intake)return false;
+    var srcs=[d.rawBody,d.message,d.rawHtml];
+    var o=null; for(var i=0;i<srcs.length&&!o;i++){ if(srcs[i]&&(''+srcs[i]).indexOf('LASTv1:')>=0)o=window.lastIntakeParse(srcs[i]); }
+    if(!o)return false;
+    d.intake=o; d.formalite=o.type||'';
+    if(o.numeroDossier)d.numeroDossier=o.numeroDossier;
+    var lbl=TYPE_LABELS[o.type]||o.type||''; if(lbl)d.serviceSouhaite=lbl;
+    var c=o.contact||{};
+    if(c.nom||c.prenom)d.clientNom=((c.prenom||'')+' '+(c.nom||'')).trim();
+    if(c.email&&!d.clientEmail)d.clientEmail=c.email;
+    if(c.tel&&!d.clientTel)d.clientTel=c.tel;
+    d.qualifie=true; return true;
+  };
+  window.intakeFicheHTML=function(d){
+    var o=d&&d.intake; if(!o)return '';
+    var E=(typeof esc==='function')?esc:function(s){return (''+(s==null?'':s));};
+    function row(k,v){ return v?('<div class="ik-r"><span class="ik-k">'+E(k)+'</span><span class="ik-v">'+E(v)+'</span></div>'):''; }
+    function grp(t,inner){ return inner?('<div class="ik-g">'+E(t)+'</div>'+inner):''; }
+    var s=o.societe||{},si=o.siege||{},dir=o.direction||{},co=o.contact||{},mo=o.modif||{},as=o.asso||{},h='';
+    h+=grp('Formalité', row('Type',TYPE_LABELS[o.type]||o.type)+row('N° dossier',o.numeroDossier));
+    if(/^(creation|sasu|sas|eurl|sarl|sci)$/.test(o.type)){
+      h+=grp('Société', row('Dénomination',s.denomination)+row('Sigle',s.sigle)+row('Objet',s.objet)+row('Capital',s.capital?(s.capital+' €'):'')+row('Régime',s.regime)+row('Début',s.debut));
+      h+=grp('Siège', row('Adresse',[si.rue,si.cp,si.ville].filter(Boolean).join(' '))+row('Type',si.type)+row('Bailleur',si.bailleur)+row('Domiciliataire',si.domiciliataire));
+      h+=grp('Direction', row('Nom',[dir.civilite,dir.prenom,dir.nom].filter(Boolean).join(' '))+row('Naissance',[dir.naissance,dir.lieuNaissance].filter(Boolean).join(' à '))+row('Nationalité',dir.nationalite)+row('Adresse',dir.adresse)+row('Fonction',dir.fonction));
+      var A=(o.associes||[]).filter(function(a){return a.nom||a.prenom;});
+      if(A.length)h+=grp('Associés', A.map(function(a,i){return row('Associé '+(i+1),[a.prenom,a.nom].filter(Boolean).join(' ')+(a.apport?(' — '+a.apport+' €'):'')+(a.parts?(' / '+a.parts+' parts'):'')+(a.role?(' ('+a.role+')'):''));}).join(''));
+    } else if(o.type==='association'){
+      h+=grp('Association', row('Nom',as.nom)+row('Objet',as.objet)+row('Siège',[si.rue,si.cp,si.ville].filter(Boolean).join(' ')));
+      var b=o.bureau||{}; h+=grp('Bureau', ['president','tresorier','secretaire'].map(function(r){var p=b[r]||{};return row(r.charAt(0).toUpperCase()+r.slice(1),[p.prenom,p.nom].filter(Boolean).join(' '));}).join(''));
+    } else if(o.type==='modification'){
+      h+=grp('Société', row('Dénomination',mo.denomination)+row('SIREN',mo.siren));
+      h+=grp('Modification', row('Type',mo.type)+row('Détails',mo.details)+row('Date d\'effet',mo.dateEffet));
+    }
+    h+=grp('Contact', row('Nom',[co.prenom,co.nom].filter(Boolean).join(' '))+row('Email',co.email)+row('Téléphone',co.tel)+row('Message',co.message));
+    return '<div class="card ik-card"><div class="card-h"><h2>✅ Fiche prospect qualifiée</h2><span class="sub" style="margin-left:auto">Questionnaire du site — données structurées</span></div><div class="card-b">'+h+'</div></div>';
+  };
+  if(typeof demIngest==='function'){ var _di=demIngest; demIngest=window.demIngest=function(mails){ var r=_di(mails); try{ (DB.demandes||[]).forEach(window.lastEnrichDemande); }catch(e){} return r; }; }
+  if(typeof window.demVueDetail==='function'){ var _dv=window.demVueDetail; window.demVueDetail=function(id){ var h=_dv(id); try{ var d=(DB.demandes||[]).find(function(x){return x.id===id;}); if(d&&d.intake&&h.indexOf('dem-view-cards')>=0)h=h.replace('<div class="dem-view-cards">','<div class="dem-view-cards">'+window.intakeFicheHTML(d)); }catch(e){} return h; }; }
+  var st=document.createElement('style'); st.textContent='.ik-card .card-h h2{color:#2f6b3a}.ik-g{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#8a7d69;font-weight:700;margin:12px 0 4px;border-top:1px solid var(--line,#e7ddc9);padding-top:8px}.ik-g:first-child{border-top:none;margin-top:0}.ik-r{display:flex;justify-content:space-between;gap:12px;padding:3px 0;font-size:13px;align-items:flex-start}.ik-k{color:#8a7d69;white-space:nowrap}.ik-v{font-weight:600;text-align:right;max-width:66%}'; document.head.appendChild(st);
+  function migrate(){ try{ var ch=false;(DB.demandes||[]).forEach(function(d){ if(window.lastEnrichDemande(d))ch=true; }); if(ch&&typeof save==='function')save(); }catch(e){} }
+  if(typeof DB!=='undefined'&&DB&&DB.demandes)migrate(); else setTimeout(migrate,500);
 })();
 </script>
 
