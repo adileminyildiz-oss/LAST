@@ -1893,105 +1893,6 @@ function saveUser(){const n=document.getElementById('u-nom').value.trim();if(!n)
 function delUser(id){if(!confirm('Retirer ce collaborateur ?'))return;DB.users=DB.users.filter(u=>u.id!==id);save();render();}
 
 /* ---------- FACTURATION (Client / Fournisseur) ---------- */
-function factStatColor(s){return {'Émise':'#977619','Payée':'#5c7a4c','Impayée':'#a85a34','À payer':'#977619','Avoir':'#8e44ad','Annulée':'#8a7f6c'}[s]||'#8a7f6c';}
-function fvNextAvoirNum(){DB.seq=DB.seq||{};return 'AV-'+(1000+(DB.seq.avoir||1));}
-function factAvoir(id){var f=(DB.factures||[]).find(function(x){return x.id===id;});if(!f)return;
-  if(f.avoir)return toast('Un avoir ne peut pas être avoiré.');
-  if(f.avoirNum)return toast('Cette facture a déjà un avoir ('+f.avoirNum+').');
-  yc('Créer un avoir (annulation) pour la facture '+f.num+' ?',function(){
-    DB.seq=DB.seq||{};var num=fvNextAvoirNum();DB.seq.avoir=(DB.seq.avoir||1)+1;
-    var doc=f.doc?JSON.parse(JSON.stringify(f.doc)):null;
-    if(doc){doc.type='avoir';doc.numero=num;doc.date=today();(doc.lignes||[]).forEach(function(l){l.pu=-Math.abs(+l.pu||0);});}
-    DB.factures.unshift({id:uid('fa'),type:'client',num:num,tiers:f.tiers,date:today(),ech:'',
-      ht:-Math.abs(+f.ht||0),tva:-Math.abs(+f.tva||0),ttc:-Math.abs(+f.ttc||0),taux:f.taux,statut:'Avoir',avoir:true,avoirDe:f.id,doc:doc,createdAt:today()});
-    f.avoirNum=num;if(f.statut==='Impayée')f.statut='Annulée';
-    if(typeof logAudit==='function')logAudit('Avoir créé',num+' — annule '+f.num+' — '+eur(f.ttc));
-    save();closeModal();toast('Avoir '+num+' créé');state.page='facturation';render();
-  });
-}
-function factNum(t){DB.seq=DB.seq||{};const k=t==='client'?'factVente':'factAchat';const n=DB.seq[k]||1;DB.seq[k]=n+1;return (t==='client'?'FV-':'FA-')+(2600+n);}
-function factSetFilter(v){state.factFilter=v;render();}
-function factSort(col){var s=state.factSort||{col:'date',dir:-1};if(s.col===col){s.dir=-s.dir;}else{s.col=col;s.dir=(col==='date'||col==='ht'||col==='tva'||col==='ttc')?-1:1;}state.factSort=s;render();}
-function pageFacturation(){
-  const t='client';
-  const all=(DB.factures||[]).filter(f=>f.type===t);
-  const fil=state.factFilter||'tous';
-  const match=(f)=>fil==='tous'?true:(fil==='emises'?f.statut==='Émise':fil==='impayees'?f.statut==='Impayée':fil==='payees'?f.statut==='Payée':fil==='avoirs'?!!f.avoir:true);
-  const so=state.factSort||{col:'date',dir:-1};
-  const acc={num:f=>f.num||'',tiers:f=>f.tiers||'',date:f=>f.date||'',ht:f=>+f.ht||0,tva:f=>+f.tva||0,ttc:f=>+f.ttc||0,statut:f=>f.statut||''};
-  const fh=(col,label,cls)=>`<th${cls?' class="'+cls+'"':''} style="cursor:pointer;user-select:none;white-space:nowrap" onclick="factSort('${col}')">${label}${so.col===col?(so.dir>0?' ▲':' ▼'):''}</th>`;
-  const list=all.filter(match).slice().sort((a,b)=>{var va=acc[so.col]?acc[so.col](a):'',vb=acc[so.col]?acc[so.col](b):'';var c=(typeof va==='number')?(va-vb):(''+va).localeCompare(''+vb);return c*so.dir;});
-  const cnt=(k)=>all.filter(f=>k==='tous'?true:(k==='emises'?f.statut==='Émise':k==='impayees'?f.statut==='Impayée':k==='payees'?f.statut==='Payée':k==='avoirs'?!!f.avoir:true)).length;
-  const chip=(k,lbl)=>`<button class="fchip${fil===k?' on':''}" onclick="factSetFilter('${k}')">${lbl} <span class="fchip-n">${cnt(k)}</span></button>`;
-  const filtres=`<div class="fchips">${chip('tous','Toutes')}${chip('emises','Émises')}${chip('impayees','Impayées')}${chip('payees','Payées')}${chip('avoirs','Avoirs')}</div>`;
-  const totTVA=all.reduce((s,f)=>s+(+f.tva||0),0), totTTC=all.reduce((s,f)=>s+(+f.ttc||0),0);
-  const du=all.filter(f=>f.statut==='Impayée'||f.statut==='À payer').reduce((s,f)=>s+(+f.ttc||0),0);
-  const aRelancer=all.filter(f=>f.statut==='Impayée'&&relanceEnRetard(f)).length;
-  return `
-  <div class="grid g4" style="margin-bottom:14px">
-    ${kpi('card',eur(totTTC),'Total TTC — '+(t==='client'?'ventes':'achats'))}
-    ${kpi('euro',eur(totTVA),'TVA')}
-    ${kpi('trend',eur(du),t==='client'?'Impayé':'Reste à payer',t==='client'?'hot':'')}
-    ${kpi('inbox',aRelancer,'À relancer (échues)',aRelancer?'hot':'')}
-  </div>
-  <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center"><button class="btn btn-pri" onclick="${t==='client'?'fvOpen()':'factModal()'}">${svg(IC.plus)}Ajouter</button>
-    ${t==='client'?`<button class="btn btn-ghost btn-sm" onclick="recModal()">🔁 Facturation récurrente</button>`:''}
-    ${t==='client'?`<button class="btn btn-ghost btn-sm" onclick="demDesignationIA()">✨ Désignation (IA)</button>`:''}
-    <button class="btn btn-ghost btn-sm" onclick="iaLireFacture()">📷 Lire une facture (IA)</button>
-    ${t==='client'&&list.length?`<button class="btn btn-ghost btn-sm" onclick="exportFacturesCSV()">Exporter (CSV)</button>`:''}
-    ${t==='client'&&list.filter(f=>f.doc).length?`<button class="btn btn-ghost btn-sm" onclick="factImprimerLot()">Imprimer le lot (PDF)</button>`:''}
-    <span class="tag blue">${list.length}${fil!=='tous'?'/'+all.length:''} facture(s)</span></div>
-  ${(typeof recCard==='function')?recCard():''}
-  ${(typeof factAnomaliesCard==='function')?factAnomaliesCard(t):''}
-  ${all.length?filtres:''}
-  <div class="card"><div class="card-b" style="padding:0">
-  ${list.length?`<table><thead><tr>${fh('num','N°')}${fh('tiers',t==='client'?'Client':'Fournisseur')}${fh('date','Date','hide-sm')}${fh('ht','HT')}${fh('tva','TVA','hide-sm')}${fh('ttc','TTC')}${fh('statut','Statut')}<th></th></tr></thead><tbody>
-  ${list.map(f=>`<tr onclick="${t==='client'?"fvView('"+f.id+"')":"factModal('"+f.id+"')"}" style="cursor:pointer">
-    <td class="tname">${esc(f.num)}${(typeof factAnomalieBadge==='function')?factAnomalieBadge(f):''}</td><td>${esc(f.tiers)}</td><td class="hide-sm">${frDate(f.date)}</td>
-    <td>${eur(f.ht)}</td><td class="hide-sm">${eur(f.tva)}</td><td>${eur(f.ttc)}</td>
-    <td><span class="pill-stat" style="color:${factStatColor(f.statut)};border-color:${factStatColor(f.statut)}55;background:${factStatColor(f.statut)}18">${esc(f.statut)}</span>${(f.statut==='Impayée'&&relanceEnRetard(f))?' <span class="tag hot" style="font-size:9px">échue</span>':''}${(f.relances&&f.relances.length)?' <span class="tsub">'+f.relances.length+'×</span>':''}</td>
-    <td onclick="event.stopPropagation()">${(t==='client'&&f.statut==='Impayée')?"<button class=\"btn btn-sm btn-ghost\" onclick=\"factRelancer('"+f.id+"')\">Relancer</button> <button class=\"btn btn-sm btn-ghost\" onclick=\"demRelanceIA('"+f.id+"')\">✨ Relance IA</button> ":''}<button class="btn btn-sm btn-ghost" onclick="${t==='client'?"fvView('"+f.id+"')":"factModal('"+f.id+"')"}">Ouvrir</button></td></tr>`).join('')}
-  </tbody></table>`:`<div class="empty">${all.length?'Aucune facture pour ce filtre.':'Aucune facture '+(t==='client'?'client (ventes)':'fournisseur (achats/débours)')+'. Ajoutez-en une.'}</div>`}
-  </div></div>`;
-}
-function factEchDefaut(dateIso){var d=new Date((dateIso||today())+'T00:00:00');d.setDate(d.getDate()+30);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-function factModal(id){
-  const t=id?(DB.factures.find(x=>x.id===id)||{}).type:(state.factTab||'client');
-  const f=id?DB.factures.find(x=>x.id===id):{type:t,num:'',tiers:'',date:today(),ht:'',taux:20,statut:t==='client'?'Émise':'À payer'};
-  const tiersField = t==='client'
-    ? `<select id="fa-tiers">${['<option value="">— Choisir un client —</option>'].concat((DB.clients||[]).map(c=>{const n=(c.prenom+' '+c.nom).trim();return `<option ${f.tiers===n?'selected':''}>${esc(n)}</option>`;})).join('')}</select>`
-    : `<input id="fa-tiers" list="fa-four-list" value="${esc(f.tiers)}" placeholder="Greffe, INPI, Annonces légales…"><datalist id="fa-four-list">${(DB.fournisseurs||[]).map(x=>`<option>${esc(x.nom)}</option>`).join('')}</datalist>`;
-  const statOpts=(t==='client'?['Émise','Payée','Impayée']:['À payer','Payée']);
-  openModal(id?('Facture '+esc(f.num)):('Nouvelle facture '+(t==='client'?'client':'fournisseur')),`
-    <div class="frow"><div><label>${t==='client'?'Client':'Fournisseur'}</label>${tiersField}</div>
-      <div><label>Date</label><input id="fa-date" type="date" max="9999-12-31" value="${esc(f.date)}"></div></div>
-    <div class="frow"><div><label>Échéance</label><input id="fa-ech" type="date" max="9999-12-31" value="${esc(f.ech||factEchDefaut(f.date))}"></div>
-      <div><label>Montant HT (€)</label><input id="fa-ht" type="number" step="0.01" value="${esc(f.ht)}" oninput="factCalc()"></div></div>
-    <div class="frow"><div><label>TVA (%)</label><select id="fa-taux" onchange="factCalc()">${[0,5.5,10,20].map(x=>`<option value="${x}" ${(+f.taux)===x?'selected':''}>${x} %</option>`).join('')}</select></div>
-      <div><label>TVA (€)</label><input id="fa-tva" readonly></div></div>
-    <div class="frow"><div><label>TTC (€)</label><input id="fa-ttc" readonly></div><div></div></div>
-    <label>Statut</label><select id="fa-statut">${statOpts.map(s=>`<option ${f.statut===s?'selected':''}>${s}</option>`).join('')}</select>
-  `,`<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
-     ${id?`<button class="btn btn-danger" onclick="factDel('${id}')">Supprimer</button>`:''}
-     <button class="btn btn-pri" onclick="factSave('${id||''}','${t}')">Enregistrer</button>`);
-  factCalc();
-}
-function factCalc(){const g=x=>document.getElementById(x);if(!g('fa-ht'))return;const ht=+g('fa-ht').value||0,taux=+g('fa-taux').value||0;const tva=Math.round(ht*taux)/100;g('fa-tva').value=tva.toFixed(2);g('fa-ttc').value=(ht+tva).toFixed(2);}
-function factSave(id,t){
-  const g=x=>document.getElementById(x);
-  const ht=+g('fa-ht').value||0,taux=+g('fa-taux').value||0,tva=Math.round(ht*taux)/100,ttc=ht+tva;
-  const tiers=(g('fa-tiers').value||'').trim();
-  if(!tiers)return toast(t==='client'?'Client requis':'Fournisseur requis');
-  if(!DB.factures)DB.factures=[];
-  var ech=g('fa-ech')?g('fa-ech').value:'';
-  if(id){Object.assign(DB.factures.find(x=>x.id===id),{tiers,date:g('fa-date').value,ech:ech,ht,taux,tva,ttc,statut:g('fa-statut').value});}
-  else{var _num=factNum(t);DB.factures.push({id:uid('fa'),type:t,num:_num,tiers,date:g('fa-date').value,ech:ech,ht,taux,tva,ttc,statut:g('fa-statut').value,createdAt:today()});logAudit('Facture créée',_num+' — '+tiers+' — '+eur(ttc));}
-  save();closeModal();toast('Facture enregistrée');render();
-}
-function factDel(id){if(!confirm('Supprimer cette facture ?'))return;var i=DB.factures.findIndex(f=>f.id===id);if(i<0)return;var item=DB.factures[i];DB.factures.splice(i,1);if(window.corbeilleAdd)corbeilleAdd('facture',(item.num||'Facture')+(item.tiers?' · '+item.tiers:''),item);save();closeModal();
-  toastUndo('Facture supprimée',function(){DB.factures.splice(Math.min(i,DB.factures.length),0,item);save();render();toast('Suppression annulée');});render();}
-
-/* ---------- ESPACE — poste de travail des dossiers ---------- */
 const ESP_PIECES=[
   {k:'cni',l:"Pièce d'identité du/des associé(s)"},
   {k:'domicile',l:"Attestation de domiciliation (EDF, mobile, impôts)"},
@@ -2782,7 +2683,6 @@ function statutsSasHTML(d){
   function art(titre,paras){return '<div class="st-art">'+titre+'</div>'+paras.map(function(p){return '<p>'+p+'</p>';}).join('');}
 }
 function espStatut(id,dir){var d=espDoss().find(function(x){return x.id===id;});var i=STATUTS.findIndex(function(s){return s.k===d.statut;});var n=Math.max(0,Math.min(STATUTS.length-1,(i<0?0:i)+dir));var ns=STATUTS[n].k;if(ns!==d.statut){d.statut=ns;(d.historique=d.historique||[]).push({d:today(),t:'Statut → '+ns});save();render();}}
-function espFacture(id){var d=espDoss().find(function(x){return x.id===id;});var cid=(d.clientIds||[])[0];if(typeof FactureVente==='undefined')return toast('Module facture indisponible');FactureVente.ouvrir({societe:fvSociete(),clients:fvClients(),numero:fvNextNum(),initial:{clientId:cid},onCreer:fvOnCreer});}
 
 /* ---------- Facture de vente (via module FactureVente) ---------- */
 /* ---------- Éditeur des modèles d'e-mails ---------- */
@@ -2883,255 +2783,7 @@ function societeSave(){DB.societe=DB.societe||{};var g=function(x){var e=documen
   s.banqueBenef=g('so-benef')||s.raison;s.bic=g('so-bic');s.iban=g('so-iban');
   save();toast('Société enregistrée');render();
 }
-function fvSociete(){var s=DB.societe||{};return {raison:s.raison||'AEM CONSEIL',formeJur:s.formeJur||'SAS',siren:s.siren||'',siret:s.siret||'',tvaIntra:s.tvaIntra||'',capital:s.capital||'',codeAPE:s.codeAPE||s.ape||'',rcsVille:s.rcsVille||s.ville||'',adresse:s.adresse||'',cp:s.cp||'',ville:s.ville||'',iban:s.iban||'',bic:s.bic||'',banqueBenef:s.banqueBenef||s.raison||'AEM CONSEIL',tvaCondition:s.tvaCondition||'Sur les encaissements',fraisRecouvrement:(s.fraisRecouvrement!=null?s.fraisRecouvrement:40)};}
-function fvClients(){return (DB.clients||[]).map(function(c){return {id:c.id,nom:(c.prenom+' '+c.nom).trim(),adresse:c.adresse||'',cp:c.cp||'',ville:c.ville||'',email:c.email||'',siret:c.siret||''};});}
-function fvNextNum(){DB.seq=DB.seq||{};return 'FV-'+(2600+(DB.seq.factVente||1));}
-function fvNextNumDevis(){DB.seq=DB.seq||{};return 'DEV-'+(1000+(DB.seq.devis||1));}
-function devisLignesFromServices(serviceIds){var L=[];(serviceIds||[]).forEach(function(id){var v=svcById(id);if(!v)return;L.push({desc:v.nom,qte:1,unite:'forfait',pu:(+v.prix||0),taux:20,forfait:true});if(+v.debours>0)L.push({desc:'Débours / frais officiels — '+v.nom,qte:1,unite:'forfait',pu:(+v.debours||0),taux:0,forfait:true});});return L.length?L:[{desc:'',qte:1,unite:'forfait',pu:0,taux:20,forfait:true}];}
 function svcMatchDemande(txt){txt=(''+(txt||'')).toLowerCase();var best=null;(DB.services||[]).forEach(function(s){var nom=(''+s.nom).toLowerCase();if(txt&&(txt.indexOf(nom.slice(0,10))>=0||nom.split(/\s+/).some(function(w){return w.length>4&&txt.indexOf(w)>=0;})))best=best||s;});if(!best&&/cr[ée]a|sas|sarl|soci[ée]t[ée]|entreprise/.test(txt))best=(DB.services||[])[0];return best;}
-function fvOnCreerDevis(doc){if(!DB.devis)DB.devis=[];var c=(DB.clients||[]).find(function(x){return x.id===doc.clientId;});var name=(doc.clientNom&&doc.clientNom.trim())||(c?(c.prenom+' '+c.nom).trim():'')||(window._devisClientNom||'(client)');DB.devis.unshift({id:uid('dev'),num:doc.numero,tiers:name,date:doc.date,ech:doc.echeance,ht:doc.ht,tva:doc.tva,ttc:doc.ttc,statut:'Émis',doc:doc,createdAt:today()});DB.seq=DB.seq||{};DB.seq.devis=(DB.seq.devis||1)+1;logAudit('Devis créé',doc.numero+' — '+name+' — '+eur(doc.ttc));save();toast('Devis '+doc.numero+' créé');if(typeof render==='function')render();}
-function espDevis(id){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;if(typeof FactureVente==='undefined')return toast('Module devis indisponible');var cid=(d.clientIds||[])[0];window._devisClientNom=dossierClients(d);FactureVente.ouvrir({societe:fvSociete(),clients:fvClients(),services:(DB.services||[]),numero:fvNextNumDevis(),initial:{type:'devis',clientId:cid,lignes:devisLignesFromServices(d.serviceIds)},onCreer:fvOnCreerDevis});}
-function demDevis(id){var d=DB.demandes.find(function(x){return x.id===id;});if(!d)return;if(typeof FactureVente==='undefined')return toast('Module devis indisponible');
-  var clients=fvClients();var cid='';
-  if(d.dossierId){var dos=DB.dossiers.find(function(x){return x.id===d.dossierId;});if(dos)cid=(dos.clientIds||[])[0];}
-  if(!cid){var m=clients.find(function(c){return (d.clientEmail&&c.email&&c.email.toLowerCase()===(''+d.clientEmail).toLowerCase())||c.nom.toLowerCase()===(''+d.clientNom).toLowerCase();});if(m)cid=m.id;}
-  if(!cid){cid='demc-'+d.id;clients=clients.concat([{id:cid,nom:d.clientNom||'Client',email:d.clientEmail||'',adresse:'',cp:'',ville:'',siret:''}]);}
-  window._devisClientNom=d.clientNom||'Client';
-  var svc=svcMatchDemande((d.serviceSouhaite||'')+' '+(d.message||''));
-  var lignes=svc?devisLignesFromServices([svc.id]):[{desc:d.serviceSouhaite||'',qte:1,unite:'forfait',pu:0,taux:20,forfait:true}];
-  FactureVente.ouvrir({societe:fvSociete(),clients:clients,services:(DB.services||[]),numero:fvNextNumDevis(),initial:{type:'devis',clientId:cid,lignes:lignes},onCreer:fvOnCreerDevis});}
-function fvOpen(){
-  if(typeof FactureVente==='undefined')return toast('Module facture indisponible');
-  FactureVente.ouvrir({societe:fvSociete(),clients:fvClients(),services:(DB.services||[]),numero:fvNextNum(),onCreer:fvOnCreer});
-}
-function fvOnCreer(doc){
-  if(!DB.factures)DB.factures=[];
-  var c=(DB.clients||[]).find(function(x){return x.id===doc.clientId;});
-  var name=c?(c.prenom+' '+c.nom).trim():'(client)';
-  DB.factures.unshift({id:uid('fa'),type:'client',num:doc.numero,tiers:name,date:doc.date,ech:doc.echeance,
-    ht:doc.ht,tva:doc.tva,ttc:doc.ttc,taux:(doc.lignes&&doc.lignes[0]?+doc.lignes[0].taux:20),statut:'Émise',doc:doc,createdAt:today()});
-  DB.seq=DB.seq||{};DB.seq.factVente=(DB.seq.factVente||1)+1;
-  logAudit('Facture créée',doc.numero+' — '+name+' — '+eur(doc.ttc));save();FactureVente.fermer();toast('Facture créée');render();
-}
-function fvView(id){
-  var f=(DB.factures||[]).find(function(x){return x.id===id;});if(!f)return;
-  if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();
-  var html=(f.doc&&typeof FactureVente!=='undefined'&&FactureVente.docHTML)?FactureVente.docHTML(f.doc):'<div class="hint" style="padding:14px">Aperçu indisponible pour cette facture.</div>';
-  var note=f.avoir?'<div class="hint" style="margin-top:8px">Avoir (note de crédit) annulant la facture '+esc((DB.factures.find(function(x){return x.id===f.avoirDe;})||{}).num||'')+'.</div>'
-    :(f.avoirNum?'<div class="hint" style="margin-top:8px">Un avoir <b>'+esc(f.avoirNum)+'</b> a été émis pour cette facture.</div>':'');
-  openModal((f.avoir?'Avoir ':'Facture ')+esc(f.num),
-    '<div class="fv-view-scroll"><div class="inv">'+html+'</div></div>'+note
-    +(typeof efactBlocHTML==='function'?efactBlocHTML(id):'')
-    +(f.avoir?'':'<label>Statut</label><select id="fa-statut">'+['Émise','Payée','Impayée'].map(function(s){return '<option '+(f.statut===s?'selected':'')+'>'+s+'</option>';}).join('')+'</select>'),
-    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
-    +'<button class="btn btn-danger" onclick="factDel(\''+id+'\')">Supprimer</button>'
-    +(f.statut==='Impayée'?'<button class="btn btn-ghost" onclick="factRelancer(\''+id+'\')">Relancer'+((f.relances&&f.relances.length)?' ('+f.relances.length+')':'')+'</button>':'')
-    +((!f.avoir&&!f.avoirNum)?'<button class="btn btn-ghost" onclick="factAvoir(\''+id+'\')">Créer un avoir</button>':'')
-    +'<button class="btn" onclick="fvPrint(\''+id+'\')">Imprimer</button>'
-    +(f.avoir?'':'<button class="btn btn-pri" onclick="factStatutSave(\''+id+'\')">Enregistrer</button>'));
-  setTimeout(fvFitView,40);
-}
-function fvFitView(){var w=document.querySelector('#ov .fv-view-scroll');if(!w)return;var page=w.querySelector('.inv-page');if(!page)return;var s=Math.min(1,(w.clientWidth-4)/794);page.style.transformOrigin='top left';page.style.transform='scale('+s+')';w.style.height=(page.offsetHeight*s+14)+'px';}
-function fvPrint(id){var f=(DB.factures||[]).find(function(x){return x.id===id;});if(f&&f.doc&&typeof FactureVente!=='undefined'&&FactureVente.imprimerDoc)FactureVente.imprimerDoc(f.doc);}
-function factImprimerLot(){
-  var fil=state.factFilter||'tous';
-  var match=function(f){return fil==='tous'?true:(fil==='emises'?f.statut==='Émise':fil==='impayees'?f.statut==='Impayée':fil==='payees'?f.statut==='Payée':fil==='avoirs'?!!f.avoir:true);};
-  var list=(DB.factures||[]).filter(function(f){return f.type==='client'&&f.doc&&match(f);}).sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
-  if(!list.length)return toast('Aucune facture imprimable'+(fil!=='tous'?' pour ce filtre.':'.'));
-  if(typeof FactureVente==='undefined'||!FactureVente.docHTML)return toast('Module facture indisponible.');
-  if(FactureVente.injectCSS)FactureVente.injectCSS();
-  var html=list.map(function(f){return '<div class="inv" style="page-break-after:always;break-after:page">'+FactureVente.docHTML(f.doc)+'</div>';}).join('');
-  var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}
-  pa.innerHTML=html;if(typeof logAudit==='function')logAudit('Impression lot factures',list.length+' facture(s)');
-  toast('Préparation de '+list.length+' facture(s)…');setTimeout(function(){window.print();},160);
-}
-function factStatutSave(id){var f=(DB.factures||[]).find(function(x){return x.id===id;});if(!f)return;var el=document.getElementById('fa-statut');if(el)f.statut=el.value;save();closeModal();toast('Statut mis à jour');render();}
-
-/* ---------- RAPPROCHEMENT DES PAIEMENTS (relevé bancaire → lettrage) ---------- */
-function rapproNorm(s){return (''+(s||'')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');}
-function rapproNum(t){t=(''+t).replace(/[^\d.,-]/g,'');if(!t)return NaN;var neg=/-/.test(t);t=t.replace(/-/g,'');var lc=t.lastIndexOf(','),ld=t.lastIndexOf('.');var dec=Math.max(lc,ld);var ip,fr='';if(dec>=0&&(t.length-dec-1)<=2){ip=t.slice(0,dec).replace(/[.,]/g,'');fr=t.slice(dec+1);}else{ip=t.replace(/[.,]/g,'');}var v=parseFloat((ip||'0')+'.'+(fr||'0'));if(isNaN(v))return NaN;return neg?-v:v;}
-function rapproDate(s){s=''+(s||'');var m=s.match(/(\d{4})-(\d{2})-(\d{2})/);if(m)return m[1]+'-'+m[2]+'-'+m[3];m=s.match(/(\d{2})[\/.](\d{2})[\/.](\d{2,4})/);if(m){var y=m[3].length===2?('20'+m[3]):m[3];return y+'-'+m[2]+'-'+m[1];}return '';}
-function rapproParse(text){var out=[];(text||'').split(/\r?\n/).forEach(function(raw){var line=(raw||'').trim();if(!line)return;
-  if(/^(date|libell|lib|montant|op[eé]ration|solde|cr[eé]dit|d[eé]bit)\b/i.test(line)&&!/\d[.,]\d/.test(line))return;
-  var dm=line.match(/(\d{4}-\d{2}-\d{2})|(\d{2}[\/.]\d{2}[\/.]\d{2,4})/);var date=dm?rapproDate(dm[0]):'';
-  var nums=line.match(/-?\d[\d  .]*[.,]\d{2}(?!\d)/g);if(!nums||!nums.length)nums=line.match(/-?\d[\d ]{2,}/g);
-  if(!nums||!nums.length)return;var amt=rapproNum(nums[nums.length-1]);if(isNaN(amt)||amt===0)return;
-  var lib=line;if(dm)lib=lib.replace(dm[0],' ');nums.forEach(function(n){lib=lib.replace(n,' ');});lib=lib.replace(/€|eur/gi,' ').replace(/[;|\t]+/g,' ').replace(/\s+/g,' ').trim();
-  out.push({date:date,libelle:lib,montant:amt});});
-  return out;}
-function rapproCandidates(){return (DB.factures||[]).filter(function(f){return f.type==='client'&&!f.avoir&&f.statut!=='Payée';});}
-function rapproSuggest(line){var amt=Math.round(Math.abs(line.montant)*100)/100;var cands=rapproCandidates();var libN=rapproNorm(line.libelle);
-  var exact=cands.filter(function(f){return Math.round((+f.ttc||0)*100)/100===amt;});
-  if(exact.length){var byNum=exact.filter(function(f){return f.num&&libN.indexOf(rapproNorm(f.num))>=0;});
-    var byName=exact.filter(function(f){var t=rapproNorm(f.tiers);return t&&libN.indexOf(t)>=0;});
-    var pick=byNum[0]||byName[0]||exact.slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');})[0];
-    return {id:pick.id,sur:true};}
-  var fz=cands.filter(function(f){var t=rapproNorm(f.tiers);return (t&&t.length>=3&&libN.indexOf(t)>=0)||(f.num&&libN.indexOf(rapproNorm(f.num))>=0);});
-  if(fz.length)return {id:fz[0].id,sur:false};
-  return {id:'',sur:false};}
-function rapproImport(){var el=document.getElementById('rappro-text');var t=el?el.value:'';var lines=rapproParse(t);if(!lines.length){toast('Aucune ligne détectée — vérifiez le format (date, libellé, montant).');return;}state.rapproLines=lines;state.rapproText='';render();}
-function rapproFile(inp){var f=inp.files&&inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(e){var lines=rapproParse(''+e.target.result);if(!lines.length){toast('Aucune ligne détectée dans le fichier.');return;}state.rapproLines=lines;render();};r.readAsText(f);inp.value='';}
-function rapproClear(){state.rapproLines=null;state.rapproText='';render();}
-function rapproMatch(idx,factId){var lines=state.rapproLines||[];var line=lines[idx];if(!line)return;
-  var sel=document.getElementById('rappro-sel-'+idx);var fid=factId||(sel?sel.value:'');if(!fid){toast('Sélectionnez une facture.');return;}
-  var f=(DB.factures||[]).find(function(x){return x.id===fid;});if(!f)return;
-  f.statut='Payée';f.paiementDate=line.date||today();f.paiementMontant=Math.abs(line.montant);
-  DB.rapprochements=DB.rapprochements||[];DB.rapprochements.unshift({ts:Date.now(),factId:f.id,num:f.num,tiers:f.tiers,montant:Math.abs(line.montant),date:f.paiementDate,libelle:line.libelle});
-  if(DB.rapprochements.length>200)DB.rapprochements.length=200;
-  lines.splice(idx,1);if(typeof logAudit==='function')logAudit('Paiement rapproché',f.num+' — '+f.tiers+' — '+eur(f.paiementMontant));save();toast('Facture '+f.num+' rapprochée (Payée)');render();}
-function rapproAuto(){var lines=state.rapproLines||[];var done=0;for(var i=lines.length-1;i>=0;i--){var s=rapproSuggest(lines[i]);if(s.id&&s.sur){rapproMatchSilent(i,s.id);done++;}}
-  if(typeof logAudit==='function'&&done)logAudit('Rapprochement automatique',done+' facture(s) rapprochée(s)');save();toast(done?(done+' correspondance(s) exacte(s) rapprochée(s)'):'Aucune correspondance exacte.');render();}
-function rapproMatchSilent(idx,fid){var lines=state.rapproLines||[];var line=lines[idx];var f=(DB.factures||[]).find(function(x){return x.id===fid;});if(!line||!f)return;
-  f.statut='Payée';f.paiementDate=line.date||today();f.paiementMontant=Math.abs(line.montant);
-  DB.rapprochements=DB.rapprochements||[];DB.rapprochements.unshift({ts:Date.now(),factId:f.id,num:f.num,tiers:f.tiers,montant:Math.abs(line.montant),date:f.paiementDate,libelle:line.libelle});
-  lines.splice(idx,1);}
-function pageRappro(){
-  var lines=state.rapproLines;
-  var out='<div class="flow-note">'+svg(IC.card)+'<div><b>Rapprochement des paiements</b> — collez ou importez votre relevé bancaire ; les <b>encaissements</b> sont rapprochés automatiquement de vos <b>factures impayées</b> (marquées « Payée »).</div></div>';
-  if(!lines||!lines.length){
-    out+='<div class="card" style="margin-top:14px"><div class="card-h"><h2>Importer un relevé</h2><span class="sub" style="margin-left:auto">Copier-coller ou fichier CSV</span></div><div class="card-b">'
-      +'<p class="hint" style="margin:0 0 8px">Une ligne par opération. Formats reconnus : <code>date ; libellé ; montant</code>, CSV, ou copie directe depuis votre banque (la date, le libellé et le montant sont détectés automatiquement).</p>'
-      +'<textarea id="rappro-text" rows="7" style="width:100%;font:inherit;font-size:12.5px" placeholder="15/05/2026 ; VIREMENT CLAIRE MOREAU FV-2601 ; 1200,00\n18/05/2026 ; VIR DUPONT SAS ; 960,00"></textarea>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
-      +'<button class="btn btn-sm btn-pri" onclick="rapproImport()">Analyser le relevé</button>'
-      +'<button class="btn btn-sm btn-ghost" onclick="document.getElementById(\'rappro-file\').click()">Importer un fichier CSV</button>'
-      +'<input type="file" id="rappro-file" accept=".csv,text/csv,text/plain" style="display:none" onchange="rapproFile(this)"></div>'
-      +'</div></div>';
-    out+=rapproLogCard();
-    return out;
-  }
-  var sugg=lines.map(rapproSuggest);
-  var exact=sugg.filter(function(s){return s.id&&s.sur;}).length;
-  var approx=sugg.filter(function(s){return s.id&&!s.sur;}).length;
-  var none=sugg.filter(function(s){return !s.id;}).length;
-  var totalRappro=lines.reduce(function(t,l,i){return t+(sugg[i].id&&sugg[i].sur?Math.abs(l.montant):0);},0);
-  out+='<div class="cf-kpis" style="margin-top:14px">'
-    +'<div class="cf-k ok"><div class="v">'+exact+'</div><div class="k">Correspondances exactes</div></div>'
-    +'<div class="cf-k warm"><div class="v">'+approx+'</div><div class="k">À vérifier</div></div>'
-    +'<div class="cf-k hot"><div class="v">'+none+'</div><div class="k">Sans correspondance</div></div></div>';
-  out+='<div class="card"><div class="card-h"><h2>Rapprochement — '+lines.length+' opération(s)</h2>'
-    +'<button class="btn btn-sm btn-pri" style="margin-left:auto" onclick="rapproAuto()"'+(exact?'':' disabled style="opacity:.5;margin-left:auto"')+'>Rapprocher les '+exact+' exactes</button>'
-    +'<button class="btn btn-sm btn-ghost" style="margin-left:8px" onclick="rapproClear()">Effacer</button></div><div class="card-b" style="padding:0">'
-    +'<table><thead><tr><th class="hide-sm">Date</th><th>Libellé</th><th>Montant</th><th>Facture</th><th></th></tr></thead><tbody>';
-  var cands=rapproCandidates();
-  lines.forEach(function(l,i){ var s=sugg[i];
-    var opts='<option value="">— choisir —</option>'+cands.map(function(f){return '<option value="'+f.id+'"'+(f.id===s.id?' selected':'')+'>'+esc(f.num)+' · '+esc(f.tiers)+' · '+eur(f.ttc)+'</option>';}).join('');
-    var badge=s.id?(s.sur?'<span class="cf-badge fait">exact</span>':'<span class="cf-badge imminent">à vérifier</span>'):'<span class="cf-badge retard">aucune</span>';
-    out+='<tr><td class="hide-sm">'+(l.date?frDate(l.date):'—')+'</td><td>'+esc(l.libelle||'—')+' '+badge+'</td>'
-      +'<td class="'+(l.montant<0?'':'')+'"><b>'+eur(Math.abs(l.montant))+'</b></td>'
-      +'<td><select id="rappro-sel-'+i+'" style="min-width:220px;margin:0">'+opts+'</select></td>'
-      +'<td><button class="btn btn-sm'+(s.id?' btn-pri':' btn-ghost')+'" onclick="rapproMatch('+i+')">Rapprocher</button></td></tr>';
-  });
-  out+='</tbody></table></div></div>';
-  out+=rapproLogCard();
-  return out;
-}
-function rapproLogCard(){var log=DB.rapprochements||[];if(!log.length)return '';
-  return '<div class="card" style="margin-top:16px"><div class="card-h"><h2>Paiements rapprochés</h2><span class="sub" style="margin-left:auto">'+log.length+' dernier(s)</span></div><div class="card-b" style="padding:0">'
-    +'<table><thead><tr><th class="hide-sm">Le</th><th>Facture</th><th>Client</th><th>Montant</th></tr></thead><tbody>'
-    +log.slice(0,15).map(function(r){return '<tr><td class="hide-sm">'+(r.date?frDate(r.date):frDate(new Date(r.ts).toISOString().slice(0,10)))+'</td><td class="tname">'+esc(r.num||'')+'</td><td>'+esc(r.tiers||'')+'</td><td>'+eur(r.montant)+'</td></tr>';}).join('')
-    +'</tbody></table></div></div>';}
-
-/* ---------- DEVIS (établissement, suivi, transformation en facture) ---------- */
-function devisStatColor(s){return s==='Accepté'?'#3f7d54':s==='Refusé'?'#c0392b':s==='Transformé'?'#8e44ad':s==='Expiré'?'#b45309':'#5a6b8c';}
-function devisExpire(d){if(!d.ech)return false;if(d.statut==='Transformé'||d.statut==='Accepté')return false;return d.ech<today();}
-function fvOpenDevis(){
-  if(typeof FactureVente==='undefined')return toast('Module devis indisponible');
-  window._devisClientNom='';
-  FactureVente.ouvrir({societe:fvSociete(),clients:fvClients(),services:(DB.services||[]),numero:fvNextNumDevis(),initial:{type:'devis'},onCreer:fvOnCreerDevis});
-}
-function devisSetFilter(v){state.devisFilter=v;render();}
-function devisSort(col){var s=state.devisSort||{col:'date',dir:-1};if(s.col===col){s.dir=-s.dir;}else{s.col=col;s.dir=(col==='date'||col==='ech'||col==='ttc')?-1:1;}state.devisSort=s;render();}
-function pageDevis(){
-  var all=(DB.devis||[]).slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
-  all.forEach(function(d){if(devisExpire(d)&&d.statut==='Émis')d.statut='Expiré';});
-  var fil=state.devisFilter||'tous';
-  var dmatch=function(d,k){return k==='tous'?true:(k==='emis'?d.statut==='Émis':k==='acceptes'?d.statut==='Accepté':k==='transformes'?d.statut==='Transformé':k==='refuses'?(d.statut==='Refusé'||d.statut==='Expiré'):true);};
-  var dso=state.devisSort||{col:'date',dir:-1};
-  var dacc={num:function(d){return d.num||'';},tiers:function(d){return d.tiers||'';},date:function(d){return d.date||'';},ech:function(d){return d.ech||'';},ttc:function(d){return +d.ttc||0;},statut:function(d){return d.statut||'';}};
-  var list=all.filter(function(d){return dmatch(d,fil);}).slice().sort(function(a,b){var va=dacc[dso.col]?dacc[dso.col](a):'',vb=dacc[dso.col]?dacc[dso.col](b):'';var c=(typeof va==='number')?(va-vb):(''+va).localeCompare(''+vb);return c*dso.dir;});
-  var dfh=function(col,label,cls){return '<th'+(cls?' class="'+cls+'"':'')+' style="cursor:pointer;user-select:none;white-space:nowrap" onclick="devisSort(\''+col+'\')">'+label+(dso.col===col?(dso.dir>0?' ▲':' ▼'):'')+'</th>';};
-  var dcnt=function(k){return all.filter(function(d){return dmatch(d,k);}).length;};
-  var dchip=function(k,lbl){return '<button class="fchip'+(fil===k?' on':'')+'" onclick="devisSetFilter(\''+k+'\')">'+lbl+' <span class="fchip-n">'+dcnt(k)+'</span></button>';};
-  var dfiltres='<div class="fchips">'+dchip('tous','Tous')+dchip('emis','En attente')+dchip('acceptes','Acceptés')+dchip('transformes','Transformés')+dchip('refuses','Refusés/Expirés')+'</div>';
-  var nb=list.length;
-  var totTTC=all.reduce(function(s,d){return s+(+d.ttc||0);},0);
-  var acc=all.filter(function(d){return d.statut==='Accepté';});
-  var trans=all.filter(function(d){return d.statut==='Transformé';});
-  var enAttente=all.filter(function(d){return d.statut==='Émis';});
-  var base=acc.length+trans.length+list.filter(function(d){return d.statut==='Refusé';}).length;
-  var tauxConv=base?Math.round((trans.length/base)*100):0;
-  return '<div class="grid g3" style="margin-bottom:14px">'
-    +kpi('quote',eur(totTTC),'Total devis (TTC)','blue')
-    +kpi('trend',tauxConv+' %','Taux de transformation','ok')
-    +kpi('inbox',enAttente.length,'En attente de réponse',enAttente.length?'warm':'')
-    +'</div>'
-    +'<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center"><button class="btn btn-pri" onclick="fvOpenDevis()">'+svg(IC.plus)+'Nouveau devis</button>'
-    +(all.length?'<button class="btn btn-ghost btn-sm" onclick="exportDevisCSV()">Exporter (CSV)</button>':'')
-    +'<span class="tag blue">'+nb+(fil!=='tous'?'/'+all.length:'')+' devis</span>'+(trans.length?'<span class="tag green">'+trans.length+' transformé(s)</span>':'')+'</div>'
-    +(all.length?dfiltres:'')
-    +'<div class="card"><div class="card-b" style="padding:0">'
-    +(nb?'<table><thead><tr>'+dfh('num','N°')+dfh('tiers','Client')+dfh('date','Date','hide-sm')+dfh('ech','Validité','hide-sm')+dfh('ttc','TTC')+dfh('statut','Statut')+'<th></th></tr></thead><tbody>'
-      +list.map(function(d){return '<tr onclick="devisView(\''+d.id+'\')" style="cursor:pointer">'
-        +'<td class="tname">'+esc(d.num)+'</td><td>'+esc(d.tiers)+'</td>'
-        +'<td class="hide-sm">'+frDate(d.date)+'</td><td class="hide-sm">'+(d.ech?frDate(d.ech):'—')+'</td>'
-        +'<td>'+eur(d.ttc)+'</td>'
-        +'<td><span class="pill-stat" style="color:'+devisStatColor(d.statut)+';border-color:'+devisStatColor(d.statut)+'55;background:'+devisStatColor(d.statut)+'18">'+esc(d.statut)+'</span>'+((d.relances&&d.relances.length)?' <span class="tsub">'+d.relances.length+'× relancé</span>':'')+'</td>'
-        +'<td onclick="event.stopPropagation()"><button class="btn btn-sm btn-ghost" onclick="devisView(\''+d.id+'\')">Ouvrir</button></td></tr>';}).join('')
-      +'</tbody></table>'
-      :'<div class="empty">'+(all.length?'Aucun devis pour ce filtre.':'Aucun devis. Créez-en un avec « Nouveau devis ».')+'</div>')
-    +'</div></div>';
-}
-function devisView(id){
-  var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;
-  if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();
-  var html=(d.doc&&typeof FactureVente!=='undefined'&&FactureVente.docHTML)?FactureVente.docHTML(d.doc):'<div class="hint" style="padding:14px">Aperçu indisponible.</div>';
-  var transformed=d.statut==='Transformé';
-  var actions='';
-  if(!transformed){
-    actions='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
-      +'<button class="btn btn-sm '+(d.statut==='Accepté'?'btn-pri':'btn-ghost')+'" onclick="devisSetStatut(\''+id+'\',\'Accepté\')">Marquer accepté</button>'
-      +'<button class="btn btn-sm btn-ghost" onclick="devisSetStatut(\''+id+'\',\'Refusé\')">Refusé</button>'
-      +'<button class="btn btn-sm btn-ghost" onclick="devisEnvoyer(\''+id+'\')">Envoyer au client</button>'
-      +((d.statut==='Émis'||d.statut==='Expiré')?'<button class="btn btn-sm btn-ghost" onclick="devisRelancer(\''+id+'\')">Relancer'+((d.relances&&d.relances.length)?' ('+d.relances.length+')':'')+'</button>':'')
-      +'<button class="btn btn-sm btn-ghost" onclick="devisPrint(\''+id+'\')">Imprimer / PDF</button>'
-      +'</div>';
-  } else {
-    actions='<p class="hint" style="margin:10px 0 0;color:#8e44ad">Devis transformé en facture'+(d.factureNum?' <b>'+esc(d.factureNum)+'</b>':'')+'.</p>';
-  }
-  openModal('Devis '+esc(d.num),
-    '<div class="fv-view-scroll"><div class="inv">'+html+'</div></div>'+actions,
-    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
-    +(transformed?'':'<button class="btn btn-danger" onclick="devisDel(\''+id+'\')">Supprimer</button>'
-      +'<button class="btn btn-pri" onclick="devisTransformer(\''+id+'\')">Transformer en facture</button>'));
-  setTimeout(fvFitView,40);
-}
-function devisSetStatut(id,st){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;d.statut=st;save();toast('Devis '+st.toLowerCase());devisView(id);}
-function devisDel(id){yc('Supprimer ce devis ?',function(){var i=(DB.devis||[]).findIndex(function(x){return x.id===id;});if(i<0)return;var item=DB.devis[i];DB.devis.splice(i,1);if(window.corbeilleAdd)corbeilleAdd('devis',(item.num||'Devis')+(item.tiers?' · '+item.tiers:''),item);save();closeModal();
-  toastUndo('Devis supprimé',function(){DB.devis.splice(Math.min(i,DB.devis.length),0,item);save();render();toast('Suppression annulée');});render();});}
-function devisPrint(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(d&&d.doc&&typeof FactureVente!=='undefined'&&FactureVente.imprimerDoc)FactureVente.imprimerDoc(d.doc);}
-function devisEnvoyer(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;
-  var mail=(d.doc&&d.doc.clientEmail)||docClientEmail(d)||'';
-  var _v={num:d.num,client:d.tiers,ttc:eur(d.ttc),ech:(d.ech?frDate(d.ech):'—'),cabinet:mailCabinet(),n:''};
-  var _t=mailTpl('envoiDevis');var sujet=mailFill(_t.sujet,_v),corps=mailFill(_t.corps,_v);
-  if(mail&&typeof demEnvoiSilencieux==='function'&&demEnvoiSilencieux(mail,sujet,corps)){toast('Devis envoyé à '+mail);}
-  else{window.location.href='mailto:'+encodeURIComponent(mail)+'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);}
-}
-function devisTransformer(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;
-  yc('Transformer ce devis en facture de vente ?',function(){
-    if(!DB.factures)DB.factures=[];
-    var num=fvNextNum();
-    var fdoc=d.doc?JSON.parse(JSON.stringify(d.doc)):null;
-    if(fdoc){fdoc.type='facture';fdoc.numero=num;fdoc.date=today();}
-    DB.factures.unshift({id:uid('fa'),type:'client',num:num,tiers:d.tiers,date:today(),ech:d.ech,
-      ht:d.ht,tva:d.tva,ttc:d.ttc,taux:(d.doc&&d.doc.lignes&&d.doc.lignes[0]?+d.doc.lignes[0].taux:20),
-      statut:'Émise',doc:fdoc,devisId:d.id,createdAt:today()});
-    DB.seq=DB.seq||{};DB.seq.factVente=(DB.seq.factVente||1)+1;
-    d.statut='Transformé';d.factureNum=num;
-    logAudit('Devis transformé',d.num+' → '+num+' — '+eur(d.ttc));save();closeModal();toast('Facture '+num+' créée depuis le devis');state.page='facturation';render();
-  });
-}
-/* helper de confirmation (compat) */
 function yc(msg,ok){if(typeof confirm==='function'){if(confirm(msg))ok();}else ok();}
 
 /* ---------- Modèles d'e-mails paramétrables ---------- */
@@ -3144,104 +2796,7 @@ var DEFAULT_MAILTPL={
 function mailTpl(key){var t=(DB.params&&DB.params.mailTpl&&DB.params.mailTpl[key])||DEFAULT_MAILTPL[key]||{sujet:'',corps:''};return {sujet:t.sujet||'',corps:t.corps||''};}
 function mailFill(str,v){return (''+(str||'')).replace(/\{(\w+)\}/g,function(m,k){return v[k]!=null?v[k]:m;});}
 /* ---------- RELANCES (devis en attente & factures impayées) ---------- */
-function docClientEmail(o){
-  if(o&&o.doc&&o.doc.clientEmail)return o.doc.clientEmail;
-  var nom=(o&&o.tiers)||'';var c=(DB.clients||[]).find(function(x){return ((x.prenom+' '+x.nom).trim()===nom)||x.nom===nom;});
-  return c?(c.email||''):'';
-}
-function relanceEnRetard(o){if(!o||!o.ech)return false;return o.ech<today();}
 function joursAvant(iso){try{var d=new Date(iso+'T00:00:00');var n=new Date();n.setHours(0,0,0,0);return Math.round((d-n)/86400000);}catch(x){return null;}}
-function echeancierAVenir(nbJours){nbJours=nbJours||45;var out=[];
-  (DB.factures||[]).forEach(function(f){if(f.type!=='client')return;if(f.avoir)return;if(f.statut!=='Impayée'&&f.statut!=='Émise')return;if(!f.ech)return;var j=joursAvant(f.ech);if(j==null||j<0||j>nbJours)return;out.push({kind:'facture',id:f.id,num:f.num,tiers:f.tiers,ttc:f.ttc,date:f.ech,jours:j});});
-  (DB.devis||[]).forEach(function(d){if(d.statut!=='Émis')return;if(!d.ech)return;var j=joursAvant(d.ech);if(j==null||j<0||j>nbJours)return;out.push({kind:'devis',id:d.id,num:d.num,tiers:d.tiers,ttc:d.ttc,date:d.ech,jours:j});});
-  out.sort(function(a,b){return a.jours-b.jours;});return out;}
-function relanceInfo(o){var r=(o&&o.relances)||[];return {n:r.length,last:r.length?r[r.length-1].ts:''};}
-function factRelancer(id){var f=(DB.factures||[]).find(function(x){return x.id===id;});if(!f)return;
-  var mail=docClientEmail(f);if(!mail)return toast('Aucune adresse e-mail — renseignez la fiche client.');
-  var info=relanceInfo(f);
-  var _v={num:f.num,client:f.tiers,ttc:eur(f.ttc),ech:(f.ech?frDate(f.ech):'—'),cabinet:mailCabinet(),n:info.n+1};
-  var _t=mailTpl('relanceFacture');var sujet=mailFill(_t.sujet,_v),corps=mailFill(_t.corps,_v);
-  var sent=(typeof demEnvoiSilencieux==='function')&&demEnvoiSilencieux(mail,sujet,corps);
-  f.relances=f.relances||[];f.relances.push({ts:Date.now(),canal:sent?'email':'mailto'});logAudit('Relance facture',f.num+' — '+f.tiers+' ('+f.relances.length+'e relance)');save();
-  if(sent){toast('Relance envoyée à '+mail);}
-  else{window.location.href='mailto:'+encodeURIComponent(mail)+'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);}
-  if(document.getElementById('ov')&&document.getElementById('ov').classList.contains('show'))fvView(id);else render();
-}
-function relancerToutesEchues(){
-  var echues=(DB.factures||[]).filter(function(f){return f.type==='client'&&f.statut==='Impayée'&&relanceEnRetard(f);});
-  if(!echues.length)return toast('Aucune facture échue.');
-  yc('Envoyer une relance aux '+echues.length+' client(s) concerné(s) ?',function(){
-    var ok=0,ko=0;
-    echues.forEach(function(f){var mail=docClientEmail(f);
-      var _v={num:f.num,client:f.tiers,ttc:eur(f.ttc),ech:(f.ech?frDate(f.ech):'—'),cabinet:mailCabinet(),n:(f.relances||[]).length+1};var _t=mailTpl('relanceFacture');
-      if(mail&&typeof demEnvoiSilencieux==='function'&&demEnvoiSilencieux(mail,mailFill(_t.sujet,_v),mailFill(_t.corps,_v))){
-        f.relances=f.relances||[];f.relances.push({ts:Date.now(),canal:'email'});ok++;
-      } else ko++;
-    });
-    logAudit('Relances groupées',ok+' facture(s) relancée(s)'+(ko?(' · '+ko+' sans e-mail'):''));save();render();
-    toast(ok+' relance(s) envoyée(s)'+(ko?(' · '+ko+' sans e-mail'):''));
-  });
-}
-function devisRelancer(id){var d=(DB.devis||[]).find(function(x){return x.id===id;});if(!d)return;
-  var mail=docClientEmail(d);if(!mail)return toast('Aucune adresse e-mail — renseignez la fiche client.');
-  var info=relanceInfo(d);
-  var _v={num:d.num,client:d.tiers,ttc:eur(d.ttc),ech:(d.ech?frDate(d.ech):'—'),cabinet:mailCabinet(),n:info.n+1};
-  var _t=mailTpl('relanceDevis');var sujet=mailFill(_t.sujet,_v),corps=mailFill(_t.corps,_v);
-  var sent=(typeof demEnvoiSilencieux==='function')&&demEnvoiSilencieux(mail,sujet,corps);
-  d.relances=d.relances||[];d.relances.push({ts:Date.now(),canal:sent?'email':'mailto'});logAudit('Relance devis',d.num+' — '+d.tiers);save();
-  if(sent){toast('Relance envoyée à '+mail);}
-  else{window.location.href='mailto:'+encodeURIComponent(mail)+'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps);}
-  if(document.getElementById('ov')&&document.getElementById('ov').classList.contains('show'))devisView(id);else render();
-}
-
-/* ---------- TIERS (Clients & Fournisseurs) ---------- */
-function pageTiers(){
-  const t=state.tiersTab||'clients';
-  return `<div class="fact-tabs">
-    <button class="ftab ${t==='clients'?'on':''}" onclick="state.tiersTab='clients';render()">Clients</button>
-    <button class="ftab ${t==='fournisseurs'?'on':''}" onclick="state.tiersTab='fournisseurs';render()">Fournisseurs</button>
-  </div>${t==='clients'?pageClients():tiersFourn()}`;
-}
-function tiersFourn(){
-  let list=(DB.fournisseurs||[]);
-  if(state.q)list=list.filter(f=>((f.nom||'')+(f.email||'')+(f.prestation||'')).toLowerCase().includes(state.q));
-  return `<div style="display:flex;gap:10px;margin-bottom:14px"><button class="btn btn-pri" onclick="fournModal()">${svg(IC.plus)}Ajouter</button><span class="tag blue">${(DB.fournisseurs||[]).length} fournisseur(s)</span></div>
-  <div class="card"><div class="card-b" style="padding:0">
-  ${list.length?`<table><thead><tr><th>Fournisseur</th><th class="hide-sm">Contact</th><th class="hide-sm">Prestation</th><th>SIRET</th><th></th></tr></thead><tbody>
-  ${list.map(f=>`<tr onclick="fournModal('${f.id}')" style="cursor:pointer">
-    <td><div style="display:flex;align-items:center;gap:9px"><span class="av" style="background:#544a3b">${initials(f.nom||'?')}</span><div><div class="tname">${esc(f.nom)}</div><div class="tsub">${esc(f.ville||'')}</div></div></div></td>
-    <td class="hide-sm"><div style="font-size:11.5px">${esc(f.email||'—')}</div><div class="tsub">${esc(f.tel||'')}</div></td>
-    <td class="hide-sm">${esc(f.prestation||'—')}</td><td>${esc(f.siret||'—')}</td>
-    <td onclick="event.stopPropagation()"><button class="btn btn-sm btn-ghost" onclick="fournModal('${f.id}')">Ouvrir</button></td></tr>`).join('')}
-  </tbody></table>`:`<div class="empty">Aucun fournisseur. Ajoutez vos prestataires (greffe, INPI, annonces légales, domiciliation…).</div>`}
-  </div></div>`;
-}
-function fournModal(id){
-  const f=id?DB.fournisseurs.find(x=>x.id===id):{nom:'',siret:'',tvaIntra:'',adresse:'',cp:'',ville:'',email:'',tel:'',prestation:''};
-  openModal(id?'Fournisseur — '+esc(f.nom):'Nouveau fournisseur',`
-    <label>Dénomination</label><input id="fo-nom" value="${esc(f.nom)}" placeholder="Greffe, INPI, Journal d'annonces…">
-    <div class="frow"><div><label>Prestation / nature</label><input id="fo-prest" value="${esc(f.prestation)}" placeholder="Annonces légales, dépôt…"></div>
-      <div><label>SIRET</label><input id="fo-siret" value="${esc(f.siret)}"></div></div>
-    <div class="frow"><div><label>N° TVA intracom.</label><input id="fo-tva" value="${esc(f.tvaIntra)}"></div>
-      <div><label>Téléphone</label><input id="fo-tel" value="${esc(f.tel)}"></div></div>
-    <label>Email</label><input id="fo-mail" type="email" value="${esc(f.email)}">
-    <label>Adresse</label><input id="fo-adr" value="${esc(f.adresse)}">
-    <div class="frow"><div><label>Code postal</label><input id="fo-cp" value="${esc(f.cp)}"></div><div><label>Ville</label><input id="fo-ville" value="${esc(f.ville)}"></div></div>
-  `,`<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
-     ${id?`<button class="btn btn-danger" onclick="fournDel('${id}')">Supprimer</button>`:''}
-     <button class="btn btn-pri" onclick="fournSave('${id||''}')">Enregistrer</button>`);
-}
-function fournSave(id){
-  const g=x=>document.getElementById(x);
-  const obj={nom:g('fo-nom').value.trim(),prestation:g('fo-prest').value.trim(),siret:g('fo-siret').value.trim(),tvaIntra:g('fo-tva').value.trim(),tel:g('fo-tel').value.trim(),email:g('fo-mail').value.trim(),adresse:g('fo-adr').value.trim(),cp:g('fo-cp').value.trim(),ville:g('fo-ville').value.trim()};
-  if(!obj.nom)return toast('Dénomination requise');
-  if(!DB.fournisseurs)DB.fournisseurs=[];
-  if(id)Object.assign(DB.fournisseurs.find(x=>x.id===id),obj);else DB.fournisseurs.push({id:uid('fo'),createdAt:today(),...obj});
-  save();closeModal();toast('Fournisseur enregistré');render();
-}
-function fournDel(id){if(!confirm('Supprimer ce fournisseur ?'))return;var i=DB.fournisseurs.findIndex(f=>f.id===id);if(i<0)return;var item=DB.fournisseurs[i];DB.fournisseurs.splice(i,1);if(window.corbeilleAdd)corbeilleAdd('fournisseur',item.nom||item.raison||'Fournisseur',item);save();closeModal();
-  toastUndo('Fournisseur supprimé',function(){DB.fournisseurs.splice(Math.min(i,DB.fournisseurs.length),0,item);save();render();toast('Suppression annulée');});render();}
-
 function pageSoon(){
   const p=PAGES.find(x=>x.id===state.page)||PAGES[0];
   return `<div class="card"><div class="card-b" style="text-align:center;padding:56px 24px">
@@ -3314,13 +2869,6 @@ function ensureData(){
         {id:uid('fo'),nom:'INPI',prestation:'Dépôt de marque',siret:'',tvaIntra:'',adresse:'',cp:'',ville:'Courbevoie',email:'',tel:'',createdAt:today()},
         {id:uid('fo'),nom:"Journal d'annonces légales",prestation:'Annonces légales',siret:'',tvaIntra:'',adresse:'',cp:'',ville:'',email:'',tel:'',createdAt:today()},
         {id:uid('fo'),nom:'Domiciliation Paris',prestation:'Domiciliation commerciale',siret:'',tvaIntra:'',adresse:'',cp:'75002',ville:'Paris',email:'',tel:'',createdAt:today()}
-      );
-    }
-    if(DB.factures.length===0){
-      DB.factures.push(
-        {id:uid('fa'),type:'client',num:factNum('client'),tiers:'David Okonkwo',date:today(),ht:690,taux:20,tva:138,ttc:828,statut:'Émise',createdAt:today()},
-        {id:uid('fa'),type:'client',num:factNum('client'),tiers:'Julien Marchand',date:today(),ht:390,taux:20,tva:78,ttc:468,statut:'Payée',createdAt:today()},
-        {id:uid('fa'),type:'fournisseur',num:factNum('fournisseur'),tiers:"Journal d'annonces légales",date:today(),ht:180,taux:0,tva:0,ttc:180,statut:'À payer',createdAt:today()}
       );
     }
     localStorage.setItem('last-seed2','1');
@@ -3429,16 +2977,6 @@ var _authPwd='';var _authSecret='';   /* en mémoire, le temps de la connexion *
 function _authErr(m){var e=document.getElementById('lg-err');if(e){e.textContent=m||'';e.style.display=m?'block':'none';}}
 function _authGranted(){try{localStorage.setItem('last-gate-ok','1');localStorage.setItem('last-role','admin');localStorage.removeItem('last-user');}catch(e){}_authOk();_authPwd='';_authSecret='';var g=document.getElementById('last-gate');if(g)g.remove();lastBoot();}
 /* Étape unique — connexion collaborateur (identifiant + mot de passe, sans 2FA) */
-async function lastGateCollabTry(ev){if(ev&&ev.preventDefault)ev.preventDefault();
-  if(_authLockLeft()>0){_authErr('Trop de tentatives — réessayez dans '+_authLockLeft()+' s.');return false;}
-  var login=(document.getElementById('lg-login')||{}).value||'';
-  var pwd=(document.getElementById('lg-cpwd')||{}).value||'';
-  var u=(typeof collabAuth==='function')?await collabAuth(login,pwd):null;
-  if(u){try{localStorage.setItem('last-gate-ok','1');localStorage.setItem('last-role','collab');localStorage.setItem('last-user',u.id);}catch(e){}_authOk();var g=document.getElementById('last-gate');if(g)g.remove();lastBoot();}
-  else{_authFail();var c=document.getElementById('lg-cpwd');if(c){c.value='';c.focus();}_authErr('Identifiant ou mot de passe incorrect.'+(_authLockLeft()?(' Verrouillé '+_authLockLeft()+' s.'):''));}
-  return false;
-}
-
 /* Étape 1 — mot de passe */
 async function lastGateTry(ev){if(ev&&ev.preventDefault)ev.preventDefault();
   if(_authLockLeft()>0){_authErr('Trop de tentatives — réessayez dans '+_authLockLeft()+' s.');return false;}
@@ -3510,27 +3048,13 @@ function lastGate(){
 function lastGateRender(stage,data){
   data=data||{};var b=document.getElementById('lg-body');if(!b)return;
   if(stage==='pwd'){
-    var mode=(window.__lgMode==='collab')?'collab':'admin';
-    var tabs='<div class="lg-tabs"><button type="button" class="lg-tab'+(mode==='admin'?' on':'')+'" onclick="window.__lgMode=\'admin\';lastGateRender(\'pwd\')">Administrateur</button>'
-      +'<button type="button" class="lg-tab'+(mode==='collab'?' on':'')+'" onclick="window.__lgMode=\'collab\';lastGateRender(\'pwd\')">Collaborateur</button></div>';
-    if(mode==='collab'){
-      b.innerHTML='<div class="lg-form">'+tabs
-        +'<div class="lg-step">Espace collaborateur</div>'
-        +'<form onsubmit="return lastGateCollabTry(event)">'
-        +'<label>Identifiant</label><input id="lg-login" type="text" autocomplete="username" autofocus placeholder="prenom.n">'
-        +'<label style="margin-top:8px">Mot de passe</label><input id="lg-cpwd" type="password" autocomplete="current-password" placeholder="••••••••">'
-        +'<div id="lg-err" class="lg-err"></div>'
-        +'<button class="btn btn-pri" type="submit" style="width:100%;justify-content:center;margin-top:12px">Se connecter</button></form></div>';
-      var il=document.getElementById('lg-login');if(il)il.focus();
-    } else {
-      b.innerHTML='<div class="lg-form">'+tabs
-        +'<form onsubmit="return lastGateTry(event)">'
-        +'<div class="lg-step">Étape 1 / 2 · Mot de passe</div>'
-        +'<label>Mot de passe</label><input id="lg-pwd" type="password" autocomplete="current-password" autofocus placeholder="••••••••">'
-        +'<div id="lg-err" class="lg-err"></div>'
-        +'<button class="btn btn-pri" type="submit" style="width:100%;justify-content:center;margin-top:12px">Continuer</button></form></div>';
-      var i=document.getElementById('lg-pwd');if(i)i.focus();
-    }
+    b.innerHTML='<div class="lg-form">'
+      +'<form onsubmit="return lastGateTry(event)">'
+      +'<div class="lg-step">Étape 1 / 2 · Mot de passe</div>'
+      +'<label>Mot de passe</label><input id="lg-pwd" type="password" autocomplete="current-password" autofocus placeholder="••••••••">'
+      +'<div id="lg-err" class="lg-err"></div>'
+      +'<button class="btn btn-pri" type="submit" style="width:100%;justify-content:center;margin-top:12px">Continuer</button></form></div>';
+    var i=document.getElementById('lg-pwd');if(i)i.focus();
   } else if(stage==='otp'){
     b.innerHTML='<form class="lg-form" onsubmit="return lastGateOtp(event)">'
       +'<div class="lg-step">Étape 2 / 2 · Code de sécurité</div>'
@@ -3578,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=222;
+var LAST_VER=223;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9402,161 +8926,6 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 })();
 </script>
 
-<script id="flux-mod">
-/* ===================================================================
-   FLUX QUI GÉNÈRE DU CHIFFRE — deux leviers anti-fuite :
-   1) Accepter une demande → devis auto pré-rempli (plus de devis oublié).
-   2) Pipeline argent sur le tableau de bord — les 4 étapes du tunnel de
-      vente avec le € potentiel et les actions rapides à chaque étape.
-   =================================================================== */
-(function(){
-  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
-  function money(n){return (typeof eur==='function')?eur(n):(''+(n||0));}
-
-  /* ---- Montants estimés par étape ---- */
-  function demMontant(d){try{var s=(typeof svcMatchDemande==='function')?svcMatchDemande(((d.serviceSouhaite||d.service||'')+' '+(d.message||d.corps||''))):null;return s?((+s.prix||0)+(+s.debours||0)):0;}catch(e){return 0;}}
-  function dosMontant(d){try{return (typeof dossierMontant==='function')?dossierMontant(d):0;}catch(e){return 0;}}
-  function dosFacture(d){if(d.factureNum)return true;return (DB.factures||[]).some(function(f){return f.dossierId===d.id;});}
-  var LIVRE={'Paiement':1,'Transmis greffe':1,'Clôturé':1};
-
-  window.fluxStages=function(){
-    return {
-      demandes:(DB.demandes||[]).filter(function(d){return !d.archived && !d.dossierId && d.statut!=='Clôturé' && d.decision!=='refuse';}),
-      devis:(DB.devis||[]).filter(function(d){return d.statut==='Émis' || d.statut==='Accepté';}),
-      facturer:(DB.dossiers||[]).filter(function(d){return !d.archived && LIVRE[d.statut] && !dosFacture(d);}),
-      impayes:(DB.factures||[]).filter(function(f){return f.type==='client' && f.statut==='Impayée';})
-    };
-  };
-  window.fluxTotals=function(){
-    var s=fluxStages();var sum=function(a,fn){return a.reduce(function(t,x){return t+(fn(x)||0);},0);};
-    return {
-      demandes:{n:s.demandes.length,eur:sum(s.demandes,demMontant)},
-      devis:{n:s.devis.length,eur:sum(s.devis,function(d){return +d.ttc||0;})},
-      facturer:{n:s.facturer.length,eur:sum(s.facturer,dosMontant)},
-      impayes:{n:s.impayes.length,eur:sum(s.impayes,function(f){return +f.ttc||0;})}
-    };
-  };
-
-  /* ---- LEVIER 1 : Accepter → devis ---- */
-  window.demAccepterDevis=function(id){
-    var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return;
-    d.decision='accepte';d.decisionTs=Date.now();
-    if(typeof logAudit==='function')logAudit('Demande acceptée','→ devis — '+((typeof demBestName==='function')?demBestName(d):(d.clientNom||'')));
-    if(typeof save==='function')save();
-    if(typeof toast==='function')toast('Demande acceptée — établissez le devis.');
-    if(typeof demDevis==='function')demDevis(id);
-    else if(typeof render==='function')render();
-  };
-
-  /* ---- Anti-fuite DÉBOURS : les frais officiels (annonce légale, greffe/INPI)
-     doivent être refacturés au client. On détecte ceux qui manquent au dossier. ---- */
-  function svcDebours(rx){return (DB.services||[]).find(function(s){return s.type==='debours' && rx.test((s.nom||'').toLowerCase());});}
-  window.fluxDeboursRequis=function(d){
-    if(!d)return [];
-    var fam={};(d.serviceIds||[]).forEach(function(id){var s=(typeof svcById==='function')?svcById(id):null;if(s&&s.type!=='debours')fam[s.famille]=1;});
-    var need=[];
-    if(fam['Création']||fam['Modification']){need.push(/annonce/);need.push(/greffe|inpi/);}
-    else if(fam['Annuel']){need.push(/greffe|inpi/);}          /* dépôt des comptes */
-    var miss=[];var seen={};
-    need.forEach(function(rx){var s=svcDebours(rx);if(s && !(d.serviceIds||[]).includes(s.id) && !seen[s.id]){seen[s.id]=1;miss.push(s);}});
-    return miss;
-  };
-  window.fluxAjouterDebours=function(d,miss){
-    if(!d||!miss||!miss.length)return 0;
-    d.serviceIds=(d.serviceIds||[]).concat(miss.map(function(s){return s.id;}));
-    if(typeof save==='function')save();
-    return miss.length;
-  };
-
-  /* ---- LEVIER 1 bis : facturer un dossier livré (lien dossier↔facture) ---- */
-  window.fluxFacturerDossier=function(id){
-    var d=(DB.dossiers||[]).find(function(x){return x.id===id;});if(!d)return;
-    if(typeof FactureVente==='undefined')return (typeof toast==='function')&&toast('Module facture indisponible');
-    /* Refacturation des débours officiels manquants (marge préservée) */
-    var miss=fluxDeboursRequis(d);
-    if(miss.length){
-      var lbl=miss.map(function(s){return s.nom+' ('+money(s.debours)+')';}).join(', ');
-      if(typeof confirm!=='function' || confirm('Ce dossier n\'inclut pas ses débours officiels :\n'+lbl+'.\n\nLes ajouter à la facture (refacturés au client, marge préservée) ?')){
-        var n=fluxAjouterDebours(d,miss);
-        if(n&&typeof toast==='function')toast(n+' débours ajouté(s) — refacturé(s) au client.');
-      }
-    }
-    var cid=(d.clientIds||[])[0];
-    var lignes=(typeof devisLignesFromServices==='function')?devisLignesFromServices(d.serviceIds):undefined;
-    window._devisClientNom=(typeof dossierClients==='function')?dossierClients(d):'';
-    FactureVente.ouvrir({societe:fvSociete(),clients:fvClients(),services:(DB.services||[]),numero:fvNextNum(),
-      initial:{clientId:cid,lignes:lignes},
-      onCreer:function(doc){
-        if(!DB.factures)DB.factures=[];
-        var c=(DB.clients||[]).find(function(x){return x.id===doc.clientId;});
-        var name=c?(c.prenom+' '+c.nom).trim():(window._devisClientNom||'(client)');
-        DB.factures.unshift({id:uid('fa'),type:'client',num:doc.numero,tiers:name,date:doc.date,ech:doc.echeance,
-          ht:doc.ht,tva:doc.tva,ttc:doc.ttc,taux:(doc.lignes&&doc.lignes[0]?+doc.lignes[0].taux:20),
-          statut:'Émise',doc:doc,dossierId:d.id,createdAt:today()});
-        DB.seq=DB.seq||{};DB.seq.factVente=(DB.seq.factVente||1)+1;
-        d.factureNum=doc.numero;(d.historique=d.historique||[]).push({d:today(),t:'Facture '+doc.numero+' émise'});
-        if(typeof logAudit==='function')logAudit('Facture créée',doc.numero+' — '+name+' — '+money(doc.ttc)+' (dossier '+(d.ref||'')+')');
-        if(typeof save==='function')save();FactureVente.fermer();
-        if(typeof toast==='function')toast('Facture '+doc.numero+' créée pour '+(d.ref||'le dossier'));
-        if(typeof render==='function')render();
-      }});
-  };
-
-  /* ---- LEVIER 3 : carte Pipeline argent ---- */
-  function nomDem(d){return (typeof demBestName==='function')?demBestName(d):(d.clientNom||'(demande)');}
-  function col(key,emo,titre,tot,items){
-    var head='<div class="flux-col-h flux-'+key+'"><span class="flux-emo">'+emo+'</span><div class="flux-col-t"><b>'+E(titre)+'</b>'
-      +'<span class="flux-col-m">'+tot.n+' · '+money(tot.eur)+'</span></div></div>';
-    var body=items.length?items.map(function(it){
-      return '<div class="flux-it"><div class="flux-it-main" onclick="'+it.open+'"><b>'+E(it.nom)+'</b><span class="flux-it-eur">'+money(it.eur)+'</span></div>'
-        +'<button class="btn btn-sm '+(it.pri?'btn-pri':'btn-ghost')+' flux-it-act" onclick="'+it.act+'">'+E(it.lbl)+'</button></div>';
-    }).join(''):'<div class="flux-empty">—</div>';
-    return '<div class="flux-col">'+head+'<div class="flux-col-b">'+body+'</div></div>';
-  }
-  window.fluxPipelineCard=function(){
-    var s=fluxStages(),t=fluxTotals();var MAX=5;
-    var potentiel=t.demandes.eur+t.devis.eur+t.facturer.eur;
-    var cDem=col('dem','📨','Demandes à qualifier',t.demandes,
-      s.demandes.slice(0,MAX).map(function(d){return {nom:nomDem(d),eur:demMontant(d),open:"gsGo('demande','"+d.id+"')",act:"demAccepterDevis('"+d.id+"')",lbl:'🧾 Devis',pri:true};}));
-    var cDev=col('dev','📝','Devis en attente',t.devis,
-      s.devis.slice(0,MAX).map(function(d){return {nom:(d.num||'')+' · '+(d.tiers||''),eur:+d.ttc||0,open:"gsGo('devis','"+d.id+"')",act:"devisTransformer('"+d.id+"')",lbl:'→ Facture',pri:true};}));
-    var cFac=col('fac','📂','Dossiers à facturer',t.facturer,
-      s.facturer.slice(0,MAX).map(function(d){var deb=fluxDeboursRequis(d).length;return {nom:(d.ref||'')+' · '+((typeof dossierClients==='function')?dossierClients(d):'')+(deb?' ⚠':''),eur:dosMontant(d),open:"gsGo('dossier','"+d.id+"')",act:"fluxFacturerDossier('"+d.id+"')",lbl:'💶 Facturer',pri:true};}));
-    var cImp=col('imp','⏰','Impayés à relancer',t.impayes,
-      s.impayes.slice(0,MAX).map(function(f){return {nom:(f.num||'')+' · '+(f.tiers||''),eur:+f.ttc||0,open:"gsGo('facture','"+f.id+"')",act:"factRelancer('"+f.id+"')",lbl:'Relancer',pri:false};}));
-    return '<div class="card flux-card"><div class="card-h"><h2>💰 Pipeline commercial</h2>'
-      +'<span class="sub" style="margin-left:auto">Potentiel à convertir : <b>'+money(potentiel)+'</b> · Impayés : <b>'+money(t.impayes.eur)+'</b></span></div>'
-      +'<div class="card-b" style="padding:12px"><div class="flux-grid">'+cDem+cDev+cFac+cImp+'</div>'
-      +'<p class="hint" style="margin:10px 2px 0;font-size:11px">Chaque colonne = une étape du tunnel de vente. Traitez de gauche à droite : qualifiez → chiffrez → livrez → facturez → encaissez.</p>'
-      +'</div></div>';
-  };
-
-  /* ---- Greffes ---- */
-  /* Pipeline désormais rendu par pageDash lui-même (ordre : greeting → actions → cockpit → KPIs). */
-  /* Bouton « Accepter & établir le devis » retiré : la facturation/devis n'est plus dans la navigation. */
-
-  if(!document.getElementById('flux-css')){var st=document.createElement('style');st.id='flux-css';
-    st.textContent='.flux-card{margin-bottom:16px}'
-      +'.flux-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}'
-      +'@media(max-width:1100px){.flux-grid{grid-template-columns:repeat(2,1fr)}}'
-      +'@media(max-width:640px){.flux-grid{grid-template-columns:1fr}}'
-      +'.flux-col{border:1px solid var(--line-2,#e2d9c6);border-radius:11px;background:var(--paper-2,#f8f2e6);overflow:hidden;display:flex;flex-direction:column}'
-      +'.flux-col-h{display:flex;align-items:center;gap:9px;padding:10px 11px;border-bottom:1px solid var(--line-soft,#f0e9da)}'
-      +'.flux-emo{font-size:18px;flex:none}'
-      +'.flux-col-t{min-width:0;line-height:1.25}.flux-col-t b{display:block;font-size:12.5px}'
-      +'.flux-col-m{font-size:11.5px;color:var(--ink-3,#9c9078);font-weight:700}'
-      +'.flux-col-h.flux-imp{background:#fbf1e5}.flux-col-h.flux-fac{background:#eef4ea}.flux-col-h.flux-dev{background:#f3eee0}'
-      +'.flux-col-b{padding:7px;display:flex;flex-direction:column;gap:6px}'
-      +'.flux-it{display:flex;align-items:center;gap:7px}'
-      +'.flux-it-main{min-width:0;flex:1;cursor:pointer;display:flex;flex-direction:column;line-height:1.2}'
-      +'.flux-it-main b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}'
-      +'.flux-it-eur{font-size:11px;color:var(--ink-3,#9c9078)}'
-      +'.flux-it-act{flex:none;padding:3px 8px;font-size:11px}'
-      +'.flux-empty{text-align:center;color:var(--ink-3,#9c9078);font-size:12px;padding:8px 0}'
-      +'.flux-accdev{width:100%;justify-content:center;margin-bottom:8px}';
-    document.head.appendChild(st);}
-})();
-</script>
 
 
 

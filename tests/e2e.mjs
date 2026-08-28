@@ -147,17 +147,6 @@ const gd = await page.evaluate(() => {
 });
 ok('Guide — mise en service proxy Mistral', gd);
 
-// 10) Cœur métier : devis → facture
-const core = await page.evaluate(() => {
-  const o = {};
-  DB.clients = [{ id: 'ce', prenom: 'A', nom: 'B', email: 'a@b.fr' }];
-  DB.devis = [{ id: 'dve', num: 'DEV-E', tiers: 'A B', date: '2026-05-01', ech: '2026-06-01', ht: 1000, tva: 200, ttc: 1200, statut: 'Émis', doc: { type: 'devis', numero: 'DEV-E', clientId: 'ce', lignes: [{ desc: 'X', qte: 1, pu: 1000, taux: 20 }] } }];
-  DB.factures = []; devisTransformer('dve');
-  o.dv2fac = DB.factures.some((f) => f.devisId === 'dve' && f.ttc === 1200);
-  return o;
-});
-ok('Cœur — devis → facture', core.dv2fac);
-
 ok('Aucune erreur JS (pageerror)', perr.length === 0);
 ok('Aucune erreur console', cerr.length === 0);
 

@@ -74,7 +74,9 @@ const r = await page.evaluate(async () => {
   // 7) Modules RETIRÉS : bien absents
   const gone = ['pageClientsEspace', 'pageMarge', 'statsCard', 'exportFacturesCSV', 'exportDevisCSV',
     'pagePilotage', 'pageSuivi', 'recModal', 'recCard', 'secCard', 'meGet', 'demStats',
-    'tresoPrevision', 'finSanteCard', 'iaCopilote', 'collabAuth', 'isCollab', 'relancesAutoCard'];
+    'tresoPrevision', 'finSanteCard', 'iaCopilote', 'collabAuth', 'isCollab', 'relancesAutoCard',
+    'pageFacturation', 'pageDevis', 'pageRappro', 'pageTiers', 'factNum', 'devisView',
+    'devisTransformer', 'factRelancer', 'fluxPipelineCard', 'espFacture', 'espDevis', 'lastGateCollabTry'];
   out.retires = gone.filter(n => typeof window[n] !== 'undefined');
 
   // 8) Génération de documents (conception du dossier) toujours présente
