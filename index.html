@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=248;
+var LAST_VER=249;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10979,6 +10979,77 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     window.pageParams=function(){var h=_pp.apply(this,arguments);
       if(h.indexOf('id="num-card"')<0){var note=h.lastIndexOf('<div class="flow-note"');
         if(note>=0){h=h.slice(0,note)+window.numDossierCard()+h.slice(note);}else{h+=window.numDossierCard();}}
+      return h;};
+  }
+})();
+</script>
+
+<script id="depot-message-mod">
+/* ===== Message d'accompagnement du portail de dépôt (e-mail de demande de pièces) ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  var DEF_SUJET='Documents nécessaires pour démarrer votre dossier — AEM CONSEIL';
+  var DEF_CORPS='Bonjour {prenom},\n\n'
+    +'Nous avons bien reçu votre demande et nous vous en remercions.\n\n'
+    +'Afin de démarrer les démarches, merci de nous transmettre les documents suivants :\n\n'
+    +'{pieces}\n\n'
+    +'Vous pouvez répondre directement à cet e-mail en y joignant les documents (photo nette ou PDF), ou les déposer en ligne en toute sécurité via votre espace dédié :\n{lien}\n\n'
+    +'Dès réception, nous lançons les démarches de votre dossier.\n\n'
+    +'Bien cordialement,';
+  window.depotMsgCfg=function(){DB.parametres=DB.parametres||{};var c=DB.parametres.depotMsg=DB.parametres.depotMsg||{};
+    if(c.sujet==null)c.sujet=DEF_SUJET;if(c.corps==null)c.corps=DEF_CORPS;return c;};
+
+  function pieceLignes(d){
+    var pcs=[];try{if(typeof piecesRequises==='function')pcs=piecesRequises(d)||[];}catch(e){}
+    if(!pcs.length)pcs=[{label:"Pièce d'identité du dirigeant (recto/verso)"},{label:'Justificatif de domicile (− 3 mois)'}];
+    return pcs.map(function(p){return '  • '+((p&&p.label)||p);}).join('\n');
+  }
+  window.depotMsgResolve=function(d){
+    var c=window.depotMsgCfg();
+    var nom=(typeof demBestName==='function'?demBestName(d):'')||'';var prenom=(nom.split(/\s+/)[0]||'').trim();
+    var lien='';try{if(typeof depotLien==='function')lien=depotLien(d)||'';}catch(e){}
+    var corps=(''+c.corps)
+      .replace(/\{prenom\}/g,prenom)
+      .replace(/\{pieces\}/g,pieceLignes(d));
+    /* {lien} : si vide, retire la ligne qui le contient */
+    if(lien) corps=corps.replace(/\{lien\}/g,lien);
+    else corps=corps.replace(/^.*\{lien\}.*$\n?/gm,'').replace(/\{lien\}/g,'');
+    var sujet=(''+c.sujet).replace(/\{prenom\}/g,prenom);
+    return {sujet:sujet,corps:corps};
+  };
+
+  /* Override : « Demander les documents » utilise le message configuré + la liste de pièces configurée */
+  if(typeof window.demDemanderDocs==='function'||typeof demDemanderDocs==='function'){
+    window.demDemanderDocs=function(id){
+      var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return;
+      var m=window.depotMsgResolve(d);
+      var to=(typeof demReplyTo==='function')?demReplyTo(d):(d.clientEmail||'');
+      if(!to&&typeof toast==='function')toast("Adresse e-mail du client introuvable — vérifiez la demande avant d'envoyer.");
+      if(typeof demOuvrirMessagerie==='function')demOuvrirMessagerie(to,m.sujet,m.corps);
+      d.docsMailSent=Date.now();if(typeof save==='function')save();if(typeof render==='function')render();
+    };
+  }
+
+  window.depotMsgSave=function(){var c=window.depotMsgCfg();var su=document.getElementById('dmsg-sujet'),co=document.getElementById('dmsg-corps');
+    if(su)c.sujet=(''+su.value).trim()||DEF_SUJET;if(co)c.corps=(''+co.value)||DEF_CORPS;
+    if(typeof save==='function')save();if(typeof toast==='function')toast('Message enregistré');if(typeof render==='function')render();};
+  window.depotMsgReset=function(){var c=window.depotMsgCfg();c.sujet=DEF_SUJET;c.corps=DEF_CORPS;if(typeof save==='function')save();if(typeof toast==='function')toast('Message réinitialisé');if(typeof render==='function')render();};
+
+  window.depotMsgCard=function(){var c=window.depotMsgCfg();var perso=(c.sujet!==DEF_SUJET||c.corps!==DEF_CORPS);
+    return '<div class="card" id="dmsg-card" style="margin-top:14px"><div class="card-h"><h2>Message de demande de pièces</h2><span class="sub" style="margin-left:auto">'+(perso?'<span class="tag ok">Personnalisé</span>':'<span class="tag mut">Modèle standard</span>')+'</span></div><div class="card-b">'
+      +'<p class="hint" style="margin:0 0 10px">Texte de l\'e-mail envoyé au client avec le lien du portail de dépôt (bouton « Demander les pièces »). Variables : <code>{prenom}</code>, <code>{pieces}</code> (liste selon la formalité), <code>{lien}</code> (portail sécurisé).</p>'
+      +'<label>Objet</label><input id="dmsg-sujet" value="'+E(c.sujet)+'">'
+      +'<label>Corps du message</label><textarea id="dmsg-corps" rows="12" style="width:100%;font:13px/1.5 inherit">'+E(c.corps)+'</textarea>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-sm btn-pri" onclick="depotMsgSave()">Enregistrer</button>'
+      +(perso?'<button class="btn btn-sm btn-ghost" onclick="depotMsgReset()">↺ Réinitialiser</button>':'')+'</div>'
+      +'</div></div>';
+  };
+
+  if(typeof window.pageParams==='function'||typeof pageParams==='function'){
+    var _pp=(typeof window.pageParams==='function')?window.pageParams:pageParams;
+    window.pageParams=function(){var h=_pp.apply(this,arguments);
+      if(h.indexOf('id="dmsg-card"')<0){var note=h.lastIndexOf('<div class="flow-note"');
+        if(note>=0){h=h.slice(0,note)+window.depotMsgCard()+h.slice(note);}else{h+=window.depotMsgCard();}}
       return h;};
   }
 })();
