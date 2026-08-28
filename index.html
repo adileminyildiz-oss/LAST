@@ -3103,7 +3103,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=231;
+var LAST_VER=232;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9532,6 +9532,157 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     try{ var d=(DB.demandes||[]).find(function(x){return x.id===id;}); var lien=d?window.depotLien(d):''; if(lien){ var box=null; setTimeout(function(){ var ta=document.getElementById('ml-corps'); if(ta&&ta.value&&ta.value.indexOf('depot.html')<0){ ta.value=ta.value.replace(/\n*Bien cordialement,?/i,'\n\nPour plus de simplicité, vous pouvez aussi déposer vos pièces en ligne, en toute sécurité, via votre espace dédié :\n'+lien+'\n\nBien cordialement,'); } },120); } }catch(e){}
     return _dd(id);
   }; }
+})();
+</script>
+
+<script id="doc-models-plus-mod">
+/* ===== Plusieurs modèles de documents CHOISISSABLES : variantes d'actes + nouveaux documents ===== */
+(function(){
+  var DM=window.DOC_MODELS; if(!DM) return;
+  function X(d){return stDossData(d);}
+  function isPart(f){return f==='SARL'||f==='EURL'||f==='SCI';}
+  function qualiteMin(f){return isPart(f)?'gérant':'président';}
+
+  /* ---- POUVOIR : variante « pouvoir spécial de formalités (Guichet unique / INPI) » ---- */
+  window.pouvoirFormalitesHTML=function(d){
+    var x=X(d);var s=x.s;var q=stQualite(x.forme);
+    var repFirm=((s.representant||s.dirigeant||s.raison||'AEM CONSEIL')+'').trim();
+    var adrFirm=((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«adresse du mandataire»';
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">POUVOIR SPÉCIAL</div>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(Formalités de constitution — Guichet unique électronique des formalités d\'entreprises)</p>'
+      +'<p>Je soussigné <b>'+esc(x.president)+'</b>, agissant en qualité de '+q+' de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros, dont le siège social est situé '+esc(x.siegeComplet)+', en cours d\'immatriculation,</p>'
+      +'<p style="margin-top:8px"><b>donne pouvoir à</b> '+esc(repFirm)+', domicilié '+esc(adrFirm)+', avec faculté de subdélégation, à l\'effet de :</p>'
+      +'<p style="margin-left:14px">• déposer et signer, en mon nom, la formalité de création de la société sur le guichet unique des formalités d\'entreprises (INPI) ;</p>'
+      +'<p style="margin-left:14px">• transmettre l\'ensemble des pièces et actes constitutifs au registre national des entreprises (RNE) et au greffe du tribunal de commerce compétent ;</p>'
+      +'<p style="margin-left:14px">• répondre à toute demande de régularisation, signer toute pièce rectificative et acquitter les frais et émoluments correspondants ;</p>'
+      +'<p style="margin-left:14px">• et, plus généralement, accomplir toutes les démarches nécessaires à l\'immatriculation de la société.</p>'
+      +'<div class="st-fin" style="margin-top:30px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+esc(x.president)+'</b>Le Mandant — Le '+q+'</div><div class="sg"><b>'+esc(repFirm)+'</b>Le Mandataire — « Bon pour acceptation de pouvoir »</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---- DNC : variante « attestation simplifiée » (courte) ---- */
+  window.dncSimpleHTML=function(d){
+    var x=X(d);var dcl=x.assoc.filter(function(a){return (''+(a.nom||'')).trim()===(''+x.president).trim();})[0]||x.assoc[0]||{};
+    var nom=esc((dcl.nom||x.president||'').trim())||'«nom prénom»';
+    var naiss=dcl.naissance?esc(dcl.naissance):'«…»';var lieu=dcl.lieuNaissance?esc(dcl.lieuNaissance):'«lieu»';
+    var nat=dcl.nationalite?esc(dcl.nationalite):'«…»';var adr=dcl.adresse?esc(dcl.adresse):'«adresse»';
+    var q=stQualite(x.forme);
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre" style="font-size:14px">ATTESTATION SUR L\'HONNEUR DE NON-CONDAMNATION ET DE FILIATION</div>'
+      +'<p style="margin-top:18px">Je soussigné <b>'+nom+'</b>, né le '+naiss+' à '+lieu+', de nationalité '+nat+', demeurant '+adr+',</p>'
+      +'<p style="margin-top:10px">agissant en qualité de '+q+' de la société <b>'+esc(x.denom)+'</b>,</p>'
+      +'<p style="margin-top:10px"><b>atteste sur l\'honneur</b> n\'avoir fait l\'objet d\'aucune condamnation pénale ni sanction civile ou administrative de nature à m\'interdire d\'exercer une activité commerciale ou de gérer, administrer ou diriger une personne morale.</p>'
+      +'<p style="margin-top:8px">Je déclare être le fils / la fille de '+(x.pere?esc(x.pere):'«nom et prénom du père»')+' et de '+(x.mere?esc(x.mere):'«nom et prénom de la mère»')+'.</p>'
+      +'<div class="st-fin" style="margin-top:34px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+nom+'</b>Signature (précédée de « Lu et approuvé »)</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---- SOUSCRIPTEURS : variante « liste simplifiée » ---- */
+  window.souscripteursListeHTML=function(d){
+    var x=X(d);var act=(x.forme==='SAS'||x.forme==='SASU');var UNS=act?'actions':'parts sociales';
+    var rows=x.assoc.map(function(a,i){var p=Number(a.parts)||0;var m=(x.nominal&&p)?stNum(Math.round(x.nominal*p))+' €':'«…»';
+      var pct=(x.totalParts>0&&p)?(Math.round(p/x.totalParts*1000)/10+' %'):'«…»';
+      return '<tr><td>'+(i+1)+'</td><td class="al">'+stCivil(a)+'</td><td>'+(p||'«…»')+'</td><td>'+m+'</td><td>'+pct+'</td></tr>';}).join('');
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-hdr"><b>'+esc(x.denom)+'</b><div class="sub">'+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div><div class="sub">Siège social : '+esc(x.siegeComplet)+'</div></div>'
+      +'<div class="st-titre">LISTE DES SOUSCRIPTEURS</div>'
+      +'<table class="st-tbl"><thead><tr><th>N°</th><th class="al">Souscripteur</th><th>Nombre de '+UNS+'</th><th>Apport (€)</th><th>Quote-part</th></tr></thead><tbody>'
+      +rows+'<tr class="tot"><td></td><td class="al">TOTAL</td><td>'+(x.nbActions||'«…»')+'</td><td>'+(x.cap?stNum(x.cap)+' €':'«…»')+'</td><td>100 %</td></tr></tbody></table>'
+      +'<p style="margin-top:12px">La présente liste des souscripteurs est certifiée exacte et sincère par le '+stQualite(x.forme)+'.</p>'
+      +'<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
+      +'<div class="st-sign"><div class="sg"><b>'+esc(x.president)+'</b>Le '+stQualite(x.forme)+' — Signature</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---- DOMICILIATION : variante « attestation par un tiers hébergeant » ---- */
+  window.attestationHebergementHTML=function(d){
+    var x=X(d);var q=qualiteMin(x.forme);
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">ATTESTATION DE DOMICILIATION</div>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(Mise à disposition du local par un tiers)</p>'
+      +'<p style="margin-top:10px">Je soussigné(e) «nom et prénom de l\'hébergeant», demeurant «adresse complète de l\'hébergeant»,</p>'
+      +'<p style="margin-top:8px"><b>atteste</b> mettre à la disposition de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+', représentée par '+esc(x.president)+', son '+q+', un local situé '+esc(x.siegeComplet)+' pour y fixer le siège social de ladite société.</p>'
+      +'<p style="margin-top:8px">Cette mise à disposition prend effet à compter du «date d\'effet» et est consentie «à titre gratuit / moyennant une indemnité de «…» euros par mois».</p>'
+      +'<p style="margin-top:8px">La présente attestation est établie pour servir et valoir ce que de droit, en vue de l\'immatriculation de la société au registre du commerce et des sociétés.</p>'
+      +'<div class="st-fin" style="margin-top:30px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>«L\'hébergeant»</b>Signature (précédée de « Lu et approuvé »)</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---- CESSION : variante « modèle simplifié » (numéraire, quittance) ---- */
+  window.cessionSimpleHTML=function(d){
+    var x=X(d);var des=isPart(x.forme)?'parts sociales':'actions';
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">CESSION DE '+(isPart(x.forme)?'PARTS SOCIALES':'ACTIONS')+'</div>'
+      +'<div style="text-align:center;font-size:11px;margin:-4px 0 14px">'+esc(x.denom)+' — '+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
+      +'<p><b>Le cédant :</b> «Nom Prénom du cédant», demeurant «adresse».</p>'
+      +'<p><b>Le cessionnaire :</b> «Nom Prénom du cessionnaire», demeurant «adresse».</p>'
+      +'<p style="margin-top:8px">Le cédant cède au cessionnaire, qui accepte, «nombre» '+des+' de la société '+esc(x.denom)+', moyennant le prix de «montant» euros, dont quittance.</p>'
+      +'<p>Le cessionnaire est propriétaire des '+des+' cédées à compter de ce jour et subrogé dans tous les droits et obligations y attachés.</p>'
+      +'<div class="st-fin" style="margin-top:26px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+', en deux exemplaires.</p>'
+      +'<div class="st-sign"><div class="sg"><b>Le Cédant</b>« Bon pour cession »</div><div class="sg"><b>Le Cessionnaire</b>« Bon pour acquisition »</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---- NOUVEAU DOCUMENT : Lettre d'acceptation des fonctions (2 modèles) ---- */
+  function acceptationDoc(d,fonction){
+    var x=X(d);
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">ACCEPTATION DES FONCTIONS</div>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">('+fonction+' de '+esc(x.denom)+')</p>'
+      +'<p style="margin-top:10px">Je soussigné(e) <b>'+esc(x.president)+'</b>, demeurant '+esc(x.siegeComplet)+',</p>'
+      +'<p style="margin-top:10px"><b>déclare accepter</b> les fonctions de '+fonction+' de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros, dont le siège social est situé '+esc(x.siegeComplet)+', qui m\'ont été confiées aux termes '+(isPart(x.forme)?'des statuts':'des statuts / de la décision des associés')+' en date du '+x.dateActe+'.</p>'
+      +'<p style="margin-top:8px">Je déclare en outre satisfaire à toutes les conditions requises par la loi et les règlements pour l\'exercice de ces fonctions et n\'être frappé(e) d\'aucune incompatibilité ni interdiction de nature à m\'empêcher de les exercer.</p>'
+      +'<div class="st-fin" style="margin-top:32px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+esc(x.president)+'</b>« Bon pour acceptation des fonctions »</div></div></div>'
+      +'</div></div>';
+  }
+  window.acceptationDirigeantHTML=function(d){var x=X(d);return acceptationDoc(d,isPart(x.forme)?'Gérant':'Président');};
+  window.acceptationDGHTML=function(d){return acceptationDoc(d,'Directeur Général');};
+
+  /* ---- Enregistrement : append en conservant les modèles existants (choix) ---- */
+  function push(k,m){DM[k]=DM[k]||[];if(!DM[k].some(function(e){return e.id===m.id;}))DM[k].push(m);}
+  push('pouvoir',{id:'formalites',label:'Pouvoir spécial — formalités Guichet unique (INPI)',fn:function(d){return pouvoirFormalitesHTML(d);}});
+  push('dnc',{id:'simplifie',label:'Non-condamnation — attestation simplifiée',fn:function(d){return dncSimpleHTML(d);}});
+  push('souscripteurs',{id:'liste',label:'Souscripteurs — liste simplifiée',fn:function(d){return souscripteursListeHTML(d);}});
+  push('decladomicile',{id:'tiers',label:'Domiciliation — attestation par un tiers hébergeant',fn:function(d){return attestationHebergementHTML(d);}});
+  push('cession',{id:'simple',label:'Cession — modèle simplifié (quittance)',fn:function(d){return cessionSimpleHTML(d);}});
+  DM.acceptation=[
+    {id:'dirigeant',label:'Acceptation des fonctions — Président / Gérant',fn:function(d){return acceptationDirigeantHTML(d);}},
+    {id:'dg',label:'Acceptation des fonctions — Directeur Général',fn:function(d){return acceptationDGHTML(d);}}
+  ];
+  try{ if(typeof ESP_DOCS!=='undefined' && !ESP_DOCS.some(function(x){return x.k==='acceptation';})) ESP_DOCS.push({k:'acceptation',l:'Lettre d\'acceptation des fonctions',prix:0,optional:true}); }catch(e){}
+
+  /* ---- Sélecteur de modèle DANS l'aperçu de vérification (choisissable en direct) ---- */
+  if(typeof espVerifRender==='function'){
+    var _evr=espVerifRender;
+    espVerifRender=window.espVerifRender=function(id){_evr(id);
+      try{
+        var ov=document.getElementById('esp-verif');if(!ov||!ov.classList.contains('show'))return;
+        var d=(typeof espDoss==='function'?espDoss():[]).find(function(x){return x.id===id;});if(!d)return;
+        var v=d.verif||{};var k=v.docSel||'statuts';
+        var sel=(typeof espDocModelSelect==='function')?espDocModelSelect(d,k):'';
+        var host=ov.querySelector('.ev-docsel');
+        if(host&&sel&&!ov.querySelector('.ev-modelsel')){var wrap=document.createElement('div');wrap.className='ev-modelsel';wrap.innerHTML='<span class="ev-modell">Modèle&nbsp;:</span>'+sel;host.parentNode.insertBefore(wrap,host.nextSibling);}
+      }catch(e){}
+    };
+  }
+
+  /* ---- Style léger du sélecteur de modèle ---- */
+  try{
+    if(!document.getElementById('doc-models-plus-css')){
+      var st=document.createElement('style');st.id='doc-models-plus-css';
+      st.textContent='.esp-model-sel{margin-left:8px;max-width:100%;font:inherit;padding:3px 6px;border:1px solid var(--line2,#d9ccb2);border-radius:7px;background:#fffdf8;color:var(--ink,#2a2117)}'
+        +'.esp-model-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 10px}'
+        +'.esp-model-lbl,.ev-modell{font-size:12px;color:var(--ink3,#8a7d69);font-weight:700}'
+        +'.ev-modelsel{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 4px}'
+        +'.ev-modelsel .esp-model-sel{margin-left:0}';
+      document.head.appendChild(st);
+    }
+  }catch(e){}
 })();
 </script>
 
