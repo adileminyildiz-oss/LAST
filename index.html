@@ -831,9 +831,9 @@ function kpi(ic,val,lbl,cls){return `<div class="kpi"><div class="ic">${svg(IC[i
 function demEtat(d){
   if(d.dossierId){var dos=DB.dossiers.find(function(x){return x.id===d.dossierId;});
     if(dos&&dos.statut==='Clôturé')return 'finalise';return 'encours';}
-  if(d.assigneA)return 'assigne';return 'nouveau';
+  return 'nouveau';
 }
-const DEM_TABS=[['nouveau','À traiter'],['assigne','Assignées'],['encours','En cours de traitement'],['finalise','Finalisées']];
+const DEM_TABS=[['nouveau','À traiter'],['encours','En cours de traitement'],['finalise','Finalisées']];
 function mailDecodeWord(s){return (''+s).replace(/=\?[^?]+\?[BbQq]\?[^?]*\?=/g,function(w){try{var p=w.split('?');var enc=p[3];if(/b/i.test(p[2]))return decodeURIComponent(escape(atob(enc)));return enc.replace(/_/g,' ').replace(/=([0-9A-Fa-f]{2})/g,function(_,x){return String.fromCharCode(parseInt(x,16));});}catch(e){return w;}});}
 function mailParseFrom(s){s=mailDecodeWord((''+s).trim());var m=s.match(/^(.*?)<([^>]+)>/);if(m)return {nom:(m[1]||'').replace(/(^"|"$)/g,'').trim(),email:(m[2]||'').trim()};var e=s.match(/[^\s<>@]+@[^\s<>@]+/);return {nom:(e?e[0].split('@')[0]:s).trim(),email:e?e[0]:''};}
 function mailCleanBody(b){b=(''+b);b=b.replace(/=\r?\n/g,'').replace(/=([0-9A-Fa-f]{2})/g,function(_,x){try{return String.fromCharCode(parseInt(x,16));}catch(e){return _;}});if(/<[a-z][\s\S]*>/i.test(b))b=b.replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<[^>]+>/g,' ');return b.replace(/\r/g,'').replace(/&nbsp;/g,' ').replace(/\n{3,}/g,'\n\n').replace(/[ \t]{2,}/g,' ').trim().slice(0,4000);}
@@ -1171,14 +1171,13 @@ function pageDemandes(){
     +'</div></div>';
 }
 function tableDemandes(list,tab){
-  return '<table class="dem-tbl"><thead><tr><th>Client</th><th>Objet (IA)</th><th class="hide-sm">Pièces</th><th class="hide-sm">Assigné</th></tr></thead><tbody>'
-   +list.map(function(d){var u=userById(d.assigneA);var p=IA.pieces(d);
+  return '<table class="dem-tbl"><thead><tr><th>Client</th><th>Objet (IA)</th><th class="hide-sm">Pièces</th></tr></thead><tbody>'
+   +list.map(function(d){var p=IA.pieces(d);
       var ptag=p.complet?'<span class="tag ok">Dossier complet</span>':(p.flou?'<span class="tag warm">Précisions à obtenir</span>':'<span class="tag mut">Pièces à demander</span>');
       return '<tr onclick="modalDemandeView(\''+d.id+'\')" style="cursor:pointer">'
         +'<td><div class="tname">'+esc(demBestName(d))+'</div><div class="tsub">'+esc(d.canal)+' · '+frDate(d.date)+'</div></td>'
         +'<td><span class="tag blue">'+esc(IA.objet(d))+'</span></td>'
         +'<td class="hide-sm">'+ptag+'</td>'
-        +'<td class="hide-sm">'+(u?'<span class="tag"><span class="av" style="width:18px;height:18px;font-size:8px;background:'+u.couleur+'">'+initials(u.nom)+'</span> '+u.nom+'</span>':'<span class="tag mut">Non assigné</span>')+'</td>'
         +'</tr>';
     }).join('')
    +'</tbody></table>';
@@ -1195,12 +1194,9 @@ function modalDemandeView(id){
     +'<div><label>Canal</label><div class="hint">'+esc(d.canal||'—')+'</div></div>'
     +'<div><label>Reçue le</label><div class="hint">'+esc(mailDateHeure(d))+'</div></div></div>'
     +'<label>Demande reçue</label><div class="hint" style="background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:11px;white-space:pre-wrap">'+esc(mailDemande(d))+'</div>'
-    +'<label>Assigner à un collaborateur</label>'
-    +'<select id="dm-assign">'+['<option value="">— Non assigné —</option>'].concat(DB.users.map(function(u){return '<option value="'+u.id+'" '+(d.assigneA===u.id?'selected':'')+'>'+esc(u.nom)+(u.role==='admin'?' (admin)':'')+'</option>';})).join('')+'</select>'
-    +'<div class="hint" style="margin-top:6px;font-size:11px">Sans assignation, la demande reste dans l\'onglet « À traiter ».</div>',
+    ,
     '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
     +'<button class="btn" onclick="demMailComplet(\''+id+'\')">Mail complet</button>'
-    +'<button class="btn" onclick="assignDemande(\''+id+'\')">Assigner</button>'
     +'<button class="btn" onclick="demQuestionnaire(\''+id+'\')">📋 Questionnaire</button>'
     +'<button class="btn btn-pri" onclick="demOuvrirDossier(\''+id+'\')">📂 Ouvrir le dossier</button>');
 }
@@ -1718,7 +1714,7 @@ const dossierClients=d=>{var names=(d.clientIds||[]).map(function(id){var c=clie
   if(!names.length){try{var dm=(typeof espDemandeDe==='function')?espDemandeDe(d):null;if(dm){var x=(typeof demBestName==='function')?demBestName(dm):'';if(x&&!/formsubmit/i.test(x))names.push(x);}}catch(e){}}
   return names.join(', ')||'—';};
 const dossierMontant=d=>d.serviceIds.reduce((s,id)=>{const v=svcById(id);return s+(v?(+v.prix||0)+(+v.debours||0):0);},0);
-function assigneTag(d){const u=userById(d.assigneA);return u?`<span class="tag"><span class="av" style="width:18px;height:18px;font-size:8px;background:${u.couleur}">${initials(u.nom)}</span>${u.nom}</span>`:'<span class="tag mut">Non assigné</span>';}
+function assigneTag(d){return '';}
 
 function modalNewDossier(){
   const dos={id:'',ref:'DOS-'+DB.seq.dossier,clientIds:[],serviceIds:[],statut:'Nouveau',assigneA:''};
@@ -1732,8 +1728,7 @@ function modalDossier(id,draft){
   window._dcl=[...d.clientIds];window._dsv=[...d.serviceIds];
   openModal((id?d.ref:'Nouveau dossier — '+d.ref),`
     ${id?`<div class="chips" style="margin-bottom:14px"><span class="pill-stat" style="color:${statColor(d.statut)};border-color:${statColor(d.statut)}55;background:${statColor(d.statut)}18">${d.statut}</span>${assigneTag(d)}<span class="tag blue">${eur(dossierMontant(d))}</span></div>`:''}
-    <div class="frow"><div><label>Statut</label><select id="do-stat">${STATUTS.map(s=>`<option ${d.statut===s.k?'selected':''}>${s.k}</option>`).join('')}</select></div>
-      <div><label>Assigné à</label><select id="do-assign"><option value="">— Non assigné —</option>${DB.users.map(u=>`<option value="${u.id}" ${d.assigneA===u.id?'selected':''}>${u.nom}</option>`).join('')}</select></div></div>
+    <div class="frow"><div><label>Statut</label><select id="do-stat">${STATUTS.map(s=>`<option ${d.statut===s.k?'selected':''}>${s.k}</option>`).join('')}</select></div><div></div></div>
     <label>Client(s) concerné(s)</label><div style="max-height:120px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px 12px">${clientOpts}</div>
     <label>Prestations du dossier</label><div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px 12px">${svcOpts}</div>
     ${id&&(d.historique||[]).length?`<label>Historique</label>${d.historique.map(h=>`<div class="hint">• ${frDate(h.d)} — ${esc(h.t)}</div>`).join('')}`:''}
@@ -1743,12 +1738,12 @@ function modalDossier(id,draft){
 }
 function toggArr(which,val){const arr=which==='cl'?window._dcl:window._dsv;const i=arr.indexOf(val);if(i<0)arr.push(val);else arr.splice(i,1);}
 function saveDossier(id,newref){
-  const stat=document.getElementById('do-stat').value,assign=document.getElementById('do-assign').value;
+  const stat=document.getElementById('do-stat').value;
   if(id){const d=DB.dossiers.find(x=>x.id===id);const chg=d.statut!==stat;
-    d.statut=stat;d.assigneA=assign;d.clientIds=[...window._dcl];d.serviceIds=[...window._dsv];
+    d.statut=stat;d.clientIds=[...window._dcl];d.serviceIds=[...window._dsv];
     if(chg)(d.historique=d.historique||[]).push({d:today(),t:'Statut → '+stat});
   }else{DB.dossiers.unshift({id:uid('do'),ref:newref,clientIds:[...window._dcl],serviceIds:[...window._dsv],
-    statut:stat,assigneA:assign,createdAt:today(),historique:[{d:today(),t:'Dossier créé'}]});DB.seq.dossier++;}
+    statut:stat,createdAt:today(),historique:[{d:today(),t:'Dossier créé'}]});DB.seq.dossier++;}
   save();closeModal();toast('Dossier enregistré');render();
 }
 function delDossier(id){if(!confirm('Supprimer ce dossier ?'))return;var i=DB.dossiers.findIndex(x=>x.id===id);if(i<0)return;var item=DB.dossiers[i];
@@ -1796,15 +1791,8 @@ function delService(id){if(!confirm('Supprimer ce service ?'))return;var i=DB.se
 
 /* ---------- MARGE (aperçu) ---------- */
 function pageParams(){
-  return `<div class="grid g2">
-    <div class="card"><div class="card-h"><h2>Équipe</h2><span class="sub">1 admin + collaborateurs</span></div><div class="card-b">
-      ${DB.users.map(u=>`<div style="display:flex;align-items:center;gap:11px;padding:8px 0;border-bottom:1px solid var(--line)">
-        <span class="av" style="background:${u.couleur}">${initials(u.nom)}</span>
-        <div style="flex:1"><b style="font-size:13px">${esc(u.nom)}</b><div class="tsub">${u.role==='admin'?'Administrateur':'Collaborateur'+(u.login?(' · '+esc(u.login)+(u.actif===false?' (désactivé)':(u.pwdHash?' ✓':' — accès non défini'))):' — accès non défini')}</div></div>
-        ${u.role!=='admin'?`<button class="btn btn-sm btn-ghost" onclick="delUser('${u.id}')">Retirer</button>`:'<span class="tag blue">Admin</span>'}</div>`).join('')}
-      <button class="mini-add" style="margin-top:12px" onclick="modalUser()">+ Collaborateur</button>
-    </div></div>
-    <div class="card"><div class="card-h"><h2>Réglages</h2></div><div class="card-b">
+  return `<div class="grid g1">
+    <div class="card"><div class="card-h"><h2>Réglages</h2><span class="sub" style="margin-left:auto">Poste unique</span></div><div class="card-b">
       <label>Nom du cabinet</label><input value="${esc(DB.params.cabinet)}" onchange="DB.params.cabinet=this.value;save();toast('Enregistré')">
       <div class="section-t">Pipeline de traitement</div>
       <div class="chips">${STATUTS.map(s=>`<span class="tag" style="border-color:${s.c}55"><span class="dot" style="background:${s.c}"></span>${s.k}</span>`).join('')}</div>
@@ -3104,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=240;
+var LAST_VER=241;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3943,7 +3931,7 @@ window.demMessagerieView=function(){
            +sla
            +((typeof demSignauxHTML==='function')?demSignauxHTML(d):'')
            +'<span class="msg-date">'+esc(mailDateHeure(d))+'</span></div>'
-         +'<div class="msg-obj"><span class="tag blue">'+esc(IA.objet(d))+'</span>'+(u?'<span class="tag"><span class="av" style="width:16px;height:16px;font-size:7px;background:'+u.couleur+'">'+initials(u.nom)+'</span> '+esc(u.nom)+'</span>':'')+'<span class="tag mut">'+esc(d.statut||'Nouveau')+'</span></div>'
+         +'<div class="msg-obj"><span class="tag blue">'+esc(IA.objet(d))+'</span><span class="tag mut">'+esc(d.statut||'Nouveau')+'</span></div>'
          +(infos?'<div class="msg-infos">'+infos+'</div>':'')
          +(apercu?'<div class="msg-prev">'+esc(apercu)+(apercu.length>=150?'…':'')+'</div>':'')
          +(ctx?'<div class="msg-ctx">'+esc(ctx)+'</div>':'')
@@ -4013,15 +4001,14 @@ window.demTraitementView=function(){
 };
 
 window.tableDemandes=function(list,tab){
- return '<table class="dem-tbl"><thead><tr><th>Client</th><th>Objet (IA)</th><th>Type</th><th class="hide-sm">Pièces</th><th class="hide-sm">Assigné</th></tr></thead><tbody>'
-  +list.map(function(d){var u=userById(d.assigneA);var t=demType(d);var atts=demAtt(d);
+ return '<table class="dem-tbl"><thead><tr><th>Client</th><th>Objet (IA)</th><th>Type</th><th class="hide-sm">Pièces</th></tr></thead><tbody>'
+  +list.map(function(d){var t=demType(d);var atts=demAtt(d);
      var pcell=atts.length?('<span class="tag warm">📎 '+atts.length+'</span>'):(d.thread&&d.thread.length>1?('<span class="tag blue">💬 '+d.thread.length+'</span>'):'<span class="tag mut">—</span>');
      return '<tr class="'+(t==='questionnaire'?'dem-row-q':'')+'" onclick="demOuvrirVue(\''+d.id+'\')" style="cursor:pointer">'
        +'<td><div class="tname"><span class="dem-code">'+esc(demCode(d))+'</span> '+esc(demBestName(d))+((typeof demSlaBadge==='function')?demSlaBadge(d):'')+'</div><div class="tsub">'+esc((d.clientEmail&&!/formsubmit/i.test(d.clientEmail))?d.clientEmail:(d.canal||'—'))+' · '+esc(mailDateHeure(d))+'</div></td>'
        +'<td><span class="tag blue">'+esc(IA.objet(d))+'</span></td>'
        +'<td>'+demTypeBadge(d)+'</td>'
        +'<td class="hide-sm">'+pcell+'</td>'
-       +'<td class="hide-sm">'+(u?'<span class="tag"><span class="av" style="width:18px;height:18px;font-size:8px;background:'+u.couleur+'">'+initials(u.nom)+'</span> '+u.nom+'</span>':'<span class="tag mut">Non assigné</span>')+'</td>'
        +'</tr>';
    }).join('')
   +'</tbody></table>';

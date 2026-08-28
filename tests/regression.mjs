@@ -43,7 +43,7 @@ const r = await page.evaluate(async () => {
 
   // 2) Rendu des 3 pages
   ['demandes', 'espace', 'params'].forEach(p => { state.page = p; render(); out['page_' + p] = document.getElementById('view').innerHTML.length; });
-  out.paramsReglages = /Réglages/.test(pageParams()) && /Équipe/.test(pageParams());
+  out.paramsReglages = /Réglages/.test(pageParams()) && !/<h2>Équipe<\/h2>/.test(pageParams()) && /Poste unique/.test(pageParams());
 
   // 3) Onglets Demandes : reception / qualification / envoi / pieces
   const tabOk = {};
@@ -94,7 +94,7 @@ check('barre latérale sans anciennes pages', r.navNoOld);
 check('page Demandes rendue', r.page_demandes > 50);
 check('page Traitement rendue', r.page_espace > 50);
 check('page Paramètres rendue', r.page_params > 50);
-check('Paramètres : Réglages + Équipe', r.paramsReglages);
+check('Paramètres : Réglages sans « Équipe » (poste unique)', r.paramsReglages);
 check('Demandes : 4 onglets (réception/qualif/envoi/pièces)', r.tabs);
 check('détail d’une demande', r.detail === true);
 check('helpers du cœur (initials/validators/piecesRequises/demCode)', r.helpers);
