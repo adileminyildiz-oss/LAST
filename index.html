@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=241;
+var LAST_VER=242;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10376,6 +10376,128 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.mep-ck{flex:0 0 22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;background:#efe7d5;color:#8a7d69}'
       +'.mep-ck.ok{background:#d6ecc9;color:#2f6b3a}.mep-main{flex:1;min-width:0}.mep-d{display:block;font-size:12px;color:var(--ink3,#8a7d69)}'
       +'.mep-card{border-color:#d9ccb2}.mep-flash{outline:2px solid #c9a13c;outline-offset:3px;border-radius:12px;transition:outline .3s}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="avocat-fiscaliste-mod">
+/* ===== Logique d'avocat fiscaliste — analyse & recommandations (aide à la décision) ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function C(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
+  function num(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.,]/g,'').replace(',','.'));return isNaN(n)?null:n;}
+  function R(titre,niveau,detail,base){return {titre:titre,niveau:niveau,detail:detail,base:base||''};}
+
+  window.avocatFiscaliste=function(d){
+    var c=C(d);
+    var forme=((c.forme||d.forme||'')+'').toUpperCase();
+    var A=(c.associes||[]).filter(function(a){return (''+(a.nom||'')).trim();});
+    var cap=num(c.capital);
+    var totalParts=A.reduce(function(t,a){return t+(num(a.parts)||0);},0);
+    var pres=A.filter(function(a){return (''+(a.nom||'')).trim()===(''+(c.president||'')).trim();})[0]||A[0]||{};
+    var presParts=num(pres.parts)||0;
+    var presPct=totalParts>0?Math.round(presParts/totalParts*1000)/10:null;
+    var activite=(((c.activites||[]).join(' '))+' '+(c.objet||'')).toLowerCase();
+    var regTxt=((c.regime||'')+'').toUpperCase();
+    var choixIS=/IS|SOCI[EÉ]T[EÉ]S/.test(regTxt), choixIR=/IR|REVENU/.test(regTxt);
+
+    var isSAS=/SAS|SASU/.test(forme)||forme==='SA', isSARLfam=/SARL|EURL/.test(forme), isSCI=/SCI/.test(forme), uniperso=/SASU|EURL/.test(forme);
+    /* ----- Régime fiscal par défaut ----- */
+    var defautFiscal = isSCI?'IR' : (forme==='EURL'?'IR':'IS'); // SAS/SASU/SARL/SA → IS ; EURL/SCI → IR
+    var regimeFiscal = choixIS?'IS':(choixIR?'IR':defautFiscal);
+    /* ----- Régime social du dirigeant ----- */
+    var regimeSocial, socialDetail;
+    if(isSAS){ regimeSocial='Assimilé salarié'; socialDetail='Président de '+forme+' → régime général de la Sécurité sociale (assimilé salarié).'; }
+    else if(forme==='EURL'){ regimeSocial='TNS'; socialDetail='Gérant associé unique d\'EURL → travailleur non salarié (SSI).'; }
+    else if(/SARL/.test(forme)){
+      if(presPct!=null&&presPct>50){ regimeSocial='TNS'; socialDetail='Gérant majoritaire ('+presPct+' % des parts) → travailleur non salarié (SSI).'; }
+      else if(presPct!=null){ regimeSocial='Assimilé salarié'; socialDetail='Gérant '+(presPct===50?'égalitaire':'minoritaire')+' ('+presPct+' %) → assimilé salarié (régime général).'; }
+      else { regimeSocial='À déterminer'; socialDetail='Répartition des parts du gérant non renseignée — la majorité conditionne le régime (TNS si > 50 %).'; }
+    }
+    else if(isSCI){ regimeSocial=(regimeFiscal==='IS')?'Variable':'Non affilié (gérance)'; socialDetail='Gérant de SCI : pas d\'affiliation au titre de la gérance (sauf activité relevant du régime social).'; }
+    else { regimeSocial='À déterminer'; socialDetail='Forme non reconnue — préciser la forme sociale.'; }
+
+    var an=[];
+    /* 1. Régime fiscal */
+    if(!regTxt){ an.push(R('Régime fiscal à arrêter','attention','Aucun régime précisé. Par défaut, '+forme+' relève de l\''+defautFiscal+'.'+(forme==='EURL'?' L\'EURL peut opter pour l\'IS (option révocable dans les 5 ans, puis irrévocable).':'')+(isSCI?' La SCI peut opter pour l\'IS, mais l\'option est irréversible.':''),'Choix IS/IR')); }
+    else { an.push(R('Régime fiscal retenu : '+regimeFiscal,'conseil',(regimeFiscal===defautFiscal)?(forme+' à l\''+regimeFiscal+' (régime usuel).'):(forme+' avec option '+regimeFiscal+' — vérifier l\'éligibilité et la durée de l\'option.'),'Choix IS/IR')); }
+    /* 2. IS : taux réduit */
+    if(regimeFiscal==='IS'){ an.push(R('Taux réduit d\'IS à 15 %','conseil','Bénéfice imposé à 15 % jusqu\'à 42 500 €, puis 25 %, si CA < 10 M€, capital entièrement libéré et détenu à ≥ 75 % par des personnes physiques.','IS — taux réduit PME')); }
+    /* 3. SCI à l'IS : vigilance */
+    if(isSCI&&regimeFiscal==='IS'){ an.push(R('SCI à l\'IS — option irréversible','risque','L\'option pour l\'IS est irréversible : elle fait perdre le régime des plus-values des particuliers (abattement pour durée de détention) et amène l\'imposition des plus-values professionnelles à la revente. Réservez-la à une stratégie de capitalisation assumée.','SCI / option IS')); }
+    /* 4. Activité commerciale en SCI */
+    if(isSCI&&/(meubl|saisonni|marchand de biens|achat[- ]revente|para[- ]?h[oô]tel|airbnb)/.test(activite)){ an.push(R('Activité commerciale dans une SCI','risque','La location meublée / l\'achat-revente sont des activités commerciales : risque d\'assujettissement d\'office à l\'IS, voire de requalification. Envisagez une SARL de famille ou une structure adaptée.','Objet civil vs commercial')); }
+    /* 5. Régime social */
+    an.push(R('Régime social du dirigeant : '+regimeSocial,'conseil',socialDetail,'Statut social du dirigeant'));
+    if(regimeSocial==='Assimilé salarié'){ an.push(R('Coût et protection (assimilé salarié)','attention','Protection sociale du régime général (hors chômage), mais charges élevées (~ 70-80 % du net). Aucune cotisation en l\'absence de rémunération — arbitrage rémunération/dividendes ouvert.','Cotisations régime général')); }
+    if(regimeSocial==='TNS'){ an.push(R('Cotisations TNS (SSI)','attention','Cotisations plus faibles (~ 40-45 %) mais cotisations minimales dues même sans rémunération, et protection sociale à compléter (prévoyance, retraite).','Cotisations SSI')); }
+    /* 6. Dividendes / arbitrage */
+    if(regimeFiscal==='IS'){
+      if(regimeSocial==='TNS'){ an.push(R('Dividendes du gérant majoritaire','attention','La fraction des dividendes supérieure à 10 % du capital social (+ primes + apports en compte courant) est soumise aux cotisations sociales SSI. Un capital plus élevé accroît la part de dividendes non cotisée.','Dividendes TNS > 10 %')); }
+      else { an.push(R('Arbitrage rémunération / dividendes','conseil','En assimilé salarié, les dividendes ne supportent pas de cotisations sociales : ils sont soumis au PFU de 30 % (12,8 % IR + 17,2 % prélèvements sociaux). La rémunération, elle, est déductible de l\'IS et ouvre des droits sociaux — à doser selon les besoins.','PFU 30 % / rémunération')); }
+    } else {
+      an.push(R('Transparence fiscale (IR)','conseil','Les résultats sont imposés directement entre les mains des associés à l\'impôt sur le revenu, à proportion de leurs droits — pas de distinction rémunération/dividendes.','Semi-transparence IR'));
+    }
+    /* 7. TVA */
+    an.push(R('Régime de TVA','conseil','Franchise en base possible sous les seuils en vigueur (services ~ 37 500 €, ventes ~ 85 000 €) : pas de TVA facturée ni récupérée. Au-delà, ou pour récupérer la TVA sur les investissements, opter pour le réel simplifié ou normal.','Franchise / réel — à vérifier selon la LF'));
+    /* 8. Capital & libération */
+    if(cap!=null){
+      if(cap>0&&cap<100){ an.push(R('Capital social très faible','attention','Un capital de '+cap+' € est légal mais nuit à la crédibilité et à la capacité de financement ; il réduit aussi la part de dividendes non soumise à cotisations pour un gérant TNS.','Capital / crédibilité')); }
+      var libmin=isSAS?'50 %':(/SARL|EURL/.test(forme)?'20 %':null);
+      if(libmin) an.push(R('Libération des apports','conseil','Apports en numéraire libérés d\'au moins '+libmin+' à la constitution ('+forme+'), le solde dans les 5 ans.','Libération du capital'));
+    } else { an.push(R('Capital non renseigné','attention','Fixez le capital et sa répartition avant rédaction des statuts.','Capital')); }
+    /* 9. Choix de forme (orientation) */
+    if(/lev[ée]e de fonds|investisseur|holding|startup|start-up/.test(activite)){ an.push(R('Forme adaptée à l\'ouverture du capital','conseil','Pour accueillir des investisseurs, la SAS offre la plus grande souplesse statutaire (actions de préférence, pactes).','Choix de la forme')); }
+    if(/immobili|locati/.test(activite)&&!isSCI){ an.push(R('Détention immobilière','conseil','Pour un patrimoine immobilier locatif nu, la SCI à l\'IR est souvent privilégiée (transparence, transmission).','Choix de la forme')); }
+
+    var counts={risque:an.filter(function(a){return a.niveau==='risque';}).length,
+      attention:an.filter(function(a){return a.niveau==='attention';}).length,
+      conseil:an.filter(function(a){return a.niveau==='conseil';}).length};
+    var synthese=forme+' · '+regimeFiscal+' · '+regimeSocial;
+    return {profil:{forme:forme,regimeFiscal:regimeFiscal,defautFiscal:defautFiscal,regimeSocial:regimeSocial,tva:'Franchise/réel',capital:cap,dirigeantPct:presPct},
+      analyses:an,counts:counts,synthese:synthese};
+  };
+
+  window.avocatFiscalisteHTML=function(d){
+    var r=window.avocatFiscaliste(d);var p=r.profil;
+    var chip=function(l,v){return '<span class="af-chip"><span class="af-k">'+E(l)+'</span><b>'+E(v)+'</b></span>';};
+    var head='<div class="af-profil">'+chip('Forme',p.forme||'—')+chip('Régime fiscal',p.regimeFiscal)+chip('Régime social',p.regimeSocial)+(p.dirigeantPct!=null?chip('Part dirigeant',p.dirigeantPct+' %'):'')+(p.capital!=null?chip('Capital',(p.capital+' €')):'')+'</div>';
+    var order=['risque','attention','conseil'];var lbl={risque:'⛔ Points de vigilance',attention:'⚠️ À arbitrer',conseil:'💡 Recommandations'};
+    var body=order.map(function(n){var g=r.analyses.filter(function(a){return a.niveau===n;});if(!g.length)return '';
+      return '<div class="af-grp af-'+n+'"><div class="af-grp-t">'+lbl[n]+'</div>'+g.map(function(a){
+        return '<div class="af-item"><b>'+E(a.titre)+'</b><span>'+E(a.detail)+'</span>'+(a.base?('<span class="af-base">'+E(a.base)+'</span>'):'')+'</div>';}).join('')+'</div>';}).join('');
+    return '<div class="af-wrap"><div class="af-verdict">Analyse de l\'avocat fiscaliste — <b>'+E(r.synthese)+'</b> · '+r.counts.risque+' vigilance(s), '+r.counts.attention+' arbitrage(s), '+r.counts.conseil+' conseil(s)</div>'
+      +head+body
+      +'<div class="af-note">Aide à la décision automatisée à partir des règles usuelles (CGI, statut social du dirigeant, TVA). Ne remplace pas un conseil personnalisé ; vérifiez les seuils et taux selon la loi de finances en vigueur.</div></div>';
+  };
+  window.ouvrirAvocatFiscaliste=function(id){
+    var d=(typeof espDoss==='function'?espDoss():[]).find(function(x){return x.id===id;});if(!d||typeof openModal!=='function')return;
+    openModal('⚖️ Analyse fiscaliste — '+E((typeof dossierClients==='function')?dossierClients(d):''),window.avocatFiscalisteHTML(d),
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+  };
+
+  /* Intégration : ajoute l'analyse fiscaliste au contrôle qualité */
+  if(typeof window.controleQualiteHTML==='function'){var _cq=window.controleQualiteHTML;
+    window.controleQualiteHTML=function(d){return _cq(d)+'<div class="af-inqc">'+window.avocatFiscalisteHTML(d)+'</div>';};}
+
+  /* Bouton « Analyse fiscaliste » dans l'aperçu de vérification */
+  if(typeof espVerifRender==='function'){var _r=espVerifRender;
+    espVerifRender=window.espVerifRender=function(id){_r(id);
+      try{var head=document.querySelector('#esp-verif .ev-head .ev-transmit');
+        if(head&&!document.getElementById('af-btn')){var b=document.createElement('button');b.id='af-btn';b.className='btn btn-sm btn-ghost';b.textContent='⚖️ Analyse fiscaliste';b.setAttribute('onclick','ouvrirAvocatFiscaliste(\''+id+'\')');head.parentNode.insertBefore(b,head);}
+      }catch(e){}};}
+
+  try{ if(!document.getElementById('af-css')){var st=document.createElement('style');st.id='af-css';
+    st.textContent='.af-wrap{max-height:72vh;overflow:auto}.af-verdict{padding:10px 12px;border-radius:10px;margin-bottom:10px;font-size:13px;background:#eef2f7;color:#2a3a52}'
+      +'.af-profil{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}.af-chip{display:inline-flex;flex-direction:column;background:#fbf7ee;border:1px solid var(--line,#e7ddc9);border-radius:10px;padding:6px 10px;min-width:90px}'
+      +'.af-chip .af-k{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--ink3,#8a7d69);font-weight:700}.af-chip b{font-size:13px}'
+      +'.af-grp{border:1px solid var(--line,#e7ddc9);border-radius:12px;padding:6px 12px 10px;margin-bottom:10px;border-left-width:4px}'
+      +'.af-grp.af-risque{border-left-color:#b0442f}.af-grp.af-attention{border-left-color:#b98029}.af-grp.af-conseil{border-left-color:#3d6b3d}'
+      +'.af-grp-t{font-weight:700;font-size:12.5px;margin:6px 0 4px}'
+      +'.af-item{padding:7px 0;border-top:1px solid var(--line,#eee)}.af-item:first-of-type{border-top:none}.af-item b{display:block;font-size:12.5px}.af-item span{display:block;font-size:12px;color:var(--ink2,#5b5040);margin-top:2px}'
+      +'.af-base{font-size:10.5px;color:var(--ink3,#8a7d69);font-style:italic;margin-top:2px}'
+      +'.af-note{font-size:11px;color:var(--ink3,#8a7d69);margin-top:8px;border-top:1px dashed var(--line,#e7ddc9);padding-top:8px}'
+      +'.af-inqc{margin-top:14px;border-top:2px solid var(--line,#e7ddc9);padding-top:12px}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
