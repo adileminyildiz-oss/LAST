@@ -1822,7 +1822,7 @@ function pageParams(){
   <div class="flow-note" style="margin-top:8px">${svg(IC.gear)}<div>Prochains niveaux de la pyramide : <b>Devis auto</b>, <b>facturation & marge complète</b>, <b>signature + paiement</b>, <b>IA de réponse locale</b>, puis <b>stockage lourd, archivage 10 ans, multi-poste & mise en ligne</b>.</div></div>`;
 }
 /* ---------- Conformité RGPD (minimisation, conservation, registre, information) ---------- */
-function rgpdStats(){var files=0,bytes=0;function scan(arr){(arr||[]).forEach(function(e){var docs=e.docs||{};Object.keys(docs).forEach(function(k){(docs[k]||[]).forEach(function(f){if(f&&f.dataUrl){files++;bytes+=f.dataUrl.length*0.75;}});});});}scan(DB.demandes);scan(DB.dossiers);return {files:files,mb:(bytes/1048576).toFixed(1)};}
+function rgpdStats(){var files=0,bytes=0;function scan(arr){(arr||[]).forEach(function(e){var docs=e.docs||{};Object.keys(docs).forEach(function(k){var v=docs[k];if(!Array.isArray(v))return;v.forEach(function(f){if(f&&f.dataUrl){files++;bytes+=f.dataUrl.length*0.75;}});});});}scan(DB.demandes);scan(DB.dossiers);return {files:files,mb:(bytes/1048576).toFixed(1)};}
 function rgpdMois(){return (DB.params&&DB.params.rgpdMois!=null)?DB.params.rgpdMois:6;}
 function rgpdCard(){var st=rgpdStats();
   return '<div class="card" style="margin-top:14px"><div class="card-h"><h2>Conformité RGPD</h2><span class="sub" style="margin-left:auto">Protection des données</span></div>'
@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=247;
+var LAST_VER=248;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10929,6 +10929,58 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.ecfg-l{flex:1;font-size:13px}.ecfg-act{display:flex;gap:4px}.ecfg-empty{color:var(--ink3,#8a7d69);font-size:13px;padding:8px 0}'
       +'.ecfg-addrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}.ecfg-addrow input{flex:1;min-width:220px}';
     document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="num-config-mod">
+/* ===== Numérotation des dossiers configurable (format + compteur) ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function year(){return ''+new Date().getFullYear();}
+  window.numCfg=function(){DB.parametres=DB.parametres||{};var c=DB.parametres.numDossier=DB.parametres.numDossier||{};
+    if(c.prefix==null)c.prefix='DOS';if(c.sep==null)c.sep='-';if(c.annee==null)c.annee=true;if(!(c.taille>0))c.taille=3;c.compteurs=c.compteurs||{};return c;};
+  window.numDossierFormat=function(n,an){var c=window.numCfg();var p=String(Math.max(0,n|0)).padStart(c.taille,'0');
+    return c.prefix+c.sep+(c.annee?((an||year())+c.sep):'')+p;};
+  window.numDossierPreview=function(){var c=window.numCfg();var y=year();return window.numDossierFormat((c.compteurs[y]||0)+1,y);};
+  window.numDossierNext=function(){var c=window.numCfg();var y=year();var n=(c.compteurs[y]||0)+1;c.compteurs[y]=n;if(typeof save==='function')save();return window.numDossierFormat(n,y);};
+
+  /* Attribue un numéro configuré à la création d'un dossier (si absent) */
+  if(typeof window.creerDossierDepuis==='function'){var _cd=window.creerDossierDepuis;
+    window.creerDossierDepuis=function(){var d=_cd.apply(this,arguments);
+      try{ if(d&&!( (''+(d.numeroDossier||'')).trim() )){ d.numeroDossier=window.numDossierNext(); if(typeof save==='function')save(); } }catch(e){}
+      return d;};}
+
+  window.numCfgSave=function(){var c=window.numCfg();var g=function(x){return document.getElementById(x);};
+    var pf=g('num-prefix'),sp=g('num-sep'),an=g('num-annee'),ta=g('num-taille'),co=g('num-compteur');
+    if(pf)c.prefix=(''+pf.value).trim().slice(0,10)||'DOS';
+    if(sp)c.sep=(''+sp.value).slice(0,2);
+    if(an)c.annee=!!an.checked;
+    if(ta){var t=parseInt(ta.value,10);c.taille=(t>=1&&t<=8)?t:3;}
+    if(co){var n=parseInt((''+co.value).replace(/[^0-9]/g,''),10);if(!isNaN(n)&&n>=0)c.compteurs[year()]=n;}
+    if(typeof save==='function')save();if(typeof toast==='function')toast('Numérotation enregistrée — prochain n° : '+window.numDossierPreview());if(typeof render==='function')render();};
+
+  window.numDossierCard=function(){var c=window.numCfg();var y=year();
+    return '<div class="card" id="num-card" style="margin-top:14px"><div class="card-h"><h2>Numérotation des dossiers</h2><span class="sub" style="margin-left:auto">Prochain : <b>'+E(window.numDossierPreview())+'</b></span></div><div class="card-b">'
+      +'<p class="hint" style="margin:0 0 10px">Format du numéro attribué à chaque nouveau dossier. Le compteur repart de la valeur choisie ; il est indépendant par année si l\'année est incluse.</p>'
+      +'<div class="grid g2">'
+      +'<div><label>Préfixe</label><input id="num-prefix" value="'+E(c.prefix)+'" maxlength="10"></div>'
+      +'<div><label>Séparateur</label><input id="num-sep" value="'+E(c.sep)+'" maxlength="2" style="max-width:80px"></div>'
+      +'</div><div class="grid g2">'
+      +'<div><label>Longueur du compteur (chiffres)</label><input id="num-taille" type="number" min="1" max="8" value="'+c.taille+'"></div>'
+      +'<div><label>Compteur de l\'année '+y+'</label><input id="num-compteur" type="number" min="0" value="'+(c.compteurs[y]||0)+'"></div>'
+      +'</div>'
+      +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:6px"><input type="checkbox" id="num-annee" '+(c.annee?'checked':'')+' style="width:auto;flex:none;margin:0"> Inclure l\'année dans le numéro</label>'
+      +'<div style="margin-top:12px"><button class="btn btn-sm btn-pri" onclick="numCfgSave()">Enregistrer</button></div>'
+      +'</div></div>';
+  };
+
+  if(typeof window.pageParams==='function'||typeof pageParams==='function'){
+    var _pp=(typeof window.pageParams==='function')?window.pageParams:pageParams;
+    window.pageParams=function(){var h=_pp.apply(this,arguments);
+      if(h.indexOf('id="num-card"')<0){var note=h.lastIndexOf('<div class="flow-note"');
+        if(note>=0){h=h.slice(0,note)+window.numDossierCard()+h.slice(note);}else{h+=window.numDossierCard();}}
+      return h;};
+  }
 })();
 </script>
 
