@@ -3104,7 +3104,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=236;
+var LAST_VER=237;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10030,6 +10030,87 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.rl-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line,#e7ddc9)}'
       +'.rl-main{flex:1;min-width:0}.rl-meta{font-size:11px;color:var(--ink3,#8a7d69);margin-left:8px}'
       +'.rl-pcs{font-size:12px;color:var(--ink2,#5b5040);margin-top:3px}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="ged-search-mod">
+/* ===== GED intelligente — extraction des métadonnées + recherche plein texte ===== */
+(function(){
+  function norm(s){return (''+(s==null?'':s)).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+  function cli(d){try{return (typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{};}catch(e){return {};}}
+  function labelDoc(k){try{return (typeof espDocLabel==='function')?espDocLabel(k):k;}catch(e){return k;}}
+
+  /* Extraction automatique des métadonnées d'un dossier (fiche société + pièces + actes) */
+  window.gedMetadata=function(d){
+    var c=cli(d);var ex=(d.verif&&d.verif.extract)||{};
+    var assoc=(c.associes||[]).map(function(a){return (''+(a.nom||'')).trim();}).filter(Boolean);
+    var docs=[];try{d.docs=d.docs||{};Object.keys(d.docs).forEach(function(k){if(d.docs[k])docs.push(labelDoc(k));});}catch(e){}
+    var num=(typeof archiveNumero==='function')?archiveNumero(d):(d.numeroDossier||d.ref||'');
+    var fields=[
+      ['N° de dossier',num],['Dénomination',c.denomination||''],['Sigle',c.sigle||''],
+      ['Forme',c.forme||d.forme||''],['Capital',c.capital?(c.capital+' €'):''],
+      ['SIREN',c.siren||''],['SIRET',c.siret||''],
+      ['Objet / activité',((c.activites||[]).join(', '))||c.objet||''],
+      ['Siège',[c.siege,c.cp,c.ville].filter(Boolean).join(' ')],
+      ['Dirigeant',c.president||ex.nom||''],
+      ['Associés',assoc.join(', ')],
+      ['Contact',c.email||d.clientEmail||''],
+      ['Statut',d.statut||''],
+      ['Documents',docs.join(', ')]
+    ].filter(function(x){return (''+(x[1]||'')).trim();});
+    return {num:num,fields:fields,client:c};
+  };
+  window.gedHaystack=function(d){return norm(window.gedMetadata(d).fields.map(function(f){return f[0]+' '+f[1];}).join(' '));};
+  /* Champs correspondant à la requête (pour l'extrait affiché) */
+  window.gedMatch=function(d,q){q=norm(q);if(q.length<2)return [];
+    return window.gedMetadata(d).fields.filter(function(f){return norm(f[0]+' '+f[1]).indexOf(q)>=0;}).slice(0,3);};
+
+  /* Recherche plein texte : override de gSearchRender (dossiers full-text + métadonnées + demandes) */
+  if(typeof window.gSearchRender==='function'||typeof gSearchRender==='function'){
+    window.gSearchRender=function(q){
+      var el=document.getElementById('gsearch');if(!el)return;
+      var qn=norm(q);if(qn.length<2){if(typeof gsClose==='function')gsClose();return;}
+      var res=[];
+      (DB.dossiers||[]).forEach(function(d){if(d.archived)return;
+        var hay=window.gedHaystack(d)+' '+norm((d.ref||'')+' '+((typeof dossierClients==='function')?dossierClients(d):''));
+        if(hay.indexOf(qn)<0)return;
+        var mm=window.gedMatch(d,q);
+        var sub=mm.length?mm.map(function(f){return f[0]+' : '+f[1];}).join(' · '):('Dossier · '+((typeof dossierClients==='function')?dossierClients(d):''));
+        res.push({type:'dossier',ic:IC.espace,id:d.id,label:(window.gedMetadata(d).num||d.ref||'(dossier)'),sub:sub});
+      });
+      (DB.demandes||[]).forEach(function(d){if(d.archived)return;
+        var hay=norm((d.clientNom||'')+' '+(d.serviceSouhaite||'')+' '+(d.clientEmail||''));
+        if(hay.indexOf(qn)<0)return;
+        res.push({type:'demande',ic:IC.inbox,id:d.id,label:(d.clientNom||'(demande)'),sub:'Demande · '+(d.serviceSouhaite||'')});
+      });
+      var order=['dossier','demande'],lbl={dossier:'Dossiers (GED)',demande:'Demandes'};
+      var total=res.length;res=res.slice(0,24);
+      var html='';order.forEach(function(t){var grp=res.filter(function(r){return r.type===t;});if(!grp.length)return;
+        html+='<div class="gs-grp">'+lbl[t]+'</div>'+grp.map(function(r){return '<div class="gs-item" onclick="gsGo(\''+r.type+'\',\''+r.id+'\')"><span class="gs-ic">'+svg(r.ic)+'</span><div class="gs-main"><b>'+esc(r.label)+'</b><span class="gs-sub">'+esc(r.sub)+'</span></div></div>';}).join('');});
+      if(!html)html='<div class="gs-empty">Aucun résultat pour « '+esc(q)+' »</div>';
+      else if(total>24)html+='<div class="gs-empty">'+(total-24)+' autre(s) résultat(s)… précisez la recherche.</div>';
+      el.innerHTML=html;el.classList.add('show');
+    };
+  }
+  /* La recherche doit aussi se déclencher depuis la page Traitement */
+  if(typeof window.onSearch==='function'){var _os=window.onSearch;window.onSearch=function(v){state.q=(''+(v||'')).trim().toLowerCase();
+    if(['clients','dossiers','demandes','espace'].indexOf(state.page)>=0){try{render();}catch(e){}}try{gSearchRender(state.q);}catch(e){}};}
+
+  /* Métadonnées extraites affichées dans la fiche d'archive (GED) */
+  if(typeof window.archiveHTML==='function'){var _ah=window.archiveHTML;window.archiveHTML=function(d){
+    var base=_ah(d);try{var md=window.gedMetadata(d);
+      var rows=md.fields.map(function(f){return '<tr><td class="ged-mk">'+esc(f[0])+'</td><td class="ged-mv">'+esc(f[1])+'</td></tr>';}).join('');
+      var meta='<div class="ged-meta"><div class="ged-meta-t">🔎 Métadonnées extraites</div><table class="ged-meta-tbl"><tbody>'+rows+'</tbody></table></div>';
+      return base+meta;
+    }catch(e){return base;}};}
+
+  try{ if(!document.getElementById('ged-search-css')){var st=document.createElement('style');st.id='ged-search-css';
+    st.textContent='.ged-meta{margin-top:14px;border-top:1px solid var(--line,#e7ddc9);padding-top:10px}'
+      +'.ged-meta-t{font-weight:700;font-size:13px;margin-bottom:6px}'
+      +'.ged-meta-tbl{width:100%;border-collapse:collapse;font-size:12.5px}'
+      +'.ged-meta-tbl td{padding:4px 8px;border-bottom:1px solid var(--line,#eee);vertical-align:top}'
+      +'.ged-mk{color:var(--ink3,#8a7d69);width:150px;font-weight:600}.ged-mv{color:var(--ink,#2a2117)}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
