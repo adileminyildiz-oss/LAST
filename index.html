@@ -726,6 +726,7 @@ const nivTag=n=>`<span class="tag ${n==='chaud'?'hot':n==='tiède'?'warm':'mut'}
 const PAGES=[
   {id:'demandes',lbl:'Demandes',ic:'inbox',sub:'Réception & qualification IA'},
   {id:'espace',lbl:'Traitement',ic:'espace',sub:'Travail & génération des dossiers'},
+  {id:'pilotage',lbl:'Pilotage',ic:'dash',sub:'Tableau de bord temps réel'},
   {id:'params',lbl:'Paramètres',ic:'gear',sub:'Équipe & réglages'}
 ];
 const state={page:'demandes',q:''};
@@ -789,7 +790,7 @@ function navBadgeCount(id){
   return 0;
 }
 function buildNav(){
-  const act=PAGES.filter(p=>p.id==='demandes'||p.id==='espace');
+  const act=PAGES.filter(p=>p.id==='demandes'||p.id==='espace'||p.id==='pilotage');
   const sys=PAGES.filter(p=>p.id==='params');
   document.getElementById('nav').innerHTML=
     `<div class="nav-lbl">Activité</div>`+
@@ -818,7 +819,7 @@ function render(){
   document.getElementById('psub').textContent=p.sub;
   const V=document.getElementById('view');
   var __bb=(typeof backupBannerHTML==='function')?backupBannerHTML():'';
-  V.innerHTML=__bb+({demandes:pageDemandes,espace:pageEspace,params:pageParams}[state.page]||pageDemandes)();
+  V.innerHTML=__bb+({demandes:pageDemandes,espace:pageEspace,params:pageParams,pilotage:(typeof pagePilotage==='function'?pagePilotage:pageDemandes)}[state.page]||pageDemandes)();
   wireCards();
 }
 
@@ -3103,7 +3104,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=233;
+var LAST_VER=234;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9794,6 +9795,118 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(DM.rbe) add.push({k:'rbe',l:'Déclaration des bénéficiaires effectifs (RBE)',prix:0,optional:true});
     add.forEach(function(e){ if(!ESP_DOCS.some(function(x){return x.k===e.k;})) ESP_DOCS.push(e); });
   } }catch(e){}
+})();
+</script>
+
+<script id="dashboard-mod">
+/* ===== Étape 8 — Tableau de bord temps réel (Pilotage) ===== */
+(function(){
+  function doss(){return (DB.dossiers||[]).filter(function(d){return !d.archived;});}
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function num(n){return (typeof eur==='function')?eur(n):(''+n);}
+
+  /* Classification robuste d'un dossier par étape atteinte (indépendante du libellé) */
+  function piecesOk(d){try{
+    var P=(typeof DIRIGEANT_PIECES!=='undefined')?DIRIGEANT_PIECES:[{k:'identite'},{k:'domiciliation'}];
+    var pc=d.pieces||{};return P.every(function(p){var v=pc[p.k]||{};return !!(v.data||v.recu);});
+  }catch(e){return false;}}
+  function signAll(d){try{var s=d.signDossier||{};var ks=['statuts','pouvoir','dnc','souscripteurs'];
+    return ks.every(function(k){return (s[k]||{}).statut==='signe';});}catch(e){return false;}}
+  function signAny(d){try{var s=d.signDossier||{};return Object.keys(s).some(function(k){return (s[k]||{}).statut&&(s[k]||{}).statut!=='brouillon';});}catch(e){return false;}}
+  function depose(d){return !!(d.inpi&&(d.inpi.reference||d.inpi.status));}
+  function clot(d){return !!(d.clotureLe)|| (d.statut==='Clôturé');}
+  function pret(d){try{return (typeof depotReadiness==='function')?depotReadiness(d).ready:false;}catch(e){return false;}}
+
+  /* Étape « la plus avancée » atteinte : 0 pièces → 6 clôturé */
+  function etape(d){
+    if(clot(d))return 6;
+    if(depose(d))return 5;
+    if(pret(d)||signAll(d))return 4;
+    if(signAny(d))return 3;
+    if(piecesOk(d))return 2;
+    return 1;
+  }
+
+  /* Taux d'automatisation : moyenne des jalons automatisés franchis par dossier */
+  window.tauxAutomatisation=function(){
+    var L=doss();if(!L.length)return 0;
+    var tot=0;
+    L.forEach(function(d){
+      var jalons=[
+        !!d.intake,                                   /* dossier auto-créé depuis le questionnaire */
+        piecesOk(d),                                  /* pièces collectées */
+        !!(d.verif&&d.verif.extract&&(''+(d.verif.extract.nom||'')).trim()), /* infos extraites (OCR) */
+        !!(d.docs&&d.docs.statuts),                   /* actes générés */
+        signAny(d),                                   /* signatures lancées */
+        pret(d)||depose(d)                            /* prêt au dépôt / déposé */
+      ];
+      tot += jalons.filter(Boolean).length/jalons.length;
+    });
+    return Math.round(tot/L.length*100);
+  };
+
+  window.pilotageStats=function(){
+    var L=doss();var s={total:L.length,attente:0,encours:0,signes:0,deposes:0,clotures:0,complets:0,ca:0};
+    L.forEach(function(d){
+      var e=etape(d);
+      if(e<=1)s.attente++;              /* en attente de pièces */
+      else if(e===2||e===3)s.encours++; /* en cours (pièces ok → signatures lancées) */
+      if(signAll(d))s.signes++;
+      if(depose(d))s.deposes++;
+      if(clot(d))s.clotures++;
+      if(e>=4)s.complets++;             /* dossier complet (prêt/signé/déposé/clôturé) */
+      try{s.ca += (typeof espDocsTotal==='function')?(espDocsTotal(d)||0):0;}catch(_){}
+    });
+    var dem=(DB.demandes||[]).filter(function(x){return !x.archived;});
+    s.aTraiter=dem.filter(function(x){return !x.dossierId&&x.statut!=='Clôturé';}).length;
+    s.retard=(typeof demRetardCount==='function')?demRetardCount():0;
+    s.taux=window.tauxAutomatisation();
+    return s;
+  };
+
+  window.pagePilotage=function(){
+    var s=window.pilotageStats();
+    var K=(typeof kpi==='function')?kpi:function(ic,v,l,c){return '<div class="kpi"><div class="val '+(c||'')+'">'+v+'</div><div class="lbl">'+l+'</div></div>';};
+    var kpis='<div class="grid kpis pil-kpis">'
+      +K('folder',s.total,'Dossiers actifs')
+      +K('clock',s.attente,'En attente de pièces','warn')
+      +K('bolt',s.encours,'En cours de traitement')
+      +K('check',s.complets,'Dossiers complets','ok')
+      +K('idcard',s.signes,'Signés','ok')
+      +K('trend',s.deposes,'Déposés (Guichet unique)')
+      +'</div>';
+    var caCard='<div class="card pil-half"><div class="card-h"><h2>💶 Chiffre d\'affaires estimé</h2></div><div class="card-b">'
+      +'<div class="pil-big">'+num(s.ca)+'</div><div class="pil-sub">Honoraires prévisionnels sur les '+s.total+' dossier(s) actif(s) — hors débours (annonce légale, greffe, INPI).</div>'
+      +'<div class="pil-line"><span>Demandes à traiter</span><b>'+s.aTraiter+(s.retard?(' <span class="pil-warn">· '+s.retard+' en retard</span>'):'')+'</b></div>'
+      +'<div class="pil-line"><span>Dossiers clôturés</span><b>'+s.clotures+'</b></div>'
+      +'</div></div>';
+    var pct=s.taux;
+    var autoCard='<div class="card pil-half"><div class="card-h"><h2>⚡ Taux d\'automatisation</h2></div><div class="card-b">'
+      +'<div class="pil-gauge"><div class="pil-gauge-fill" style="width:'+pct+'%"></div><span class="pil-gauge-txt">'+pct+' %</span></div>'
+      +'<div class="pil-sub">Moyenne des jalons automatisés franchis (création depuis le questionnaire, collecte des pièces, extraction OCR, génération des actes, signatures, dépôt).</div>'
+      +'<div class="pil-obj '+(pct>=90?'ok':'')+'">Objectif spec : ≥ 90 %'+(pct>=90?' — atteint ✓':'')+'</div>'
+      +'</div></div>';
+    var flow='<div class="card"><div class="card-h"><h2>🔄 Répartition par étape</h2></div><div class="card-b"><div class="pil-flow">'
+      +[['En attente pièces',s.attente],['En cours',s.encours],['Complets',s.complets],['Signés',s.signes],['Déposés',s.deposes],['Clôturés',s.clotures]]
+        .map(function(x){var w=s.total?Math.round(x[1]/s.total*100):0;return '<div class="pil-frow"><span class="pil-fl">'+x[0]+'</span><span class="pil-fbar"><span style="width:'+w+'%"></span></span><b>'+x[1]+'</b></div>';}).join('')
+      +'</div></div></div>';
+    return kpis+'<div class="pil-2col">'+caCard+autoCard+'</div>'+flow;
+  };
+
+  try{ if(!document.getElementById('dashboard-css')){var st=document.createElement('style');st.id='dashboard-css';
+    st.textContent='.pil-2col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}@media(max-width:820px){.pil-2col{grid-template-columns:1fr}}'
+      +'.pil-half{margin:0}.pil-big{font:800 30px/1 Georgia,serif;color:var(--accent,#3f372b);margin:2px 0 4px}'
+      +'.pil-sub{font-size:12px;color:var(--ink3,#8a7d69);margin-bottom:10px}'
+      +'.pil-line{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--line,#e7ddc9);font-size:13px}'
+      +'.pil-warn{color:#b0442f;font-weight:700}'
+      +'.pil-gauge{position:relative;height:26px;border-radius:14px;background:#efe7d5;overflow:hidden;margin:6px 0 4px}'
+      +'.pil-gauge-fill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#c9a13c,#7a6a49);border-radius:14px;transition:width .4s}'
+      +'.pil-gauge-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 13px/1 inherit;color:#2a2117}'
+      +'.pil-obj{margin-top:8px;font-size:12px;color:var(--ink3,#8a7d69);font-weight:700}.pil-obj.ok{color:#3d6b3d}'
+      +'.pil-flow{display:flex;flex-direction:column;gap:8px}.pil-frow{display:flex;align-items:center;gap:10px;font-size:13px}'
+      +'.pil-fl{flex:0 0 130px;color:var(--ink2,#5b5040)}.pil-fbar{flex:1;height:10px;background:#efe7d5;border-radius:6px;overflow:hidden}'
+      +'.pil-fbar>span{display:block;height:100%;background:linear-gradient(90deg,#7a6a49,#c9a13c);border-radius:6px}.pil-frow b{flex:0 0 30px;text-align:right}';
+    document.head.appendChild(st);} }catch(e){}
 })();
 </script>
 
