@@ -3103,7 +3103,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=228;
+var LAST_VER=229;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9355,6 +9355,81 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   if(typeof espVerifRender==='function'){ var _r=espVerifRender; espVerifRender=window.espVerifRender=function(id){ _r(id); try{ var head=document.querySelector('#esp-verif .ev-head .ev-transmit'); if(head&&!document.getElementById('sg-qc-btn')){ var b=document.createElement('button'); b.id='sg-qc-btn'; b.className='btn btn-sm btn-ghost'; b.textContent='✍️ Signatures'; b.setAttribute('onclick','ouvrirSignatures(\''+id+'\')'); head.parentNode.insertBefore(b,head); } }catch(e){} }; }
 
   var st=document.createElement('style'); st.textContent='.sg-wrap{max-height:70vh;overflow:auto}.sg-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;padding:10px 12px;background:#f6f0e2;border-radius:10px;margin-bottom:10px}.sg-prog{font-weight:700;color:#5b5040}.sg-actions{margin-bottom:10px}.sg-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line,#e7ddc9);border-radius:10px;margin-bottom:8px;flex-wrap:wrap}.sg-doc b{display:block;font-size:13px}.sg-doc span{font-size:11.5px;color:#8a7d69}.sg-act{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.sg-b{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}.sg-ok{background:#e7f2e3;color:#3d6b3d}.sg-warn{background:#fbf1dd;color:#96650f}.sg-ko{background:#fbe6e0;color:#b0442f}.sg-mut{background:#eee7d7;color:#8a7d69}.sg-done{font-size:12px;color:#3d6b3d;font-weight:700}'; document.head.appendChild(st);
+})();
+</script>
+
+<script id="depot-mod">
+/* Phase 7 — assemblage « Prêt au dépôt » + RBE + transmission au Guichet unique (INPI).
+   Réutilise le dépôt INPI existant. 100% additif. */
+(function(){
+  function cli(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
+  function num(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.]/g,''));return isNaN(n)?null:n;}
+  var E=(typeof esc==='function')?esc:function(s){return ''+(s==null?'':s);};
+
+  window.rbeBeneficiaires=function(d){
+    var c=cli(d),A=(c.associes||[]).filter(function(a){return (''+(a.nom||'')).trim();}),cap=num(c.capital)||0;
+    var totP=A.reduce(function(t,a){return t+(num(a.parts)||0);},0);
+    return A.map(function(a){
+      var pP=totP>0?(num(a.parts)||0)/totP:null, pA=cap>0?(num(a.apport)||0)/cap:null;
+      var pct=(pP!=null&&pP>0)?pP:(pA!=null?pA:null);
+      var dir=(''+(a.nom||'')).trim()===(''+(c.president||'')).trim();
+      return {nom:a.nom,pct:pct!=null?Math.round(pct*100):null,dirigeant:dir,beneficiaire:(pct!=null&&pct>0.25)||dir};
+    }).filter(function(x){return x.beneficiaire;});
+  };
+  window.rbeHTML=function(d){
+    var c=cli(d),denom=(c.denomination||'«dénomination»'),B=window.rbeBeneficiaires(d);
+    var rows=B.length?B.map(function(b){return '<tr><td style="padding:6px;border:1px solid #ddd">'+E(b.nom)+'</td><td style="padding:6px;border:1px solid #ddd;text-align:center">'+(b.pct!=null?(b.pct+' %'):'—')+'</td><td style="padding:6px;border:1px solid #ddd">'+(b.dirigeant?'Représentant légal + détention':'Détention du capital')+'</td></tr>';}).join(''):'<tr><td colspan="3" style="text-align:center;color:#8a7d69;padding:6px">Aucun bénéficiaire effectif identifié (à compléter).</td></tr>';
+    return '<div class="doc-gen"><div style="font-family:Georgia,serif;padding:20px 8px;color:#111"><h2 style="text-align:center;font-size:15px">REGISTRE DES BÉNÉFICIAIRES EFFECTIFS</h2>'
+      +'<p style="text-align:center">Société <b>'+E(denom)+'</b></p>'
+      +'<p style="font-size:12.5px">Est bénéficiaire effectif toute personne physique qui détient, directement ou indirectement, plus de 25 % du capital ou des droits de vote, ou qui exerce un pouvoir de contrôle sur la société (art. L561-2-2 du Code monétaire et financier).</p>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px"><thead><tr style="background:#f0ead9"><th style="text-align:left;padding:6px;border:1px solid #ddd">Nom et prénom</th><th style="padding:6px;border:1px solid #ddd">% détention</th><th style="text-align:left;padding:6px;border:1px solid #ddd">Nature du contrôle</th></tr></thead><tbody>'+rows+'</tbody></table>'
+      +'<p style="margin-top:26px;font-size:12.5px">Fait pour servir et valoir ce que de droit.</p></div></div>';
+  };
+
+  window.depotReadiness=function(d){
+    var blockers=[];
+    var qc=(typeof controleQualite==='function')?controleQualite(d):{ko:0};
+    if(qc.ko>0)blockers.push('Contrôle qualité : '+qc.ko+' point(s) à corriger (voir « 🤖 Contrôle qualité »).');
+    var sp=(typeof sigProgress==='function')?sigProgress(d):{tous:true,signes:0,total:0};
+    if(!sp.tous)blockers.push('Signatures : '+sp.signes+'/'+sp.total+' actes signés (voir « ✍️ Signatures »).');
+    return {ready:blockers.length===0,blockers:blockers,qualite:qc,signatures:sp};
+  };
+  window.depotPackage=function(d){
+    var out=[];
+    [['statuts','Statuts signés'],['pouvoir','Pouvoir signé'],['dnc','Déclaration de non-condamnation'],['souscripteurs','Liste des souscripteurs']].forEach(function(a){
+      var s=((d.signDossier||{})[a[0]]||{}); out.push({k:a[0],label:a[1],present:s.statut==='signe',cat:'Acte'});
+    });
+    out.push({k:'rbe',label:'Registre des bénéficiaires effectifs',present:window.rbeBeneficiaires(d).length>0,cat:'Acte'});
+    var reqs=(typeof DIRIGEANT_PIECES!=='undefined')?DIRIGEANT_PIECES:[];
+    reqs.forEach(function(pc){ var st=(d.pieces&&d.pieces[pc.k])||{}; out.push({k:pc.k,label:pc.l,present:!!st.data,cat:'Pièce'}); });
+    return out;
+  };
+
+  window.depotTransmettre=function(id){
+    var d=espDoss().find(function(x){return x.id===id;}); if(!d)return;
+    var r=window.depotReadiness(d);
+    if(!r.ready){ if(typeof toast==='function')toast('⚠ Dossier non prêt : '+r.blockers[0]); return; }
+    d.statut='Prêt au dépôt'; (d.historique=d.historique||[]).push({d:(typeof today==='function'?today():''),t:'Dossier marqué prêt au dépôt'});
+    if(typeof save==='function')save();
+    if(typeof espDepotInpi==='function'){ if(typeof closeModal==='function')closeModal(); espDepotInpi(id); }
+    else if(typeof toast==='function')toast('✅ Dossier prêt au dépôt.');
+  };
+
+  function bdg(ok){return ok?'<span class="dp-b ok">✓</span>':'<span class="dp-b ko">✕</span>';}
+  window.depotHTML=function(d){
+    var r=window.depotReadiness(d), pkg=window.depotPackage(d);
+    var vh=r.ready?'<div class="dp-verdict ok">✅ Dossier <b>Prêt au dépôt</b> — toutes les conditions sont réunies.</div>'
+      :'<div class="dp-verdict ko"><b>Dossier non prêt.</b><ul style="margin:6px 0 0;padding-left:18px">'+r.blockers.map(function(b){return '<li>'+E(b)+'</li>';}).join('')+'</ul></div>';
+    function grp(cat){ var it=pkg.filter(function(x){return x.cat===cat;}); return '<div class="dp-grp">'+E(cat==='Acte'?'Actes juridiques':'Pièces justificatives')+'</div>'+it.map(function(x){return '<div class="dp-row">'+bdg(x.present)+'<span>'+E(x.label)+'</span>'+(x.k==='rbe'?' <button class="btn btn-sm btn-ghost" onclick="depotVoirRBE(\''+d.id+'\')">Voir</button>':'')+'</div>';}).join(''); }
+    return '<div class="dp-wrap">'+vh+'<div class="dp-pkg">'+grp('Acte')+grp('Pièce')+'</div>'
+      +'<div class="dp-actions"><button class="btn '+(r.ready?'btn-pri':'')+'" '+(r.ready?'':'disabled')+' onclick="depotTransmettre(\''+d.id+'\')">📤 Transmettre au Guichet unique (INPI)</button></div></div>';
+  };
+  window.depotVoirRBE=function(id){ var d=espDoss().find(function(x){return x.id===id;}); if(d&&typeof openModal==='function')openModal('Registre des bénéficiaires effectifs',window.rbeHTML(d),'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'); };
+  window.ouvrirDepot=function(id){ var d=espDoss().find(function(x){return x.id===id;}); if(d&&typeof openModal==='function')openModal('📤 Dépôt — '+E((typeof dossierClients==='function')?dossierClients(d):''),window.depotHTML(d),'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'); };
+
+  if(typeof espVerifRender==='function'){ var _r=espVerifRender; espVerifRender=window.espVerifRender=function(id){ _r(id); try{ var head=document.querySelector('#esp-verif .ev-head .ev-transmit'); if(head&&!document.getElementById('dp-qc-btn')){ var b=document.createElement('button'); b.id='dp-qc-btn'; b.className='btn btn-sm btn-ghost'; b.textContent='📤 Prêt au dépôt'; b.setAttribute('onclick','ouvrirDepot(\''+id+'\')'); head.parentNode.insertBefore(b,head); } }catch(e){} }; }
+
+  var st=document.createElement('style'); st.textContent='.dp-wrap{max-height:70vh;overflow:auto}.dp-verdict{padding:10px 12px;border-radius:10px;margin-bottom:12px;font-size:13px}.dp-verdict.ok{background:#e7f2e3;color:#2f6b3a}.dp-verdict.ko{background:#fbe6e0;color:#a63a22}.dp-grp{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#8a7d69;font-weight:700;margin:10px 0 4px}.dp-row{display:flex;align-items:center;gap:9px;padding:6px 2px;font-size:13px}.dp-b{width:18px;height:18px;border-radius:50%;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}.dp-b.ok{background:#5c8a52}.dp-b.ko{background:#c0553a}.dp-actions{margin-top:14px;text-align:center}'; document.head.appendChild(st);
 })();
 </script>
 
