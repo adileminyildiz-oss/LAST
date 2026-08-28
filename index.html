@@ -3103,7 +3103,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=230;
+var LAST_VER=231;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -9477,6 +9477,61 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   if(typeof espVerifRender==='function'){ var _r=espVerifRender; espVerifRender=window.espVerifRender=function(id){ _r(id); try{ var head=document.querySelector('#esp-verif .ev-head .ev-transmit'); if(head&&!document.getElementById('ar-qc-btn')){ var b=document.createElement('button'); b.id='ar-qc-btn'; b.className='btn btn-sm btn-ghost'; b.textContent='🗄️ Archives'; b.setAttribute('onclick','ouvrirArchive(\''+id+'\')'); head.parentNode.insertBefore(b,head); } }catch(e){} }; }
 
   var st=document.createElement('style'); st.textContent='.ar-wrap{max-height:72vh;overflow:auto}.ar-tree{font-family:ui-monospace,Consolas,monospace;font-size:13px;background:#f6f0e2;border-radius:10px;padding:10px 12px;margin-bottom:12px;line-height:1.7}.ar-dos b{color:#5b5040}.ar-folder{border:1px solid var(--line,#e7ddc9);border-radius:10px;margin-bottom:8px;background:#fffdf8;overflow:hidden}.ar-folder>summary{cursor:pointer;padding:9px 12px;font-weight:700;font-size:13px;color:#5b5040;list-style:none;display:flex;align-items:center;gap:8px}.ar-folder>summary::-webkit-details-marker{display:none}.ar-count{margin-left:auto;font-size:11px;font-weight:700;background:#eee7d7;color:#8a7d69;padding:2px 8px;border-radius:20px}.ar-item{display:flex;align-items:center;gap:9px;padding:6px 14px;font-size:12.5px;border-top:1px solid #f0e9d8}.ar-item.mut{color:#a99f8b}.ar-ic{width:16px;text-align:center}.ar-item.ok .ar-ic{color:#5c8a52;font-weight:700}.ar-meta{margin-left:auto;font-size:11px;color:#8a7d69}'; document.head.appendChild(st);
+})();
+</script>
+
+<script id="depot-portail-mod">
+/* Phase 2 — portail de dépôt sécurisé des pièces (page depot.html).
+   Lien sécurisé par dossier + ingestion des dépôts reçus par e-mail. 100% additif. */
+(function(){
+  function hash(s){s=''+(s||'');var h=5381;for(var i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36);}
+  window.depotToken=function(numero){ var s='AEM-DEPOT-'+(numero||''); return (hash(s)+hash(s+'/2')).slice(0,8); };
+  function baseUrl(){ try{ var h=location.href.split('#')[0].split('?')[0]; return h.replace(/[^\/]*$/,''); }catch(e){ return ''; } }
+  window.depotLien=function(d){ var no=(d&&(d.numeroDossier||(d.intake&&d.intake.numeroDossier)))||(d&&d.ref)||''; if(!no)return ''; return baseUrl()+'depot.html?d='+encodeURIComponent(no)+'&k='+window.depotToken(no); };
+
+  window.depotDetectEmail=function(mail){
+    var txt=((mail&&mail.subject)||'')+' \n '+((mail&&mail.body)||'')+' '+((mail&&mail.rawBody)||'');
+    if(txt.indexOf('LASTDEP1:')<0 && !/D[ÉE]P[ÔO]T PI[ÈE]CES/i.test(txt))return null;
+    var i=txt.indexOf('LASTDEP1:');
+    if(i>=0){ var seg=txt.slice(i+9).match(/^[A-Za-z0-9+/=\s]+/); if(seg){ var chars=seg[0].replace(/[\s=]/g,''); for(var len=chars.length;len>=8;len--){ var b=chars.slice(0,len);while(b.length%4)b+='='; try{var j=decodeURIComponent(escape(atob(b)));if(j&&j.charAt(0)==='{'){var end=j.lastIndexOf('}');if(end>0){var o=JSON.parse(j.slice(0,end+1));if(o&&o.version==='LASTDEP1')return o;}}}catch(e){} } } }
+    // repli : sujet « DÉPÔT PIÈCES — DOS-... »
+    var m=txt.match(/D[ÉE]P[ÔO]T PI[ÈE]CES\s*[—-]\s*(DOS-\d{4}-\d+)/i); if(m)return {version:'LASTDEP1',dossier:m[1],pieces:{}};
+    return null;
+  };
+
+  function trouverEntite(numero){
+    numero=''+(numero||'');
+    var d=(DB.demandes||[]).find(function(x){return (x.numeroDossier===numero)||((x.intake||{}).numeroDossier===numero);});
+    if(d)return d;
+    var dos=(DB.dossiers||[]).find(function(x){return x.numeroDossier===numero||x.ref===numero;});
+    if(dos){ var dm=(DB.demandes||[]).find(function(x){return x.dossierId===dos.id;}); return dm||dos; }
+    return null;
+  }
+  window.depotAttacherAuDossier=function(numero,info,mail){
+    var e=trouverEntite(numero); if(!e)return {ok:false,raison:'dossier introuvable'};
+    e.piecesRecues=e.piecesRecues||{}; e.docs=e.docs||{};
+    var keys=Object.keys((info&&info.pieces)||{}).filter(function(k){return (info.pieces[k]||[]).length;});
+    if(!keys.length && info && info.pieces && Object.keys(info.pieces).length===0){ keys=['identite','domiciliation']; } // repli sujet seul
+    keys.forEach(function(k){
+      e.piecesRecues[k]=true; e.docs[k]=e.docs[k]||[];
+      ((info.pieces&&info.pieces[k])||[]).forEach(function(nm){ if(!e.docs[k].some(function(x){return x.name===nm;}))e.docs[k].push({name:nm,portail:true,ts:Date.now()}); });
+      if(!(info.pieces&&info.pieces[k]||[]).length && !e.docs[k].length)e.docs[k].push({name:'pièce déposée',portail:true,ts:Date.now()});
+    });
+    e.depotPortail={statut:'reçu',ts:Date.now(),keys:keys,nb:keys.length};
+    if(typeof save==='function')save();
+    if(typeof toast==='function')toast('📥 Pièces reçues via le portail — dossier '+numero+' ('+keys.length+')');
+    return {ok:true,entite:e.id,keys:keys};
+  };
+  window.depotTraiterMail=function(mail){ var info=window.depotDetectEmail(mail); if(!info||!info.dossier)return null; return window.depotAttacherAuDossier(info.dossier,info,mail); };
+
+  // ingestion : à chaque synchro, relier les e-mails de dépôt
+  if(typeof demIngest==='function'){ var _di=demIngest; demIngest=window.demIngest=function(mails){ var r=_di(mails); try{ (mails||[]).forEach(function(m){ var info=window.depotDetectEmail(m); if(info&&info.dossier)window.depotAttacherAuDossier(info.dossier,info,m); }); }catch(e){} return r; }; }
+
+  // lien de dépôt ajouté au mail « Demander les documents »
+  if(typeof demDemanderDocs==='function'){ var _dd=demDemanderDocs; demDemanderDocs=window.demDemanderDocs=function(id){
+    try{ var d=(DB.demandes||[]).find(function(x){return x.id===id;}); var lien=d?window.depotLien(d):''; if(lien){ var box=null; setTimeout(function(){ var ta=document.getElementById('ml-corps'); if(ta&&ta.value&&ta.value.indexOf('depot.html')<0){ ta.value=ta.value.replace(/\n*Bien cordialement,?/i,'\n\nPour plus de simplicité, vous pouvez aussi déposer vos pièces en ligne, en toute sécurité, via votre espace dédié :\n'+lien+'\n\nBien cordialement,'); } },120); } }catch(e){}
+    return _dd(id);
+  }; }
 })();
 </script>
 

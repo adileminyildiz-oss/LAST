@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AEM CONSEIL — Dépôt sécurisé de vos pièces</title>
+<style>
+:root{--bg:#faf6ec;--card:#fffdf8;--ink:#2a2117;--ink2:#5b5040;--ink3:#8a7d69;--line:#e7ddc9;--line2:#d9ccb2;--accent:#3f372b;--accent2:#7a6a49;--gold:#b8912f;--ok:#3d6b3d;--err:#b0442f}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#f3ecdc,#faf6ec 240px);color:var(--ink);font:15px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;padding:24px 14px 60px}
+.wrap{max-width:680px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.brand .logo{font:800 24px/1 Georgia,serif;letter-spacing:2px;color:var(--accent)}
+.brand .sub{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);font-weight:700}
+h1{font-size:21px;margin:14px 0 4px}
+.lead{color:var(--ink2);margin:0 0 16px}
+.dosno{display:inline-block;font:700 14px/1 Georgia,serif;letter-spacing:1px;color:var(--accent);background:#f6f0e2;border:1px solid var(--line);border-radius:9px;padding:7px 12px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line2);border-radius:16px;padding:22px 20px;box-shadow:0 24px 60px -40px rgba(70,55,25,.4)}
+.piece{border:1px solid var(--line2);border-radius:12px;padding:14px;margin-bottom:12px;background:#fffefb}
+.piece.done{border-color:#cfe3c6;background:#f4faf1}
+.piece-h{display:flex;align-items:center;gap:10px}
+.piece-h b{font-size:14px}
+.piece-h .st{margin-left:auto;font-size:11px;font-weight:700;color:var(--ink3)}
+.piece.done .st{color:var(--ok)}
+.piece .hint{font-size:12px;color:var(--ink3);margin:4px 0 10px}
+.drop{border:1.5px dashed var(--line2);border-radius:10px;padding:14px;text-align:center;cursor:pointer;color:var(--accent2);font-weight:600;background:#fff}
+.drop:hover{border-color:var(--accent2)}
+.files{margin-top:8px;font-size:12px;color:var(--ink2)}
+.files div{padding:3px 0}
+.btn{margin-top:8px;width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(180deg,#c9a13c,#a8801f);color:#fff;font:600 15px/1 inherit;cursor:pointer}
+.btn:disabled{background:#d9ccb2;cursor:not-allowed}
+.note{font-size:12px;color:var(--ink3);margin-top:12px;text-align:center}
+.ok{display:none;text-align:center;padding:34px 12px}
+.ok h2{color:var(--ok)}
+.err{color:var(--err);font-size:13px;text-align:center;padding:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><span class="logo">AEM</span><span class="sub">Conseil · Dépôt sécurisé</span></div>
+  <h1>Dépôt de vos pièces justificatives</h1>
+  <p class="lead" id="lead">Transmettez en toute sécurité les documents nécessaires à la création de votre société.</p>
+  <div id="dosno" class="dosno"></div>
+
+  <div class="card" id="cardForm">
+    <div id="pieces"></div>
+    <form id="post" action="https://formsubmit.co/aemconseil.sas@gmail.com" method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="_captcha" value="false">
+      <input type="hidden" name="_template" value="box">
+      <input type="hidden" name="_subject" id="p_subject" value="DÉPÔT PIÈCES — AEM CONSEIL">
+      <input type="hidden" name="_next" id="p_next" value="">
+      <input type="hidden" name="Origine" value="Portail de dépôt sécurisé">
+      <input type="hidden" name="Numéro de dossier" id="p_dossier" value="">
+      <input type="hidden" name="LAST_DEPOT" id="p_marker" value="">
+      <div id="fileInputs" style="display:none"></div>
+      <button class="btn" type="button" id="send" disabled>Transmettre mes pièces</button>
+    </form>
+    <div class="note">🔒 Liaison directe et sécurisée à votre dossier. Aucun compte à créer.</div>
+  </div>
+
+  <div class="card ok" id="cardOk">
+    <h2>✅ Merci, vos pièces sont transmises !</h2>
+    <p class="lead" style="text-align:center">Nous avons bien reçu vos documents. Notre équipe les vérifie et poursuit les démarches de création.</p>
+  </div>
+  <div class="err" id="cardErr" style="display:none">Lien invalide : numéro de dossier manquant. Utilisez le lien reçu par e-mail.</div>
+</div>
+
+<script>
+var PIECES=[
+ {k:'identite',l:"Pièce d'identité du dirigeant",h:'Carte nationale d\'identité, passeport ou titre de séjour — recto et verso.'},
+ {k:'domiciliation',l:'Justificatif de domicile',h:'Facture (électricité, téléphone…) ou quittance de loyer de moins de 3 mois.'},
+ {k:'attestation',l:'Attestation de domiciliation / bail',h:'Si le siège est chez vous : attestation. Si local : bail ou mise à disposition.'},
+ {k:'impot',l:"Avis d'impôt (facultatif)",h:'Dernier avis d\'imposition, si demandé.'}
+];
+function qp(n){var m=location.search.match(new RegExp('[?&]'+n+'=([^&]*)'));return m?decodeURIComponent(m[1].replace(/\+/g,' ')):'';}
+function b64(s){return btoa(unescape(encodeURIComponent(s)));}
+var dossier=qp('d')||qp('dossier'), token=qp('k'), STORE={};
+if(!dossier){document.getElementById('cardForm').style.display='none';document.getElementById('cardErr').style.display='block';}
+else{
+  document.getElementById('dosno').textContent='Dossier '+dossier;
+  document.getElementById('p_dossier').value=dossier;
+  document.getElementById('p_subject').value='DÉPÔT PIÈCES — '+dossier+' — AEM CONSEIL';
+  document.getElementById('p_next').value=location.href.split('#')[0]+'#ok';
+  render();
+}
+function esc(s){return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+function render(){
+  var el=document.getElementById('pieces');
+  el.innerHTML=PIECES.map(function(p){var f=STORE[p.k]||[];var done=f.length>0;
+    return '<div class="piece'+(done?' done':'')+'" id="pc-'+p.k+'"><div class="piece-h"><b>'+esc(p.l)+'</b><span class="st">'+(done?('✓ '+f.length+' fichier(s)'):'À déposer')+'</span></div>'
+     +'<div class="hint">'+esc(p.h)+'</div>'
+     +'<label class="drop">＋ Choisir un fichier (photo ou PDF)<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="pick(\''+p.k+'\',this)"></label>'
+     +(done?('<div class="files">'+f.map(function(x){return '<div>📎 '+esc(x.name)+'</div>';}).join('')+'</div>'):'')+'</div>';
+  }).join('');
+  var any=Object.keys(STORE).some(function(k){return (STORE[k]||[]).length;});
+  document.getElementById('send').disabled=!any;
+}
+function pick(k,inp){var fl=inp.files;if(!fl||!fl.length)return;STORE[k]=STORE[k]||[];
+  Array.prototype.forEach.call(fl,function(f){STORE[k].push({name:f.name,file:f});});
+  syncInputs();render();}
+function syncInputs(){
+  // recrée des <input type=file> nommés pour l'envoi FormSubmit (pièces jointes)
+  var host=document.getElementById('fileInputs');host.innerHTML='';
+  Object.keys(STORE).forEach(function(k){(STORE[k]||[]).forEach(function(x,i){
+    var dt=new DataTransfer();dt.items.add(x.file);
+    var inp=document.createElement('input');inp.type='file';inp.name='Pièce '+k+' '+(i+1);inp.files=dt.files;host.appendChild(inp);
+  });});
+}
+document.getElementById('send').addEventListener('click',function(){
+  var names={};Object.keys(STORE).forEach(function(k){names[k]=(STORE[k]||[]).map(function(x){return x.name;});});
+  var payload={version:'LASTDEP1',dossier:dossier,token:token,pieces:names,ts:new Date().toISOString()};
+  document.getElementById('p_marker').value='LASTDEP1:'+b64(JSON.stringify(payload));
+  try{localStorage.setItem('aem-depot-'+dossier,'1');}catch(e){}
+  document.getElementById('post').submit();
+});
+if(location.hash==='#ok'){document.getElementById('cardForm').style.display='none';document.getElementById('dosno').style.display='none';document.getElementById('cardOk').style.display='block';}
+</script>
+</body>
+</html>
