@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=244;
+var LAST_VER=245;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10664,6 +10664,157 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.or-in label{font-size:12px;color:var(--ink3,#8a7d69)}.or-in select{max-width:320px}.or-sub{font-size:11px;color:var(--ink3,#8a7d69);margin:4px 0 8px}'
       +'.or-cards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}.or-c{flex:1;min-width:120px;background:#eef4fb;border:1px solid #d6e2f0;border-radius:10px;padding:8px 11px}.or-c .or-k{display:block;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:#5b7091;font-weight:700}.or-c b{font-size:13px;color:#22344d}'
       +'.or-why,.or-att{margin-top:6px}.or-t{font-weight:700;font-size:12px;margin-bottom:3px}.or-li{font-size:12px;color:var(--ink2,#5b5040);padding:2px 0}.or-att .or-li{color:#8a5e0d}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="fiscaliste-modification-mod">
+/* ===== Volet modification — conséquences fiscales & sociales (cession, dirigeant, siège, objet, régime) ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function eu(n){n=Math.round(n||0);return (typeof eur==='function')?eur(n):(n+' €');}
+  function C(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
+  function pfNum(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.,]/g,'').replace(',','.'));return isNaN(n)?0:n;}
+
+  window.MODIF_TYPES=[
+    {k:'cession',l:'Cession de titres (parts / actions)'},
+    {k:'dirigeant',l:'Changement de dirigeant'},
+    {k:'siege',l:'Transfert de siège social'},
+    {k:'objet',l:'Changement d\'objet social'},
+    {k:'regime',l:'Changement de régime fiscal (option IS)'}
+  ];
+
+  /* Droits d'enregistrement sur cession (barème France) */
+  window.droitsCession=function(p){
+    p=p||{};var forme=((p.forme||'')+'').toUpperCase();var prix=Math.max(0,pfNum(p.prix));
+    var quotite=p.quotite!=null?Math.max(0,Math.min(1,pfNum(p.quotite)/(pfNum(p.quotite)>1?100:1))):1;
+    var actions=/SAS|SASU|SA$/.test(forme);var immo=/SCI/.test(forme);
+    var taux, abattement=0, base, droits, regle;
+    if(actions){ taux=0.001; base=prix; droits=prix*taux; regle='Actions (SAS/SA) : 0,1 % sans abattement.'; }
+    else if(immo){ taux=0.05; base=prix; droits=prix*taux; regle='Parts de société à prépondérance immobilière (SCI) : 5 %, sans abattement.'; }
+    else { taux=0.03; abattement=23000*quotite; base=Math.max(0,prix-abattement); droits=base*taux; regle='Parts sociales (SARL/SNC…) : 3 % après abattement de 23 000 € × quotité cédée.'; }
+    return {taux:taux,abattement:abattement,base:base,droits:droits,regle:regle,actions:actions,immo:immo};
+  };
+  /* Plus-value de cession du cédant (personne physique, PFU par défaut) */
+  window.plusValueCession=function(p){
+    p=p||{};var pv=Math.max(0,pfNum(p.prix)-pfNum(p.acquisition));
+    var ir=pv*0.128, ps=pv*0.172, total=pv*0.30;
+    return {plusValue:pv,ir:ir,ps:ps,total:total,net:pfNum(p.prix)-total};
+  };
+
+  window.analyseModification=function(type,p){
+    p=p||{};var forme=((p.forme||'')+'').toUpperCase();var R=[];var chiffres=[];var formalites=[];
+    var lvl=function(niveau,titre,detail){return {niveau:niveau,titre:titre,detail:detail};};
+    if(type==='cession'){
+      var dc=window.droitsCession(p);var pv=window.plusValueCession(p);
+      chiffres.push({label:'Droits d\'enregistrement',valeur:eu(dc.droits),note:dc.regle});
+      chiffres.push({label:'Plus-value imposable',valeur:eu(pv.plusValue),note:'Prix de cession − prix d\'acquisition'});
+      chiffres.push({label:'Impôt sur la plus-value (PFU 30 %)',valeur:eu(pv.total),note:'12,8 % IR + 17,2 % prélèvements sociaux'});
+      R.push(lvl('conseil','Droits d\'enregistrement',dc.regle+' Réglés par l\'acquéreur, dans le mois de la cession.'));
+      R.push(lvl('attention','Plus-value du cédant','Plus-value soumise au PFU de 30 % (option barème possible, avec abattements pour durée de détention si titres acquis avant 2018 ; exonérations spécifiques : départ à la retraite du dirigeant, etc.).'));
+      if(!dc.actions){ R.push(lvl('attention','Agrément préalable','Les cessions de parts de SARL à des tiers requièrent l\'agrément des associés (majorité légale). Vérifiez les clauses d\'agrément des statuts.')); }
+      else { R.push(lvl('conseil','Clauses statutaires','En SAS, vérifiez les clauses d\'agrément / de préemption du pacte et des statuts avant la cession.')); }
+      formalites=['Acte de cession signé (mentions Bon pour cession / acquisition)','Agrément des associés si requis (PV)','Enregistrement au service des impôts dans le mois + paiement des droits','Mise à jour : registre des mouvements de titres (SAS) / statuts (SARL si les parts y figurent)','Déclaration de la plus-value par le cédant'];
+    }
+    else if(type==='dirigeant'){
+      var av=pfNum(p.partsAvant), ap=pfNum(p.partsApres);
+      R.push(lvl('conseil','Nature de la formalité','Changement de dirigeant = modification de la représentation légale ; le nouveau dirigeant fournit une pièce d\'identité, une déclaration de non-condamnation et de filiation.'));
+      if(/SARL/.test(forme)&&(av||ap)){
+        var avMaj=av>50, apMaj=ap>50;
+        if(avMaj!==apMaj){ R.push(lvl('risque','Bascule du régime social',(apMaj?'Le nouveau gérant devient majoritaire → passage au régime TNS (SSI).':'Le nouveau gérant est minoritaire/égalitaire → passage au régime général (assimilé salarié).')+' Anticipez le changement de cotisations et de protection sociale.')); }
+        else { R.push(lvl('conseil','Régime social inchangé','La majorité du gérant ne change pas → régime social identique.')); }
+      } else if(/SARL/.test(forme)){ R.push(lvl('attention','Vérifier la majorité','Renseignez les parts du gérant entrant : sa majorité (> 50 %) détermine son régime social (TNS vs assimilé salarié).')); }
+      formalites=['Décision (PV d\'assemblée / décision de l\'associé unique)','Mise à jour des statuts si le dirigeant y est nommément désigné','Publication d\'un avis dans un support d\'annonces légales','Dépôt de la formalité au guichet unique (INPI) → mise à jour du Kbis','DNC + attestation de filiation du nouveau dirigeant'];
+    }
+    else if(type==='siege'){
+      var mm=(p.memeRessort===true||p.memeRessort==='1');
+      R.push(lvl('conseil','Décision & justificatif','Transfert décidé selon les statuts (gérant/président ou collectivité) ; joindre un justificatif de jouissance du nouveau local (bail, attestation de domiciliation).'));
+      if(p.memeRessort==null){ R.push(lvl('attention','Ressort du greffe','Si le nouveau siège relève d\'un autre greffe/département, prévoir la publication d\'un avis dans l\'ancien ET le nouveau département ; sinon une seule publication.')); }
+      else if(mm){ R.push(lvl('conseil','Même ressort','Nouveau siège dans le même ressort : une seule publication d\'annonce légale.')); }
+      else { R.push(lvl('attention','Changement de ressort','Nouveau ressort/département : deux publications (ancien + nouveau) et changement de tribunal compétent.')); }
+      formalites=['Décision de transfert (PV) + mise à jour des statuts','Justificatif de jouissance du nouveau local','Publication d\'annonce légale (une ou deux selon le ressort)','Dépôt de la formalité au guichet unique (INPI)'];
+    }
+    else if(type==='objet'){
+      R.push(lvl('conseil','Modification statutaire','Changement d\'objet = décision extraordinaire (majorité renforcée selon la forme) et mise à jour des statuts.'));
+      R.push(lvl('attention','Cohérence & code APE','Vérifiez la compatibilité avec l\'activité réelle, l\'éventuelle réglementation (activité réglementée), le régime de TVA et la mise à jour du code APE.'));
+      formalites=['Décision extraordinaire (PV) + statuts mis à jour','Publication d\'annonce légale','Dépôt au guichet unique (INPI)','Vérifier autorisations / assurances liées à la nouvelle activité'];
+    }
+    else if(type==='regime'){
+      var isSCI=/SCI/.test(forme);
+      R.push(lvl(isSCI?'risque':'attention','Option pour l\'IS',isSCI?'L\'option d\'une SCI pour l\'IS est irréversible et fait perdre le régime des plus-values des particuliers : à décider en connaissance de cause.':'L\'option pour l\'IS d\'une société de personnes (EURL, SNC…) est révocable pendant 5 ans, puis devient irréversible.'));
+      R.push(lvl('conseil','Notification & délai','L\'option se notifie à l\'administration fiscale dans les délais (avant la fin du 3ᵉ mois de l\'exercice pour lequel elle s\'applique). Pas d\'annonce légale requise.'));
+      formalites=['Décision des associés (le cas échéant)','Notification de l\'option au service des impôts dans le délai','Mise à jour des obligations comptables et déclaratives'];
+    }
+    var counts={risque:R.filter(function(a){return a.niveau==='risque';}).length,attention:R.filter(function(a){return a.niveau==='attention';}).length,conseil:R.filter(function(a){return a.niveau==='conseil';}).length};
+    return {type:type,forme:forme,chiffres:chiffres,analyses:R,formalites:formalites,counts:counts};
+  };
+
+  window.modificationHTML=function(d,type){
+    var c=C(d);var forme=((c.forme||d.forme||'')+'').toUpperCase();var t=type||'cession';
+    var opts=window.MODIF_TYPES.map(function(x){return '<option value="'+x.k+'" '+(x.k===t?'selected':'')+'>'+E(x.l)+'</option>';}).join('');
+    var inputs='';
+    if(t==='cession'){
+      inputs='<div class="mo-grid"><div><label>Prix de cession (€)</label><input id="mo-prix" type="number" min="0" value="'+(pfNum(c.capital)||10000)+'"></div>'
+        +'<div><label>Prix d\'acquisition (€)</label><input id="mo-acq" type="number" min="0" value="0"></div>'
+        +'<div><label>Quotité cédée (%)</label><input id="mo-quot" type="number" min="0" max="100" value="100"></div></div>'
+        +'<button class="btn btn-sm btn-pri" onclick="modifRun(\''+d.id+'\')">Calculer</button>';
+    } else if(t==='siege'){
+      inputs='<div class="mo-in"><label>Nouveau siège</label><select id="mo-ressort"><option value="">— à préciser —</option><option value="1">Même ressort/département</option><option value="0">Autre ressort/département</option></select><button class="btn btn-sm btn-pri" style="margin-left:8px" onclick="modifRun(\''+d.id+'\')">Analyser</button></div>';
+    } else if(t==='dirigeant'&&/SARL/.test(forme)){
+      inputs='<div class="mo-grid"><div><label>Parts de l\'ancien gérant (%)</label><input id="mo-av" type="number" min="0" max="100" value="0"></div>'
+        +'<div><label>Parts du nouveau gérant (%)</label><input id="mo-ap" type="number" min="0" max="100" value="0"></div></div>'
+        +'<button class="btn btn-sm btn-pri" onclick="modifRun(\''+d.id+'\')">Analyser</button>';
+    }
+    var p={forme:forme};
+    if(t==='cession'){p.prix=pfNum(c.capital)||10000;p.acquisition=0;p.quotite=100;}
+    var r=window.analyseModification(t,p);
+    return '<div class="mo-sel"><label>Type de modification</label><select id="mo-type" onchange="modifRun(\''+d.id+'\')">'+opts+'</select></div>'
+      +'<div class="mo-inputs">'+inputs+'</div>'
+      +'<div id="mo-res">'+window.modificationResHTML(r)+'</div>';
+  };
+  window.modificationResHTML=function(r){
+    var ch=r.chiffres.length?('<div class="mo-cards">'+r.chiffres.map(function(x){return '<div class="mo-c"><span class="mo-k">'+E(x.label)+'</span><b>'+E(x.valeur)+'</b>'+(x.note?'<span class="mo-note">'+E(x.note)+'</span>':'')+'</div>';}).join('')+'</div>'):'';
+    var order=['risque','attention','conseil'];var lbl={risque:'⛔ Vigilance',attention:'⚠️ À vérifier',conseil:'💡 Repère'};
+    var an=order.map(function(n){var g=r.analyses.filter(function(a){return a.niveau===n;});if(!g.length)return '';
+      return '<div class="mo-grp mo-'+n+'"><div class="mo-t">'+lbl[n]+'</div>'+g.map(function(a){return '<div class="mo-item"><b>'+E(a.titre)+'</b><span>'+E(a.detail)+'</span></div>';}).join('')+'</div>';}).join('');
+    var fo=r.formalites.length?('<div class="mo-form"><div class="mo-t">Formalités</div>'+r.formalites.map(function(x){return '<div class="mo-li">→ '+E(x)+'</div>';}).join('')+'</div>'):'';
+    return ch+an+fo;
+  };
+  window.modifRun=function(id){
+    var d=(typeof espDoss==='function'?espDoss():[]).find(function(x){return x.id===id;});if(!d)return;
+    var c=C(d);var forme=((c.forme||d.forme||'')+'').toUpperCase();
+    var tSel=document.getElementById('mo-type');var t=tSel?tSel.value:'cession';
+    /* si le type change, reconstruire tout le bloc (inputs différents) */
+    var wrap=document.getElementById('mo-wrap');
+    var prevType=wrap?wrap.getAttribute('data-t'):null;
+    if(prevType!==t&&wrap){wrap.setAttribute('data-t',t);wrap.innerHTML=window.modificationHTML(d,t);return;}
+    var p={forme:forme};
+    if(t==='cession'){p.prix=pfNum((document.getElementById('mo-prix')||{}).value);p.acquisition=pfNum((document.getElementById('mo-acq')||{}).value);p.quotite=pfNum((document.getElementById('mo-quot')||{}).value);}
+    if(t==='siege'){p.memeRessort=(document.getElementById('mo-ressort')||{}).value;if(p.memeRessort==='')p.memeRessort=null;}
+    if(t==='dirigeant'){p.partsAvant=pfNum((document.getElementById('mo-av')||{}).value);p.partsApres=pfNum((document.getElementById('mo-ap')||{}).value);}
+    var res=document.getElementById('mo-res');if(res)res.innerHTML=window.modificationResHTML(window.analyseModification(t,p));
+  };
+  window.ouvrirAnalyseModification=function(id){
+    var d=(typeof espDoss==='function'?espDoss():[]).find(function(x){return x.id===id;});if(!d||typeof openModal!=='function')return;
+    openModal('🔁 Conséquences d\'une modification — '+E((typeof dossierClients==='function')?dossierClients(d):''),
+      '<div id="mo-wrap" data-t="cession" class="mo-box">'+window.modificationHTML(d,'cession')+'</div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+  };
+
+  /* Bouton dans l'aperçu de vérification */
+  if(typeof espVerifRender==='function'){var _r=espVerifRender;
+    espVerifRender=window.espVerifRender=function(id){_r(id);
+      try{var head=document.querySelector('#esp-verif .ev-head .ev-transmit');
+        if(head&&!document.getElementById('mo-btn')){var b=document.createElement('button');b.id='mo-btn';b.className='btn btn-sm btn-ghost';b.textContent='🔁 Modification';b.setAttribute('onclick','ouvrirAnalyseModification(\''+id+'\')');head.parentNode.insertBefore(b,head);}
+      }catch(e){}};}
+
+  try{ if(!document.getElementById('mo-css')){var st=document.createElement('style');st.id='mo-css';
+    st.textContent='.mo-box{max-height:74vh;overflow:auto}.mo-sel label,.mo-in label,.mo-grid label{font-size:12px;color:var(--ink3,#8a7d69)}.mo-sel select{max-width:340px}'
+      +'.mo-inputs{margin:8px 0}.mo-grid{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}.mo-grid>div{flex:1;min-width:130px}.mo-grid input{width:100%}'
+      +'.mo-cards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.mo-c{flex:1;min-width:150px;background:#fbf7ee;border:1px solid var(--line,#e7ddc9);border-radius:10px;padding:8px 11px;display:flex;flex-direction:column}.mo-c .mo-k{font-size:10px;letter-spacing:.4px;text-transform:uppercase;color:var(--ink3,#8a7d69);font-weight:700}.mo-c b{font-size:15px;color:var(--accent,#3f372b)}.mo-c .mo-note{font-size:10.5px;color:var(--ink3,#8a7d69);margin-top:2px}'
+      +'.mo-grp{border:1px solid var(--line,#e7ddc9);border-radius:12px;padding:6px 12px 10px;margin-bottom:10px;border-left-width:4px}.mo-grp.mo-risque{border-left-color:#b0442f}.mo-grp.mo-attention{border-left-color:#b98029}.mo-grp.mo-conseil{border-left-color:#3d6b3d}'
+      +'.mo-t{font-weight:700;font-size:12.5px;margin:6px 0 4px}.mo-item{padding:7px 0;border-top:1px solid var(--line,#eee)}.mo-item:first-of-type{border-top:none}.mo-item b{display:block;font-size:12.5px}.mo-item span{display:block;font-size:12px;color:var(--ink2,#5b5040);margin-top:2px}'
+      +'.mo-form{border:1px dashed var(--line,#e7ddc9);border-radius:10px;padding:8px 12px}.mo-li{font-size:12px;color:var(--ink2,#5b5040);padding:2px 0}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
