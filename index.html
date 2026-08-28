@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=246;
+var LAST_VER=247;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10870,6 +10870,64 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     st.textContent='.pcfg-list{margin:10px 0}.pcfg-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line,#e7ddc9)}.pcfg-row:first-child{border-top:none}.pcfg-l{flex:1;font-size:13px}'
       +'.pcfg-empty{color:var(--ink3,#8a7d69);font-size:13px;padding:8px 0}'
       +'.pcfg-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}.pcfg-add input{flex:1;min-width:220px}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="etapes-config-mod">
+/* ===== Étapes de traitement configurables (par type de formalité) ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function types(){return (window.FORMALITE_TEMPLATES||[]);}
+  function tplEtapes(type){var t=types().filter(function(x){return x.key===type;})[0];return t?(t.etapes||[]).slice():[];}
+  function store(){DB.parametres=DB.parametres||{};DB.parametres.etapesConfig=DB.parametres.etapesConfig||{};return DB.parametres.etapesConfig;}
+  function cfgOf(type){var s=store();return s[type]||null;}
+  function ensureCfg(type){var s=store();if(!s[type])s[type]=tplEtapes(type);return s[type];}
+  window.etapesEffective=function(type){var c=cfgOf(type);return c?c.slice():tplEtapes(type);};
+
+  /* demEtapes lit la configuration si elle existe, sinon le modèle */
+  if(typeof window.demEtapes==='function'){var _de=window.demEtapes;
+    window.demEtapes=function(d){try{var type=(typeof formaliteType==='function')?formaliteType(d):null;var c=type?cfgOf(type):null;if(c&&c.length)return c.slice();}catch(e){}return _de(d);};}
+
+  window.ecfgSetType=function(v){window.__ecfgType=v;if(typeof render==='function')render();};
+  window.ecfgAdd=function(type){var inp=document.getElementById('ecfg-add');var l=inp?(''+inp.value).trim():'';if(!l)return;ensureCfg(type).push(l);if(typeof save==='function')save();if(typeof render==='function')render();};
+  window.ecfgRemove=function(type,i){var a=ensureCfg(type);a.splice(i,1);if(typeof save==='function')save();if(typeof render==='function')render();};
+  window.ecfgMove=function(type,i,dir){var a=ensureCfg(type);var j=i+dir;if(j<0||j>=a.length)return;var t=a[i];a[i]=a[j];a[j]=t;if(typeof save==='function')save();if(typeof render==='function')render();};
+  window.ecfgReset=function(type){var s=store();delete s[type];if(typeof save==='function')save();if(typeof toast==='function')toast('Étapes réinitialisées au modèle');if(typeof render==='function')render();};
+
+  window.etapesConfigCard=function(){
+    var T=types();if(!T.length)return '';
+    var type=window.__ecfgType||T[0].key;
+    var perso=!!cfgOf(type);var list=window.etapesEffective(type);
+    var opts=T.map(function(t){var p=!!cfgOf(t.key);return '<option value="'+t.key+'" '+(t.key===type?'selected':'')+'>'+E(t.label)+(p?' — personnalisé':'')+'</option>';}).join('');
+    var rows=list.map(function(s,i){
+      return '<div class="ecfg-row"><span class="ecfg-n">'+(i+1)+'</span><span class="ecfg-l">'+E(s)+'</span>'
+        +'<span class="ecfg-act"><button class="btn btn-sm btn-ghost" title="Monter" onclick="ecfgMove(\''+type+'\','+i+',-1)" '+(i===0?'disabled':'')+'>↑</button>'
+        +'<button class="btn btn-sm btn-ghost" title="Descendre" onclick="ecfgMove(\''+type+'\','+i+',1)" '+(i===list.length-1?'disabled':'')+'>↓</button>'
+        +'<button class="btn btn-sm btn-ghost" onclick="ecfgRemove(\''+type+'\','+i+')">✕</button></span></div>';
+    }).join('')||'<div class="ecfg-empty">Aucune étape pour ce type.</div>';
+    return '<div class="card" id="ecfg-card" style="margin-top:14px"><div class="card-h"><h2>Étapes de traitement</h2><span class="sub" style="margin-left:auto">'+(perso?'<span class="tag ok">Personnalisé</span>':'<span class="tag mut">Modèle standard</span>')+'</span></div><div class="card-b">'
+      +'<p class="hint" style="margin:0 0 10px">Définissez, par type de formalité, les étapes de traitement (checklist du dossier). Réordonnez avec ↑ ↓. Sans personnalisation, le modèle standard s\'applique.</p>'
+      +'<label>Type de formalité</label><select onchange="ecfgSetType(this.value)">'+opts+'</select>'
+      +'<div class="ecfg-list">'+rows+'</div>'
+      +'<div class="ecfg-addrow"><input id="ecfg-add" placeholder="Ajouter une étape (ex. Vérification anti-blanchiment)"><button class="btn btn-sm btn-pri" onclick="ecfgAdd(\''+type+'\')">＋ Ajouter</button>'
+      +(perso?('<button class="btn btn-sm btn-ghost" onclick="ecfgReset(\''+type+'\')">↺ Réinitialiser au modèle</button>'):'')+'</div>'
+      +'</div></div>';
+  };
+
+  if(typeof window.pageParams==='function'||typeof pageParams==='function'){
+    var _pp=(typeof window.pageParams==='function')?window.pageParams:pageParams;
+    window.pageParams=function(){var h=_pp.apply(this,arguments);
+      if(h.indexOf('id="ecfg-card"')<0){var note=h.lastIndexOf('<div class="flow-note"');
+        if(note>=0){h=h.slice(0,note)+window.etapesConfigCard()+h.slice(note);}else{h+=window.etapesConfigCard();}}
+      return h;};
+  }
+
+  try{ if(!document.getElementById('ecfg-css')){var st=document.createElement('style');st.id='ecfg-css';
+    st.textContent='.ecfg-list{margin:10px 0}.ecfg-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line,#e7ddc9)}.ecfg-row:first-child{border-top:none}'
+      +'.ecfg-n{flex:0 0 22px;height:22px;border-radius:50%;background:#f6f0e2;color:#5b5040;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}'
+      +'.ecfg-l{flex:1;font-size:13px}.ecfg-act{display:flex;gap:4px}.ecfg-empty{color:var(--ink3,#8a7d69);font-size:13px;padding:8px 0}'
+      +'.ecfg-addrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}.ecfg-addrow input{flex:1;min-width:220px}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
