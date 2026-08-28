@@ -126,55 +126,6 @@ ok('Formalités — carte IA', fo.card);
 ok('Formalités — objet social (démo)', fo.objet);
 ok('Dossier — Résumé IA', fo.resume);
 
-// 5) Facturation IA (désignation, anomalies, relance, lecture facture)
-const fa = await page.evaluate(async () => {
-  const o = {};
-  o.desig = typeof demDesignationIA === 'function';
-  DB.factures = DB.factures || [];
-  ['a', 'b'].forEach((s) => DB.factures.push({ id: 'e2f' + s, type: 'client', num: 'FV-E2E', tiers: 'DOUBLON', date: '2026-0' + (s === 'a' ? 1 : 2) + '-01', ht: 100, tva: 20, ttc: 120, statut: 'Émise' }));
-  const anos = factAnomalies('client');
-  o.anos = anos.some((a) => a.tiers === 'DOUBLON' && a.type === 'doublon');
-  o.card = /Anomalies/.test(factAnomaliesCard('client'));
-  const imp = { id: 'e2imp', type: 'client', num: 'FV-IMP', tiers: 'RET', date: '2020-01-01', ech: '2020-02-01', ttc: 600, statut: 'Impayée', relances: [], doc: { clientEmail: 'r@ex.fr' } };
-  DB.factures.push(imp);
-  if (typeof demRelanceIA === 'function') { demRelanceIA('e2imp'); await new Promise((r) => setTimeout(r, 450)); o.relance = true; if (typeof closeModal === 'function') closeModal(); } else o.relance = false;
-  o.lire = typeof iaLireFacture === 'function';
-  return o;
-});
-ok('Facturation — désignation IA dispo', fa.desig);
-ok('Facturation — détection anomalie doublon', fa.anos);
-ok('Facturation — carte anomalies', fa.card);
-ok('Facturation — relance IA (démo)', fa.relance);
-ok('Facturation — lecture facture (vision) dispo', fa.lire);
-
-// 6) Copilote ⌘K
-const co = await page.evaluate(async () => {
-  const o = {};
-  iaCopilote('quelles pièces pour une SARL ?'); await new Promise((r) => setTimeout(r, 450));
-  o.rep = ((document.getElementById('iacop-rep') || {}).textContent || '').length > 20;
-  if (typeof closeModal === 'function') closeModal();
-  iaCopilote('créer une nouvelle facture'); await new Promise((r) => setTimeout(r, 450));
-  o.action = !!(window.__iaCopAction && window.__iaCopAction.type === 'nouvelle_facture');
-  if (typeof closeModal === 'function') closeModal();
-  return o;
-});
-ok('Copilote — réponse métier', co.rep);
-ok('Copilote — action proposée', co.action);
-
-// 7) Pilotage
-const pi = await page.evaluate(async () => {
-  const o = {};
-  o.reco = piloRecoCount() >= 0;
-  piloRapportGen('mois', true); await new Promise((r) => setTimeout(r, 450));
-  const rap = piloCfg().rapports.find((x) => x.periode === 'mois');
-  o.rapport = !!(rap && rap.synthese && rap.synthese.length > 10);
-  o.page = /Recommandations/.test(pagePilotage());
-  return o;
-});
-ok('Pilotage — recommandations', pi.reco);
-ok('Pilotage — rapport (KPIs + synthèse)', pi.rapport);
-ok('Pilotage — page rendue', pi.page);
-
 // 8) Transverse — barre IA + raccourcir
 const tr = await page.evaluate(async () => {
   document.body.insertAdjacentHTML('beforeend', '<textarea id="e2ta">ceci   est un  texte   de test. deuxieme phrase longue ici. troisieme phrase.</textarea>');

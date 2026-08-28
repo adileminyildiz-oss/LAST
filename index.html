@@ -650,6 +650,7 @@ function save(){
 function svcById(id){return DB.services.find(s=>s.id===id)}
 function clientById(id){return DB.clients.find(c=>c.id===id)}
 function userById(id){return DB.users.find(u=>u.id===id)}
+const initials=n=>(''+(n||'')).split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
 
 /* =================================================================
    MOTEUR IA — qualification des demandes
@@ -826,50 +827,6 @@ function render(){
    ================================================================= */
 function kpi(ic,val,lbl,cls){return `<div class="kpi"><div class="ic">${svg(IC[ic])}</div><div class="val ${cls||''}">${val}</div><div class="lbl">${lbl}</div></div>`;}
 
-function pageDash(){
-  const nb=DB.demandes.filter(d=>demEtat(d)==='nouveau').length;
-  const assignees=DB.demandes.filter(d=>demEtat(d)==='assigne').length;
-  const enCours=DB.dossiers.filter(d=>d.statut!=='Clôturé').length;
-  const ca=DB.dossiers.reduce((s,d)=>s+dossierMontant(d),0);
-  const recent=[...DB.demandes].filter(d=>!d.dossierId).slice(0,5);
-  return `
-  <div class="grid g4">
-    ${kpi('inbox',nb,'À traiter','blue')}
-    ${kpi('check',assignees,'Assignées')}
-    ${kpi('folder',enCours,'Dossiers en cours')}
-    ${kpi('euro',eur(ca),'Honoraires potentiels','ok')}
-  </div>
-  <div class="section-t">Dernières demandes reçues</div>
-  <div class="card"><div class="card-b" style="padding:0">
-    ${recent.length?tableDemandes(recent):`<div class="empty">Aucune demande en attente.</div>`}
-  </div></div>
-  <div class="grid g2" style="margin-top:8px">
-    <div class="card"><div class="card-h"><h2>Répartition par statut</h2></div><div class="card-b">${statBars()}</div></div>
-    <div class="card"><div class="card-h"><h2>Charge par collaborateur</h2></div><div class="card-b">${chargeCollab()}</div></div>
-  </div>`;
-}
-function statBars(){
-  const tot=DB.dossiers.length||1;
-  return STATUTS.map(s=>{const n=DB.dossiers.filter(d=>d.statut===s.k).length;
-    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
-      <span style="width:120px;font-size:12px;color:var(--ink-2)">${s.k}</span>
-      <div class="bar" style="flex:1;height:8px;border-radius:6px;background:rgba(255,255,255,.06);overflow:hidden">
-        <i style="display:block;height:100%;width:${n/tot*100}%;background:${s.c};border-radius:6px"></i></div>
-      <b style="font-size:12px;width:20px;text-align:right">${n}</b></div>`;}).join('');
-}
-function chargeCollab(){
-  return DB.users.filter(u=>u.role==='collab').map(u=>{
-    const n=DB.dossiers.filter(d=>d.assigneA===u.id&&d.statut!=='Clôturé').length;
-    const dm=DB.demandes.filter(d=>d.assigneA===u.id&&!d.dossierId).length;
-    return `<div style="display:flex;align-items:center;gap:11px;margin-bottom:11px">
-      <span class="av" style="background:${u.couleur}">${initials(u.nom)}</span>
-      <div style="flex:1"><b style="font-size:13px">${u.nom}</b></div>
-      <span class="tag">${n} dossier${n>1?'s':''}</span><span class="tag mut">${dm} demande${dm>1?'s':''}</span></div>`;
-  }).join('');
-}
-const initials=n=>n.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
-
-/* ---------- DEMANDES ---------- */
 function demEtat(d){
   if(d.dossierId){var dos=DB.dossiers.find(function(x){return x.id===d.dossierId;});
     if(dos&&dos.statut==='Clôturé')return 'finalise';return 'encours';}
@@ -1200,52 +1157,6 @@ function demSyncAuto(){try{if(typeof DB==='undefined'||!DB.parametres)return;var
 window.addEventListener('load',function(){setTimeout(demSyncAuto,6000);setInterval(demSyncAuto,180000);});
 document.addEventListener('visibilitychange',function(){if(!document.hidden)demSyncAuto();});
 /* ---------- Tableau de bord (synthèse) ---------- */
-function pageDash(){
-  var dem=(DB.demandes||[]).filter(function(d){return !d.dossierId&&d.statut!=='Clôturé'&&!d.archived;});
-  var doss=(DB.dossiers||[]);
-  var fv=(DB.factures||[]).filter(function(f){return f.type==='client';});
-  var caFact=fv.reduce(function(s,f){return s+(+f.ttc||0);},0);
-  var enc=fv.filter(function(f){return f.statut==='Payée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
-  var imp=fv.filter(function(f){return f.statut==='Impayée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
-  var devisAtt=(DB.devis||[]).filter(function(d){return d.statut==='Émis';});
-  var echues=fv.filter(function(f){return f.statut==='Impayée'&&relanceEnRetard(f);}).sort(function(a,b){return (a.ech||'').localeCompare(b.ech||'');});
-  var unassigned=dem.filter(function(d){return !d.assigneA;}).length;
-  var dossEnCours=doss.filter(function(d){return d.statut!=='Clôturé';}).length;
-  var dossClos=doss.length-dossEnCours;
-  var devisTtc=devisAtt.reduce(function(s,d){return s+(+d.ttc||0);},0);
-  function k2(ic,val,lbl,cls,sub){return '<div class="kpi2 '+(cls||'')+'"><span class="k2-ic">'+svg(IC[ic])+'</span><div class="k2-val">'+val+'</div><div class="k2-lbl">'+lbl+'</div>'+(sub?'<div class="k2-sub">'+sub+'</div>':'')+'</div>';}
-  var greet=(function(){var h=new Date().getHours();return h<12?'Bonjour':h<18?'Bon après-midi':'Bonsoir';})();
-  var cab=(DB.params&&DB.params.cabinet)||'AEM CONSEIL';
-  var out='<div class="flow-note" style="margin-bottom:12px">'+svg(IC.dash)+'<div><b>'+greet+'</b> — voici l\'activité de <b>'+esc(cab)+'</b> en un coup d\'œil.</div></div>';
-  out+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
-    +'<button class="btn btn-pri btn-sm" onclick="fvOpenDevis()">'+svg(IC.plus)+'Nouveau devis</button>'
-    +'<button class="btn btn-sm" onclick="fvOpen()">'+svg(IC.plus)+'Nouvelle facture</button>'
-    +'<button class="btn btn-sm btn-ghost" onclick="go(\'demandes\')">Voir les demandes</button></div>';
-  if(echues.length){var mtEch=echues.reduce(function(s,f){return s+(+f.ttc||0);},0);
-    out+='<div class="dash-alert"><span class="da-ic">!</span><div class="da-txt"><b>'+echues.length+' facture'+(echues.length>1?'s':'')+' échue'+(echues.length>1?'s':'')+'</b> — '+eur(mtEch)+' à recouvrer.</div>'
-      +'<button class="btn btn-sm btn-pri" onclick="relancerToutesEchues()">Tout relancer</button></div>';}
-  out+=backupBannerHTML();
-  out+=(typeof finSanteCard==='function'?finSanteCard():'');
-  out+=(typeof fluxPipelineCard==='function'?fluxPipelineCard():'');
-  var dossClosList=doss.filter(function(d){return d.statut==='Clôturé';});
-  var caEnc=fv.filter(function(f){return f.statut==='Payée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
-  out+='<div class="grid g4 dash-kpis">'
-    +k2('espace',dossClos,'Missions complétées','ok',doss.length?('sur '+doss.length+' mission'+(doss.length>1?'s':'')):'—')
-    +k2('card',fv.length,'Ventes réalisées','',caFact?('CA '+eur(caFact)):'aucune vente')
-    +k2('euro',eur(caEnc),'Encaissé','ok',caFact?(Math.round(caEnc/caFact*100)+' % recouvré'):'—')
-    +k2('inbox',dem.length,'Demandes à traiter',dem.length?'warm':'',unassigned?('<b>'+unassigned+'</b> non assignée'+(unassigned>1?'s':'')):'toutes assignées ✓')
-    +'</div>';
-  // Dernières missions clôturées (résultats)
-  out+='<div class="card" style="margin-top:16px"><div class="card-h"><h2>Dernières missions clôturées</h2><span class="sub" style="margin-left:auto">'+dossClosList.length+' clôturée'+(dossClosList.length>1?'s':'')+'</span></div><div class="card-b" style="padding:0">';
-  if(dossClosList.length){
-    var closSorted=dossClosList.slice().sort(function(a,b){return String(b.clotureDate||'').localeCompare(String(a.clotureDate||''));});
-    out+='<table><thead><tr><th>Réf.</th><th>Client</th><th class="hide-sm">Clôturée le</th><th>Montant</th><th></th></tr></thead><tbody>'
-      +closSorted.slice(0,10).map(function(d){return '<tr style="cursor:pointer" onclick="state.espaceDossier=\''+d.id+'\';state.page=\'espace\';render()"><td class="tname">'+esc(d.ref||'—')+'</td><td>'+esc(dossierClients(d))+'</td><td class="hide-sm">'+(d.clotureDate?frDate(d.clotureDate):'—')+'</td><td>'+eur(dossierMontant(d))+'</td><td><button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();state.espaceDossier=\''+d.id+'\';state.page=\'espace\';render()">Ouvrir</button></td></tr>';}).join('')
-      +'</tbody></table>';
-  } else out+='<div class="empty">Aucune mission clôturée pour le moment. 🚀</div>';
-  out+='</div></div>';
-  return out;
-}
 function pageDemandes(){
   var tab=state.demTab||'nouveau';var q=(state.q||'').toLowerCase();
   var counts={nouveau:0,assigne:0,encours:0,finalise:0};
@@ -1289,7 +1200,6 @@ function modalDemandeView(id){
     '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
     +'<button class="btn" onclick="demMailComplet(\''+id+'\')">Mail complet</button>'
     +'<button class="btn" onclick="assignDemande(\''+id+'\')">Assigner</button>'
-    +'<button class="btn" onclick="demDevis(\''+id+'\')">🧾 Devis</button>'
     +'<button class="btn" onclick="demQuestionnaire(\''+id+'\')">📋 Questionnaire</button>'
     +'<button class="btn btn-pri" onclick="demOuvrirDossier(\''+id+'\')">📂 Ouvrir le dossier</button>');
 }
@@ -1773,272 +1683,6 @@ function demOuvrirDossier(id){var d=DB.demandes.find(function(x){return x.id===i
   creerDossierDepuis(id);}
 
 /* ---------- CLIENTS ---------- */
-function pageClients(){
-  let list=DB.clients;
-  if(state.q)list=list.filter(c=>(c.nom+c.prenom+c.email+(c.activites||[]).join(' ')).toLowerCase().includes(state.q));
-  return `<div style="display:flex;gap:10px;margin-bottom:14px;align-items:center"><span class="tag blue">${DB.clients.length} clients</span><span class="tag mut">Ajout automatique depuis les demandes reçues par mail</span></div>
-  <div class="card"><div class="card-b" style="padding:0">
-  ${list.length?`<table><thead><tr><th>Client</th><th class="hide-sm">Contact</th><th class="hide-sm">Activité(s)</th><th>Capital</th><th>Dossiers</th><th></th></tr></thead><tbody>
-  ${list.map(c=>{const nd=DB.dossiers.filter(d=>d.clientIds.includes(c.id)).length;
-    return `<tr onclick="modalClient('${c.id}')" style="cursor:pointer">
-      <td><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:linear-gradient(160deg,#4a4034,#2c271f)">${initials(c.prenom+' '+c.nom)}</span>
-        <div><div class="tname">${esc(c.prenom)} ${esc(c.nom)}</div><div class="tsub">${(c.associes||[]).length} associé(s)</div></div></div></td>
-      <td class="hide-sm"><div style="font-size:12px">${esc(c.email||'—')}</div><div class="tsub">${esc(c.tel||'')}</div></td>
-      <td class="hide-sm"><div class="chips">${(c.activites||[]).slice(0,2).map(a=>`<span class="tag">${esc(a)}</span>`).join('')||'<span class="tag mut">—</span>'}</div></td>
-      <td>${eur(c.capital)}</td>
-      <td><span class="tag ${nd?'blue':'mut'}">${nd}</span></td>
-      <td onclick="event.stopPropagation()"><button class="btn btn-sm btn-ghost" onclick="modalClient('${c.id}')">Ouvrir</button></td>
-    </tr>`;}).join('')}
-  </tbody></table>`:`<div class="empty">Aucun client. Ajoute ta première fiche.</div>`}
-  </div></div>`;
-}
-/* ===== Module Clients : barre latérale (comme Traitement) + onglets Dirigeant / Salarié / État ===== */
-function clNom(c){return (((c.prenom||'')+' '+(c.nom||'')).trim())||c.denomination||'Client';}
-function pageClientsEspace(){
-  var mod=state.clModule||'clients';
-  var nbRef=DB.demandes.filter(function(d){return d.archived;}).length;
-  var modBar='<div class="cl-mod-tabs">'
-    +'<button class="cl-mod-tab'+(mod==='clients'?' on':'')+'" onclick="clSetModule(\'clients\')">Clients<span class="cl-mod-n">'+DB.clients.length+'</span></button>'
-    +'<button class="cl-mod-tab'+(mod==='refuses'?' on':'')+'" onclick="clSetModule(\'refuses\')">Refusés<span class="cl-mod-n">'+nbRef+'</span></button>'
-    +'</div>';
-  if(mod==='refuses')return modBar+clRefusesList();
-  var list=DB.clients.slice();
-  if(state.q)list=list.filter(function(c){return (clNom(c)+(c.email||'')+(c.denomination||'')+(c.activites||[]).join(' ')).toLowerCase().includes(state.q);});
-  var head='<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap"><span class="tag">'+DB.clients.length+' clients</span><button class="btn btn-sm btn-pri" onclick="modalClient(\'\')">+ Nouveau client</button></div>';
-  if(!list.length)return modBar+head+'<div class="card"><div class="card-b"><div class="empty">Aucun client. Les fiches sont créées automatiquement depuis les demandes, ou manuellement.</div></div></div>';
-  var id=state.clientSel;if(!list.find(function(c){return c.id===id;}))id=list[0].id;
-  var c=DB.clients.find(function(x){return x.id===id;});
-  return modBar+head+'<div class="esp-shell">'+clMiniList(list,id)+'<div class="esp-main">'+clDetail(c)+'</div></div>';
-}
-/* Onglet « Refusés » du module Client : demandes refusées (archivées), restaurables ou supprimables. */
-function clRefusesList(){
-  var arch=DB.demandes.filter(function(d){return d.archived;}).sort(function(a,b){return (b.archivedTs||0)-(a.archivedTs||0);});
-  var head='<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap"><span class="tag">'+arch.length+' client(s) refusé(s)</span></div>';
-  if(!arch.length)return head+'<div class="card"><div class="card-b"><div class="empty">Aucun client refusé. Les demandes que vous refusez apparaissent ici (retirées de la liste des demandes).</div></div></div>';
-  var rows=arch.map(function(d){
-    var nom=(typeof demBestName==='function'?demBestName(d):'')||d.clientNom||'Client';
-    var email=(d.clientEmail&&!/formsubmit/i.test(d.clientEmail))?d.clientEmail:'';
-    var dt=d.archivedTs?frDate(new Date(d.archivedTs).toISOString().slice(0,10)):'';
-    return '<tr><td><div class="tname">'+esc(nom)+'</div><div class="tsub">'+esc(email||d.canal||'—')+'</div></td>'
-      +'<td>'+esc(IA.objet(d))+'</td>'
-      +'<td><span class="tag" style="background:#fff1f4;border-color:#f3d7de;color:#9f1239">Refusé</span></td>'
-      +'<td>'+esc(dt)+'</td>'
-      +'<td style="text-align:right;white-space:nowrap"><button class="btn btn-sm" onclick="demDesarchiver(\''+d.id+'\')">↩ Restaurer</button> <button class="btn btn-sm" onclick="clRefuseSuppr(\''+d.id+'\')">🗑</button></td></tr>';
-  }).join('');
-  return head+'<div class="card"><div class="card-b" style="padding:0"><table class="dem-tbl"><thead><tr><th>Client</th><th>Objet</th><th>Statut</th><th>Refusé le</th><th style="text-align:right">Actions</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
-}
-function clSetModule(m){state.clModule=m;render();}
-function clRefuseSuppr(id){
-  if(!confirm('Supprimer définitivement ce client refusé ? Cette action est irréversible.'))return;
-  var i=DB.demandes.findIndex(function(x){return x.id===id;});
-  if(i>=0){DB.demandes.splice(i,1);if(typeof save==='function')save();render();if(typeof toast==='function')toast('Client refusé supprimé.');}
-}
-function clMiniList(list,id){
-  return '<aside class="esp-mini"><div class="esp-mini-h">Clients<span class="esp-mini-n">'+list.length+'</span></div><div class="esp-mini-list">'
-   +list.map(function(c){var nd=DB.dossiers.filter(function(d){return d.clientIds.includes(c.id);}).length;
-     return '<button class="esp-mini-item'+(c.id===id?' on':'')+'" onclick="clSelect(\''+c.id+'\')">'
-       +'<span class="esp-mini-av">'+initials(clNom(c))+'</span>'
-       +'<span class="esp-mini-txt"><b>'+esc(clNom(c))+'</b><span>'+esc(c.denomination||(nd+' dossier(s)'))+'</span></span>'
-       +'</button>';
-   }).join('')+'</div></aside>';
-}
-function clSelect(id){state.clientSel=id;render();}
-function clSetTab(t){state.clientTab=t;render();}
-function clDetail(c){
-  if(!c)return '<div class="card"><div class="card-b"><div class="empty">Sélectionnez un client.</div></div></div>';
-  var tab=state.clientTab||'dirigeant';
-  var tabs=[['dirigeant','Dirigeant'],['salarie','Salarié'],['etat','État']];
-  var bar='<div class="cl-tabs">'+tabs.map(function(t){return '<button class="cl-tab'+(t[0]===tab?' on':'')+'" onclick="clSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
-  var body=(tab==='salarie')?clTabSalarie(c):(tab==='etat')?clTabEtat(c):clTabDirigeant(c);
-  return '<div class="card"><div class="card-h"><h2>'+esc(clNom(c))+'</h2>'
-    +'<span class="sub" style="margin-left:auto">'+esc(c.denomination||c.forme||'')+'</span>'
-    +'<button class="btn btn-sm" style="margin-left:10px" onclick="modalClient(\''+c.id+'\')">Éditer la fiche</button></div>'
-    +'<div class="card-b">'+bar+'<div class="cl-tabbody">'+body+'</div></div></div>';
-}
-function clKV(l,v){return '<div class="cl-kv"><span class="cl-kv-l">'+esc(l)+'</span><span class="cl-kv-v">'+(v?esc(v):'—')+'</span></div>';}
-function clTabDirigeant(c){
-  var soc='<div class="cl-sec">Société</div><div class="cl-kv2">'
-    +clKV('Dénomination',c.denomination)+clKV('Forme',c.forme)+clKV('Capital',c.capital?eur(c.capital):'')+clKV('Nom commercial',c.nomCommercial)
-    +clKV('Siège',c.siege||c.adresse)+clKV('Ville',c.ville)+'</div>';
-  var dir='<div class="cl-sec">Dirigeant / Président</div><div class="cl-kv2">'
-    +clKV('Nom & prénom',(((c.prenom||'')+' '+(c.nom||'')).trim())||c.president)+clKV('E-mail',c.email)
-    +clKV('Téléphone',c.tel)+clKV('Adresse',c.adresse)+'</div>';
-  var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
-  var asg=assoc.length?('<div class="cl-sec">Associés & répartition</div><table class="cl-tbl"><thead><tr><th>Associé</th><th>Parts</th><th>Apport</th><th>Naissance</th><th>Nationalité</th></tr></thead><tbody>'
-    +assoc.map(function(a){return '<tr><td>'+esc(a.nom)+'</td><td>'+esc(a.parts||'—')+'</td><td>'+(a.apport?eur(a.apport):'—')+'</td><td>'+esc(a.naissance||'—')+'</td><td>'+esc(a.nationalite||'—')+'</td></tr>';}).join('')+'</tbody></table>')
-    :'<div class="cl-sec">Associés</div><div class="empty" style="padding:10px">Aucun associé renseigné.</div>';
-  return soc+dir+asg;
-}
-function clTabSalarie(c){
-  var sals=c.salaries||[];
-  var listHTML=sals.length?('<table class="cl-tbl"><thead><tr><th>Nom</th><th>Poste</th><th>Contrat</th><th>Entrée</th><th>Salaire brut</th><th></th></tr></thead><tbody>'
-    +sals.map(function(s,i){return '<tr><td>'+esc(s.nom||'—')+'</td><td>'+esc(s.poste||'—')+'</td><td>'+esc(s.contrat||'—')+'</td><td>'+esc(s.debut||'—')+'</td><td>'+(s.salaire?eur(s.salaire):'—')+'</td><td><button class="btn btn-sm btn-ghost" onclick="clSalDel(\''+c.id+'\','+i+')">Retirer</button></td></tr>';}).join('')+'</tbody></table>')
-    :'<div class="empty" style="padding:12px">Aucun salarié enregistré.</div>';
-  var form='<div class="cl-sec">Ajouter un salarié</div><div class="cl-salform">'
-    +'<input id="sal-nom" placeholder="Nom Prénom">'
-    +'<input id="sal-poste" placeholder="Poste">'
-    +'<select id="sal-contrat"><option>CDI</option><option>CDD</option><option>Alternance</option><option>Stage</option><option>Intérim</option></select>'
-    +'<input id="sal-debut" placeholder="Entrée (jj/mm/aaaa)">'
-    +'<input id="sal-salaire" type="number" placeholder="Salaire brut (€)">'
-    +'<button class="btn btn-sm btn-pri" onclick="clSalAdd(\''+c.id+'\')">Ajouter</button></div>';
-  return '<div class="cl-sec">Salariés ('+sals.length+')</div>'+listHTML+form;
-}
-function clSalAdd(id){var c=clientById(id);if(!c)return;var g=function(x){var e=document.getElementById(x);return e?(''+e.value).trim():'';};
-  var nom=g('sal-nom');if(!nom)return toast('Nom du salarié requis');
-  c.salaries=c.salaries||[];c.salaries.push({nom:nom,poste:g('sal-poste'),contrat:(document.getElementById('sal-contrat')||{}).value||'CDI',debut:g('sal-debut'),salaire:g('sal-salaire')});
-  save();render();toast('Salarié ajouté');}
-function clSalDel(id,i){var c=clientById(id);if(!c||!c.salaries)return;c.salaries.splice(i,1);save();render();}
-function clFacturation(c){
-  var nom=((c.prenom||'')+' '+(c.nom||'')).trim();
-  var devis=(DB.devis||[]).filter(function(d){return d.tiers===nom;});
-  var facs=(DB.factures||[]).filter(function(f){return f.type==='client'&&f.tiers===nom;});
-  if(!devis.length&&!facs.length)return '';
-  var caFact=facs.reduce(function(s,f){return s+(+f.ttc||0);},0);
-  var enc=facs.filter(function(f){return f.statut==='Payée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
-  var imp=facs.filter(function(f){return f.statut==='Impayée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
-  var h='<div class="cl-sec" style="margin-top:16px">Facturation & devis</div>';
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
-    +'<span class="tag blue">Facturé : '+eur(caFact)+'</span><span class="tag ok">Encaissé : '+eur(enc)+'</span>'
-    +(imp?'<span class="tag hot">Impayé : '+eur(imp)+'</span>':'')+'</div>';
-  if(facs.length)h+='<table class="cl-tbl"><thead><tr><th>Facture</th><th>Date</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>'
-    +facs.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');}).map(function(f){return '<tr><td>'+esc(f.num)+'</td><td>'+(f.date?frDate(f.date):'—')+'</td><td>'+eur(f.ttc)+'</td><td>'+esc(f.statut||'')+'</td><td><button class="btn btn-sm btn-ghost" onclick="closeModal();setTimeout(function(){fvView(\''+f.id+'\');},20)">Ouvrir</button></td></tr>';}).join('')+'</tbody></table>';
-  if(devis.length)h+='<table class="cl-tbl" style="margin-top:8px"><thead><tr><th>Devis</th><th>Date</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>'
-    +devis.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');}).map(function(d){return '<tr><td>'+esc(d.num)+'</td><td>'+(d.date?frDate(d.date):'—')+'</td><td>'+eur(d.ttc)+'</td><td>'+esc(d.statut||'')+'</td><td><button class="btn btn-sm btn-ghost" onclick="closeModal();setTimeout(function(){devisView(\''+d.id+'\');},20)">Ouvrir</button></td></tr>';}).join('')+'</tbody></table>';
-  return h;
-}
-function clNotes(c){
-  var meta=c.notesTs?('Dernière modification : '+new Date(c.notesTs).toLocaleString('fr-FR')+(c.notesBy?(' · '+esc(c.notesBy)):'')):'Notes internes (non visibles par le client)';
-  return '<div class="cl-sec" style="margin-top:16px">Notes internes</div>'
-    +'<textarea id="cl-notes-'+c.id+'" rows="4" style="width:100%;font:inherit;font-size:12.5px;resize:vertical" placeholder="Remarques, points de suivi, à faire… (visibles uniquement en interne)" onchange="clNotesSave(\''+c.id+'\')">'+esc(c.notes||'')+'</textarea>'
-    +'<div class="tsub" style="margin-top:6px">'+meta+'</div>';
-}
-function clNotesSave(id){var c=(DB.clients||[]).find(function(x){return x.id===id;});if(!c)return;
-  var el=document.getElementById('cl-notes-'+id);if(!el)return;var v=el.value;
-  if((c.notes||'')===v)return;c.notes=v;c.notesTs=Date.now();try{c.notesBy=(typeof auditUser==='function')?auditUser():'';}catch(e){}
-  if(typeof save==='function')save();toast('Notes enregistrées');render();
-}
-function clTabEtat(c){
-  var doss=DB.dossiers.filter(function(d){return d.clientIds.includes(c.id);});
-  if(!doss.length)return '<div class="empty" style="padding:12px">Aucun dossier ouvert pour ce client.</div>'+clFacturation(c)+clNotes(c);
-  return '<div class="cl-sec">Dossiers & avancement</div>'+doss.map(function(d){
-    var req=(typeof espDocsRequis==='function')?espDocsRequis(d):[];var st=d.docState||{};
-    var prets=req.filter(function(dc){return st[dc.k]&&st[dc.k].ts;}).length;
-    var complets=req.filter(function(dc){return st[dc.k]&&st[dc.k].ts&&(typeof espDocComplet==='function'?espDocComplet(d,dc.k):true);}).length;
-    var tous=(typeof espTousPrets==='function')&&espTousPrets(d);
-    var lbl=tous?'Prêt à produire':(complets>0?'En cours':'À démarrer');var cls=tous?'ok':(complets>0?'blue':'warm');
-    return '<div class="cl-etat-row"><div class="cl-etat-top"><b>'+esc(d.ref)+'</b> <span class="tag '+cls+'">'+lbl+'</span> <span class="tag mut">'+esc(d.statut||'—')+'</span></div>'
-      +'<div class="cl-etat-meta">Documents : '+complets+'/'+(req.length||0)+' complets · '+prets+' préparé(s)</div>'
-      +'<button class="btn btn-sm" onclick="clOuvrirDossier(\''+d.id+'\')">Ouvrir le dossier</button></div>';
-  }).join('')+clFacturation(c)+clNotes(c);
-}
-function clOuvrirDossier(id){state.page='espace';state.espaceDossier=id;render();}
-function modalClient(id){
-  const c=id?DB.clients.find(x=>x.id===id):{prenom:'',nom:'',email:'',tel:'',adresse:'',parts:'',capital:'',activites:[],associes:[]};
-  window._assoc=(c.associes||[]).map(a=>({...a}));if(!window._assoc.length)window._assoc=[{nom:'',parts:''}];
-  window._clSiret=(c.siret||c.siren)?{siret:c.siret||'',siren:c.siren||(c.siret?String(c.siret).replace(/\D/g,'').slice(0,9):'')}:null;
-  const FORMES=['SAS','SASU','SARL','EURL','SCI','SA'];
-  openModal(id?'Fiche client — '+esc(c.prenom+' '+c.nom):'Nouveau client',`
-    <div class="frow"><div><label>Prénom</label><input id="cl-prenom" value="${esc(c.prenom)}"></div><div><label>Nom</label><input id="cl-nom" value="${esc(c.nom)}"></div></div>
-    <div class="frow"><div><label>Email</label><input id="cl-mail" type="email" value="${esc(c.email)}"></div><div><label>Téléphone</label><input id="cl-tel" value="${esc(c.tel)}"></div></div>
-    <label>Adresse</label><input id="cl-adr" value="${esc(c.adresse)}">
-    <div class="frow"><div><label>Nombre de parts dans la société</label><input id="cl-parts" type="number" value="${esc(c.parts)}"></div>
-      <div><label>Montant du dépôt de capital (€)</label><input id="cl-cap" type="number" value="${esc(c.capital)}"></div></div>
-    <label>Activité(s) — séparées par des virgules</label><input id="cl-act" value="${esc((c.activites||[]).join(', '))}" placeholder="Conseil, Formation, Négoce…">
-    <div class="section-t" style="margin-top:14px">Société (formalité)</div>
-    <div class="frow"><div><label>SIRET / SIREN (société existante — vérification auto)</label><input id="cl-siret" value="${esc(c.siret||c.siren||'')}" placeholder="14 ou 9 chiffres" inputmode="numeric"></div>
-      <div style="display:flex;align-items:flex-end"><button type="button" class="btn btn-sm" style="width:100%;justify-content:center" onclick="clVerifSiret()">🔎 Vérifier &amp; pré-remplir</button></div></div>
-    <div id="cl-siret-msg" class="hint" style="margin:-4px 0 6px"></div>
-    <div class="frow"><div><label>Dénomination sociale</label><input id="cl-denom" value="${esc(c.denomination||'')}" placeholder="Ex. KURUMSAL GROUPE"></div>
-      <div><label>Forme</label><select id="cl-forme">${FORMES.map(f=>`<option ${(c.forme||'SAS')===f?'selected':''}>${f}</option>`).join('')}</select></div></div>
-    <div class="frow"><div><label>Nom commercial (facultatif)</label><input id="cl-nomcom" value="${esc(c.nomCommercial||'')}"></div>
-      <div><label>Président désigné</label><input id="cl-pres" value="${esc(c.president||'')}" placeholder="Nom du 1er Président"></div></div>
-    <div class="frow"><div><label>Siège social (si ≠ adresse)</label><input id="cl-siege" value="${esc(c.siege||'')}" placeholder="Adresse du siège"></div>
-      <div><label>Ville du siège</label><input id="cl-ville" value="${esc(c.ville||'')}"></div></div>
-    <label>Associés & répartition des parts / actions</label>
-    <div id="assoc-list">${assocRows()}</div>
-    <button class="mini-add" onclick="addAssoc()">+ Associé</button>
-  `,`<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
-     ${id?`<button class="btn btn-danger" onclick="delClient('${id}')">Supprimer</button>`:''}
-     <button class="btn btn-pri" onclick="saveClient('${id||''}')">Enregistrer</button>`);
-}
-function assocRows(){
-  return window._assoc.map((a,i)=>`<div class="assoc-block">
-    <div class="assoc-row">
-      <input placeholder="Nom Prénom de l'associé" value="${esc(a.nom)}" oninput="_assoc[${i}].nom=this.value">
-      <input type="number" placeholder="Parts" value="${esc(a.parts)}" oninput="_assoc[${i}].parts=this.value">
-      <button class="del" onclick="delAssoc(${i})">×</button></div>
-    <div class="assoc-civil">
-      <input placeholder="Né(e) le (jj/mm/aaaa)" value="${esc(a.naissance||'')}" oninput="_assoc[${i}].naissance=this.value">
-      <input placeholder="à (lieu)" value="${esc(a.lieuNaissance||'')}" oninput="_assoc[${i}].lieuNaissance=this.value">
-      <input placeholder="pays" value="${esc(a.pays||'')}" oninput="_assoc[${i}].pays=this.value">
-      <input placeholder="nationalité" value="${esc(a.nationalite||'')}" oninput="_assoc[${i}].nationalite=this.value">
-    </div>
-    <input class="assoc-adr" placeholder="Adresse de l'associé" value="${esc(a.adresse||'')}" oninput="_assoc[${i}].adresse=this.value">
-    <div class="assoc-civil" style="grid-template-columns:1fr 1fr;margin-top:6px">
-      <input type="number" placeholder="Apport en capital (€)" value="${esc(a.apport||'')}" oninput="_assoc[${i}].apport=this.value">
-      <input placeholder="Email de l'associé" value="${esc(a.email||'')}" oninput="_assoc[${i}].email=this.value">
-    </div>
-    <div class="assoc-civil" style="grid-template-columns:1fr 1fr;margin-top:6px">
-      <input placeholder="Nom du père (filiation)" value="${esc(a.pereNom||'')}" oninput="_assoc[${i}].pereNom=this.value">
-      <input placeholder="Nom de la mère (filiation)" value="${esc(a.mereNom||'')}" oninput="_assoc[${i}].mereNom=this.value">
-    </div>
-  </div>`).join('');
-}
-function addAssoc(){window._assoc.push({nom:'',parts:''});document.getElementById('assoc-list').innerHTML=assocRows();}
-function delAssoc(i){window._assoc.splice(i,1);if(!window._assoc.length)window._assoc=[{nom:'',parts:''}];document.getElementById('assoc-list').innerHTML=assocRows();}
-function saveClient(id){
-  const g=x=>document.getElementById(x);
-  const obj={prenom:g('cl-prenom').value.trim(),nom:g('cl-nom').value.trim(),email:g('cl-mail').value.trim(),
-    tel:g('cl-tel').value.trim(),adresse:g('cl-adr').value.trim(),parts:g('cl-parts').value,capital:g('cl-cap').value,
-    activites:g('cl-act').value.split(',').map(s=>s.trim()).filter(Boolean),
-    denomination:g('cl-denom')?g('cl-denom').value.trim():'',forme:g('cl-forme')?g('cl-forme').value:'SAS',
-    nomCommercial:g('cl-nomcom')?g('cl-nomcom').value.trim():'',president:g('cl-pres')?g('cl-pres').value.trim():'',
-    siege:g('cl-siege')?g('cl-siege').value.trim():'',ville:g('cl-ville')?g('cl-ville').value.trim():'',
-    siret:(function(){var e=g('cl-siret');var d=e?e.value.replace(/\D/g,''):'';return d.length>=14?d.slice(0,14):((window._clSiret&&window._clSiret.siret)||'');})(),
-    siren:(function(){var e=g('cl-siret');var d=e?e.value.replace(/\D/g,''):'';return (window._clSiret&&window._clSiret.siren)||d.slice(0,9)||'';})(),
-    associes:window._assoc.filter(a=>a.nom.trim())};
-  if(!obj.nom&&!obj.prenom)return toast('Nom requis');
-  var warn=[];
-  if(obj.email&&typeof validEmail==='function'&&!validEmail(obj.email))warn.push('e-mail');
-  if(obj.siret&&typeof validSiret==='function'&&!validSiret(obj.siret))warn.push('SIRET');
-  if(id){Object.assign(DB.clients.find(x=>x.id===id),obj);}else{DB.clients.push({id:uid('c'),createdAt:today(),...obj});}
-  save();closeModal();toast(warn.length?('Fiche enregistrée — à vérifier : '+warn.join(', ')):'Fiche client enregistrée');render();
-}
-function delClient(id){if(!confirm('Supprimer cette fiche client ?'))return;var i=DB.clients.findIndex(c=>c.id===id);if(i<0)return;var item=DB.clients[i];DB.clients.splice(i,1);if(window.corbeilleAdd)corbeilleAdd('client',((item.prenom||'')+' '+(item.nom||'')).trim()||'Client',item);save();closeModal();
-  toastUndo('Client supprimé',function(){DB.clients.splice(Math.min(i,DB.clients.length),0,item);save();render();toast('Suppression annulée');});render();}
-/* ---------- Vérification SIRET/SIREN (API publique gratuite recherche-entreprises.api.gouv.fr, sans clé) ---------- */
-var NJ_FORME={'5710':'SAS','5720':'SAS','5499':'SARL','5498':'EURL','6540':'SCI','6541':'SCI','6542':'SCI','5385':'SA','1000':'EI','5202':'SNC'};
-function siretVerify(query,ok,ko){
-  var digits=(''+(query||'')).replace(/\D/g,'');
-  var q=(digits.length>=9)?digits:(''+(query||'')).trim();
-  if(!q){if(ko)ko('Renseignez un SIRET, un SIREN ou un nom.');return;}
-  var url='https://recherche-entreprises.api.gouv.fr/search?q='+encodeURIComponent(q)+'&page=1&per_page=1';
-  fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
-    var e=(j&&j.results&&j.results[0])||null;
-    if(!e){if(ko)ko('Aucune entreprise trouvée pour « '+q+' ».');return;}
-    var sg=e.siege||{};
-    var adr=[sg.numero_voie,sg.type_voie,sg.libelle_voie].filter(Boolean).join(' ').trim()||sg.adresse||sg.geo_adresse||'';
-    var dir=(e.dirigeants&&e.dirigeants[0])||null;
-    var dirNom=dir?(((dir.prenoms||dir.prenom||'')+' '+(dir.nom||dir.nom_naissance||'')).replace(/\s+/g,' ').trim()||dir.denomination||''):'';
-    ok({siren:e.siren||'',siret:sg.siret||'',denomination:e.nom_raison_sociale||e.nom_complet||'',
-        adresse:adr,cp:sg.code_postal||'',ville:sg.libelle_commune||'',
-        forme:NJ_FORME[(''+e.nature_juridique)]||'',dirigeant:dirNom,ape:e.activite_principale||''});
-  }).catch(function(){if(ko)ko('Vérification indisponible (réseau ou service INSEE).');});
-}
-function clVerifSiret(){
-  var inp=document.getElementById('cl-siret');if(!inp)return;
-  var msg=document.getElementById('cl-siret-msg');if(msg){msg.textContent='Vérification en cours…';msg.style.color='';}
-  siretVerify(inp.value,function(r){
-    var set=function(id,v){var e=document.getElementById(id);if(e&&v)e.value=v;};
-    set('cl-denom',r.denomination);set('cl-siege',r.adresse);set('cl-ville',r.ville);
-    if(r.forme){var f=document.getElementById('cl-forme');if(f){for(var i=0;i<f.options.length;i++){if(f.options[i].value===r.forme){f.selectedIndex=i;break;}}}}
-    var pres=document.getElementById('cl-pres');if(pres&&!pres.value&&r.dirigeant)pres.value=r.dirigeant;
-    window._clSiret={siret:r.siret||'',siren:r.siren||''};
-    if(msg){msg.innerHTML='✓ '+esc(r.denomination||'Entreprise trouvée')+(r.siren?(' · SIREN '+esc(r.siren)):'')+' — champs pré-remplis.';msg.style.color='#3f7d54';}
-  },function(err){if(msg){msg.textContent='✕ '+err;msg.style.color='#be123c';}});
-}
-
-/* ---------- DOSSIERS ---------- */
 function pageDossiers(){
   const view=state.dossView||'kanban';
   let list=DB.dossiers;
@@ -2149,69 +1793,6 @@ function delService(id){if(!confirm('Supprimer ce service ?'))return;var i=DB.se
   toastUndo('Service supprimé',function(){DB.services.splice(Math.min(i,DB.services.length),0,item);save();render();toast('Suppression annulée');});render();}
 
 /* ---------- MARGE (aperçu) ---------- */
-function margeDossier(d){
-  var hon=0,deb=0,com=0;
-  (d.serviceIds||[]).forEach(function(id){var v=svcById(id);if(!v)return;
-    if(v.type==='debours')deb+=(+v.debours||0);
-    else if(v.type==='commission')com+=(+v.prix||0);
-    else hon+=(+v.prix||0);
-    if(v.type!=='debours')deb+=(+v.debours||0);
-  });
-  return {hon:hon,deb:deb,com:com,marge:hon+com,ca:hon+deb+com};
-}
-function pageMarge(){
-  var rows=DB.dossiers.map(function(d){return {d:d,m:margeDossier(d)};});
-  var hon=rows.reduce(function(s,r){return s+r.m.hon;},0);
-  var deb=rows.reduce(function(s,r){return s+r.m.deb;},0);
-  var com=rows.reduce(function(s,r){return s+r.m.com;},0);
-  var marge=hon+com, caTot=hon+deb+com;
-  var fv=(DB.factures||[]).filter(function(f){return f.type==='client';});
-  var facture=fv.reduce(function(s,f){return s+(+f.ttc||0);},0);
-  var encaisse=fv.filter(function(f){return f.statut==='Payée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
-  var restedu=fv.filter(function(f){return f.statut==='Impayée';}).reduce(function(s,f){return s+(+f.ttc||0);},0);
-  var tauxMarge=caTot?Math.round((marge/caTot)*100):0;
-  return `<div class="flow-note">${svg(IC.trend)}<div><b>Rentabilité par dossier</b> — la <b>marge nette du cabinet</b> = honoraires (forfaits) + commissions. Les <b>débours</b> (greffe, INPI, annonces) sont refacturés à l'identique : neutres pour la marge.</div></div>
-  <div class="grid g4" style="margin-top:16px">
-    ${kpi('trend',eur(marge),'Marge nette (honoraires + commissions)','ok')}
-    ${kpi('euro',eur(hon),'Honoraires (forfaits)','blue')}
-    ${kpi('card',eur(deb),'Débours refacturés','warm')}
-    ${kpi('quote',eur(com),'Commissions','blue')}
-  </div>
-  <div class="grid g3" style="margin-top:14px">
-    ${kpi('card',eur(facture),'Facturé (ventes TTC)')}
-    ${kpi('euro',eur(encaisse),'Encaissé','ok')}
-    ${kpi('trend',eur(restedu),'Reste dû',restedu?'hot':'')}
-  </div>
-  <div class="card" style="margin-top:8px"><div class="card-h"><h2>Marge par dossier</h2><span class="sub" style="margin-left:auto">Taux de marge global : <b>${tauxMarge} %</b></span></div><div class="card-b" style="padding:0">
-  <table><thead><tr><th>Réf.</th><th>Client(s)</th><th class="hide-sm">Honoraires</th><th class="hide-sm">Débours</th><th class="hide-sm">Commissions</th><th>Marge nette</th><th>Taux</th></tr></thead><tbody>
-  ${rows.map(function(r){var m=r.m;var tx=m.ca?Math.round((m.marge/m.ca)*100):0;
-    return `<tr><td class="tname">${esc(r.d.ref)}</td><td>${esc(dossierClients(r.d))}</td><td class="hide-sm">${eur(m.hon)}</td><td class="hide-sm">${eur(m.deb)}</td><td class="hide-sm">${eur(m.com)}</td><td><b style="color:var(--ok)">${eur(m.marge)}</b></td><td><span class="tag ${tx>=50?'ok':tx>0?'warm':'mut'}">${tx} %</span></td></tr>`;}).join('')||'<tr><td colspan="7" class="empty">Aucun dossier.</td></tr>'}
-  </tbody>${rows.length?`<tfoot><tr style="font-weight:700;border-top:2px solid var(--line)"><td colspan="2">Total (${rows.length} dossier${rows.length>1?'s':''})</td><td class="hide-sm">${eur(hon)}</td><td class="hide-sm">${eur(deb)}</td><td class="hide-sm">${eur(com)}</td><td style="color:var(--ok)">${eur(marge)}</td><td>${tauxMarge} %</td></tr></tfoot>`:''}</table></div></div>`+statsCard();
-}
-function statMois(n){
-  var out=[];var now=new Date();
-  for(var i=n-1;i>=0;i--){var d=new Date(now.getFullYear(),now.getMonth()-i,1);
-    var ym=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2);
-    var lbl=['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'][d.getMonth()]+' '+String(d.getFullYear()).slice(2);
-    out.push({ym:ym,label:lbl,facture:0,encaisse:0,nb:0});}
-  var idx={};out.forEach(function(m){idx[m.ym]=m;});
-  (DB.factures||[]).filter(function(f){return f.type==='client';}).forEach(function(f){var ym=(''+(f.date||'')).slice(0,7);var m=idx[ym];if(!m)return;m.facture+=(+f.ttc||0);m.nb++;if(f.statut==='Payée')m.encaisse+=(+f.ttc||0);});
-  return out;
-}
-function statsCard(){
-  var m=statMois(12);var max=m.reduce(function(s,x){return Math.max(s,x.facture);},0)||1;
-  var caTot=m.reduce(function(s,x){return s+x.facture;},0),encTot=m.reduce(function(s,x){return s+x.encaisse;},0),nbTot=m.reduce(function(s,x){return s+x.nb;},0);
-  var bars=m.map(function(x){var hF=Math.round((x.facture/max)*100);var hE=x.facture?Math.round((x.encaisse/x.facture)*hF):0;
-    return '<div class="stat-col" title="'+esc(x.label)+' — Facturé : '+eur(x.facture)+' · Encaissé : '+eur(x.encaisse)+' ('+x.nb+' facture'+(x.nb>1?'s':'')+')">'
-      +'<div class="stat-bar"><div class="stat-bar-f" style="height:'+hF+'%"><div class="stat-bar-e" style="height:'+hE+'%"></div></div></div>'
-      +'<div class="stat-x">'+esc(x.label)+'</div></div>';}).join('');
-  return '<div class="card" style="margin-top:16px"><div class="card-h"><h2>Chiffre d\'affaires par mois</h2><span class="sub" style="margin-left:auto">12 derniers mois · '+nbTot+' facture(s)</span></div><div class="card-b">'
-    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><span class="tag blue">Facturé : '+eur(caTot)+'</span><span class="tag ok">Encaissé : '+eur(encTot)+'</span></div>'
-    +'<div class="stat-chart">'+bars+'</div>'
-    +'</div></div>';
-}
-
-/* ---------- PARAMS ---------- */
 function pageParams(){
   return `<div class="grid g2">
     <div class="card"><div class="card-h"><h2>Équipe</h2><span class="sub">1 admin + collaborateurs</span></div><div class="card-b">
@@ -2493,7 +2074,7 @@ function espMailCard(d){
    +'<div class="esp-notes"><span class="tag '+du.c+'">⏱ '+du.lbl+' · '+du.temps+'</span><span class="tag '+fi.c+'">'+fi.lbl+'</span></div>'
    +'<div class="esp-fiche-row"><button class="btn btn-sm" onclick="espFicheTechnique(\''+d.id+'\')">📋 Fiche technique</button>'
    +'<button class="btn btn-sm" onclick="espDocsModal(\''+d.id+'\')">📄 Documents à produire</button></div>'
-   +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-sm" onclick="espFicheOpen(\''+d.id+'\')">✉ Mail au client</button><button class="btn btn-sm btn-ghost" onclick="espDevis(\''+d.id+'\')">🧾 Devis</button><button class="btn btn-sm btn-ghost" onclick="espFacture(\''+d.id+'\')">Facture</button><button class="btn btn-sm btn-ghost" onclick="modalDossier(\''+d.id+'\')">Éditer</button></div>'
+   +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-sm" onclick="espFicheOpen(\''+d.id+'\')">✉ Mail au client</button><button class="btn btn-sm btn-ghost" onclick="modalDossier(\''+d.id+'\')">Éditer</button></div>'
    +'</div></div>';
 }
 function espPiecesManquantes(d){return ESP_PIECES.filter(function(pc){return !espPieceState(d,pc.k).recu;});}
@@ -3702,24 +3283,6 @@ function downloadCSV(filename,rows){
   setTimeout(function(){URL.revokeObjectURL(u);a.remove();},600);
   if(typeof toast==='function')toast('Export CSV téléchargé');
 }
-function exportFacturesCSV(){
-  var fil=state.factFilter||'tous';
-  var match=function(f){return fil==='tous'?true:(fil==='emises'?f.statut==='Émise':fil==='impayees'?f.statut==='Impayée':fil==='payees'?f.statut==='Payée':fil==='avoirs'?!!f.avoir:true);};
-  var list=(DB.factures||[]).filter(function(f){return f.type==='client'&&match(f);}).sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
-  var rows=[['N°','Client','Date','Échéance','HT','TVA','TTC','Statut','Relances']];
-  list.forEach(function(f){rows.push([f.num,f.tiers,f.date||'',f.ech||'',(+f.ht||0).toFixed(2),(+f.tva||0).toFixed(2),(+f.ttc||0).toFixed(2),f.statut||'',(f.relances||[]).length]);});
-  var tHT=list.reduce(function(s,f){return s+(+f.ht||0);},0),tTVA=list.reduce(function(s,f){return s+(+f.tva||0);},0),tTTC=list.reduce(function(s,f){return s+(+f.ttc||0);},0);
-  rows.push(['','','','TOTAL',tHT.toFixed(2),tTVA.toFixed(2),tTTC.toFixed(2),'','']);
-  downloadCSV('journal-ventes-'+today()+'.csv',rows);
-}
-function exportDevisCSV(){
-  var fil=state.devisFilter||'tous';
-  var dm=function(d){return fil==='tous'?true:(fil==='emis'?d.statut==='Émis':fil==='acceptes'?d.statut==='Accepté':fil==='transformes'?d.statut==='Transformé':fil==='refuses'?(d.statut==='Refusé'||d.statut==='Expiré'):true);};
-  var list=(DB.devis||[]).filter(dm).slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
-  var rows=[['N°','Client','Date','Validité','HT','TVA','TTC','Statut','Facture','Relances']];
-  list.forEach(function(d){rows.push([d.num,d.tiers,d.date||'',d.ech||'',(+d.ht||0).toFixed(2),(+d.tva||0).toFixed(2),(+d.ttc||0).toFixed(2),d.statut||'',d.factureNum||'',(d.relances||[]).length]);});
-  downloadCSV('devis-'+today()+'.csv',rows);
-}
 function importDB(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
   r.onload=e=>{try{DB=JSON.parse(e.target.result);save();toast('Données importées');render();}catch(_e){toast('Fichier invalide');}};r.readAsText(f);}
 
@@ -4015,7 +3578,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=221;
+var LAST_VER=222;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
