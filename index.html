@@ -3104,7 +3104,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=234;
+var LAST_VER=235;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -7363,9 +7363,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<p class="cf-note">Échéances calculées d\'après la date de clôture : <b>approbation des comptes (AGO)</b> dans les 6 mois, <b>dépôt au greffe</b> dans le mois suivant l\'AGO (2 mois en cas de dépôt en ligne). Les SCI ne sont pas soumises au dépôt des comptes au greffe.</p>'
       +'</div></div>'; };
 
-  /* Greffe sur le tableau de bord */
-  function hookDash(){ if(typeof window.pageDash!=='function'){setTimeout(hookDash,200);return;} if(window.pageDash.__cf)return;
-    var _pd=window.pageDash; var w=function(){ var h=_pd.apply(this,arguments); try{ h+=conformiteCard(); }catch(e){} return h; }; w.__cf=true; window.pageDash=w; }
+  /* Greffe sur le tableau de bord (Pilotage) */
+  var _cfTries=0;
+  function hookDash(){ if(typeof window.pagePilotage!=='function'){ if(_cfTries++<60)setTimeout(hookDash,200); return; } if(window.pagePilotage.__cf)return;
+    var _pd=window.pagePilotage; var w=function(){ var h=_pd.apply(this,arguments); try{ h+=conformiteCard(); }catch(e){} return h; }; w.__cf=true; window.pagePilotage=w; }
   hookDash();
 })();
 </script>
@@ -9283,7 +9284,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var all=j.concat(f,fi);
     var ko=all.filter(function(x){return x.statut==='ko';}).length, warn=all.filter(function(x){return x.statut==='warn';}).length, ok=all.filter(function(x){return x.statut==='ok';}).length;
     var verdict=ko?'À corriger':(warn?'À vérifier':'Conforme');
-    return {juridique:j,formalites:f,fiscal:fi,ko:ko,warn:warn,ok:ok,total:all.length,verdict:verdict};
+    var score=all.length?Math.round((ok+0.5*warn)/all.length*100):0;
+    return {juridique:j,formalites:f,fiscal:fi,ko:ko,warn:warn,ok:ok,total:all.length,verdict:verdict,score:score};
   };
 
   function agentCard(titre,emo,list){
@@ -9295,7 +9297,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   window.controleQualiteHTML=function(d){
     var r=window.controleQualite(d);
     var vc=r.ko?'ko':(r.warn?'warn':'ok');
-    return '<div class="ag-verdict ag-'+vc+'">Verdict global : <b>'+esc(r.verdict)+'</b> — '+r.ok+' conforme(s), '+r.warn+' à vérifier, '+r.ko+' à corriger</div>'
+    return '<div class="ag-verdict ag-'+vc+'"><span class="ag-scorepill ag-'+vc+'">Score de conformité : '+r.score+' / 100</span>Verdict global : <b>'+esc(r.verdict)+'</b> — '+r.ok+' conforme(s), '+r.warn+' à vérifier, '+r.ko+' à corriger</div>'
       +'<div class="ag-grid">'+agentCard('Agent Juridique','⚖️',r.juridique)+agentCard('Agent Formalités','🗂️',r.formalites)+agentCard('Agent Fiscal','📊',r.fiscal)+'</div>';
   };
   window.ouvrirControleQualite=function(id){
@@ -9861,6 +9863,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     s.aTraiter=dem.filter(function(x){return !x.dossierId&&x.statut!=='Clôturé';}).length;
     s.retard=(typeof demRetardCount==='function')?demRetardCount():0;
     s.taux=window.tauxAutomatisation();
+    /* Étape 6 — score de conformité moyen (dossiers en cours de traitement) */
+    if(typeof controleQualite==='function'){
+      var scored=L.filter(function(d){return etape(d)>=2;});
+      if(scored.length){var sum=0;scored.forEach(function(d){try{sum+=(controleQualite(d).score||0);}catch(_){}});s.conformite=Math.round(sum/scored.length);s.conformiteNb=scored.length;}
+      else{s.conformite=0;s.conformiteNb=0;}
+    } else {s.conformite=0;s.conformiteNb=0;}
     return s;
   };
 
@@ -9881,10 +9889,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<div class="pil-line"><span>Dossiers clôturés</span><b>'+s.clotures+'</b></div>'
       +'</div></div>';
     var pct=s.taux;
+    var cf=s.conformite||0;var cfc=cf>=80?'ok':(cf>=50?'':'warn');
     var autoCard='<div class="card pil-half"><div class="card-h"><h2>⚡ Taux d\'automatisation</h2></div><div class="card-b">'
       +'<div class="pil-gauge"><div class="pil-gauge-fill" style="width:'+pct+'%"></div><span class="pil-gauge-txt">'+pct+' %</span></div>'
       +'<div class="pil-sub">Moyenne des jalons automatisés franchis (création depuis le questionnaire, collecte des pièces, extraction OCR, génération des actes, signatures, dépôt).</div>'
       +'<div class="pil-obj '+(pct>=90?'ok':'')+'">Objectif spec : ≥ 90 %'+(pct>=90?' — atteint ✓':'')+'</div>'
+      +'<div class="pil-line" style="border-top:1px solid var(--line,#e7ddc9);margin-top:10px"><span>Score de conformité moyen (contrôle IA)</span><b class="pil-cf '+cfc+'">'+cf+' / 100</b></div>'
+      +'<div class="pil-sub" style="margin:4px 0 0">Moyenne des scores des 3 agents (Juridique · Formalités · Fiscal) sur '+(s.conformiteNb||0)+' dossier(s) en traitement.</div>'
       +'</div></div>';
     var flow='<div class="card"><div class="card-h"><h2>🔄 Répartition par étape</h2></div><div class="card-b"><div class="pil-flow">'
       +[['En attente pièces',s.attente],['En cours',s.encours],['Complets',s.complets],['Signés',s.signes],['Déposés',s.deposes],['Clôturés',s.clotures]]
@@ -9905,7 +9916,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.pil-obj{margin-top:8px;font-size:12px;color:var(--ink3,#8a7d69);font-weight:700}.pil-obj.ok{color:#3d6b3d}'
       +'.pil-flow{display:flex;flex-direction:column;gap:8px}.pil-frow{display:flex;align-items:center;gap:10px;font-size:13px}'
       +'.pil-fl{flex:0 0 130px;color:var(--ink2,#5b5040)}.pil-fbar{flex:1;height:10px;background:#efe7d5;border-radius:6px;overflow:hidden}'
-      +'.pil-fbar>span{display:block;height:100%;background:linear-gradient(90deg,#7a6a49,#c9a13c);border-radius:6px}.pil-frow b{flex:0 0 30px;text-align:right}';
+      +'.pil-fbar>span{display:block;height:100%;background:linear-gradient(90deg,#7a6a49,#c9a13c);border-radius:6px}.pil-frow b{flex:0 0 30px;text-align:right}'
+      +'.pil-cf{font-variant-numeric:tabular-nums}.pil-cf.ok{color:#3d6b3d}.pil-cf.warn{color:#b0442f}'
+      +'.ag-scorepill{display:inline-block;margin-right:10px;padding:2px 9px;border-radius:20px;font-weight:800;font-size:12px;background:rgba(0,0,0,.06)}.ag-scorepill.ok{background:#d6ecc9;color:#2f6b3a}.ag-scorepill.warn{background:#f6e4c2;color:#8a5e0d}.ag-scorepill.ko{background:#f5d5cb;color:#a63a22}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>

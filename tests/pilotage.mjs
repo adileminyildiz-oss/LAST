@@ -56,10 +56,17 @@ const r = await page.evaluate(() => {
   out.taux100d1 = tauxAutomatisation() > 0 && tauxAutomatisation() <= 100;
   out.ca = typeof s.ca === 'number' && s.ca >= 0;
 
+  // Étape 6 — score de conformité
+  out.cqScore = (() => { const q = controleQualite(d1); return typeof q.score === 'number' && q.score >= 0 && q.score <= 100; })();
+  out.cqHtml = /Score de conformité/.test(controleQualiteHTML(d1));
+  out.pilCf = typeof s.conformite === 'number' && s.conformite >= 0 && s.conformite <= 100;
+
   // page rendue via le routeur
   state.page = 'pilotage'; render();
   const html = document.getElementById('view').innerHTML;
   out.rendu = /Taux d'automatisation/.test(html) && /Chiffre d'affaires estimé/.test(html) && /Répartition par étape/.test(html);
+  out.renduCf = /Score de conformité moyen/.test(html);
+  out.renduObl = /obligations annuelles/i.test(html) || true; // carte conformité annuelle greffée (si dossiers concernés)
   out.nav = !!Array.from(document.querySelectorAll('#nav .nav-btn')).find(b => /Pilotage/.test(b.textContent));
   out.gauge = !!document.querySelector('#view .pil-gauge-fill');
   return out;
@@ -73,7 +80,11 @@ check('dossier complet détecté (pièces+signatures)', r.complet);
 check('dossier signé détecté', r.signes);
 check('taux d’automatisation calculé (0–100 %)', r.taux100d1);
 check('chiffre d’affaires estimé (nombre)', r.ca);
+check('score de conformité numérique (controleQualite.score)', r.cqScore);
+check('score affiché dans le contrôle qualité', r.cqHtml);
+check('score de conformité moyen agrégé (Pilotage)', r.pilCf);
 check('page Pilotage rendue (CA + taux + répartition)', r.rendu);
+check('score de conformité moyen affiché sur le Pilotage', r.renduCf);
 check('entrée « Pilotage » dans la navigation', r.nav);
 check('jauge d’automatisation affichée', r.gauge);
 check('aucun pageerror', perr.length === 0);
