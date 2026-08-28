@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=243;
+var LAST_VER=244;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10578,6 +10578,92 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.simu-tbl thead th{background:#f6f0e2;color:#5b5040}.simu-net td{background:#fbf7ee}.simu-win{background:#e7f2e3 !important;color:#2f6b3a}'
       +'.simu-reco{margin-top:8px;padding:9px 11px;border-radius:9px;font-size:12.5px}.simu-reco.simu-remuneration{background:#eef4fb;color:#2a3a52}.simu-reco.simu-dividendes{background:#f4f0e6;color:#5b5040}'
       +'.simu-hyp{font-size:10.5px;color:var(--ink3,#8a7d69);margin-top:8px;font-style:italic}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="fiscaliste-orientation-mod">
+/* ===== Orientation par objectif — forme & régime recommandés (logique fiscaliste) ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function C(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
+
+  window.ORIENT_OBJECTIFS=[
+    {k:'protection',l:'Protection sociale maximale'},
+    {k:'cout',l:'Coût des charges minimal'},
+    {k:'dividendes',l:'Optimiser les dividendes'},
+    {k:'levee',l:'Lever des fonds / entrée d\'investisseurs'},
+    {k:'transmission',l:'Transmission / cadre familial'},
+    {k:'immobilier',l:'Détenir un patrimoine immobilier'},
+    {k:'simplicite',l:'Simplicité (activité solo)'}
+  ];
+
+  window.optimiserStructure=function(obj,ctx){
+    ctx=ctx||{};var solo=!!ctx.solo;
+    var M={
+      protection:{forme:solo?'SASU':'SAS',fiscal:'IS',social:'Assimilé salarié',
+        raisons:['Le président de SAS/SASU relève du régime général (assimilé salarié) : meilleure protection sociale (maladie, retraite de base + complémentaire).','Aucune cotisation en l\'absence de rémunération : arbitrage souple.'],
+        attention:['Charges sociales élevées (~ 70-80 % du net) ; pas d\'assurance chômage.']},
+      cout:{forme:solo?'EURL':'SARL',fiscal:solo?'IR (option IS possible)':'IS',social:'TNS (SSI)',
+        raisons:['Le gérant majoritaire de SARL / le gérant d\'EURL est TNS : cotisations plus faibles (~ 40-45 %).'],
+        attention:['Cotisations minimales dues même sans rémunération ; protection sociale à compléter (prévoyance, retraite).','Dividendes > 10 % du capital soumis aux cotisations SSI.']},
+      dividendes:{forme:solo?'SASU':'SAS',fiscal:'IS',social:'Assimilé salarié',
+        raisons:['En assimilé salarié, les dividendes ne supportent pas de cotisations sociales : PFU de 30 %.'],
+        attention:['Sans rémunération, aucun droit à la retraite ni prévoyance : prévoir un socle de rémunération.']},
+      levee:{forme:'SAS',fiscal:'IS',social:'Assimilé salarié',
+        raisons:['La SAS offre la plus grande souplesse statutaire : actions de préférence, pactes d\'associés, gouvernance sur mesure.','Cadre attendu par les investisseurs (fonds, business angels).'],
+        attention:['Formalisme des statuts à soigner (clauses d\'agrément, sortie).']},
+      transmission:{forme:'SARL (option « SARL de famille »)',fiscal:'IR',social:'TNS (SSI)',
+        raisons:['La SARL de famille peut opter pour l\'IR sans limitation de durée (entre parents en ligne directe, conjoints, PACS).','Cadre adapté à une activité familiale et à la transmission des parts.'],
+        attention:['Réservée aux activités commerciales, industrielles, artisanales ou agricoles (hors professions libérales).']},
+      immobilier:{forme:'SCI',fiscal:'IR',social:'—',
+        raisons:['Pour un patrimoine locatif nu, la SCI à l\'IR (transparence) facilite la gestion à plusieurs et la transmission (donation de parts).'],
+        attention:['La location meublée est commerciale → risque d\'IS d\'office. L\'option IS est irréversible.']},
+      simplicite:{forme:solo?'EURL':'SARL',fiscal:solo?'IR':'IS',social:'TNS (SSI)',
+        raisons:['Cadre éprouvé et encadré par la loi (statuts standard), gestion simple pour une activité de proximité.'],
+        attention:['Moins de souplesse statutaire que la SAS.']}
+    };
+    var r=M[obj]||M.protection;
+    return {objectif:obj,recommandation:{forme:r.forme,fiscal:r.fiscal,social:r.social},raisons:r.raisons,attention:r.attention};
+  };
+
+  window.orientationHTML=function(d,obj){
+    var c=C(d);var A=(c.associes||[]).filter(function(a){return (''+(a.nom||'')).trim();});
+    var solo=A.length<=1;var o=obj||'protection';
+    var activite=(((c.activites||[]).join(' '))+' '+(c.objet||'')).toLowerCase();
+    if(!obj){ if(/immobili|locati/.test(activite))o='immobilier'; else if(/lev[ée]e|investisseur|holding/.test(activite))o='levee'; }
+    var r=window.optimiserStructure(o,{solo:solo,activite:activite});
+    var opts=window.ORIENT_OBJECTIFS.map(function(x){return '<option value="'+x.k+'" '+(x.k===o?'selected':'')+'>'+E(x.l)+'</option>';}).join('');
+    var reco='<div class="or-reco"><div class="or-cards">'
+      +'<div class="or-c"><span class="or-k">Forme</span><b>'+E(r.recommandation.forme)+'</b></div>'
+      +'<div class="or-c"><span class="or-k">Régime fiscal</span><b>'+E(r.recommandation.fiscal)+'</b></div>'
+      +'<div class="or-c"><span class="or-k">Statut social</span><b>'+E(r.recommandation.social)+'</b></div></div>'
+      +'<div class="or-why"><div class="or-t">Pourquoi</div>'+r.raisons.map(function(x){return '<div class="or-li">• '+E(x)+'</div>';}).join('')+'</div>'
+      +'<div class="or-att"><div class="or-t">Points d\'attention</div>'+r.attention.map(function(x){return '<div class="or-li">⚠ '+E(x)+'</div>';}).join('')+'</div></div>';
+    return '<div class="or-in"><label>Objectif prioritaire du client</label>'
+      +'<select id="or-obj" onchange="orientationRun(\''+d.id+'\')">'+opts+'</select>'
+      +'<div class="or-sub">'+(solo?'Associé unique détecté':A.length+' associés détectés')+' — la recommandation s\'y adapte.</div></div>'
+      +'<div id="or-res">'+reco+'</div>';
+  };
+  window.orientationRun=function(id){
+    var d=(typeof espDoss==='function'?espDoss():[]).find(function(x){return x.id===id;});if(!d)return;
+    var sel=document.getElementById('or-obj');var o=sel?sel.value:'protection';
+    var res=document.getElementById('or-res');if(res){
+      var tmp=document.createElement('div');tmp.innerHTML=window.orientationHTML(d,o);
+      var nr=tmp.querySelector('#or-res');if(nr)res.innerHTML=nr.innerHTML;
+    }
+  };
+
+  if(typeof window.avocatFiscalisteHTML==='function'){var _h=window.avocatFiscalisteHTML;
+    window.avocatFiscalisteHTML=function(d){var base=_h(d);if(!d||!d.id)return base;
+      return base+'<div class="or-wrap"><div class="or-h">🎯 Orientation par objectif</div>'+window.orientationHTML(d)+'</div>';};
+  }
+
+  try{ if(!document.getElementById('or-css')){var st=document.createElement('style');st.id='or-css';
+    st.textContent='.or-wrap{margin-top:14px;border-top:1px dashed var(--line,#e7ddc9);padding-top:12px}.or-h{font-weight:700;font-size:13px;margin-bottom:8px}'
+      +'.or-in label{font-size:12px;color:var(--ink3,#8a7d69)}.or-in select{max-width:320px}.or-sub{font-size:11px;color:var(--ink3,#8a7d69);margin:4px 0 8px}'
+      +'.or-cards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}.or-c{flex:1;min-width:120px;background:#eef4fb;border:1px solid #d6e2f0;border-radius:10px;padding:8px 11px}.or-c .or-k{display:block;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:#5b7091;font-weight:700}.or-c b{font-size:13px;color:#22344d}'
+      +'.or-why,.or-att{margin-top:6px}.or-t{font-weight:700;font-size:12px;margin-bottom:3px}.or-li{font-size:12px;color:var(--ink2,#5b5040);padding:2px 0}.or-att .or-li{color:#8a5e0d}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
