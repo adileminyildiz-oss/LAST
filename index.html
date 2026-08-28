@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=249;
+var LAST_VER=250;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11050,6 +11050,85 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     window.pageParams=function(){var h=_pp.apply(this,arguments);
       if(h.indexOf('id="dmsg-card"')<0){var note=h.lastIndexOf('<div class="flow-note"');
         if(note>=0){h=h.slice(0,note)+window.depotMsgCard()+h.slice(note);}else{h+=window.depotMsgCard();}}
+      return h;};
+  }
+})();
+</script>
+
+<script id="mailtpl-mod">
+/* ===== Modèles d'e-mails (réponses types) éditables ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  var DEFS={
+    accuse:{label:'Accusé de réception',
+      sujet:'Bonne réception de votre demande{ref} — AEM CONSEIL',
+      corps:'Bonjour {prenom},\n\nNous accusons bonne réception de votre demande{ref} et vous remercions de votre confiance.\n\nElle est enregistrée sous le numéro {serie}. Nous la prenons en charge et revenons vers vous très prochainement.\n\nBien cordialement,'},
+    pieces:{label:'Demande de pièces',
+      sujet:'Documents nécessaires{ref} — AEM CONSEIL',
+      corps:'Bonjour {prenom},\n\nAfin de poursuivre le traitement de votre dossier {serie}, merci de nous transmettre les documents suivants :\n\n{pieces}\n\nVous pouvez répondre à cet e-mail en y joignant les documents, ou les déposer en ligne :\n{lien}\n\nBien cordialement,'},
+    suivi:{label:'Point d\'avancement',
+      sujet:'Avancement de votre dossier {serie} — AEM CONSEIL',
+      corps:'Bonjour {prenom},\n\nVotre dossier {serie} est en cours de traitement par nos services. Nous revenons vers vous dès la prochaine étape.\n\nNous restons à votre disposition pour toute question.\n\nBien cordialement,'},
+    relance:{label:'Relance (sans réponse)',
+      sujet:'Relance — votre dossier {serie} — AEM CONSEIL',
+      corps:'Bonjour {prenom},\n\nSauf erreur de notre part, nous restons en attente des éléments nécessaires pour avancer sur votre dossier {serie}.\n\nPourriez-vous nous les faire parvenir en réponse à cet e-mail ? Nous restons bien entendu disponibles pour toute question.\n\nBien cordialement,'}
+  };
+  var KEYS=['accuse','pieces','suivi','relance'];
+  function store(){DB.parametres=DB.parametres||{};return DB.parametres.mailModeles=DB.parametres.mailModeles||{};}
+  window.mailTplGet=function(key){var o=store()[key];return o||null;};
+  window.mailTplEffective=function(key){return window.mailTplGet(key)||DEFS[key]||null;};
+
+  function nm(d){return (typeof demBestName==='function')?demBestName(d):((d&&d.clientNom)||'');}
+  function pieceLignes(d){var pcs=[];try{if(typeof piecesRequises==='function')pcs=piecesRequises(d)||[];}catch(e){}
+    if(!pcs.length)pcs=[{label:"Pièce d'identité du dirigeant (recto/verso)"},{label:'Justificatif de domicile (− 3 mois)'}];
+    return pcs.map(function(p){return '  • '+((p&&p.label)||p);}).join('\n');}
+  function resolve(txt,d){
+    var full=(nm(d)||'');var prenom=(full.split(/\s+/)[0]||'').trim();
+    var code=(d&&d.code)||'';var ref=code?(' (référence '+code+')'):'';
+    var lien='';try{if(typeof depotLien==='function')lien=depotLien(d)||'';}catch(e){}
+    var s=(''+txt).replace(/\{prenom\}/g,prenom).replace(/\{nom\}/g,full).replace(/\{serie\}/g,code).replace(/\{ref\}/g,ref).replace(/\{pieces\}/g,pieceLignes(d));
+    if(lien)s=s.replace(/\{lien\}/g,lien);else s=s.replace(/^.*\{lien\}.*$\n?/gm,'').replace(/\{lien\}/g,'');
+    return s;
+  }
+  window.mailTplResolve=function(d,key){var o=window.mailTplEffective(key);if(!o)return null;return {sujet:resolve(o.sujet,d),corps:resolve(o.corps,d)};};
+
+  /* Override : les réponses types utilisent les modèles configurés */
+  if(typeof window.demReponseType==='function'||typeof demReponseType==='function'){
+    window.demReponseType=function(id,key){
+      var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return;
+      var m=window.mailTplResolve(d,key);if(!m)return;
+      if(key==='pieces'&&typeof window.demChkAutoDone==='function')window.demChkAutoDone(id,/collecte|pi[eè]ce|document/i);
+      var to=(typeof demReplyTo==='function')?demReplyTo(d):((d.clientEmail)||'');
+      if(!to&&typeof toast==='function')toast('Adresse e-mail du client introuvable — vérifiez la demande avant d\'envoyer.');
+      if(typeof demOuvrirMessagerie==='function')demOuvrirMessagerie(to||'',m.sujet,m.corps);
+    };
+  }
+
+  window.mailTplSetKey=function(v){window.__mtKey=v;if(typeof render==='function')render();};
+  window.mailTplModelSave=function(key){var s=store();var su=document.getElementById('mt-sujet'),co=document.getElementById('mt-corps');
+    s[key]={sujet:(''+(su?su.value:'')).trim()||DEFS[key].sujet,corps:(''+(co?co.value:''))||DEFS[key].corps};
+    if(typeof save==='function')save();if(typeof toast==='function')toast('Modèle enregistré');if(typeof render==='function')render();};
+  window.mailTplModelReset=function(key){var s=store();delete s[key];if(typeof save==='function')save();if(typeof toast==='function')toast('Modèle réinitialisé');if(typeof render==='function')render();};
+
+  window.mailModelesCard=function(){
+    var key=window.__mtKey||'accuse';if(KEYS.indexOf(key)<0)key='accuse';
+    var eff=window.mailTplEffective(key);var perso=!!window.mailTplGet(key);
+    var opts=KEYS.map(function(k){var p=!!window.mailTplGet(k);return '<option value="'+k+'" '+(k===key?'selected':'')+'>'+E(DEFS[k].label)+(p?' — personnalisé':'')+'</option>';}).join('');
+    return '<div class="card" id="mailmod-card" style="margin-top:14px"><div class="card-h"><h2>Modèles d\'e-mails</h2><span class="sub" style="margin-left:auto">'+(perso?'<span class="tag ok">Personnalisé</span>':'<span class="tag mut">Modèle standard</span>')+'</span></div><div class="card-b">'
+      +'<p class="hint" style="margin:0 0 10px">Réponses types envoyées depuis une demande (accusé, pièces, avancement, relance). Variables : <code>{prenom}</code>, <code>{serie}</code> (n° de la demande), <code>{ref}</code>, <code>{pieces}</code>, <code>{lien}</code>.</p>'
+      +'<label>Type de message</label><select onchange="mailTplSetKey(this.value)">'+opts+'</select>'
+      +'<label>Objet</label><input id="mt-sujet" value="'+E(eff.sujet)+'">'
+      +'<label>Corps du message</label><textarea id="mt-corps" rows="10" style="width:100%;font:13px/1.5 inherit">'+E(eff.corps)+'</textarea>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-sm btn-pri" onclick="mailTplModelSave(\''+key+'\')">Enregistrer</button>'
+      +(perso?('<button class="btn btn-sm btn-ghost" onclick="mailTplModelReset(\''+key+'\')">↺ Réinitialiser</button>'):'')+'</div>'
+      +'</div></div>';
+  };
+
+  if(typeof window.pageParams==='function'||typeof pageParams==='function'){
+    var _pp=(typeof window.pageParams==='function')?window.pageParams:pageParams;
+    window.pageParams=function(){var h=_pp.apply(this,arguments);
+      if(h.indexOf('id="mailmod-card"')<0){var note=h.lastIndexOf('<div class="flow-note"');
+        if(note>=0){h=h.slice(0,note)+window.mailModelesCard()+h.slice(note);}else{h+=window.mailModelesCard();}}
       return h;};
   }
 })();
