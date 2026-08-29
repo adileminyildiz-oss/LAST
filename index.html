@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=254;
+var LAST_VER=255;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11524,6 +11524,95 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.vue-fisc{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 12px;border-radius:10px;border:1px dashed var(--line,#e7ddc9);background:#fbf7ee;cursor:pointer;font:inherit}'
       +'.vue-fisc:hover{background:#f6f0e2}.vue-fisc>span:first-child{font-weight:700;font-size:12.5px}.vue-fisc b{font-size:12px;color:var(--ink3,#8a7d69);font-weight:600}.vue-fisc-go{margin-left:auto;font-size:15px;color:#b98029}'
       +'.vue-flash{outline:2px solid #b98029;outline-offset:2px;transition:outline .3s}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="config-io-mod">
+/* ===== Sauvegarde / restauration de la configuration du logiciel (Chantier A) ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function clone(o){try{return JSON.parse(JSON.stringify(o));}catch(e){return o;}}
+  function nbKeys(o){try{return o?Object.keys(o).length:0;}catch(e){return 0;}}
+
+  /* Paramétrage du logiciel uniquement — jamais les données des dossiers ni les identifiants de connexion. */
+  var PLAINS=['piecesConfig','etapesConfig','depotMsg','mailModeles'];
+  function cfgSnapshot(){
+    var P=DB.parametres||{},C={};
+    PLAINS.forEach(function(k){if(P[k]!=null)C[k]=clone(P[k]);});
+    if(P.slaJours!=null)C.slaJours=P.slaJours;
+    if(P.numDossier){var n=clone(P.numDossier);if(n)delete n.compteurs;C.numDossier=n;} /* format seul, pas les compteurs */
+    return C;
+  }
+
+  window.configExportData=function(){
+    return {app:'LAST',kind:'config',version:1,exportedAt:new Date().toISOString(),config:cfgSnapshot()};
+  };
+  window.configExport=function(){
+    var payload=window.configExportData();var txt=JSON.stringify(payload,null,2);
+    try{ var blob=new Blob([txt],{type:'application/json;charset=utf-8'});var u=URL.createObjectURL(blob);
+      var a=document.createElement('a');var dt=new Date().toISOString().slice(0,10);
+      a.href=u;a.download='last-config-'+dt+'.json';document.body.appendChild(a);a.click();
+      setTimeout(function(){URL.revokeObjectURL(u);a.remove();},600);
+      if(typeof toast==='function')toast('Configuration exportée');
+    }catch(e){ if(typeof toast==='function')toast('Export impossible'); }
+    return payload;
+  };
+
+  window.configImport=function(payload){
+    try{ if(typeof payload==='string')payload=JSON.parse(payload); }catch(e){ if(typeof toast==='function')toast('Fichier illisible'); return {ok:false,error:'parse'}; }
+    if(!payload||payload.kind!=='config'||!payload.config){ if(typeof toast==='function')toast('Ce fichier n\'est pas une configuration LAST'); return {ok:false,error:'shape'}; }
+    var C=payload.config;DB.parametres=DB.parametres||{};var applied=[];
+    PLAINS.forEach(function(k){if(C[k]!=null){DB.parametres[k]=clone(C[k]);applied.push(k);}});
+    if(C.slaJours!=null){DB.parametres.slaJours=C.slaJours;applied.push('slaJours');}
+    if(C.numDossier){var cur=DB.parametres.numDossier||{};var keep=cur.compteurs||{};
+      DB.parametres.numDossier=Object.assign({},cur,C.numDossier);DB.parametres.numDossier.compteurs=keep;applied.push('numDossier');} /* on conserve les compteurs locaux */
+    if(typeof save==='function')save();
+    return {ok:true,applied:applied};
+  };
+
+  window.configImportFile=function(input){
+    var f=input&&input.files&&input.files[0];if(!f)return;
+    if(typeof confirm==='function'&&!confirm('Importer cette configuration ? Les paramètres actuels (pièces, étapes, numérotation, messages, modèles, délais) seront remplacés. Les données des dossiers ne sont pas touchées.')){input.value='';return;}
+    var r=new FileReader();
+    r.onload=function(e){var res=window.configImport(e.target.result);
+      if(res&&res.ok){ if(typeof toast==='function')toast('Configuration importée ('+res.applied.length+' réglage(s))'); if(typeof render==='function')render(); }};
+    r.readAsText(f);input.value='';
+  };
+
+  window.configIOCard=function(){
+    var P=DB.parametres||{};
+    var items=[
+      ['Pièces par formalité', (nbKeys(P.piecesConfig)?(nbKeys(P.piecesConfig)+' personnalisée(s)'):'par défaut')],
+      ['Étapes du workflow', (nbKeys(P.etapesConfig)?(nbKeys(P.etapesConfig)+' personnalisée(s)'):'par défaut')],
+      ['Numérotation des dossiers', (P.numDossier?('format '+(P.numDossier.prefix||'DOS')):'par défaut')],
+      ['Message de demande de pièces', ((P.depotMsg&&P.depotMsg.corps)?'personnalisé':'standard')],
+      ['Modèles d\'e-mails', (nbKeys(P.mailModeles)?(nbKeys(P.mailModeles)+' personnalisé(s)'):'standards')],
+      ['Délais / SLA', ((P.slaJours!=null)?(P.slaJours+' j'):'par défaut')]
+    ];
+    var rows=items.map(function(it){return '<div class="cfgio-row"><span>'+E(it[0])+'</span><b>'+E(it[1])+'</b></div>';}).join('');
+    return '<div class="card" id="cfgio-card"><div class="card-h"><h2>Sauvegarde de la configuration</h2><span class="sub" style="margin-left:auto">Export / Import</span></div>'
+      +'<div class="card-b">'
+      +'<div class="tsub" style="margin:-2px 0 10px">Exportez tous vos <b>paramètres du logiciel</b> (pièces, étapes, numérotation, message de dépôt, modèles d\'e-mails, délais) dans un fichier, pour les restaurer ou les transférer sur un autre appareil. Les <b>données des dossiers</b> et les <b>identifiants de connexion</b> ne sont pas inclus.</div>'
+      +'<div class="cfgio-list">'+rows+'</div>'
+      +'<div class="cfgio-act"><button class="btn btn-pri" onclick="configExport()">⬇ Exporter la configuration</button>'
+      +'<label class="btn btn-ghost" style="cursor:pointer">⬆ Importer une configuration<input type="file" accept="application/json,.json" style="display:none" onchange="configImportFile(this)"></label></div>'
+      +'</div></div>';
+  };
+
+  if(typeof window.pageParams==='function'||typeof pageParams==='function'){
+    var _pp=(typeof window.pageParams==='function')?window.pageParams:pageParams;
+    window.pageParams=function(){var h=_pp.apply(this,arguments);
+      if(h.indexOf('id="cfgio-card"')<0){var note=h.lastIndexOf('<div class="flow-note"');
+        if(note>=0){h=h.slice(0,note)+window.configIOCard()+h.slice(note);}else{h+=window.configIOCard();}}
+      return h;};
+  }
+
+  try{ if(!document.getElementById('cfgio-css')){var st=document.createElement('style');st.id='cfgio-css';
+    st.textContent='.cfgio-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px;margin-bottom:12px}'
+      +'.cfgio-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:6px 9px;border:1px solid var(--line,#e7ddc9);border-radius:8px;background:#fbf7ee}'
+      +'.cfgio-row span{color:var(--ink3,#8a7d69)}.cfgio-row b{white-space:nowrap}'
+      +'.cfgio-act{display:flex;gap:8px;flex-wrap:wrap}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
