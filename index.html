@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=251;
+var LAST_VER=252;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11215,6 +11215,81 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   try{ if(!document.getElementById('simu-hh-css')){var st=document.createElement('style');st.id='simu-hh-css';
     st.textContent='.simu-hh{display:flex;gap:12px;flex-wrap:wrap;margin:4px 0 10px}.simu-hh label{font-size:12px;color:var(--ink3,#8a7d69);display:flex;flex-direction:column;gap:3px}.simu-hh input{max-width:150px}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="fiscaliste-is-mod">
+/* ===== Simulateur d'impôt sur les sociétés (IS) complet ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function eu(n){n=Math.round(n||0);return (typeof eur==='function')?eur(n):(n+' €');}
+  function pct(x){return (Math.round(x*1000)/10)+' %';}
+  function pf(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.,]/g,'').replace(',','.'));return isNaN(n)?0:n;}
+
+  window.calculISDetail=function(o){
+    o=o||{};var b=Math.max(0,+o.benefice||0);var ca=Math.max(0,+o.ca||0);
+    var liber=(o.capitalLibere!==false);var pp=(o.detentionPP!==false);
+    var eligibleReduit=(ca<10000000)&&liber&&pp;
+    var tranches=[];var is=0;
+    if(eligibleReduit){
+      var t1=Math.min(b,42500);is+=t1*0.15;tranches.push({label:'15 % jusqu\'à 42 500 €',base:t1,taux:0.15,montant:t1*0.15});
+      if(b>42500){var t2=b-42500;is+=t2*0.25;tranches.push({label:'25 % au-delà',base:t2,taux:0.25,montant:t2*0.25});}
+    } else {
+      is=b*0.25;tranches.push({label:'25 % (taux normal)',base:b,taux:0.25,montant:is});
+    }
+    /* Contribution sociale sur l'IS : 3,3 % de (IS − 763 000 €) si CA ≥ 7,63 M€ */
+    var contribution=0;
+    if(ca>=7630000&&is>763000)contribution=(is-763000)*0.033;
+    var isTotal=is+contribution;
+    var manques=[];
+    if(ca>=10000000)manques.push('CA ≥ 10 M€');
+    if(!liber)manques.push('capital non entièrement libéré');
+    if(!pp)manques.push('détention < 75 % par des personnes physiques');
+    return {benefice:b,ca:ca,eligibleReduit:eligibleReduit,manques:manques,tranches:tranches,is:is,contribution:contribution,isTotal:isTotal,tauxEffectif:(b>0?isTotal/b:0)};
+  };
+
+  window.isSimHTML=function(d,o){
+    o=o||{};var benef=o.benefice!=null?o.benefice:50000;var ca=o.ca!=null?o.ca:0;
+    var liber=(o.capitalLibere!==false);var pp=(o.detentionPP!==false);
+    var r=window.calculISDetail({benefice:benef,ca:ca,capitalLibere:liber,detentionPP:pp});
+    var rows=r.tranches.map(function(t){return '<tr><td>'+E(t.label)+'</td><td style="text-align:right">'+eu(t.base)+'</td><td style="text-align:right">'+eu(t.montant)+'</td></tr>';}).join('');
+    var elig=r.eligibleReduit
+      ?'<div class="is-elig ok">✓ Éligible au taux réduit de 15 % (CA &lt; 10 M€, capital libéré, ≥ 75 % personnes physiques).</div>'
+      :'<div class="is-elig ko">Taux réduit non applicable : '+E(r.manques.join(', '))+' → IS à 25 %.</div>';
+    return '<div class="is-box">'
+      +'<div class="is-in"><label>Résultat fiscal (€)<input id="is-benef" type="number" min="0" step="1000" value="'+benef+'" onchange="isSimRun(\''+d.id+'\')"></label>'
+      +'<label>Chiffre d\'affaires (€)<input id="is-ca" type="number" min="0" step="10000" value="'+ca+'" onchange="isSimRun(\''+d.id+'\')"></label></div>'
+      +'<div class="is-chk"><label><input type="checkbox" id="is-liber" '+(liber?'checked':'')+' onchange="isSimRun(\''+d.id+'\')"> Capital entièrement libéré</label>'
+      +'<label><input type="checkbox" id="is-pp" '+(pp?'checked':'')+' onchange="isSimRun(\''+d.id+'\')"> Détenue à ≥ 75 % par des personnes physiques</label></div>'
+      +elig
+      +'<table class="is-tbl"><thead><tr><th>Tranche</th><th style="text-align:right">Base</th><th style="text-align:right">IS</th></tr></thead><tbody>'+rows
+      +(r.contribution>0?('<tr><td>Contribution sociale (3,3 %)</td><td></td><td style="text-align:right">'+eu(r.contribution)+'</td></tr>'):'')
+      +'<tr class="is-tot"><td>IS total</td><td style="text-align:right">taux effectif '+pct(r.tauxEffectif)+'</td><td style="text-align:right"><b>'+eu(r.isTotal)+'</b></td></tr>'
+      +'</tbody></table>'
+      +'<div class="is-hyp">Résultat après IS : <b>'+eu(r.benefice-r.isTotal)+'</b>. Estimation — hors reports déficitaires, crédits d\'impôt et régimes particuliers.</div></div>';
+  };
+  window.isSimRun=function(id){
+    var d=(typeof espDoss==='function'?espDoss():[]).find(function(x){return x.id===id;});if(!d)return;
+    var g=function(x){return document.getElementById(x);};
+    var o={benefice:g('is-benef')?pf(g('is-benef').value):50000,ca:g('is-ca')?pf(g('is-ca').value):0,
+      capitalLibere:g('is-liber')?g('is-liber').checked:true,detentionPP:g('is-pp')?g('is-pp').checked:true};
+    var res=g('is-simu-res');if(res)res.innerHTML=window.isSimHTML(d,o);
+  };
+
+  /* Greffe : ajoute le simulateur d'IS au bas de l'analyse fiscaliste */
+  if(typeof window.avocatFiscalisteHTML==='function'){var _h=window.avocatFiscalisteHTML;
+    window.avocatFiscalisteHTML=function(d){var base=_h(d);if(!d||!d.id)return base;
+      return base+'<div class="is-wrap"><div class="is-h">🏛 Simulateur d\'impôt sur les sociétés</div><div id="is-simu-res">'+window.isSimHTML(d,{})+'</div></div>';};
+  }
+
+  try{ if(!document.getElementById('is-css')){var st=document.createElement('style');st.id='is-css';
+    st.textContent='.is-wrap{margin-top:14px;border-top:1px dashed var(--line,#e7ddc9);padding-top:12px}.is-h{font-weight:700;font-size:13px;margin-bottom:8px}'
+      +'.is-in{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px}.is-in label{font-size:12px;color:var(--ink3,#8a7d69);display:flex;flex-direction:column;gap:3px}.is-in input{max-width:170px}'
+      +'.is-chk{display:flex;gap:16px;flex-wrap:wrap;margin:4px 0 8px}.is-chk label{font-size:12px;display:flex;align-items:center;gap:6px}'
+      +'.is-elig{font-size:12px;padding:7px 10px;border-radius:8px;margin-bottom:8px}.is-elig.ok{background:#e7f2e3;color:#2f6b3a}.is-elig.ko{background:#fbf1dd;color:#8a5e0d}'
+      +'.is-tbl{width:100%;border-collapse:collapse;font-size:12.5px}.is-tbl th,.is-tbl td{border:1px solid var(--line,#e7ddc9);padding:5px 9px}.is-tbl thead th{background:#f6f0e2;color:#5b5040}.is-tot td{background:#fbf7ee}'
+      +'.is-hyp{font-size:10.5px;color:var(--ink3,#8a7d69);margin-top:8px;font-style:italic}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
