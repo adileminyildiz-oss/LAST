@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=253;
+var LAST_VER=254;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11421,6 +11421,109 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.mix-detail{font-size:12px;background:#fbf7ee;border:1px solid var(--line,#e7ddc9);border-radius:8px;padding:8px 10px;margin-bottom:8px}.mix-detail>div{display:flex;justify-content:space-between;gap:10px;padding:2px 0}.mix-detail .mix-tot{border-top:1px solid var(--line,#e7ddc9);margin-top:4px;padding-top:5px;font-weight:700}'
       +'.mix-reco{font-size:12px;padding:8px 10px;border-radius:8px;background:#e7f2e3;color:#2f5b34;margin-bottom:6px}'
       +'.mix-hyp{font-size:10.5px;color:var(--ink3,#8a7d69);font-style:italic}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="dossier-vue-mod">
+/* ===== Vue unifiée du dossier : pièces + actes + contrôle + signature + dépôt + fiscaliste (Chantier C) ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function has(f){return typeof window[f]==='function';}
+  function nom(d){return (typeof dossierClients==='function')?dossierClients(d):(d&&d.ref||'Dossier');}
+
+  function piecesEtat(d){
+    try{ var L=(typeof ESP_PIECES!=='undefined')?ESP_PIECES:[];
+      if(!L.length)return {n:0,t:0,ok:true};
+      var n=L.filter(function(pc){return (typeof espPieceState==='function')&&espPieceState(d,pc.k).recu;}).length;
+      return {n:n,t:L.length,ok:n===L.length}; }catch(e){return {n:0,t:0,ok:false};}
+  }
+  function docReady(d,k){try{return !!((d.docs&&d.docs[k]&&d.docs[k].genere)||(d.docState&&d.docState[k]&&d.docState[k].ts));}catch(e){return false;}}
+  function actesEtat(d){
+    try{ var L=(typeof espDocsRequis==='function')?espDocsRequis(d):((typeof ESP_DOCS!=='undefined')?ESP_DOCS:[]);
+      if(!L.length)return {n:0,t:0};
+      var n=L.filter(function(dc){return docReady(d,dc.k);}).length;
+      return {n:n,t:L.length}; }catch(e){return {n:0,t:0};}
+  }
+  function cqEtat(d){try{return has('controleQualite')?window.controleQualite(d):null;}catch(e){return null;}}
+  function sigEtat(d){try{return has('sigProgress')?window.sigProgress(d):{signes:0,total:0,tous:false};}catch(e){return {signes:0,total:0,tous:false};}}
+  function depotPret(d){try{return has('depotReadiness')?!!window.depotReadiness(d).ready:false;}catch(e){return false;}}
+  function depose(d){return !!(d&&d.inpi&&(d.inpi.reference||d.inpi.status));}
+  function clot(d){return !!(d&&(d.clotureLe||d.statut==='Clôturé'));}
+
+  window.vueScroll=function(txt){
+    try{ var cards=document.querySelectorAll('.esp-main .card h2'),cible=null;
+      for(var i=0;i<cards.length;i++){ if((cards[i].textContent||'').toLowerCase().indexOf((txt||'').toLowerCase())>=0){cible=cards[i].closest('.card');break;} }
+      if(cible){ cible.scrollIntoView({behavior:'smooth',block:'center'}); cible.classList.add('vue-flash'); setTimeout(function(){cible.classList.remove('vue-flash');},1400); }
+    }catch(e){}
+  };
+
+  window.vueEnsembleHTML=function(d){
+    if(!d)return '';
+    var steps=[];
+    var pi=piecesEtat(d);
+    steps.push({ic:'📎',lbl:'Pièces',st:(pi.t?(pi.n+'/'+pi.t):'—'),cls:(pi.t&&pi.ok?'ok':(pi.n>0?'warn':'todo')),act:"vueScroll('Pièces')"});
+    var ac=actesEtat(d);
+    steps.push({ic:'📝',lbl:'Actes',st:(ac.t?(ac.n+'/'+ac.t):'—'),cls:(ac.t&&ac.n===ac.t?'ok':(ac.n>0?'warn':'todo')),act:"vueScroll('Document')"});
+    var cq=cqEtat(d);
+    steps.push({ic:'✅',lbl:'Contrôle',st:(cq?(cq.verdict+' · '+cq.score+'/100'):'—'),cls:(cq?(cq.ko?'bad':(cq.warn?'warn':'ok')):'todo'),act:(has('ouvrirControleQualite')?("ouvrirControleQualite('"+d.id+"')"):"vueScroll('Contrôle')")});
+    var sg=sigEtat(d);
+    steps.push({ic:'✍️',lbl:'Signature',st:(sg.total?(sg.signes+'/'+sg.total):'—'),cls:(sg.total?(sg.tous?'ok':(sg.signes>0?'warn':'todo')):'todo'),act:(has('ouvrirSignatures')?("ouvrirSignatures('"+d.id+"')"):null)});
+    var dp=depose(d),dpr=depotPret(d);
+    steps.push({ic:'📤',lbl:'Dépôt',st:(dp?'Déposé':(dpr?'Prêt':'À finaliser')),cls:(dp?'ok':(dpr?'warn':'todo')),act:(has('ouvrirDepot')?("ouvrirDepot('"+d.id+"')"):null)});
+    var cl=clot(d);
+    steps.push({ic:'🗄️',lbl:'Clôture',st:(cl?'Clôturé':'Ouvert'),cls:(cl?'ok':'todo'),act:(has('ouvrirArchive')?("ouvrirArchive('"+d.id+"')"):null)});
+
+    var done=steps.filter(function(s){return s.cls==='ok';}).length;
+    var pct=Math.round(done/steps.length*100);
+    var chips=steps.map(function(s){
+      return '<button class="vue-step vue-'+s.cls+'"'+(s.act?(' onclick="'+s.act.replace(/"/g,'&quot;')+'"'):' disabled')+'>'
+        +'<span class="vue-ic">'+s.ic+'</span><span class="vue-sl"><span class="vue-sn">'+s.lbl+'</span><b>'+E(s.st)+'</b></span></button>';
+    }).join('');
+
+    var t=has('tacheDossier')?window.tacheDossier(d):null;
+    var nextKind=(t&&t.kind)||'ok';
+    var next=t?('<div class="vue-next vue-nk-'+nextKind+'"><span class="vue-next-l">Prochaine action</span><b>'+E(t.label)+'</b>'
+      +(t.act?('<button class="btn btn-sm btn-pri" onclick="'+t.act.replace(/"/g,'&quot;')+'">Traiter</button>'):'<span class="tag ok">À jour ✓</span>')+'</div>'):'';
+
+    var fisc='';
+    try{ if(has('avocatFiscaliste')){var syn=window.avocatFiscaliste(d).synthese;
+      fisc='<button class="vue-fisc" onclick="ouvrirAvocatFiscaliste(\''+d.id+'\')"><span>⚖️ Analyse fiscaliste</span><b>'+E(syn||'ouvrir')+'</b><span class="vue-fisc-go">→</span></button>'; } }catch(e){}
+
+    var col=(typeof statColor==='function')?statColor(d.statut):'#7a6a49';
+    return '<div class="card vue-card"><div class="card-h"><h2>🧭 Vue d\'ensemble du dossier</h2>'
+      +'<span class="pill-stat" style="margin-left:auto;color:'+col+';border-color:'+col+'55;background:'+col+'18">'+E(d.statut||'—')+'</span></div>'
+      +'<div class="card-b">'
+      +'<div class="vue-cli">'+E(nom(d))+' · <span class="tsub">'+E(d.ref||d.numeroDossier||'')+'</span></div>'
+      +next
+      +'<div class="vue-prog"><div class="vue-prog-track"><div class="vue-prog-bar" style="width:'+pct+'%"></div></div><div class="vue-prog-lbl">'+done+'/'+steps.length+' étapes finalisées</div></div>'
+      +'<div class="vue-steps">'+chips+'</div>'
+      +fisc
+      +'</div></div>';
+  };
+
+  /* Greffe : insère la vue d'ensemble en tête de la colonne principale du dossier */
+  if(has('espPanel')){var _p=window.espPanel;
+    window.espPanel=function(d,list,id){var h=_p(d,list,id);
+      try{ if(d&&/<div class="esp-main">/.test(h)) h=h.replace('<div class="esp-main">','<div class="esp-main">'+window.vueEnsembleHTML(d)); }catch(e){}
+      return h;};
+  }
+
+  try{ if(!document.getElementById('vue-css')){var st=document.createElement('style');st.id='vue-css';
+    st.textContent='.vue-card{border:1px solid var(--line,#e7ddc9)}.vue-cli{font-weight:700;font-size:14px;margin:-2px 0 10px}'
+      +'.vue-next{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;border-radius:10px;background:#f6f0e2;border:1px solid var(--line,#e7ddc9);margin-bottom:12px}'
+      +'.vue-next-l{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink3,#8a7d69);font-weight:700}.vue-next b{font-size:13px}.vue-next .btn{margin-left:auto}'
+      +'.vue-nk-corriger{background:#fbeae6;border-color:#e0b3a6}.vue-nk-relancer,.vue-nk-demander{background:#fbf1dd;border-color:#e3c58a}.vue-nk-deposer{background:#e9f2e6;border-color:#bcd6b0}'
+      +'.vue-prog{display:flex;align-items:center;gap:10px;margin-bottom:12px}.vue-prog-track{flex:1;height:8px;border-radius:6px;background:#eee6d4;overflow:hidden}.vue-prog-bar{height:100%;background:linear-gradient(90deg,#8a6d3b,#b98029);border-radius:6px;transition:width .4s}'
+      +'.vue-prog-lbl{font-size:11px;color:var(--ink3,#8a7d69);white-space:nowrap}'
+      +'.vue-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px}'
+      +'.vue-step{display:flex;align-items:center;gap:8px;text-align:left;padding:8px 10px;border-radius:10px;border:1px solid var(--line,#e7ddc9);background:#fff;cursor:pointer;font:inherit;transition:transform .12s,box-shadow .12s}'
+      +'.vue-step:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.08)}.vue-step:disabled{opacity:.6;cursor:default}'
+      +'.vue-ic{font-size:16px;line-height:1}.vue-sl{display:flex;flex-direction:column;min-width:0}.vue-sn{font-size:10.5px;color:var(--ink3,#8a7d69);text-transform:uppercase;letter-spacing:.3px}.vue-sl b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+      +'.vue-step.vue-ok{border-left:3px solid #3f6b46}.vue-step.vue-warn{border-left:3px solid #b98029}.vue-step.vue-todo{border-left:3px solid #c9bfa8}.vue-step.vue-bad{border-left:3px solid #b0442f}'
+      +'.vue-fisc{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 12px;border-radius:10px;border:1px dashed var(--line,#e7ddc9);background:#fbf7ee;cursor:pointer;font:inherit}'
+      +'.vue-fisc:hover{background:#f6f0e2}.vue-fisc>span:first-child{font-weight:700;font-size:12.5px}.vue-fisc b{font-size:12px;color:var(--ink3,#8a7d69);font-weight:600}.vue-fisc-go{margin-left:auto;font-size:15px;color:#b98029}'
+      +'.vue-flash{outline:2px solid #b98029;outline-offset:2px;transition:outline .3s}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
