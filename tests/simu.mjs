@@ -35,13 +35,13 @@ const r = await page.evaluate(() => {
 
   // Assimilé salarié, 50 000 € : rému net ≈ 19 710 ; div net ≈ 29 225 ; dividendes gagnent
   const a = simuRemDiv({ benefice: 50000, regimeSocial: 'assimile', capital: 1000 });
-  out.aRem = near(a.remuneration.net, 19710, 5);
-  out.aDiv = near(a.dividendes.net, 29225, 5);
+  out.aRem = near(a.remuneration.net, 25569, 5);
+  out.aDiv = near(a.dividendes.net, 33056, 5);
   out.aBest = a.best === 'dividendes';
 
   // TNS, 50 000 €, capital 1 000 : dividendes lourdement cotisés → rémunération gagne
   const t = simuRemDiv({ benefice: 50000, regimeSocial: 'tns', capital: 1000 });
-  out.tRem = near(t.remuneration.net, 25172, 5);
+  out.tRem = near(t.remuneration.net, 31886, 5);
   out.tSsiPositif = t.dividendes.ssi > 0;
   out.tBest = t.best === 'remuneration';
 
@@ -76,10 +76,10 @@ await browser.close();
 check('fonctions simulateur présentes', r.hasFn);
 check('IS 15 % jusqu’à 42 500 (= 6375)', r.is1);
 check('IS 42 500×15 % + 57 500×25 % (= 20 750)', r.is2);
-check('assimilé 50k : rémunération nette ≈ 19 710', r.aRem);
-check('assimilé 50k : dividendes nets ≈ 29 225', r.aDiv);
+check('assimilé 50k : rémunération nette (barème) ≈ 25 569', r.aRem);
+check('assimilé 50k : dividendes nets (barème) ≈ 33 056', r.aDiv);
 check('assimilé 50k : dividendes l’emportent', r.aBest);
-check('TNS 50k : rémunération nette ≈ 25 172', r.tRem);
+check('TNS 50k : rémunération nette (barème) ≈ 31 886', r.tRem);
 check('TNS : cotisations SSI sur dividendes > 0', r.tSsiPositif);
 check('TNS 50k faible capital : rémunération l’emporte', r.tBest);
 check('TNS : capital ↑ → net dividende ↑', r.capEffet);

@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=250;
+var LAST_VER=251;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11131,6 +11131,91 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
         if(note>=0){h=h.slice(0,note)+window.mailModelesCard()+h.slice(note);}else{h+=window.mailModelesCard();}}
       return h;};
   }
+})();
+</script>
+
+<script id="fiscaliste-bareme-mod">
+/* ===== Fiscaliste (approfondi) : barème IR progressif + arbitrage PFU/barème sur les dividendes ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function eu(n){n=Math.round(n||0);return (typeof eur==='function')?eur(n):(n+' €');}
+  function C(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
+  function pf(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.,]/g,'').replace(',','.'));return isNaN(n)?0:n;}
+  function isCalc(b){if(b<=0)return 0;var r=Math.min(b,42500)*0.15;if(b>42500)r+=(b-42500)*0.25;return r;}
+
+  /* Barème de l'impôt sur le revenu 2024 (par part, quotient familial) */
+  window.baremeIR=function(imposable,parts){
+    parts=parts>0?parts:1;var q=Math.max(0,imposable)/parts;
+    var B=[[11294,0],[28797,0.11],[82341,0.30],[177106,0.41],[Infinity,0.45]];
+    var tax=0,prev=0;
+    for(var i=0;i<B.length;i++){var cap=B[i][0],rate=B[i][1];tax+=Math.max(0,Math.min(q,cap)-prev)*rate;prev=cap;if(q<=cap)break;}
+    return tax*parts;
+  };
+
+  /* Simulateur affiné : IR au barème réel + option dividendes PFU vs barème */
+  window.simuRemDiv=function(o){
+    o=o||{};var B=Math.max(0,+o.benefice||0);
+    var social=(o.regimeSocial==='tns')?'tns':'assimile';
+    var cap=Math.max(0,+o.capital||0);
+    var parts=(+o.parts>0)?+o.parts:1;
+    var autres=Math.max(0,+o.autresRevenus||0);
+    var IRadd=function(base){return Math.max(0,window.baremeIR(autres+Math.max(0,base),parts)-window.baremeIR(autres,parts));};
+    /* Rémunération */
+    var rem={is:0};
+    if(social==='assimile'){rem.cotisations=B*0.46;rem.netAvantIR=B*0.54;}
+    else {var R=B/1.45;rem.cotisations=B-R;rem.netAvantIR=R;}
+    rem.imposable=rem.netAvantIR*0.9;
+    rem.ir=IRadd(rem.imposable);
+    rem.net=rem.netAvantIR-rem.ir;
+    /* Dividendes */
+    var div={};div.is=isCalc(B);var base=B-div.is;var ssi=0,distrib=base;
+    if(social==='tns'){var seuil=0.10*cap;var excess=Math.max(0,base-seuil);ssi=excess*0.45;distrib=base-ssi;}
+    div.ssi=ssi;div.distribuable=distrib;
+    var pfuNet=distrib*0.70;
+    var ps=distrib*0.172;var brIr=IRadd(distrib*0.60);var brNet=distrib-ps-brIr;
+    if(brNet>=pfuNet){div.option='bareme';div.net=brNet;div.ps=ps;div.ir=brIr;div.impot=ps+brIr;}
+    else {div.option='pfu';div.net=pfuNet;div.ps=distrib*0.172;div.ir=distrib*0.128;div.impot=distrib*0.30;}
+    div.pfuNet=pfuNet;div.baremeNet=brNet;
+    var best=(rem.net>=div.net)?'remuneration':'dividendes';
+    return {benefice:B,social:social,capital:cap,parts:parts,autres:autres,remuneration:rem,dividendes:div,best:best,ecart:Math.abs(rem.net-div.net)};
+  };
+
+  window.simuRemDivHTML=function(d,benefice,opts){
+    opts=opts||{};
+    var prof=(typeof avocatFiscaliste==='function')?avocatFiscaliste(d).profil:{regimeSocial:'Assimilé salarié',capital:null};
+    var social=/TNS/i.test(prof.regimeSocial)?'tns':'assimile';
+    var cap=prof.capital!=null?prof.capital:(function(){var c=C(d);return pf(c.capital);})();
+    var parts=(+opts.parts>0)?+opts.parts:1;var autres=Math.max(0,+opts.autres||0);
+    var s=window.simuRemDiv({benefice:benefice,regimeSocial:social,capital:cap,parts:parts,autres:autres});
+    var rem=s.remuneration,div=s.dividendes;
+    var td=function(v,cls){return '<td class="'+(cls||'')+'">'+v+'</td>';};
+    var rows=''
+      +'<tr><td>Impôt sur les sociétés (IS)</td>'+td(eu(rem.is))+td(eu(div.is))+'</tr>'
+      +'<tr><td>Cotisations sociales</td>'+td(eu(rem.cotisations))+td(eu(div.ssi))+'</tr>'
+      +'<tr><td>Prélèvements sociaux / IR</td>'+td(eu(rem.ir))+td(eu(div.impot))+'</tr>'
+      +'<tr class="simu-net"><td>Net en poche du dirigeant</td>'+td('<b>'+eu(rem.net)+'</b>',(s.best==='remuneration'?'simu-win':''))+td('<b>'+eu(div.net)+'</b>',(s.best==='dividendes'?'simu-win':''))+'</tr>';
+    var reco=(s.best==='remuneration')
+      ?('La <b>rémunération</b> laisse ~'+eu(s.ecart)+' de plus'+(social==='tns'?' (dividendes du gérant TNS cotisés au-delà de 10 % du capital).':'.')+' Elle ouvre en outre des droits sociaux.')
+      :('Les <b>dividendes</b> laissent ~'+eu(s.ecart)+' de plus (imposés au '+(div.option==='pfu'?'PFU 30 %':'barème progressif, plus avantageux ici')+'), mais n\'ouvrent aucun droit social.');
+    return '<div class="simu-box">'
+      +'<div class="simu-hh"><label>Parts fiscales<input id="af-parts" type="number" min="1" step="0.5" value="'+parts+'" onchange="afSimuRun(\''+d.id+'\')"></label>'
+      +'<label>Autres revenus du foyer (€)<input id="af-autres" type="number" min="0" step="1000" value="'+autres+'" onchange="afSimuRun(\''+d.id+'\')"></label></div>'
+      +'<table class="simu-tbl"><thead><tr><th>Sur un bénéfice de '+eu(s.benefice)+'</th><th>100 % rémunération</th><th>100 % dividendes</th></tr></thead><tbody>'+rows+'</tbody></table>'
+      +'<div class="simu-reco simu-'+s.best+'">'+reco+'</div>'
+      +'<div class="simu-hyp">Régime social : <b>'+(social==='tns'?'TNS (SSI)':'Assimilé salarié')+'</b>'+(cap?(' · Capital : '+eu(cap)):'')+' · IR au <b>barème progressif</b> (quotient familial, incrément sur les autres revenus). Dividendes : meilleure des options <b>PFU 30 %</b> / <b>barème (abattement 40 %)</b>. Estimation — hors plafonnement du quotient familial, décote et cas particuliers.</div></div>';
+  };
+
+  window.afSimuRun=function(id){
+    var d=(typeof espDoss==='function'?espDoss():[]).find(function(x){return x.id===id;});if(!d)return;
+    var g=function(x){return document.getElementById(x);};
+    var b=g('af-benef')?pf(g('af-benef').value):50000;
+    var parts=g('af-parts')?pf(g('af-parts').value):1;var autres=g('af-autres')?pf(g('af-autres').value):0;
+    var res=g('af-simu-res');if(res)res.innerHTML=window.simuRemDivHTML(d,b,{parts:parts,autres:autres});
+  };
+
+  try{ if(!document.getElementById('simu-hh-css')){var st=document.createElement('style');st.id='simu-hh-css';
+    st.textContent='.simu-hh{display:flex;gap:12px;flex-wrap:wrap;margin:4px 0 10px}.simu-hh label{font-size:12px;color:var(--ink3,#8a7d69);display:flex;flex-direction:column;gap:3px}.simu-hh input{max-width:150px}';
+    document.head.appendChild(st);} }catch(e){}
 })();
 </script>
 
