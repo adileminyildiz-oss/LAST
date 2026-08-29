@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=255;
+var LAST_VER=256;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11613,6 +11613,123 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.cfgio-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:6px 9px;border:1px solid var(--line,#e7ddc9);border-radius:8px;background:#fbf7ee}'
       +'.cfgio-row span{color:var(--ink3,#8a7d69)}.cfgio-row b{white-space:nowrap}'
       +'.cfgio-act{display:flex;gap:8px;flex-wrap:wrap}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="note-fiscale-mod">
+/* ===== Note de synthèse fiscaliste imprimable par dossier ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function eu(n){n=Math.round(n||0);return (typeof eur==='function')?eur(n):(n+' €');}
+  function pct(x){return (Math.round(x*1000)/10)+' %';}
+  function nom(d){try{var c=(typeof clientById==='function'&&clientById(((d||{}).clientIds||[])[0]))||{};
+    var den=(''+(c.denomination||'')).trim();if(den)return den;}catch(e){}
+    var p=(typeof dossierClients==='function')?dossierClients(d):'';return (p||(d&&d.ref)||'Dossier');}
+  function has(f){return typeof window[f]==='function';}
+  var HYP=80000; /* hypothèse de bénéfice avant rémunération pour le chiffrage */
+
+  window.noteFiscaleHTML=function(d,opts){
+    opts=opts||{};var benef=opts.benefice!=null?opts.benefice:HYP;
+    var af=has('avocatFiscaliste')?window.avocatFiscaliste(d):{profil:{},analyses:[],synthese:'',counts:{risque:0,attention:0,conseil:0}};
+    var p=af.profil||{};
+    var dateStr=(new Date()).toLocaleDateString('fr-FR',{year:'numeric',month:'long',day:'numeric'});
+    var ref=E(d&&(d.numeroDossier||d.ref)||'');
+    var chip=function(l,v){return '<div class="nf-chip"><span>'+E(l)+'</span><b>'+E(v)+'</b></div>';};
+    var grid='<div class="nf-grid">'+chip('Forme',p.forme||'—')+chip('Régime fiscal',p.regimeFiscal||'—')
+      +chip('Régime social',p.regimeSocial||'—')+(p.dirigeantPct!=null?chip('Part dirigeant',p.dirigeantPct+' %'):'')
+      +(p.capital!=null?chip('Capital',eu(p.capital)):'')+'</div>';
+
+    var order=['risque','attention','conseil'],lbl={risque:'Points de vigilance',attention:'À arbitrer',conseil:'Recommandations'};
+    var reco=order.map(function(n){var g=(af.analyses||[]).filter(function(a){return a.niveau===n;});if(!g.length)return '';
+      return '<div class="nf-recogrp nf-'+n+'"><div class="nf-recot">'+lbl[n]+'</div><ul class="nf-recol">'
+        +g.map(function(a){return '<li><b>'+E(a.titre)+'.</b> '+E(a.detail)+'</li>';}).join('')+'</ul></div>';}).join('');
+
+    var chiffre='';
+    if((p.regimeFiscal||'')==='IS'){
+      var sect=3;
+      if(has('calculISDetail')){
+        var isd=window.calculISDetail({benefice:benef,ca:500000,capitalLibere:true,detentionPP:true});
+        var trs=(isd.tranches||[]).map(function(t){return '<tr><td>'+E(t.label)+'</td><td class="r">'+eu(t.base)+'</td><td class="r">'+eu(t.montant)+'</td></tr>';}).join('');
+        chiffre+='<h2>'+(sect++)+'. Simulation d\'impôt sur les sociétés</h2>'
+          +'<p class="nf-hyp">Hypothèse de travail : bénéfice avant rémunération du dirigeant de <b>'+eu(benef)+'</b>, taux réduit d\'IS présumé applicable (CA &lt; 10 M€, capital libéré, détention ≥ 75 % par des personnes physiques).</p>'
+          +'<table class="nf-tbl"><thead><tr><th>Tranche</th><th class="r">Base</th><th class="r">IS</th></tr></thead><tbody>'+trs
+          +(isd.contribution>0?('<tr><td>Contribution sociale (3,3 %)</td><td class="r"></td><td class="r">'+eu(isd.contribution)+'</td></tr>'):'')
+          +'<tr class="nf-tot"><td>IS total — taux effectif '+pct(isd.tauxEffectif)+'</td><td class="r"></td><td class="r"><b>'+eu(isd.isTotal)+'</b></td></tr>'
+          +'<tr><td>Résultat après IS</td><td class="r"></td><td class="r"><b>'+eu(isd.benefice-isd.isTotal)+'</b></td></tr></tbody></table>';
+      }
+      if(has('mixOptimal')){
+        var social=/TNS/i.test(p.regimeSocial||'')?'tns':'assimile';
+        var mx=window.mixOptimal({enveloppe:benef,regimeSocial:social,capital:p.capital||0,parts:1,autres:0});
+        var op=mx.optimum;
+        chiffre+='<h2>'+(sect++)+'. Arbitrage rémunération / dividendes</h2>'
+          +'<table class="nf-tbl"><thead><tr><th>Scénario (sur '+eu(benef)+')</th><th class="r">Net en poche</th></tr></thead><tbody>'
+          +'<tr><td>100 % rémunération</td><td class="r">'+eu(mx.remOnly.netTotal)+'</td></tr>'
+          +'<tr class="nf-tot"><td><b>Mix optimal conseillé — '+pct(mx.partRem)+' rémunération / '+pct(mx.partDiv)+' dividendes</b></td><td class="r"><b>'+eu(op.netTotal)+'</b></td></tr>'
+          +'<tr><td>100 % dividendes</td><td class="r">'+eu(mx.divOnly.netTotal)+'</td></tr></tbody></table>'
+          +'<p class="nf-reco">'+(has('mixReco')?window.mixReco(mx):'')+'</p>';
+      }
+    } else {
+      chiffre+='<h2>3. Imposition des résultats à l\'impôt sur le revenu</h2>'
+        +'<p>La structure relève de l\'impôt sur le revenu (transparence fiscale) : les résultats sont imposés directement entre les mains des associés, à proportion de leurs droits, dans leur catégorie de revenus. Il n\'y a pas d\'arbitrage rémunération / dividendes propre à l\'impôt sur les sociétés. Une option pour l\'IS reste envisageable (à peser : irrévocable pour une SCI, révocable 5 ans pour une EURL).</p>';
+    }
+
+    return '<div class="dg-page nf-note">'
+      +'<div class="nf-hd"><div class="nf-cab"><b>AEM CONSEIL</b><span>Cabinet — formalités & conseil</span></div>'
+      +'<div class="nf-meta">'+E(dateStr)+(ref?('<br>Réf. '+ref):'')+'</div></div>'
+      +'<h1 class="nf-title">Note de synthèse fiscale et sociale</h1>'
+      +'<div class="nf-soc">Société : <b>'+E(nom(d))+'</b></div>'
+      +grid
+      +'<h2>1. Régime fiscal et social retenu</h2>'
+      +'<p>Au vu des éléments du dossier, la structure envisagée est une <b>'+E(p.forme||'—')+'</b>, relevant de <b>'+E(p.regimeFiscal||'—')+'</b>, avec un dirigeant au régime social <b>'+E(p.regimeSocial||'—')+'</b>'+(p.capital!=null?(' et un capital de <b>'+eu(p.capital)+'</b>'):'')+'.</p>'
+      +'<h2>2. Recommandations et points de vigilance</h2>'+(reco||'<p>Aucune observation particulière.</p>')
+      +chiffre
+      +'<div class="nf-foot">Note établie à titre indicatif par AEM CONSEIL sur la base des informations communiquées, à jour des règles en vigueur à la date d\'édition. Les simulations chiffrées reposent sur une hypothèse de bénéfice et des taux standard (IS 15 %/25 %, barème IR, PFU 30 % ou barème avec abattement de 40 %) ; elles ne constituent pas un conseil fiscal personnalisé et doivent être confirmées au regard de la situation réelle et de la loi de finances applicable.</div>'
+      +'</div>';
+  };
+  window.noteFiscaleDoc=function(d){return '<div class="doc-gen">'+window.noteFiscaleHTML(d)+'</div>';};
+
+  window.ouvrirNoteFiscale=function(id){
+    var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;});if(!d)return;
+    if(typeof openModal!=='function')return;
+    openModal('📄 Note de synthèse fiscale — '+E(nom(d)),window.noteFiscaleDoc(d),
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+      +'<button class="btn" onclick="telechargerNoteFiscale(\''+id+'\')">⬇ Télécharger</button>'
+      +'<button class="btn btn-pri" onclick="imprimerNoteFiscale(\''+id+'\')">🖨 Imprimer / PDF</button>');
+  };
+  window.imprimerNoteFiscale=function(id){
+    var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;});if(!d)return;
+    try{if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();}catch(e){}
+    var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}
+    pa.innerHTML=window.noteFiscaleDoc(d);setTimeout(function(){window.print();},140);
+  };
+  window.telechargerNoteFiscale=function(id){
+    var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;});if(!d)return;
+    try{ if(typeof espStandaloneHTML==='function'&&typeof espDlFile==='function'){
+      var base=(''+nom(d)).replace(/[^\wÀ-ÿ \-]/g,'').replace(/\s+/g,'-');
+      espDlFile('Note-fiscale-'+base+'.html',espStandaloneHTML('Note de synthèse fiscale — '+nom(d),window.noteFiscaleHTML(d)));
+    } else if(typeof toast==='function'){ toast('Téléchargement indisponible'); } }catch(e){}
+  };
+
+  /* Greffe : barre d'action « Note imprimable » en tête de l'analyse fiscaliste */
+  if(has('avocatFiscalisteHTML')){var _h=window.avocatFiscalisteHTML;
+    window.avocatFiscalisteHTML=function(d){var base=_h(d);if(!d||!d.id)return base;
+      return '<div class="nf-toolbar"><button class="btn btn-sm btn-pri" onclick="ouvrirNoteFiscale(\''+d.id+'\')">📄 Note de synthèse imprimable</button></div>'+base;};
+  }
+
+  try{ if(!document.getElementById('nf-css')){var st=document.createElement('style');st.id='nf-css';
+    st.textContent='.nf-toolbar{display:flex;justify-content:flex-end;margin-bottom:8px}'
+      +'.nf-note{font-size:11px;line-height:1.7;color:#1a1a1a}'
+      +'.nf-note .nf-hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #b98029;padding-bottom:8px;margin-bottom:12px}'
+      +'.nf-cab b{font-size:16px;letter-spacing:.5px;display:block}.nf-cab span{font-size:10px;color:#6b6252}.nf-meta{font-size:10px;color:#6b6252;text-align:right}'
+      +'.nf-title{font-size:17px;margin:6px 0 2px;color:#2c2419}.nf-soc{font-size:12px;margin-bottom:10px}'
+      +'.nf-note h2{font-size:12.5px;color:#8a5e0d;border-bottom:1px solid #e7ddc9;padding-bottom:3px;margin:16px 0 7px}'
+      +'.nf-grid{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}.nf-chip{border:1px solid #e0d6bf;border-radius:8px;padding:5px 10px;min-width:110px}.nf-chip span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:#8a7d69}.nf-chip b{font-size:12px}'
+      +'.nf-recogrp{margin:6px 0}.nf-recot{font-weight:700;font-size:11px;margin-bottom:2px}.nf-recol{margin:0 0 4px;padding-left:16px}.nf-recol li{margin-bottom:3px}'
+      +'.nf-risque .nf-recot{color:#b0442f}.nf-attention .nf-recot{color:#b98029}.nf-conseil .nf-recot{color:#3f6b46}'
+      +'.nf-hyp{font-style:italic;color:#5b5040}.nf-reco{background:#f6f0e2;border-left:3px solid #b98029;padding:6px 10px;margin-top:6px}'
+      +'.nf-tbl{width:100%;border-collapse:collapse;font-size:11px;margin:4px 0}.nf-tbl th,.nf-tbl td{border:1px solid #e0d6bf;padding:4px 8px}.nf-tbl th{background:#f6f0e2;text-align:left}.nf-tbl .r{text-align:right}.nf-tbl .nf-tot td{background:#faf6ec}'
+      +'.nf-foot{margin-top:16px;padding-top:8px;border-top:1px solid #e7ddc9;font-size:9px;color:#6b6252;font-style:italic}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
