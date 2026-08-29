@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=262;
+var LAST_VER=263;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11990,6 +11990,291 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   ensureCSS();
   try{var _r=window.render;if(typeof _r==='function'&&!window.__themeLast){window.__themeLast=1;window.render=function(){var x=_r.apply(this,arguments);try{var st=document.getElementById('theme-redesign-css');if(st&&st.parentNode&&st!==st.parentNode.lastElementChild)st.parentNode.appendChild(st);}catch(e){}return x;};}}catch(e){}
   setTimeout(ensureCSS,0);setTimeout(ensureCSS,400);
+})();
+</script>
+
+<script id="fiscal-hub-mod">
+/* ===== Module Fiscal (Traitement) — hub à mini-modules, cartes par thème, calculs ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function eu(n){n=Math.round(n||0);return (typeof eur==='function')?eur(n):(n+' €');}
+  function pct(x){return (Math.round(x*1000)/10)+' %';}
+  function pf(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.,-]/g,'').replace(',','.'));return isNaN(n)?0:n;}
+  function doss(id){return (typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;});}
+  function nomD(d){var c=(typeof clientById==='function'&&clientById(((d||{}).clientIds||[])[0]))||{};return (c.denomination||'').trim()||((typeof dossierClients==='function')?dossierClients(d):'')||d&&d.ref||'Dossier';}
+
+  function profil(d){
+    var p=(typeof avocatFiscaliste==='function')?avocatFiscaliste(d).profil:{forme:'',regimeFiscal:'IS',regimeSocial:'Assimilé salarié',capital:null,dirigeantPct:null};
+    var f=((p.forme||'')+'').toUpperCase();
+    p.isSAS=/SAS|SASU/.test(f)||f==='SA'; p.isSARL=/SARL/.test(f); p.isEURL=f==='EURL'; p.isSCI=/SCI/.test(f);
+    p.tns=/TNS/i.test(p.regimeSocial||''); return p;
+  }
+  function info(d){d.fiscal=d.fiscal||{};var f=d.fiscal;var p=profil(d);
+    return {caPrev:f.caPrev!=null?f.caPrev:0,benefice:f.benefice!=null?f.benefice:0,remSouhaitee:f.remSouhaitee!=null?f.remSouhaitee:0,
+      nbSalaries:f.nbSalaries!=null?f.nbSalaries:0,masseSalariale:f.masseSalariale!=null?f.masseSalariale:0,
+      zone:f.zone||'standard',innovant:!!f.innovant,acre:f.acre!=null?f.acre:true,dateCloture:f.dateCloture||'31/12',
+      capitalLibere:f.capitalLibere!=null?f.capitalLibere:true,detentionPP:f.detentionPP!=null?f.detentionPP:true,
+      parts:f.parts!=null?f.parts:1,autres:f.autres!=null?f.autres:0,secteur:f.secteur||'',_p:p};
+  }
+  window.fiscalSaveInfo=function(id){var d=doss(id);if(!d)return;d.fiscal=d.fiscal||{};var g=function(x){return document.getElementById(x);};
+    var q=function(x){return g(x)?g(x).value:'';},c=function(x){return g(x)?g(x).checked:false};
+    Object.assign(d.fiscal,{caPrev:pf(q('fx-ca')),benefice:pf(q('fx-benef')),remSouhaitee:pf(q('fx-rem')),nbSalaries:pf(q('fx-nbsal')),
+      masseSalariale:pf(q('fx-ms')),zone:q('fx-zone')||'standard',innovant:c('fx-innov'),acre:c('fx-acre'),
+      dateCloture:q('fx-cloture')||'31/12',capitalLibere:c('fx-liber'),detentionPP:c('fx-pp'),parts:pf(q('fx-parts'))||1,autres:pf(q('fx-autres')),secteur:q('fx-secteur')});
+    if(typeof save==='function')save(); if(typeof toast==='function')toast('Informations enregistrées — fiscalité recalculée'); window.fiscalTab='apercu'; fiscalRender(id);
+  };
+
+  /* ---------- Données de référence ---------- */
+  function tvaRegime(ca,forme){ // seuils indicatifs 2025
+    var svc=/SCI/.test(forme)?0:37500, ventes=85000;
+    if(ca<=svc||ca<=ventes){
+      if(ca<=svc||ca<=ventes) return {reg:'Franchise en base possible',detail:'Sous les seuils (services ~ 37 500 € · ventes ~ 85 000 €) : pas de TVA facturée ni déductible. Mention « TVA non applicable, art. 293 B du CGI ».',periodicite:'—'};
+    }
+    if(ca<=254000) return {reg:'Réel simplifié (RSI)',detail:'CA sous ~ 254 000 € (services) / ~ 840 000 € (ventes) : déclaration annuelle CA12 + 2 acomptes (juillet & décembre).',periodicite:'Annuelle (CA12) + acomptes'};
+    return {reg:'Réel normal',detail:'Au-delà des seuils du RSI : déclaration CA3 mensuelle (ou trimestrielle si TVA due < 4 000 €/an).',periodicite:'Mensuelle (CA3)'};
+  }
+
+  var AIDES=[
+    {th:'Création',t:'ACRE — exonération de charges sociales',forme:'*',ok:function(i){return i.acre;},d:'Exonération partielle des cotisations sociales du dirigeant la 1ʳᵉ année d\'activité (sous conditions de revenu). Demande auprès de l\'URSSAF (automatique pour micro).'},
+    {th:'Innovation',t:'Jeune Entreprise Innovante (JEI / JEIC)',forme:'*',ok:function(i){return i.innovant;},d:'PME de moins de 8 ans réalisant des dépenses de R&D ≥ 15 % des charges : exonérations de cotisations patronales sur les personnels de R&D, et exonérations locales possibles (CFE/TFPB sur délibération).'},
+    {th:'Recherche',t:'Crédit d\'Impôt Recherche (CIR) & Innovation (CII)',forme:'*',ok:function(i){return i.innovant;},d:'CIR : 30 % des dépenses de R&D éligibles. CII (PME) : 20 % des dépenses d\'innovation (plafonnées). Crédit imputable sur l\'IS, remboursable pour les PME/JEI.'},
+    {th:'Zones',t:'Zones France Ruralités Revitalisation (ex-ZRR)',forme:'*',ok:function(i){return i.zone==='zrr';},d:'Implantation en zone FRR : exonération d\'IS/IR dégressive (100 % puis 75/50/25 %) sur ~5 ans + exonérations locales (CFE) sur délibération.'},
+    {th:'Zones',t:'Zone Franche Urbaine — Territoire Entrepreneur (ZFU-TE)',forme:'*',ok:function(i){return i.zone==='zfu';},d:'Exonération d\'impôt sur les bénéfices sous plafond, dégressive, pour les entreprises implantées en ZFU-TE avec clause d\'embauche locale.'},
+    {th:'Zones',t:'Quartiers Prioritaires (QPV) — exonération CFE',forme:'*',ok:function(i){return i.zone==='qpv';},d:'Exonérations de CFE (et parfois d\'impôt sur les bénéfices) pour les commerces implantés en QPV, sur délibération des collectivités.'},
+    {th:'Emploi',t:'Aides à l\'embauche & réductions de charges',forme:'*',ok:function(i){return i.nbSalaries>0;},d:'Réduction générale de cotisations patronales (ex-Fillon) sur les salaires ≤ 1,6 SMIC, aides à l\'alternance (apprentissage), emplois francs en QPV.'},
+    {th:'Financement',t:'Bpifrance & dispositifs de financement',forme:'*',ok:function(i){return true;},d:'Prêts d\'honneur, garanties, bourse French Tech, aides à l\'innovation. Cumulables avec les crédits d\'impôt.'},
+    {th:'IS',t:'Taux réduit d\'IS à 15 %',forme:'*',ok:function(i){return (i._p.regimeFiscal==='IS')&&i.caPrev<10000000&&i.capitalLibere&&i.detentionPP;},d:'15 % jusqu\'à 42 500 € de bénéfice, puis 25 %, si CA < 10 M€, capital entièrement libéré et détenu à ≥ 75 % par des personnes physiques.'}
+  ];
+
+  /* ---------- Rendu des mini-modules ---------- */
+  function chip(l,v){return '<div class="fx-chip"><span>'+E(l)+'</span><b>'+E(v)+'</b></div>';}
+  function card(theme,titre,html,cls){return '<div class="fx-card '+(cls||'')+'"><div class="fx-card-th">'+E(theme)+'</div><div class="fx-card-t">'+E(titre)+'</div><div class="fx-card-b">'+html+'</div></div>';}
+
+  function m_apercu(d){var i=info(d),p=i._p;
+    var is=(typeof calculISDetail==='function')?calculISDetail({benefice:i.benefice,ca:i.caPrev,capitalLibere:i.capitalLibere,detentionPP:i.detentionPP}):{isTotal:0,tauxEffectif:0};
+    var tva=tvaRegime(i.caPrev,p.forme);
+    var mix=(typeof mixOptimal==='function'&&i.benefice>0)?mixOptimal({enveloppe:i.benefice,regimeSocial:p.tns?'tns':'assimile',capital:p.capital||0,parts:i.parts,autres:i.autres}):null;
+    var kpis='<div class="fx-kpis">'
+      +'<div class="fx-kpi"><span>IS estimé</span><b>'+(i.benefice>0?eu(is.isTotal):'—')+'</b><i>'+(i.benefice>0?('taux eff. '+pct(is.tauxEffectif)):'renseigner')+'</i></div>'
+      +'<div class="fx-kpi"><span>Net dirigeant (mix)</span><b>'+(mix?eu(mix.optimum.netTotal):'—')+'</b><i>'+(mix?(pct(mix.partRem)+' rému / '+pct(mix.partDiv)+' div.'):'—')+'</i></div>'
+      +'<div class="fx-kpi"><span>Régime de TVA</span><b style="font-size:15px">'+E(tva.reg)+'</b><i>'+E(tva.periodicite)+'</i></div>'
+      +'<div class="fx-kpi"><span>Régime fiscal</span><b>'+E(p.regimeFiscal)+'</b><i>'+E(p.regimeSocial)+'</i></div></div>';
+    var manque=(i.benefice<=0&&i.caPrev<=0);
+    return '<div class="fx-h1">Synthèse fiscale — '+E(nomD(d))+'</div>'
+      +'<div class="fx-profil">'+chip('Forme',p.forme||'—')+chip('Régime fiscal',p.regimeFiscal)+chip('Régime social',p.regimeSocial)+(p.capital!=null?chip('Capital',eu(p.capital)):'')+chip('Zone',i.zone==='standard'?'Standard':i.zone.toUpperCase())+'</div>'
+      +(manque?'<div class="fx-note warn">Renseignez les informations du client (bouton « ✎ Infos client » à gauche) pour obtenir les calculs d\'IS, le mix rémunération/dividendes et les aides éligibles.</div>':'')
+      +kpis
+      +'<div class="fx-grid">'
+      +card('Impôt sur les sociétés','Estimation d\'IS',i.benefice>0?('<b>'+eu(is.isTotal)+'</b> sur un bénéfice de '+eu(i.benefice)+' — taux effectif '+pct(is.tauxEffectif)+'. Résultat après IS : <b>'+eu(i.benefice-is.isTotal)+'</b>.'):'Renseignez le bénéfice prévisionnel pour estimer l\'IS (15 %/25 %).')
+      +card('Rémunération','Arbitrage dirigeant',mix?('Mix optimal conseillé : <b>'+pct(mix.partRem)+' rémunération / '+pct(mix.partDiv)+' dividendes</b> → net en poche <b>'+eu(mix.optimum.netTotal)+'</b>.'):'Renseignez le bénéfice pour l\'arbitrage rémunération/dividendes.')
+      +card('TVA',tva.reg,E(tva.detail))
+      +card('Aides','Dispositifs éligibles',aidesEligibles(d).length?('<b>'+aidesEligibles(d).length+'</b> dispositif(s) potentiellement mobilisable(s) — voir l\'onglet « Exonérations & aides ».'):'Renseignez la zone et le profil pour détecter les aides.')
+      +'</div>';
+  }
+  function aidesEligibles(d){var i=info(d),p=i._p;return AIDES.filter(function(a){return (a.forme==='*'||a.forme.indexOf(p.forme)>=0)&&a.ok(i);});}
+
+  function m_regime(d){var p=profil(d);var r=(typeof avocatFiscaliste==='function')?avocatFiscaliste(d):{analyses:[]};
+    var order=['risque','attention','conseil'],lbl={risque:'⛔ Points de vigilance',attention:'⚠️ À arbitrer',conseil:'💡 Recommandations'};
+    var groups=order.map(function(n){var g=(r.analyses||[]).filter(function(a){return a.niveau===n;});if(!g.length)return '';
+      return card('Analyse',lbl[n],'<ul class="fx-ul">'+g.map(function(a){return '<li><b>'+E(a.titre)+'.</b> '+E(a.detail)+'</li>';}).join('')+'</ul>');}).join('');
+    var opt='';
+    if(p.isSAS)opt=card('SAS / SASU','Régime de la SAS','Société soumise à l\'<b>IS</b> par défaut (option IR possible 5 exercices max si &lt; 5 ans, &lt; 50 salariés, &lt; 10 M€ CA, détenue à ≥ 50 % par des personnes physiques dont ≥ 34 % par les dirigeants). Président <b>assimilé salarié</b> (régime général, hors chômage). Dividendes soumis au <b>PFU 30 %</b> (pas de cotisations sociales).');
+    else if(p.isEURL)opt=card('EURL','Régime de l\'EURL','<b>IR</b> par défaut (BIC/BNC) — option IS possible (révocable 5 ans). Gérant associé unique <b>TNS (SSI)</b> : cotisations plus faibles mais dividendes &gt; 10 % du capital cotisés.');
+    else if(p.isSARL)opt=card('SARL','Régime de la SARL','<b>IS</b> par défaut (option SARL de famille à l\'IR possible). Gérant <b>majoritaire = TNS</b>, minoritaire/égalitaire = assimilé salarié. Dividendes du gérant majoritaire &gt; 10 % du capital soumis aux cotisations SSI.');
+    else if(p.isSCI)opt=card('SCI','Régime de la SCI','<b>IR</b> (transparence) par défaut — option IS <b>irréversible</b> (fait perdre le régime des plus-values des particuliers). Attention aux activités commerciales (location meublée) qui entraînent l\'IS d\'office.');
+    return '<div class="fx-h1">Régime fiscal & social</div><div class="fx-grid">'+opt+groups+'</div>';
+  }
+
+  function m_exon(d){var i=info(d),p=i._p;
+    var cards=AIDES.filter(function(a){return a.forme==='*'||a.forme.indexOf(p.forme)>=0;}).map(function(a){
+      var elig=a.ok(i);return card(a.th,(elig?'✅ ':'')+a.t,E(a.d)+(elig?'<div class="fx-badge ok">Potentiellement éligible selon les informations saisies</div>':'<div class="fx-badge">Vérifier l\'éligibilité (zone / profil)</div>'),elig?'is-elig':'');
+    }).join('');
+    return '<div class="fx-h1">Exonérations & aides de l\'État</div>'
+      +'<div class="fx-note">Dispositifs d\'aide aux dirigeants et à l\'entreprise, filtrés selon le type de société et les informations du client. Les montants et conditions exacts dépendent de la loi de finances en vigueur et des délibérations locales.</div>'
+      +'<div class="fx-grid">'+cards+'</div>';
+  }
+
+  function m_tva(d){var i=info(d),p=i._p;var t=tvaRegime(i.caPrev,p.forme);
+    return '<div class="fx-h1">TVA — régime & obligations</div><div class="fx-grid">'
+      +card('Régime applicable',t.reg,E(t.detail)+'<div class="fx-badge">Périodicité : '+E(t.periodicite)+'</div>')
+      +card('Franchise en base','Seuils 2025 (indicatifs)','Services / professions libérales : <b>37 500 €</b> (majoré 41 250 €). Ventes de marchandises : <b>85 000 €</b> (majoré 93 500 €). Sous ces seuils : pas de TVA, mention « TVA non applicable, art. 293 B du CGI ».')
+      +card('Réel simplifié (RSI)','Déclaration CA12','Déclaration annuelle <b>CA12</b> (2ᵉ jour ouvré après le 1ᵉʳ mai) + <b>2 acomptes</b> (55 % en juillet, 40 % en décembre). Bascule au réel normal si TVA due &gt; 15 000 €/an.')
+      +card('Réel normal','Déclaration CA3','Déclaration <b>mensuelle CA3</b> (ou trimestrielle si TVA &lt; 4 000 €/an), à déposer entre le 15 et le 24 du mois suivant selon le régime.')
+      +card('International','TVA intracommunautaire','Numéro de TVA intracom obligatoire pour les échanges UE. Autoliquidation sur les acquisitions ; déclaration d\'échanges de biens/services (DEB/DES) selon les seuils.')
+      +'</div>';
+  }
+
+  function m_calendrier(d){var i=info(d);var cl=i.dateCloture||'31/12';
+    var rows=[
+      ['TVA (CA3, réel normal)','Entre le 15 et le 24 de chaque mois','Déclaration + paiement de la TVA du mois précédent.'],
+      ['Acomptes d\'IS','15/03 · 15/06 · 15/09 · 15/12','4 acomptes trimestriels (si IS N-1 > 3 000 €).'],
+      ['Solde d\'IS','15 du 4ᵉ mois après la clôture','Relevé de solde n°2572. Clôture au '+E(cl)+'.'],
+      ['Liasse fiscale (résultat)','2ᵉ jour ouvré après le 1ᵉʳ mai (clôture 31/12) — sinon dans les 3 mois','Déclaration de résultat 2065 (IS) / 2031 (IR).'],
+      ['CVAE / CFE','CFE : 15/12 · CVAE : selon barème','CFE due si CA > 152 500 € ; CVAE en voie de suppression progressive.'],
+      ['Dépôt des comptes annuels','Dans le mois suivant l\'AG (2 mois si dépôt en ligne)','Greffe du tribunal de commerce, après approbation en AG (dans les 6 mois de la clôture).']
+    ];
+    return '<div class="fx-h1">Calendrier fiscal — échéances</div>'
+      +'<div class="fx-note">Échéances de déclaration et de paiement, selon le régime et la date de clôture (<b>'+E(cl)+'</b>). Vérifiez les dates exactes sur impots.gouv.fr.</div>'
+      +'<table class="fx-tbl"><thead><tr><th>Obligation</th><th>Échéance</th><th>Détail</th></tr></thead><tbody>'
+      +rows.map(function(r){return '<tr><td><b>'+E(r[0])+'</b></td><td>'+E(r[1])+'</td><td>'+E(r[2])+'</td></tr>';}).join('')+'</tbody></table>';
+  }
+
+  function m_dirigeant(d){var i=info(d),p=i._p;
+    var mix=(typeof mixOptimal==='function'&&i.benefice>0)?mixOptimal({enveloppe:i.benefice,regimeSocial:p.tns?'tns':'assimile',capital:p.capital||0,parts:i.parts,autres:i.autres}):null;
+    var sim='';
+    if(mix){var op=mix.optimum;
+      sim=card('Optimisation','Mix rémunération / dividendes',
+        '<table class="fx-tbl"><tbody>'
+        +'<tr><td>100 % rémunération</td><td class="r">'+eu(mix.remOnly.netTotal)+'</td></tr>'
+        +'<tr class="fx-tot"><td><b>Mix optimal — '+pct(mix.partRem)+' rému / '+pct(mix.partDiv)+' div.</b></td><td class="r"><b>'+eu(op.netTotal)+'</b></td></tr>'
+        +'<tr><td>100 % dividendes</td><td class="r">'+eu(mix.divOnly.netTotal)+'</td></tr></tbody></table>'
+        +'<div class="fx-badge">Rémunération conseillée : '+eu(op.coutRem)+' (coût) → net '+eu(op.remNet)+' · Dividendes distribués : '+eu(op.distribuable)+' → net '+eu(op.divNet)+'</div>');
+    } else sim=card('Optimisation','Mix rémunération / dividendes','Renseignez le bénéfice pour calculer le partage optimal rémunération/dividendes.');
+    var stat=p.tns
+      ?card('Statut social','Gérant TNS (SSI)','Cotisations plus faibles (~ 40-45 % du net) mais <b>minimales dues même sans rémunération</b> ; protection sociale à compléter (prévoyance, retraite). Dividendes &gt; 10 % du capital soumis aux cotisations SSI.')
+      :card('Statut social','Dirigeant assimilé salarié','Protection du régime général (hors chômage), charges élevées (~ 70-80 % du net). <b>Aucune cotisation sans rémunération</b> — arbitrage rémunération/dividendes ouvert ; dividendes au PFU 30 % (sans cotisations).');
+    return '<div class="fx-h1">Rémunération & cotisations du dirigeant</div><div class="fx-grid">'+stat+sim+'</div>';
+  }
+
+  function m_compta(d){var p=profil(d);
+    return '<div class="fx-h1">Comptabilité & suivi des formalités</div><div class="fx-grid">'
+      +card('Obligations','Tenue de la comptabilité','Comptabilité d\'engagement, livre-journal, grand-livre, inventaire annuel. Comptes annuels (bilan, compte de résultat, annexe). Régime simplifié possible sous les seuils (bilan simplifié).')
+      +card('Approbation','Assemblée générale & dépôt','AG d\'approbation des comptes dans les <b>6 mois</b> de la clôture. Dépôt des comptes au greffe dans le mois (2 mois en ligne). Option de confidentialité pour les micro/petites entreprises.')
+      +card('Facturation','Facturation électronique','Généralisation progressive de la facturation électronique B2B (réception, puis émission selon le calendrier en vigueur) via une plateforme (PPF/PDP) — anticiper la mise en conformité.')
+      +card('Suivi','Formalités du dossier','Immatriculation (Guichet unique INPI), bénéficiaires effectifs (RBE), mises à jour statutaires (transfert de siège, changement de dirigeant, augmentation de capital) → à suivre dans le dossier.')
+      +'</div>';
+  }
+
+  function m_actu(d){
+    var news=[
+      ['Loi de finances','Barème de l\'IR revalorisé','Les tranches du barème de l\'impôt sur le revenu sont revalorisées chaque année de l\'inflation — vérifier les seuils applicables à l\'exercice.'],
+      ['IS','Taux normal d\'IS à 25 %','Taux normal stabilisé à 25 % ; taux réduit 15 % maintenu jusqu\'à 42 500 € de bénéfice pour les PME éligibles.'],
+      ['TVA','Franchise en base — seuils','Vigilance sur les évolutions des seuils de franchise en base de TVA et leurs conditions d\'application.'],
+      ['Facturation','E-invoicing B2B','Déploiement de la facturation électronique et du e-reporting — calendrier par taille d\'entreprise ; choisir une plateforme partenaire (PDP).'],
+      ['Zones','France Ruralités Revitalisation','Le zonage FRR remplace les ZRR : nouvelles exonérations d\'impôt sur les bénéfices et de cotisations pour les implantations éligibles.']
+    ];
+    return '<div class="fx-h1">Actualités & nouveautés fiscales</div>'
+      +'<div class="fx-note">Veille synthétique. À confirmer au regard des textes en vigueur (loi de finances, BOFiP).</div>'
+      +'<div class="fx-grid">'+news.map(function(n){return card(n[0],n[1],E(n[2]));}).join('')+'</div>';
+  }
+
+  function m_simulateur(d){var i=info(d),p=i._p;
+    return '<div class="fx-h1">Simulateur fiscal</div>'
+      +'<div class="fx-note">Ajustez les paramètres puis « Recalculer ». Estimations indicatives (IS 15/25 %, IR au barème, PFU 30 % ou barème 40 %).</div>'
+      +'<div class="fx-simform">'
+      +'<label>Bénéfice avant rémunération (€)<input id="fx-sim-benef" type="number" value="'+(i.benefice||80000)+'"></label>'
+      +'<label>Chiffre d\'affaires (€)<input id="fx-sim-ca" type="number" value="'+(i.caPrev||0)+'"></label>'
+      +'<label>Parts fiscales<input id="fx-sim-parts" type="number" step="0.5" value="'+(i.parts||1)+'"></label>'
+      +'<label>Autres revenus foyer (€)<input id="fx-sim-autres" type="number" value="'+(i.autres||0)+'"></label>'
+      +'<label class="fx-ck"><input type="checkbox" id="fx-sim-liber" '+(i.capitalLibere?'checked':'')+'> Capital libéré</label>'
+      +'<label class="fx-ck"><input type="checkbox" id="fx-sim-pp" '+(i.detentionPP?'checked':'')+'> Détention ≥ 75 % PP</label>'
+      +'<button class="fx-btn" onclick="fiscalSimRun(\''+d.id+'\')">Recalculer</button></div>'
+      +'<div id="fx-sim-res">'+fiscalSimHTML(d,{benefice:i.benefice||80000,ca:i.caPrev,parts:i.parts,autres:i.autres,capitalLibere:i.capitalLibere,detentionPP:i.detentionPP,tns:p.tns,capital:p.capital})+'</div>';
+  }
+  function fiscalSimHTML(d,o){
+    var is=(typeof calculISDetail==='function')?calculISDetail({benefice:o.benefice,ca:o.ca,capitalLibere:o.capitalLibere,detentionPP:o.detentionPP}):{tranches:[],isTotal:0,tauxEffectif:0,contribution:0};
+    var mix=(typeof mixOptimal==='function')?mixOptimal({enveloppe:o.benefice,regimeSocial:o.tns?'tns':'assimile',capital:o.capital||0,parts:o.parts,autres:o.autres}):null;
+    var trs=(is.tranches||[]).map(function(t){return '<tr><td>'+E(t.label)+'</td><td class="r">'+eu(t.base)+'</td><td class="r">'+eu(t.montant)+'</td></tr>';}).join('');
+    return '<div class="fx-grid">'
+      +card('IS','Impôt sur les sociétés','<table class="fx-tbl"><thead><tr><th>Tranche</th><th class="r">Base</th><th class="r">IS</th></tr></thead><tbody>'+trs
+        +(is.contribution>0?('<tr><td>Contribution sociale 3,3 %</td><td></td><td class="r">'+eu(is.contribution)+'</td></tr>'):'')
+        +'<tr class="fx-tot"><td>IS total — taux eff. '+pct(is.tauxEffectif)+'</td><td></td><td class="r"><b>'+eu(is.isTotal)+'</b></td></tr>'
+        +'<tr><td>Résultat après IS</td><td></td><td class="r"><b>'+eu(o.benefice-is.isTotal)+'</b></td></tr></tbody></table>')
+      +(mix?card('Rémunération','Mix optimal rému / dividendes','<table class="fx-tbl"><tbody><tr><td>100 % rémunération</td><td class="r">'+eu(mix.remOnly.netTotal)+'</td></tr><tr class="fx-tot"><td><b>Mix '+pct(mix.partRem)+' / '+pct(mix.partDiv)+'</b></td><td class="r"><b>'+eu(mix.optimum.netTotal)+'</b></td></tr><tr><td>100 % dividendes</td><td class="r">'+eu(mix.divOnly.netTotal)+'</td></tr></tbody></table>'):'')
+      +'</div>';
+  }
+  window.fiscalSimRun=function(id){var d=doss(id);if(!d)return;var g=function(x){return document.getElementById(x);};var p=profil(d);
+    var o={benefice:pf(g('fx-sim-benef').value),ca:pf(g('fx-sim-ca').value),parts:pf(g('fx-sim-parts').value)||1,autres:pf(g('fx-sim-autres').value),capitalLibere:g('fx-sim-liber').checked,detentionPP:g('fx-sim-pp').checked,tns:p.tns,capital:p.capital};
+    var r=g('fx-sim-res');if(r)r.innerHTML=fiscalSimHTML(d,o);
+  };
+
+  function m_infos(d){var i=info(d);
+    return '<div class="fx-h1">Informations du client</div>'
+      +'<div class="fx-note">Ces informations alimentent tous les calculs (IS, mix rémunération/dividendes, TVA, aides éligibles).</div>'
+      +'<div class="fx-form">'
+      +'<label>Chiffre d\'affaires prévisionnel (€)<input id="fx-ca" type="number" value="'+i.caPrev+'"></label>'
+      +'<label>Bénéfice avant rémunération (€)<input id="fx-benef" type="number" value="'+i.benefice+'"></label>'
+      +'<label>Rémunération dirigeant souhaitée (€/an)<input id="fx-rem" type="number" value="'+i.remSouhaitee+'"></label>'
+      +'<label>Nombre de salariés<input id="fx-nbsal" type="number" value="'+i.nbSalaries+'"></label>'
+      +'<label>Masse salariale (€/an)<input id="fx-ms" type="number" value="'+i.masseSalariale+'"></label>'
+      +'<label>Zone d\'implantation<select id="fx-zone">'+['standard:Standard','zrr:France Ruralités (ex-ZRR)','zfu:Zone Franche Urbaine','qpv:Quartier prioritaire (QPV)','afr:Zone AFR'].map(function(o){var k=o.split(':');return '<option value="'+k[0]+'" '+(i.zone===k[0]?'selected':'')+'>'+k[1]+'</option>';}).join('')+'</select></label>'
+      +'<label>Secteur d\'activité<input id="fx-secteur" value="'+E(i.secteur)+'"></label>'
+      +'<label>Date de clôture<input id="fx-cloture" value="'+E(i.dateCloture)+'" placeholder="31/12"></label>'
+      +'<label>Parts fiscales (foyer)<input id="fx-parts" type="number" step="0.5" value="'+i.parts+'"></label>'
+      +'<label>Autres revenus du foyer (€)<input id="fx-autres" type="number" value="'+i.autres+'"></label>'
+      +'<label class="fx-ck"><input type="checkbox" id="fx-innov" '+(i.innovant?'checked':'')+'> Activité innovante (R&D / JEI)</label>'
+      +'<label class="fx-ck"><input type="checkbox" id="fx-acre" '+(i.acre?'checked':'')+'> Éligible ACRE (création)</label>'
+      +'<label class="fx-ck"><input type="checkbox" id="fx-liber" '+(i.capitalLibere?'checked':'')+'> Capital entièrement libéré</label>'
+      +'<label class="fx-ck"><input type="checkbox" id="fx-pp" '+(i.detentionPP?'checked':'')+'> Détenue à ≥ 75 % par des personnes physiques</label>'
+      +'</div>'
+      +'<div class="fx-formact"><button class="fx-btn" onclick="fiscalSaveInfo(\''+d.id+'\')">💾 Enregistrer & calculer la fiscalité</button></div>';
+  }
+
+  var MODULES=[
+    {k:'apercu',ic:'▦',l:'Synthèse',f:m_apercu},
+    {k:'infos',ic:'✎',l:'Infos client',f:m_infos},
+    {k:'regime',ic:'⚖',l:'Régime fiscal & social',f:m_regime},
+    {k:'exon',ic:'★',l:'Exonérations & aides',f:m_exon},
+    {k:'tva',ic:'%',l:'TVA',f:m_tva},
+    {k:'calendrier',ic:'▤',l:'Calendrier fiscal',f:m_calendrier},
+    {k:'dirigeant',ic:'€',l:'Rémunération dirigeant',f:m_dirigeant},
+    {k:'compta',ic:'▣',l:'Comptabilité & formalités',f:m_compta},
+    {k:'simulateur',ic:'∑',l:'Simulateur',f:m_simulateur},
+    {k:'actu',ic:'✦',l:'Actualités fiscales',f:m_actu}
+  ];
+
+  window.fiscalHubOpen=function(id){window.fiscalDossierId=id;window.fiscalTab=window.fiscalTab||'apercu';
+    var ov=document.getElementById('fiscal-ov');if(!ov){ov=document.createElement('div');ov.id='fiscal-ov';document.body.appendChild(ov);}
+    ov.classList.add('show');fiscalRender(id);
+  };
+  window.fiscalClose=function(){var ov=document.getElementById('fiscal-ov');if(ov)ov.classList.remove('show');};
+  window.fiscalGo=function(k){window.fiscalTab=k;fiscalRender(window.fiscalDossierId);};
+  function fiscalRender(id){var d=doss(id);var ov=document.getElementById('fiscal-ov');if(!d||!ov)return;
+    var cur=window.fiscalTab||'apercu';var mod=MODULES.find(function(m){return m.k===cur;})||MODULES[0];
+    var side=MODULES.map(function(m){return '<button class="fx-mi '+(m.k===cur?'on':'')+'" onclick="fiscalGo(\''+m.k+'\')"><span class="fx-mi-ic">'+m.ic+'</span>'+E(m.l)+'</button>';}).join('');
+    ov.innerHTML='<div class="fx-shell"><header class="fx-top"><div><b>🧮 Module fiscal</b><span>'+E(nomD(d))+'</span></div><button class="fx-x" onclick="fiscalClose()">✕</button></header>'
+      +'<div class="fx-body"><aside class="fx-side"><div class="fx-side-t">Mini-modules</div>'+side
+      +'<button class="fx-infobtn" onclick="fiscalGo(\'infos\')">✎ Renseigner les infos client</button></aside>'
+      +'<main class="fx-content">'+mod.f(d)+'</main></div></div>';
+  }
+
+  /* Bouton d'ouverture greffé dans la vue d'ensemble du dossier */
+  if(typeof window.vueEnsembleHTML==='function'){var _v=window.vueEnsembleHTML;
+    window.vueEnsembleHTML=function(d){var h=_v(d);if(!d||!d.id)return h;
+      var btn='<button class="fx-open" onclick="fiscalHubOpen(\''+d.id+'\')"><span>🧮 Module fiscal</span><b>Régime · IS · TVA · aides · calendrier · simulateur</b><span class="fx-open-go">→</span></button>';
+      var idx=h.lastIndexOf('</div></div>');
+      return idx>=0?(h.slice(0,idx)+btn+h.slice(idx)):(h+btn); /* insère en bas de la carte vue */
+    };
+  }
+
+  try{ if(!document.getElementById('fiscal-css')){var st=document.createElement('style');st.id='fiscal-css';
+    st.textContent='.fx-open{display:flex;align-items:center;gap:10px;width:100%;text-align:left;margin-top:8px;padding:10px 12px;border-radius:12px;border:1px solid #2a2a2e;background:linear-gradient(135deg,rgba(124,108,255,.16),rgba(124,108,255,.06));cursor:pointer;font:inherit;color:#eef0f4}'
+      +'.fx-open:hover{border-color:#7c6cff}.fx-open>span:first-child{font-weight:800}.fx-open b{font-size:11px;color:#a7abbd;font-weight:600}.fx-open-go{margin-left:auto;color:#7c6cff;font-size:16px}'
+      +'#fiscal-ov{position:fixed;inset:0;z-index:99990;background:rgba(4,4,6,.66);backdrop-filter:blur(4px);display:none;padding:18px}#fiscal-ov.show{display:block}'
+      +'.fx-shell{height:100%;max-width:1500px;margin:0 auto;background:#0e0e12;border:1px solid #242428;border-radius:20px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 40px 100px -40px rgba(0,0,0,.9)}'
+      +'.fx-top{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid #202024}.fx-top b{font-size:15px}.fx-top span{color:#a7abbd;margin-left:8px;font-size:13px}.fx-x{margin-left:auto;background:#17171b;border:1px solid #2a2a2e;color:#c7cad2;width:34px;height:34px;border-radius:9px;cursor:pointer;font-size:15px}'
+      +'.fx-body{flex:1;display:grid;grid-template-columns:250px 1fr;min-height:0}'
+      +'.fx-side{border-right:1px solid #202024;padding:14px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}.fx-side-t{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#6f7280;padding:4px 8px 6px}'
+      +'.fx-mi{display:flex;align-items:center;gap:10px;text-align:left;padding:9px 11px;border-radius:10px;border:1px solid transparent;background:transparent;color:#c2c5d0;cursor:pointer;font:inherit;font-size:13px}'
+      +'.fx-mi:hover{background:rgba(255,255,255,.04)}.fx-mi.on{background:linear-gradient(90deg,rgba(124,108,255,.12),rgba(124,108,255,.26));color:#fff;box-shadow:inset -3px 0 0 0 #7c6cff}.fx-mi-ic{width:22px;text-align:center;color:#8b7bff}'
+      +'.fx-infobtn{margin-top:10px;padding:10px;border-radius:10px;border:1px solid #4a3fd6;background:linear-gradient(135deg,#7c6cff,#5646f0);color:#fff;font:inherit;font-weight:700;cursor:pointer}'
+      +'.fx-content{padding:20px 24px;overflow-y:auto}'
+      +'.fx-h1{font-size:19px;font-weight:800;margin:0 0 12px;color:#f4f5fb}'
+      +'.fx-profil{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}.fx-chip{border:1px solid #2a2a2e;border-radius:10px;padding:6px 11px;background:#151519}.fx-chip span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:#7f8290}.fx-chip b{font-size:13px}'
+      +'.fx-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}.fx-kpi{background:#151519;border:1px solid #242428;border-radius:14px;padding:14px}.fx-kpi span{font-size:11px;color:#8b8e99}.fx-kpi b{display:block;font-size:22px;margin:4px 0 2px;color:#f4f5fb}.fx-kpi i{font-size:11px;color:#7c6cff;font-style:normal}'
+      +'.fx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}'
+      +'.fx-card{background:#141418;border:1px solid #242428;border-radius:14px;padding:14px 16px}.fx-card.is-elig{border-color:#3f6b46;box-shadow:0 0 0 1px rgba(63,107,70,.4)}'
+      +'.fx-card-th{font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#7c6cff;font-weight:700;margin-bottom:4px}.fx-card-t{font-size:14.5px;font-weight:700;margin-bottom:7px;color:#eef0f4}.fx-card-b{font-size:12.5px;line-height:1.65;color:#c2c5d0}.fx-card-b b{color:#eef0f4}'
+      +'.fx-ul{margin:0;padding-left:16px}.fx-ul li{margin-bottom:5px}'
+      +'.fx-note{font-size:12px;color:#a7abbd;background:#151519;border:1px solid #242428;border-left:3px solid #7c6cff;border-radius:8px;padding:9px 12px;margin-bottom:14px}.fx-note.warn{border-left-color:#e0a44a}'
+      +'.fx-badge{display:inline-block;margin-top:8px;font-size:11px;color:#a7abbd;background:#1b1b20;border:1px solid #2a2a2e;border-radius:20px;padding:3px 10px}.fx-badge.ok{color:#8fe0ad;border-color:#2f5b3a;background:rgba(63,107,70,.18)}'
+      +'.fx-tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}.fx-tbl th,.fx-tbl td{border:1px solid #242428;padding:6px 9px;color:#d2d5de}.fx-tbl th{background:#17171c;color:#aab0c0;text-align:left}.fx-tbl .r{text-align:right}.fx-tbl .fx-tot td{background:#1c1c22}.fx-tbl .fx-tot b{color:#fff}'
+      +'.fx-form,.fx-simform{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;background:#141418;border:1px solid #242428;border-radius:14px;padding:16px}.fx-simform{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));align-items:end;margin-bottom:16px}'
+      +'.fx-form label,.fx-simform label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#a7abbd}.fx-form input,.fx-form select,.fx-simform input{background:#0e0e11;border:1px solid #2a2a2e;border-radius:8px;padding:8px 10px;color:#eef0f4;font:inherit}'
+      +'.fx-ck{flex-direction:row!important;align-items:center;gap:8px!important}.fx-formact{margin-top:14px}'
+      +'.fx-btn{background:linear-gradient(135deg,#7c6cff,#5646f0);border:1px solid #4a3fd6;color:#fff;font:inherit;font-weight:700;padding:10px 16px;border-radius:10px;cursor:pointer}'
+      +'@media(max-width:820px){.fx-body{grid-template-columns:1fr}.fx-side{border-right:0;border-bottom:1px solid #202024;flex-direction:row;flex-wrap:wrap;overflow-x:auto}}';
+    document.head.appendChild(st);} }catch(e){}
 })();
 </script>
 
