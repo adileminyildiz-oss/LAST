@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=252;
+var LAST_VER=253;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -11290,6 +11290,137 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.is-elig{font-size:12px;padding:7px 10px;border-radius:8px;margin-bottom:8px}.is-elig.ok{background:#e7f2e3;color:#2f6b3a}.is-elig.ko{background:#fbf1dd;color:#8a5e0d}'
       +'.is-tbl{width:100%;border-collapse:collapse;font-size:12.5px}.is-tbl th,.is-tbl td{border:1px solid var(--line,#e7ddc9);padding:5px 9px}.is-tbl thead th{background:#f6f0e2;color:#5b5040}.is-tot td{background:#fbf7ee}'
       +'.is-hyp{font-size:10.5px;color:var(--ink3,#8a7d69);margin-top:8px;font-style:italic}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="fiscaliste-mix-mod">
+/* ===== Recommandation chiffrée du mix optimal rémunération / dividendes (B3) ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function eu(n){n=Math.round(n||0);return (typeof eur==='function')?eur(n):(n+' €');}
+  function pct(x){return Math.round(x*100)+' %';}
+  function pf(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.,]/g,'').replace(',','.'));return isNaN(n)?0:n;}
+  function C(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
+  function isCalc(b){if(b<=0)return 0;var r=Math.min(b,42500)*0.15;if(b>42500)r+=(b-42500)*0.25;return r;}
+
+  /* Évalue un partage donné : coût employeur affecté à la rémunération = Cr ; le reste (E − Cr) → IS puis dividendes. */
+  function evalSplit(Env,Cr,social,cap,parts,autres){
+    Cr=Math.max(0,Math.min(Env,Cr));
+    var IR=function(x){return (typeof window.baremeIR==='function')?window.baremeIR(Math.max(0,x),parts):0;};
+    /* Rémunération */
+    var remCot,remNetAvantIR;
+    if(social==='tns'){var Rr=Cr/1.45;remCot=Cr-Rr;remNetAvantIR=Rr;}
+    else{remCot=Cr*0.46;remNetAvantIR=Cr*0.54;}
+    var remImposable=remNetAvantIR*0.9;
+    var remIR=Math.max(0,IR(autres+remImposable)-IR(autres));
+    var remNet=remNetAvantIR-remIR;
+    /* Dividendes sur le bénéfice résiduel */
+    var baseIS=Math.max(0,Env-Cr);
+    var is=isCalc(baseIS);
+    var base=baseIS-is;
+    var ssi=0,distrib=base;
+    if(social==='tns'){var seuil=0.10*cap;var excess=Math.max(0,base-seuil);ssi=excess*0.45;distrib=base-ssi;}
+    distrib=Math.max(0,distrib);
+    var ps=distrib*0.172;
+    var pfuIR=distrib*0.128,pfuNet=distrib-ps-pfuIR;
+    var baseFoyer=autres+remImposable;
+    var brIR=Math.max(0,IR(baseFoyer+distrib*0.60)-IR(baseFoyer));
+    var brNet=distrib-ps-brIR;
+    var divOption,divNet,divIR,divImpot;
+    if(brNet>=pfuNet){divOption='bareme';divNet=brNet;divIR=brIR;divImpot=ps+brIR;}
+    else{divOption='pfu';divNet=pfuNet;divIR=pfuIR;divImpot=ps+pfuIR;}
+    var netTotal=remNet+divNet;
+    return {coutRem:Cr,remCot:remCot,remImposable:remImposable,remIR:remIR,remNet:remNet,
+      baseIS:baseIS,is:is,ssi:ssi,distribuable:distrib,divOption:divOption,ps:ps,divIR:divIR,divImpot:divImpot,divNet:divNet,
+      netTotal:netTotal,tauxGlobal:(Env>0?(Env-netTotal)/Env:0)};
+  }
+
+  window.mixOptimal=function(o){
+    o=o||{};var Env=Math.max(0,+o.enveloppe||+o.benefice||0);
+    var social=(o.regimeSocial==='tns')?'tns':'assimile';
+    var cap=Math.max(0,+o.capital||0);
+    var parts=(+o.parts>0)?+o.parts:1;
+    var autres=Math.max(0,+o.autresRevenus||+o.autres||0);
+    var ev=function(Cr){return evalSplit(Env,Cr,social,cap,parts,autres);};
+    var best=null,N=80,i;
+    for(i=0;i<=N;i++){var r=ev(Env*i/N);if(!best||r.netTotal>best.netTotal)best=r;}
+    var span=Env/N;
+    for(i=-80;i<=80;i++){var r2=ev(best.coutRem+span*i/80);if(r2.netTotal>best.netTotal)best=r2;}
+    var remOnly=ev(Env),divOnly=ev(0);
+    var meilleurExtreme=Math.max(remOnly.netTotal,divOnly.netTotal);
+    return {enveloppe:Env,social:social,capital:cap,parts:parts,autres:autres,
+      optimum:best,remOnly:remOnly,divOnly:divOnly,
+      gain:Math.max(0,best.netTotal-meilleurExtreme),
+      partRem:(Env>0?best.coutRem/Env:0),partDiv:(Env>0?(Env-best.coutRem)/Env:0)};
+  };
+
+  window.mixReco=function(m){
+    var pr=m.partRem;
+    if(pr<=0.03)return 'Orienter <b>~100 % vers les dividendes</b> : la rémunération n\'améliore pas le net en poche ici.'+(m.social==='assimile'?' Prévoyez toutefois une rémunération minimale pour valider des droits sociaux.':'');
+    if(pr>=0.97)return 'Orienter <b>~100 % vers la rémunération</b> : la distribution de dividendes n\'améliore pas le net en poche ici.';
+    return 'Un mix <b>~'+pct(m.partRem)+' rémunération / '+pct(m.partDiv)+' dividendes</b> maximise le net en poche'
+      +(m.gain>50?(' (≈ '+eu(m.gain)+' de mieux que le meilleur scénario unique)'):'')+'.'
+      +(m.social==='assimile'?' La rémunération ouvre des droits sociaux ; les dividendes n\'en ouvrent pas.':' En TNS, la fraction des dividendes > 10 % du capital est cotisée à la SSI.');
+  };
+
+  window.mixOptimalHTML=function(d,opts){
+    opts=opts||{};
+    var prof=(typeof avocatFiscaliste==='function')?avocatFiscaliste(d).profil:{regimeSocial:'Assimilé salarié',capital:null};
+    var social=/TNS/i.test(prof.regimeSocial)?'tns':'assimile';
+    var cap=prof.capital!=null?prof.capital:pf(C(d).capital);
+    var env=opts.enveloppe!=null?opts.enveloppe:80000;
+    var parts=(+opts.parts>0)?+opts.parts:1;var autres=Math.max(0,+opts.autres||0);
+    var m=window.mixOptimal({enveloppe:env,regimeSocial:social,capital:cap,parts:parts,autres:autres});
+    var op=m.optimum;
+    var td=function(v,cls){return '<td class="'+(cls||'')+'" style="text-align:right">'+v+'</td>';};
+    /* barre de répartition */
+    var wr=Math.round(m.partRem*100),wd=100-wr;
+    var barHtml='<div class="mix-bar"><span class="mix-br" style="width:'+wr+'%">'+(wr>=12?('Rém. '+wr+' %'):'')+'</span><span class="mix-bd" style="width:'+wd+'%">'+(wd>=12?('Div. '+wd+' %'):'')+'</span></div>';
+    var comp='<table class="mix-tbl"><thead><tr><th>Scénario</th><th style="text-align:right">Net en poche</th></tr></thead><tbody>'
+      +'<tr><td>100 % rémunération</td>'+td(eu(m.remOnly.netTotal),(m.partRem>=0.97?'mix-win':''))+'</tr>'
+      +'<tr class="mix-opt"><td><b>Mix optimal conseillé</b></td>'+td('<b>'+eu(op.netTotal)+'</b>','mix-win')+'</tr>'
+      +'<tr><td>100 % dividendes</td>'+td(eu(m.divOnly.netTotal),(m.partRem<=0.03?'mix-win':''))+'</tr>'
+      +'</tbody></table>';
+    var detail='<div class="mix-detail"><div><span>Rémunération (coût entreprise)</span><b>'+eu(op.coutRem)+'</b></div>'
+      +'<div><span>→ net de rémunération</span><b>'+eu(op.remNet)+'</b></div>'
+      +'<div><span>Dividendes distribués (après IS'+(op.ssi>0?' + SSI':'')+')</span><b>'+eu(op.distribuable)+'</b></div>'
+      +'<div><span>→ net de dividendes ('+(op.divOption==='pfu'?'PFU 30 %':'barème 40 %')+')</span><b>'+eu(op.divNet)+'</b></div>'
+      +'<div class="mix-tot"><span>Net total en poche</span><b>'+eu(op.netTotal)+'</b></div>'
+      +'<div><span>Taux de prélèvement global</span><b>'+pct(op.tauxGlobal)+'</b></div></div>';
+    return '<div class="mix-box">'
+      +'<div class="mix-in"><label>Bénéfice avant rémunération (€)<input id="mix-env" type="number" min="0" step="5000" value="'+env+'" onchange="mixRun(\''+d.id+'\')"></label>'
+      +'<label>Parts fiscales<input id="mix-parts" type="number" min="1" step="0.5" value="'+parts+'" onchange="mixRun(\''+d.id+'\')"></label>'
+      +'<label>Autres revenus du foyer (€)<input id="mix-autres" type="number" min="0" step="1000" value="'+autres+'" onchange="mixRun(\''+d.id+'\')"></label></div>'
+      +barHtml+comp+detail
+      +'<div class="mix-reco">'+window.mixReco(m)+'</div>'
+      +'<div class="mix-hyp">Régime social : <b>'+(social==='tns'?'TNS (SSI)':'Assimilé salarié')+'</b>'+(cap?(' · Capital : '+eu(cap)):'')+'. Optimisation du net en poche sur '+ (81) +' répartitions. IS 15 %/25 %, IR au barème progressif (quotient familial), dividendes au meilleur du PFU 30 % ou du barème (abattement 40 %). Estimation indicative — hors reports déficitaires, plafonnement du quotient, décote, prévoyance et cas particuliers.</div></div>';
+  };
+
+  window.mixRun=function(id){
+    var d=(typeof espDoss==='function'?espDoss():[]).find(function(x){return x.id===id;});if(!d)return;
+    var g=function(x){return document.getElementById(x);};
+    var o={enveloppe:g('mix-env')?pf(g('mix-env').value):80000,
+      parts:g('mix-parts')?pf(g('mix-parts').value):1,
+      autres:g('mix-autres')?pf(g('mix-autres').value):0};
+    var res=g('mix-res');if(res)res.innerHTML=window.mixOptimalHTML(d,o);
+  };
+
+  /* Greffe : ajoute la reco de mix optimal au bas de l'analyse fiscaliste (après le simulateur d'IS) */
+  if(typeof window.avocatFiscalisteHTML==='function'){var _h=window.avocatFiscalisteHTML;
+    window.avocatFiscalisteHTML=function(d){var base=_h(d);if(!d||!d.id)return base;
+      return base+'<div class="mix-wrap"><div class="mix-h">⚖️ Mix optimal rémunération / dividendes</div><div id="mix-res">'+window.mixOptimalHTML(d,{})+'</div></div>';};
+  }
+
+  try{ if(!document.getElementById('mix-css')){var st=document.createElement('style');st.id='mix-css';
+    st.textContent='.mix-wrap{margin-top:14px;border-top:1px dashed var(--line,#e7ddc9);padding-top:12px}.mix-h{font-weight:700;font-size:13px;margin-bottom:8px}'
+      +'.mix-in{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}.mix-in label{font-size:12px;color:var(--ink3,#8a7d69);display:flex;flex-direction:column;gap:3px}.mix-in input{max-width:190px}'
+      +'.mix-bar{display:flex;height:22px;border-radius:6px;overflow:hidden;margin:6px 0 10px;font-size:11px;font-weight:700;color:#fff}'
+      +'.mix-br{background:#3f6b46;display:flex;align-items:center;justify-content:center;min-width:0}.mix-bd{background:#8a5e0d;display:flex;align-items:center;justify-content:center;min-width:0}'
+      +'.mix-tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:8px}.mix-tbl th,.mix-tbl td{border:1px solid var(--line,#e7ddc9);padding:5px 9px}.mix-tbl thead th{background:#f6f0e2;color:#5b5040}.mix-opt td{background:#eef4ea}.mix-win{color:#2f6b3a;font-weight:700}'
+      +'.mix-detail{font-size:12px;background:#fbf7ee;border:1px solid var(--line,#e7ddc9);border-radius:8px;padding:8px 10px;margin-bottom:8px}.mix-detail>div{display:flex;justify-content:space-between;gap:10px;padding:2px 0}.mix-detail .mix-tot{border-top:1px solid var(--line,#e7ddc9);margin-top:4px;padding-top:5px;font-weight:700}'
+      +'.mix-reco{font-size:12px;padding:8px 10px;border-radius:8px;background:#e7f2e3;color:#2f5b34;margin-bottom:6px}'
+      +'.mix-hyp{font-size:10.5px;color:var(--ink3,#8a7d69);font-style:italic}';
     document.head.appendChild(st);} }catch(e){}
 })();
 </script>
