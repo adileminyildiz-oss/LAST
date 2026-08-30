@@ -511,13 +511,7 @@ aside .nav-btn:hover{color:#000}
       <small class="brand-sub">AEM CONSEIL · INTERNE</small>
     </div>
     <div class="nav" id="nav"></div>
-    <div class="side-foot">
-      <div class="userchip">
-        <span class="av" id="me-av" style="background:linear-gradient(160deg,#4a4034,#2c271f)">A</span>
-        <div class="userchip-txt"><b id="me-nom">Admin</b><span>Administrateur</span></div>
-        <button class="userchip-out" title="Se déconnecter" aria-label="Se déconnecter" onclick="lastLogout()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
-      </div>
-    </div>
+    <div class="side-foot" style="border-top:none;padding-top:0"><b id="me-nom" hidden>Admin</b></div>
   </aside>
 
   <main>
@@ -1803,6 +1797,10 @@ function pageParams(){
         <button class="btn btn-sm btn-ghost" onclick="document.getElementById('imp').click()">Importer</button>
         <button class="btn btn-sm btn-danger" onclick="if(confirm('Réinitialiser toutes les données de démonstration ?')){localStorage.removeItem(KEY);location.reload();}">Réinitialiser</button>
       </div><input type="file" id="imp" accept="application/json" style="display:none" onchange="importDB(this)">
+      <div class="section-t">Compte & session</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-danger" onclick="lastLogout()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Se déconnecter</button>
+      </div>
     </div></div>
   </div>
   <div class="card" style="margin-top:14px"><div class="card-h"><h2>Prestations</h2><span class="sub" style="margin-left:auto">Catalogue des prestations</span></div>
@@ -3092,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=279;
+var LAST_VER=280;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14011,7 +14009,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   if(window.__formIntakeInit)return; window.__formIntakeInit=1;
   function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   function num(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.]/g,''));return isNaN(n)?null:n;}
-  function blank(){return {type:'sas',numeroDossier:'',societe:{},siege:{},direction:{},dirx:{},titres:{},dates:{},associes:[],contact:{}};}
+  function blank(){return {type:'sas',numeroDossier:'',societe:{},siege:{},direction:{},dirx:{},titres:{},dates:{},associes:[],contact:{},depot:{},apports:{},conjoint:{},cac:{},extra:{},beneficiaires:[]};}
   function FD(){ if(!window.__formData||typeof window.__formData!=='object')window.__formData=blank(); return window.__formData; }
   function get(path){var o=FD();var ks=path.split('.');for(var i=0;i<ks.length;i++){o=(o&&o[ks[i]]);if(o==null)return '';}return o;}
   function fonctionDefaut(t){return (t==='sas'||t==='sasu')?'Président':'Gérant';}
@@ -14022,8 +14020,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   window.formAssocSet=function(i,key,val){var o=FD();o.associes=o.associes||[];o.associes[i]=o.associes[i]||{};o.associes[i][key]=val;};
   window.formAssocAdd=function(){var o=FD();o.associes=o.associes||[];o.associes.push({});if(typeof render==='function')render();};
   window.formAssocDel=function(i){var o=FD();if(o.associes)o.associes.splice(i,1);if(typeof render==='function')render();};
+  window.formBenSet=function(i,key,val){var o=FD();o.beneficiaires=o.beneficiaires||[];o.beneficiaires[i]=o.beneficiaires[i]||{};o.beneficiaires[i][key]=val;};
+  window.formBenAdd=function(){var o=FD();o.beneficiaires=o.beneficiaires||[];o.beneficiaires.push({});if(typeof render==='function')render();};
+  window.formBenDel=function(i){var o=FD();if(o.beneficiaires)o.beneficiaires.splice(i,1);if(typeof render==='function')render();};
+  window.formBenReprendre=function(){var o=FD();var seuil=25;o.beneficiaires=(o.associes||[]).filter(function(a){var p=num(a.parts);var tot=(o.associes||[]).reduce(function(s,x){return s+(num(x.parts)||0);},0);return tot>0&&p!=null&&(p/tot*100)>=seuil;}).map(function(a){var tot=(o.associes||[]).reduce(function(s,x){return s+(num(x.parts)||0);},0);var p=num(a.parts);var pc=(tot>0&&p!=null)?Math.round(p/tot*100):'';return {nom:(((a.prenom||'')+' '+(a.nom||'')).trim())||a.nom||'',detention:pc,vote:pc,controle:'Détention directe',naissance:a.naissance||'',nationalite:a.nationalite||''};});if(!o.beneficiaires.length)o.beneficiaires=[{}];if(typeof render==='function')render();if(typeof toast==='function')toast(o.beneficiaires.length+' bénéficiaire(s) repris des associés (> 25 %)');};
   window.formType=function(v){FD().type=v;if(typeof render==='function')render();};
   window.formReset=function(){window.__formData=blank();if(typeof render==='function')render();if(typeof toast==='function')toast('Formulaire réinitialisé');window.scrollTo(0,0);};
+  function formEstVide(){var o=FD();return !((o.societe&&o.societe.denomination)||(o.direction&&(o.direction.nom||o.direction.prenom))||(o.associes&&o.associes.length));}
+  function formDraft(){try{return DB.parametres&&DB.parametres.formDraft;}catch(e){return null;}}
+  window.formBrouillon=function(){try{DB.parametres=DB.parametres||{};DB.parametres.formDraft={data:JSON.parse(JSON.stringify(FD())),ts:Date.now()};if(typeof save==='function')save();if(typeof render==='function')render();if(typeof toast==='function')toast('Brouillon enregistré');}catch(e){if(typeof toast==='function')toast('Impossible d\'enregistrer le brouillon');}};
+  window.formReprendre=function(){var d=formDraft();if(d&&d.data){try{window.__formData=JSON.parse(JSON.stringify(d.data));}catch(e){window.__formData=d.data;}if(typeof render==='function')render();window.scrollTo(0,0);if(typeof toast==='function')toast('Brouillon repris');}};
+  window.formBrouillonSuppr=function(){try{if(DB.parametres)delete DB.parametres.formDraft;if(typeof save==='function')save();if(typeof render==='function')render();if(typeof toast==='function')toast('Brouillon supprimé');}catch(e){}};
   window.formMasqueDate=function(el,path){var d=(el.value||'').replace(/\D/g,'').slice(0,8);var out=d;if(d.length>4)out=d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4);else if(d.length>2)out=d.slice(0,2)+'/'+d.slice(2);el.value=out;window.formSet(path,out);};
 
   /* Générateurs de champs (valeur lue au rendu, mise à jour sans re-rendu → focus conservé) */
@@ -14033,12 +14040,21 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function fSel(path,opts,cur){return '<select onchange="formSet(\''+path+'\',this.value)">'+opts.map(function(o){var v=(o instanceof Array)?o[0]:o,l=(o instanceof Array)?o[1]:o;return '<option value="'+esc(v)+'"'+((''+cur)===(''+v)?' selected':'')+'>'+esc(l)+'</option>';}).join('')+'</select>';}
   function aI(i,key,ph){return '<input value="'+esc((FD().associes[i]||{})[key]||'')+'" oninput="formAssocSet('+i+',\''+key+'\',this.value)" placeholder="'+esc(ph||'')+'">';}
   function aD(i,key){return '<input inputmode="numeric" value="'+esc((FD().associes[i]||{})[key]||'')+'" oninput="var d=(this.value||\'\').replace(/\\D/g,\'\').slice(0,8);var o=d;if(d.length>4)o=d.slice(0,2)+\'/\'+d.slice(2,4)+\'/\'+d.slice(4);else if(d.length>2)o=d.slice(0,2)+\'/\'+d.slice(2);this.value=o;formAssocSet('+i+',\''+key+'\',o)" placeholder="jj/mm/aaaa">';}
+  function bI(i,key,ph){return '<input value="'+esc((FD().beneficiaires[i]||{})[key]||'')+'" oninput="formBenSet('+i+',\''+key+'\',this.value)" placeholder="'+esc(ph||'')+'">';}
+  function bSel(i,key,opts,ph){var cur=(FD().beneficiaires[i]||{})[key]||'';return '<select onchange="formBenSet('+i+',\''+key+'\',this.value)">'+opts.map(function(o){var v=(o instanceof Array)?o[0]:o,l=(o instanceof Array)?o[1]:o;return '<option value="'+esc(v)+'"'+((''+cur)===(''+v)?' selected':'')+'>'+esc(l)+'</option>';}).join('')+'</select>';}
   function r1(l,inp){return '<label>'+esc(l)+'</label>'+inp;}
   function r2(l1,i1,l2,i2){return '<div class="frow"><div><label>'+esc(l1)+'</label>'+i1+'</div><div><label>'+esc(l2)+'</label>'+i2+'</div></div>';}
   function grp(t,inner,note){return '<div class="card fi-card"><div class="card-h"><h2>'+esc(t)+'</h2>'+(note?'<span class="sub" style="margin-left:auto">'+esc(note)+'</span>':'')+'</div><div class="card-b">'+inner+'</div></div>';}
 
   function pageFormulaire(){
     var o=FD();var t=o.type||'sas';var fct=fonctionDefaut(t);
+    /* Bandeau « reprendre le brouillon » (si un brouillon existe et le formulaire est vide) */
+    var draft=formDraft();
+    var resume=(draft&&draft.data&&formEstVide())?('<div class="card fi-card fi-resume"><div class="card-b" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+      +'<span>Un brouillon a été enregistré'+((draft.ts)?(' le '+new Date(draft.ts).toLocaleString('fr-FR')):'')+'.</span>'
+      +'<span style="margin-left:auto;display:flex;gap:8px"><button class="btn btn-sm btn-pri" onclick="formReprendre()">Reprendre le brouillon</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="formBrouillonSuppr()">Supprimer</button></span>'
+      +'</div></div>'):'';
     /* Formalité */
     var head='<div class="card fi-card fi-head"><div class="card-b">'
       +'<div class="fi-intro">Saisie manuelle du dossier — renseignez les informations directement avec le client. À l\'enregistrement, le dossier est créé et l\'ensemble des documents (statuts, pouvoir, DNC, souscripteurs…) est généré automatiquement.</div>'
@@ -14055,7 +14071,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +r1('Adresse du siège social',fI('siege.rue'))
       +r2('Code postal',fI('siege.cp'),'Ville',fI('siege.ville'))
       +r2('Type de local',fSel('siege.type',[['','—'],['Local commercial','Local commercial'],['Domiciliation','Société de domiciliation'],['Domicile du dirigeant','Domicile du dirigeant']],get('siege.type')),'Date de début d\'activité',fD('societe.debut'))
-      +r2('Bailleur (si location)',fI('siege.bailleur'),'Domiciliataire (si domiciliation)',fI('siege.domiciliataire')));
+      +r2('Bailleur (si location)',fI('siege.bailleur'),'Domiciliataire (si domiciliation)',fI('siege.domiciliataire'))
+      +r2('SIREN (si déjà immatriculée)',fI('societe.siren'),'SIRET',fI('societe.siret'))
+      +r1('Enseigne (si différente)',fI('societe.enseigne')));
     /* Dirigeant */
     var dir=grp((t==='sas'||t==='sasu'?'Dirigeant (Président)':'Dirigeant (Gérant)'),
       r2('Civilité',fSel('direction.civilite',[['M.','M.'],['Mme','Mme']],get('direction.civilite')||'M.'),'Fonction',fI('direction.fonction',fct))
@@ -14091,25 +14109,69 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       (noteAssoc?'<div class="hint" style="margin-bottom:10px">'+esc(noteAssoc)+'</div>':'')
       +(assocCards||'<div class="hint">Aucun associé saisi.</div>')
       +'<button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="formAssocAdd()">'+((typeof svg==='function'&&typeof IC!=='undefined')?svg(IC.plus):'+')+'Ajouter un associé</button>');
+    /* Dépôt de capital & banque */
+    var depot=grp('Dépôt de capital & banque',
+      r2('Dépositaire des fonds',fSel('depot.type',[['Banque','Banque'],['Notaire','Notaire'],['Caisse des dépôts','Caisse des dépôts et consignations']],get('depot.type')||'Banque'),'Établissement (banque / étude)',fI('depot.banque'))
+      +r2('Montant déposé (€)',fI('depot.montant','ex. 1000'),'Date du dépôt',fD('depot.date'))
+      +r1('N° du compte / IBAN (facultatif)',fI('depot.iban')));
+    /* Bénéficiaires effectifs (DBE) */
+    var benCards=(o.beneficiaires||[]).map(function(b,i){
+      return '<div class="fi-assoc"><button class="fi-ax" title="Retirer" onclick="formBenDel('+i+')">✕</button>'
+        +'<div class="fi-assoc-t">Bénéficiaire effectif '+(i+1)+'</div>'
+        +r1('Nom et prénom',bI(i,'nom'))
+        +r2('% de détention du capital',bI(i,'detention','ex. 60'),'% des droits de vote',bI(i,'vote','ex. 60'))
+        +r2('Nature du contrôle',bSel(i,'controle',[['Détention directe','Détention directe'],['Détention indirecte','Détention indirecte'],['Pouvoir de contrôle','Autre pouvoir de contrôle']]),'Date de naissance',(function(){return '<input inputmode="numeric" value="'+esc((o.beneficiaires[i]||{}).naissance||'')+'" oninput="var d=(this.value||\'\').replace(/\\D/g,\'\').slice(0,8);var x=d;if(d.length>4)x=d.slice(0,2)+\'/\'+d.slice(2,4)+\'/\'+d.slice(4);else if(d.length>2)x=d.slice(0,2)+\'/\'+d.slice(2);this.value=x;formBenSet('+i+',\'naissance\',x)" placeholder="jj/mm/aaaa">';})())
+        +r1('Nationalité',bI(i,'nationalite','Française'))
+        +'</div>';}).join('');
+    var ben=grp('Bénéficiaires effectifs (registre RBE)',
+      '<div class="hint" style="margin-bottom:10px">Toute personne détenant &gt; 25 % du capital ou des droits de vote, ou exerçant un contrôle.</div>'
+      +(benCards||'<div class="hint">Aucun bénéficiaire saisi.</div>')
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
+      +'<button class="btn btn-ghost btn-sm" onclick="formBenAdd()">'+((typeof svg==='function'&&typeof IC!=='undefined')?svg(IC.plus):'+')+'Ajouter un bénéficiaire</button>'
+      +'<button class="btn btn-ghost btn-sm" onclick="formBenReprendre()">Reprendre les associés (&gt; 25 %)</button>'
+      +'</div>');
+    /* Apports & options fiscales / sociales */
+    var apports=grp('Apports & options fiscales / sociales',
+      r2('Apports en numéraire (€)',fI('apports.numeraire'),'Apports en nature (€)',fI('apports.nature'))
+      +r1('Description des apports en nature',fT('apports.natureDesc','ex. véhicule, matériel, fonds de commerce…'))
+      +r2('Option TVA',fSel('apports.tva',[['','—'],['Franchise en base','Franchise en base de TVA'],['Réel simplifié','Réel simplifié'],['Réel normal','Réel normal']],get('apports.tva')),'Régime social du dirigeant',fSel('apports.regimeSocial',[['','—'],['TNS','Travailleur non salarié (TNS)'],['Assimilé salarié','Assimilé salarié']],get('apports.regimeSocial')))
+      +r2('ACRE (exonération)',fSel('apports.acre',[['','—'],['Oui','Demandée'],['Non','Non demandée']],get('apports.acre')),'Libération du capital',fSel('apports.liberation',[['','—'],['Intégrale','Intégrale (100 %)'],['Partielle','Partielle (min. légal)']],get('apports.liberation'))));
+    /* Conjoint, régime matrimonial & CAC */
+    var conj=grp('Conjoint, régime matrimonial & commissaire aux comptes',
+      r2('Régime matrimonial du dirigeant',fSel('conjoint.regime',[['','—'],['Non marié(e)','Non marié(e)'],['Communauté légale','Communauté réduite aux acquêts'],['Séparation de biens','Séparation de biens'],['Communauté universelle','Communauté universelle'],['Participation aux acquêts','Participation aux acquêts']],get('conjoint.regime')),'Statut du conjoint',fSel('conjoint.statut',[['','—'],['Aucun','Aucun'],['Conjoint collaborateur','Conjoint collaborateur'],['Conjoint associé','Conjoint associé'],['Conjoint salarié','Conjoint salarié']],get('conjoint.statut')))
+      +r1('Nom et prénom du conjoint',fI('conjoint.nom'))
+      +r2('Commissaire aux comptes (nom)',fI('cac.nom'),'Durée du mandat de direction',fI('cac.dureeMandat','ex. illimitée / 3 ans'))
+      +r1('Adresse du commissaire aux comptes',fI('cac.adresse')));
+    /* Notes & observations libres */
+    var notes=grp('Notes & observations',
+      '<textarea rows="4" oninput="formSet(\'extra.notes\',this.value)" placeholder="Remarques, particularités du dossier, points à vérifier…">'+esc(get('extra.notes'))+'</textarea>');
     /* Contact */
     var contact=grp('Contact',
       r2('Email',fI('contact.email'),'Téléphone',fI('contact.tel')));
     /* Barre d'action */
     var actions='<div class="fi-actions">'
       +'<button class="btn btn-ghost" onclick="formReset()">Réinitialiser</button>'
+      +'<button class="btn btn-ghost" onclick="formBrouillon()">Brouillon</button>'
       +'<div class="fi-actions-r">'
       +'<button class="btn" onclick="formCreerDossier(false)">Enregistrer le dossier</button>'
       +'<button class="btn btn-pri" onclick="formCreerDossier(true)">Enregistrer &amp; ouvrir les documents</button>'
       +'</div></div>';
-    return '<div class="fi-wrap">'+head+soc+dir+titres+dates+assoc+contact+actions+'</div>';
+    return '<div class="fi-wrap">'+resume+head+soc+dir+titres+dates+assoc+depot+ben+apports+conj+notes+contact+actions+'</div>';
   }
   window.pageFormulaire=pageFormulaire;
 
   window.formCreerDossier=function(ouvrirDocs){
     var o=FD();var s=o.societe||{},dir=o.direction||{},dx=o.dirx||{},tt=o.titres||{},dt=o.dates||{},si=o.siege||{},co=o.contact||{};
+    var dep=o.depot||{},ap=o.apports||{},cj=o.conjoint||{},cac=o.cac||{},ex=o.extra||{},ben=(o.beneficiaires||[]);
     if(!(s.denomination||'').trim() && !((dir.nom||'')+(dir.prenom||'')).trim()){ if(typeof toast==='function')toast('Renseignez au moins la dénomination ou le dirigeant.'); return; }
     var intake={type:o.type||'sas',numeroDossier:o.numeroDossier||'',
-      societe:{denomination:s.denomination||'',sigle:s.sigle||'',capital:s.capital||'',objet:s.objet||'',regime:s.regime||'',debut:s.debut||''},
+      societe:{denomination:s.denomination||'',sigle:s.sigle||'',capital:s.capital||'',objet:s.objet||'',regime:s.regime||'',debut:s.debut||'',siren:s.siren||'',siret:s.siret||'',enseigne:s.enseigne||''},
+      depot:{type:dep.type||'Banque',banque:dep.banque||'',montant:dep.montant||'',date:dep.date||'',iban:dep.iban||''},
+      apports:{numeraire:ap.numeraire||'',nature:ap.nature||'',natureDesc:ap.natureDesc||'',tva:ap.tva||'',regimeSocial:ap.regimeSocial||'',acre:ap.acre||'',liberation:ap.liberation||''},
+      conjoint:{regime:cj.regime||'',statut:cj.statut||'',nom:cj.nom||''},
+      cac:{nom:cac.nom||'',adresse:cac.adresse||'',dureeMandat:cac.dureeMandat||''},
+      beneficiaires:ben.map(function(b){return {nom:b.nom||'',detention:b.detention||'',vote:b.vote||'',controle:b.controle||'',naissance:b.naissance||'',nationalite:b.nationalite||''};}),
+      notes:ex.notes||'',
       siege:{rue:si.rue||'',cp:si.cp||'',ville:si.ville||'',type:si.type||'',bailleur:si.bailleur||'',domiciliataire:si.domiciliataire||''},
       direction:{civilite:dir.civilite||'M.',prenom:dir.prenom||'',nom:dir.nom||'',naissance:dir.naissance||'',lieuNaissance:dir.lieuNaissance||'',pays:dir.pays||'',nationalite:dir.nationalite||'',adresse:dir.adresse||'',fonction:dir.fonction||fonctionDefaut(o.type)},
       associes:(o.associes||[]).map(function(a){return {civilite:a.civilite||'',prenom:a.prenom||'',nom:a.nom||'',naissance:a.naissance||'',lieuNaissance:a.lieuNaissance||'',pays:a.pays||'',nationalite:a.nationalite||'',adresse:a.adresse||'',apport:a.apport||'',parts:a.parts||'',role:a.role||''};}),
@@ -14121,6 +14183,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var c={id:uid('c'),prenom:parts[0]||'',nom:parts.slice(1).join(' ')||parts[0]||'Client',email:intake.contact.email,tel:intake.contact.tel,adresse:'',parts:0,capital:0,activites:[],associes:[],createdAt:today()};
     DB.clients.push(c);
     try{ if(typeof lastIntakeToClient==='function') lastIntakeToClient(intake,c); }catch(e){}
+    /* Informations société supplémentaires (toutes modifiables ensuite) */
+    if(s.siren)c.siren=s.siren; if(s.siret)c.siret=s.siret; if(s.enseigne)c.enseigne=s.enseigne;
+    c.beneficiaires=intake.beneficiaires.slice();
+    c.complement={depot:intake.depot,apports:intake.apports,conjoint:intake.conjoint,cac:intake.cac,notes:intake.notes};
     /* Associés enrichis (identité complète conservée pour chaque associé) */
     if(intake.associes.length){
       c.associes=intake.associes.map(function(a){var full=(((a.prenom||'')+' '+(a.nom||'')).trim())||a.nom||'';var pr=num(a.parts);
@@ -14133,14 +14199,20 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     /* Dirigeant → verif.extract (lu par l'éditeur de documents) */
     dos.verif=dos.verif||{};dos.verif.extract=Object.assign(dos.verif.extract||{},{
       civilite:dir.civilite||'M.',prenom:dir.prenom||'',nom:dir.nom||'',dateNaissance:dir.naissance||'',lieuNaissance:dir.lieuNaissance||'',paysNaissance:dir.pays||'',nationalite:dir.nationalite||'',adresse:dir.adresse||'',cpPerso:dx.cp||'',villePerso:dx.ville||'',typePiece:dx.typePiece||'',numPiece:dx.numPiece||''});
-    /* docVars (titres, dates, filiation) */
+    /* docVars (titres, dates, filiation, informations complémentaires) */
     c.docVars=Object.assign(c.docVars||{},{
       pereNom:dx.pereNom||'',mereNom:dx.mereNom||'',nominal:tt.nominal||'',nbTitres:tt.nbTitres||'',
-      dateActe:dt.dateActe||'',villeSignature:dt.villeSignature||si.ville||'',anneeExo:dt.anneeExo||'',finExo:dt.finExo||'',duree:dt.duree||'',clotureAnnuelle:dt.clotureAnnuelle||'',rcsVille:dt.rcsVille||si.ville||''});
+      dateActe:dt.dateActe||'',villeSignature:dt.villeSignature||si.ville||'',anneeExo:dt.anneeExo||'',finExo:dt.finExo||'',duree:dt.duree||'',clotureAnnuelle:dt.clotureAnnuelle||'',rcsVille:dt.rcsVille||si.ville||'',
+      banqueDepot:dep.banque||'',montantDepot:dep.montant||'',dateDepot:dep.date||'',depotType:dep.type||'',
+      apportNumeraire:ap.numeraire||'',apportNature:ap.nature||'',apportNatureDesc:ap.natureDesc||'',optionTVA:ap.tva||'',regimeSocial:ap.regimeSocial||'',acre:ap.acre||'',liberationCapital:ap.liberation||'',
+      regimeMatrimonial:cj.regime||'',conjointStatut:cj.statut||'',conjointNom:cj.nom||'',
+      cacNom:cac.nom||'',cacAdresse:cac.adresse||'',dureeMandat:cac.dureeMandat||''});
+    if(intake.notes)dos.notes=intake.notes;
     /* Génération de tous les documents du dossier */
     try{ dos.docs=dos.docs||{}; (typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).forEach(function(dc){ if(typeof espDocReq==='function'?espDocReq(dos,dc.k):true) dos.docs[dc.k]={genere:true,date:today()}; }); }catch(e){}
     DB.dossiers.unshift(dos);
     window.__formData=blank();
+    try{ if(DB.parametres)delete DB.parametres.formDraft; }catch(e){}
     if(typeof save==='function')save();
     if(typeof toast==='function')toast('Dossier '+ref+' créé — documents générés');
     state.page='espace';state.espaceDossier=dos.id;
