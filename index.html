@@ -3089,7 +3089,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=283;
+var LAST_VER=284;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -12407,7 +12407,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
    cachets, points, dégradés dynamiques…) — les documents blancs générés (statuts, actes, factures,
    contrat, bulletins) sont exclus. Complète le bloc CSS « TOUT NOIR ». */
 (function(){
-  var SKIP='.doc-gen,.a4-page,.a4-doc,.inv-page,.stat-doc,.pv-doc,.ct-doc,.rb-doc,.doc-preview,[data-doc],#print-area,.print-area';
+  var SKIP='.doc-gen,.a4-page,.a4-doc,.inv-page,.stat-doc,.pv-doc,.ct-doc,.rb-doc,.doc-preview,[data-doc],#print-area,.print-area,#word-menu,.word-sw';
   function gray(r,g,b){ var L=Math.round(0.299*r+0.587*g+0.114*b); return L; }
   function repl(str){ /* remplace chaque rgb()/hex saturé par son gris de même luminance */
     if(!str) return str; var changed=false;
@@ -13692,53 +13692,237 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function saveSoon(){ if(saveT)return; saveT=setTimeout(function(){ saveT=null; var el=docEl(),id=curId(),k=curK(); if(!el||!id)return; var d=doss(id); if(!d)return; d.docCustom=d.docCustom||{}; d.docCustom[k]=el.innerHTML; try{if(typeof save==='function')save();}catch(e){} var b=document.getElementById('word-saved'); if(b){b.textContent='Enregistré';b.className='word-saved on';clearTimeout(window.__wsT);window.__wsT=setTimeout(function(){if(b)b.className='word-saved';},1600);} },400); }
   function focusDoc(){ var el=docEl(); if(el) el.focus(); }
   window.wordCmd=function(cmd,val){ try{ document.execCommand('styleWithCSS',false,true); }catch(e){} focusDoc(); try{ document.execCommand(cmd,false,val==null?null:val); }catch(e){} saveSoon(); };
-  window.wordFont=function(sel){ if(sel.value) window.wordCmd('fontName',sel.value); sel.selectedIndex=0; };
-  window.wordSize=function(sel){ if(sel.value) window.wordCmd('fontSize',sel.value); sel.selectedIndex=0; };
-  window.wordBlock=function(sel){ if(sel.value) window.wordCmd('formatBlock',sel.value); sel.selectedIndex=0; };
+  /* ---- Listes de choix + états actifs (barre d'outils moderne) ---- */
+  /* Polices les plus utilisées au monde (système web-safe + populaires) — ordre indicatif de popularité */
+  var FONTS=['Arial','Helvetica','Roboto','Times New Roman','Georgia','Calibri','Verdana','Segoe UI','Tahoma','Trebuchet MS','Open Sans','Lato','Montserrat','Poppins','Inter','Noto Sans','Source Sans Pro','Raleway','Nunito','Work Sans','Rubik','Ubuntu','PT Sans','Oswald','Cambria','Garamond','Palatino Linotype','Book Antiqua','Century Gothic','Franklin Gothic Medium','Lucida Sans Unicode','Merriweather','Playfair Display','Courier New','Consolas','Impact','Arial Black','Comic Sans MS'];
+  var SIZES=[['1','Très petit'],['2','Petit'],['3','Normal'],['4','Moyen'],['5','Grand'],['6','Très grand'],['7','Énorme']];
+  var BLOCKS=[['P','Normal'],['H1','Titre 1'],['H2','Titre 2'],['H3','Titre 3'],['BLOCKQUOTE','Citation']];
+  function qcv(cmd){ try{ return (''+document.queryCommandValue(cmd)).replace(/^['"]+|['"]+$/g,''); }catch(e){ return ''; } }
+  function qcs(cmd){ try{ return !!document.queryCommandState(cmd); }catch(e){ return false; } }
+  function wordCloseMenu(){ var m=document.getElementById('word-menu'); if(m&&m.parentNode)m.parentNode.removeChild(m); document.removeEventListener('mousedown',wordMenuOutside,true); }
+  window.wordCloseMenu=wordCloseMenu;
+  function wordMenuOutside(e){ var m=document.getElementById('word-menu'); if(!m)return; if(m.contains(e.target))return; if(e.target.closest&&e.target.closest('.word-dd'))return; wordCloseMenu(); }
+  /* Sauvegarde/restauration de la sélection du document (pour que le focus sur la recherche ne la perde pas) */
+  function saveRange(){ try{ var s=window.getSelection&&window.getSelection(); window.__wordRange=(s&&s.rangeCount)?s.getRangeAt(0).cloneRange():null; }catch(e){ window.__wordRange=null; } }
+  function restoreRange(){ try{ var el=docEl(); var r=window.__wordRange; if(r&&r.startContainer&&el&&el.contains(r.startContainer)){ el.focus(); var s=window.getSelection(); s.removeAllRanges(); s.addRange(r); } else if(el){ el.focus(); } }catch(e){} }
+  function placeMenu(m,btn){ document.body.appendChild(m); var r=btn.getBoundingClientRect(); var w=m.offsetWidth,h=m.offsetHeight; var left=Math.min(r.left,window.innerWidth-w-8); var top=r.bottom+5; if(top+h>window.innerHeight-6)top=Math.max(6,r.top-h-5); m.style.left=Math.max(6,left)+'px'; m.style.top=top+'px'; m.addEventListener('mousedown',function(e){ if(e.target&&e.target.tagName==='INPUT')return; e.preventDefault(); }); setTimeout(function(){document.addEventListener('mousedown',wordMenuOutside,true);},0); }
+  function norm(s){ return (''+(s||'')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+  function fontItemsHTML(q){ var cur=norm((qcv('fontName').split(',')[0])); q=norm(q);
+    var list=FONTS.filter(function(f){ return !q||norm(f).indexOf(q)>=0; });
+    if(!list.length) return '<div class="word-menu-empty">Aucune police</div>';
+    return list.map(function(v){ var on=norm(v)===cur; return '<button type="button" class="word-menu-item'+(on?' on':'')+'" style="font-family:\''+v+'\',serif" onclick="wordPick(\'font\',\''+v+'\')">'+v+'</button>'; }).join('');
+  }
+  window.wordFontFilter=function(inp){ var l=document.getElementById('word-font-list'); if(l)l.innerHTML=fontItemsHTML(inp.value); };
+  window.wordMenu=function(type,btn){ var cur=document.getElementById('word-menu'); var same=cur&&cur.getAttribute('data-type')===type; wordCloseMenu(); if(same)return;
+    saveRange();
+    var m=document.createElement('div'); m.id='word-menu'; m.className='word-menu'; m.setAttribute('data-type',type);
+    if(type==='font'){
+      m.className='word-menu word-menu-font';
+      m.innerHTML='<div class="word-search-wrap"><input type="text" class="word-search" placeholder="Rechercher une police…" oninput="wordFontFilter(this)" onkeydown="if(event.key===\'Escape\'){event.preventDefault();wordCloseMenu();}"></div><div class="word-menu-list" id="word-font-list">'+fontItemsHTML('')+'</div>';
+      placeMenu(m,btn);
+      setTimeout(function(){ var si=m.querySelector('.word-search'); if(si)si.focus(); },10);
+      return;
+    }
+    if(type==='size'){
+      var curpt=selPt();
+      m.innerHTML=PT.map(function(pt){ var on=(curpt&&Math.abs(curpt-pt)<0.6); return '<button type="button" class="word-menu-item'+(on?' on':'')+'" onclick="wordPickSize('+pt+')">'+(''+pt).replace('.',',')+' pt</button>'; }).join('');
+      placeMenu(m,btn); return;
+    }
+    var items=BLOCKS.slice(); var curVal=qcv('formatBlock');
+    m.innerHTML=items.map(function(it){ var v=it[0],l=it[1];
+      var on=((curVal||'').toLowerCase()===v.toLowerCase());
+      return '<button type="button" class="word-menu-item'+(on?' on':'')+'" onclick="wordPick(\''+type+'\',\''+v+'\')">'+l+'</button>'; }).join('');
+    placeMenu(m,btn);
+  };
+  window.wordPick=function(type,value){ restoreRange(); if(type==='font')window.wordCmd('fontName',value); else if(type==='size')window.wordCmd('fontSize',value); else window.wordCmd('formatBlock',value); wordCloseMenu(); wordRefreshStates(); };
+  window.wordToggle=function(cmd){ window.wordCmd(cmd); wordRefreshStates(); };
+  window.wordTableMenu=function(btn){ var cur=document.getElementById('word-menu'); var same=cur&&cur.getAttribute('data-type')==='table'; wordCloseMenu(); if(same)return;
+    saveRange();
+    var N=8,g='<div class="word-grid">'; for(var i=1;i<=N;i++)for(var j=1;j<=N;j++)g+='<span class="word-gc" data-r="'+i+'" data-c="'+j+'"></span>'; g+='</div><div class="word-grid-lbl" id="word-grid-lbl">Choisir la taille</div>';
+    var m=document.createElement('div'); m.id='word-menu'; m.className='word-menu word-menu-grid'; m.setAttribute('data-type','table'); m.innerHTML=g;
+    var lbl=function(){return m.querySelector('#word-grid-lbl');}; var cells=function(){return m.querySelectorAll('.word-gc');};
+    m.addEventListener('mouseover',function(e){ var c=e.target.closest&&e.target.closest('.word-gc'); if(!c)return; var rr=+c.getAttribute('data-r'),cc=+c.getAttribute('data-c'); cells().forEach(function(x){x.classList.toggle('hot',(+x.getAttribute('data-r'))<=rr&&(+x.getAttribute('data-c'))<=cc);}); lbl().textContent=rr+' × '+cc; });
+    m.addEventListener('click',function(e){ var c=e.target.closest&&e.target.closest('.word-gc'); if(!c)return; wordInsertTable(+c.getAttribute('data-r'),+c.getAttribute('data-c')); wordCloseMenu(); });
+    placeMenu(m,btn);
+  };
+  window.wordInsertTable=function(r,c){ if(!r||!c)return; var h='<table style="border-collapse:collapse;width:100%;margin:8px 0">'; for(var i=0;i<r;i++){h+='<tr>';for(var j=0;j<c;j++)h+='<td style="border:1px solid #333;padding:5px 7px;min-width:40px">&nbsp;</td>';h+='</tr>';} h+='</table><p><br></p>'; restoreRange(); document.execCommand('insertHTML',false,h); saveSoon(); };
+  /* ---- Taille en points ---- */
+  var PT=[8,9,10,10.5,11,12,14,16,18,20,24,28,32,36,48,72];
+  window.wordPickSize=function(pt){ restoreRange(); focusDoc(); try{document.execCommand('styleWithCSS',false,true);}catch(e){} document.execCommand('fontSize',false,'7'); var dg=docEl(); if(dg){ [].slice.call(dg.querySelectorAll('[style*="xx-large"],font[size="7"]')).forEach(function(el){ el.style.fontSize=pt+'pt'; el.removeAttribute('size'); }); } wordCloseMenu(); saveSoon(); wordRefreshStates(); };
+  /* ---- Coller sans mise en forme ---- */
+  function wordPastePrompt(){ var t=window.prompt('Coller le texte (sans mise en forme) :',''); if(t!=null){ restoreRange(); focusDoc(); document.execCommand('insertText',false,t); saveSoon(); } }
+  window.wordPastePlain=function(){ restoreRange(); focusDoc(); try{ if(navigator.clipboard&&navigator.clipboard.readText){ navigator.clipboard.readText().then(function(t){ restoreRange(); focusDoc(); document.execCommand('insertText',false,t); saveSoon(); }).catch(wordPastePrompt); return; } }catch(e){} wordPastePrompt(); };
+  /* ---- Exposant / Indice via wordToggle (superscript/subscript) ---- */
+  /* ---- Interligne / Alinéa (première ligne) ---- */
+  function blocksInSelection(){ var dg=docEl(); if(!dg)return []; var s=window.getSelection&&window.getSelection(); var out=[]; if(s&&s.rangeCount){ var r=s.getRangeAt(0); var wk=document.createTreeWalker(dg,NodeFilter.SHOW_ELEMENT,{acceptNode:function(n){return /^(P|DIV|H1|H2|H3|H4|LI|BLOCKQUOTE|TD)$/.test(n.tagName)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_SKIP;}}); var n; while(n=wk.nextNode()){ try{ if(r.intersectsNode(n)) out.push(n); }catch(e){} } } if(!out.length){ var el=selAnchorEl(); var b=el&&el.closest&&el.closest('p,div,h1,h2,h3,h4,li,blockquote,td'); if(b&&dg.contains(b))out.push(b); } return out; }
+  window.wordLineHeight=function(v){ restoreRange(); blocksInSelection().forEach(function(b){ b.style.lineHeight=v; }); saveSoon(); wordCloseMenu(); wordRefreshStates(); };
+  window.wordAlinea=function(){ var bs=blocksInSelection(); if(!bs.length)return; var on=bs[0].style.textIndent&&parseFloat(bs[0].style.textIndent)>0; bs.forEach(function(b){ b.style.textIndent=on?'':'2em'; }); saveSoon(); wordRefreshStates(); };
+  window.wordLineMenu=function(btn){ var cur=document.getElementById('word-menu'); var same=cur&&cur.getAttribute('data-type')==='line'; wordCloseMenu(); if(same)return; saveRange();
+    var opts=[['1','Simple (1,0)'],['1.15','1,15'],['1.5','1,5'],['2','Double (2,0)']];
+    var m=document.createElement('div'); m.id='word-menu'; m.className='word-menu'; m.setAttribute('data-type','line');
+    m.innerHTML=opts.map(function(o){return '<button type="button" class="word-menu-item" onclick="wordLineHeight(\''+o[0]+'\')">'+o[1]+'</button>';}).join('');
+    placeMenu(m,btn); };
+  /* ---- Saut de page A4 ---- */
+  window.wordPageBreak=function(){ restoreRange(); focusDoc(); document.execCommand('insertHTML',false,'<div class="wp-break" contenteditable="false">— Saut de page —</div><p><br></p>'); saveSoon(); };
+  /* ---- Couleurs rapides (palette) ---- */
+  var PAL_TXT=['#000000','#333333','#666666','#0a1a3a','#123a7a','#7a1020','#1a5e20','#8a5a00'];
+  var PAL_HL=['#fff3a3','#ffe0b3','#d6f5d6','#d6e4ff','#f0d6ff','#ffd6d6','#e6e6e6','transparent'];
+  window.wordPalette=function(btn){ var cur=document.getElementById('word-menu'); var same=cur&&cur.getAttribute('data-type')==='pal'; wordCloseMenu(); if(same)return; saveRange();
+    function row(kind,cols){ return '<div class="word-pal">'+cols.map(function(c){ var none=(c==='transparent'); return '<button type="button" class="word-sw'+(none?' word-sw-none':'')+'" title="'+(none?'Aucun':c)+'" style="'+(none?'':'background:'+c)+'" onclick="wordColorPick(\''+kind+'\',\''+c+'\')"></button>'; }).join('')+'</div>'; }
+    var m=document.createElement('div'); m.id='word-menu'; m.className='word-menu word-menu-pal'; m.setAttribute('data-type','pal');
+    m.innerHTML='<div class="word-pal-t">Couleur du texte</div>'+row('text',PAL_TXT)+'<div class="word-pal-t">Surlignage</div>'+row('hilite',PAL_HL);
+    placeMenu(m,btn); };
+  window.wordColorPick=function(kind,c){ restoreRange(); focusDoc(); try{document.execCommand('styleWithCSS',false,true);}catch(e){} if(kind==='text'){ document.execCommand('foreColor',false,c); } else { if(!document.execCommand('hiliteColor',false,c)) document.execCommand('backColor',false,c); } wordCloseMenu(); saveSoon(); };
+  /* ---- Rechercher / Remplacer ---- */
+  window.wordFindToggle=function(){ var pv=document.getElementById('de-preview'); if(!pv)return; var p=document.getElementById('word-find'); if(p){ p.parentNode.removeChild(p); return; }
+    p=document.createElement('div'); p.id='word-find'; p.className='word-find';
+    p.innerHTML='<input type="text" id="wf-find" placeholder="Rechercher…"><input type="text" id="wf-repl" placeholder="Remplacer par…"><label class="wf-ci"><input type="checkbox" id="wf-ci"> Ignorer la casse</label><button type="button" class="word-b" onclick="wordReplaceAll()">Tout remplacer</button><button type="button" class="word-b" onclick="wordFindToggle()">Fermer</button><span class="wf-msg" id="wf-msg"></span>';
+    pv.appendChild(p); var fi=p.querySelector('#wf-find'); if(fi)setTimeout(function(){fi.focus();},10); };
+  window.wordReplaceAll=function(){ var f=document.getElementById('wf-find'); if(!f)return; var find=f.value; if(!find){ var mg=document.getElementById('wf-msg'); if(mg)mg.textContent='Saisir un texte'; return; } var repl=(document.getElementById('wf-repl')||{}).value||''; var ci=(document.getElementById('wf-ci')||{}).checked; var dg=docEl(); if(!dg)return;
+    var re=new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),ci?'gi':'g'); var count=0;
+    var wk=document.createTreeWalker(dg,NodeFilter.SHOW_TEXT,null); var nodes=[]; var n; while(n=wk.nextNode())nodes.push(n);
+    nodes.forEach(function(t){ var v=t.nodeValue; re.lastIndex=0; var c=(v.match(re)||[]).length; if(c){ count+=c; t.nodeValue=v.replace(re,repl); } });
+    saveSoon(); var mg=document.getElementById('wf-msg'); if(mg)mg.textContent=count+' remplacement(s)'; };
+  function fontLabel(){ var f=qcv('fontName'); if(!f)return 'Police'; f=f.split(',')[0].replace(/^['"]+|['"]+$/g,'').trim(); return f||'Police'; }
+  function selPt(){ var el=selAnchorEl(); var dg=docEl(); if(!el||!dg||!dg.contains(el))return null; var px=parseFloat(window.getComputedStyle(el).fontSize); if(!px)return null; return Math.round(px*72/96*10)/10; }
+  function sizeLabel(){ var pt=selPt(); return pt?((''+pt).replace('.',',')+' pt'):'Taille'; }
+  function blockLabel(){ var b=(qcv('formatBlock')||'').toLowerCase(); var m=BLOCKS.filter(function(x){return x[0].toLowerCase()===b;})[0]; return m?m[1]:'Style'; }
+  /* État actif fiable via le style calculé de la sélection (queryCommandState('bold') non fiable avec styleWithCSS) */
+  function selAnchorEl(){ try{ var s=window.getSelection&&window.getSelection(); if(!s||!s.rangeCount)return null; var node=s.getRangeAt(0).startContainer; return (node.nodeType===3?node.parentElement:node)||null; }catch(e){ return null; } }
+  function activeState(cmd){ var el=selAnchorEl(); var dg=docEl(); if(!el||!dg||!dg.contains(el))return false; var cs=window.getComputedStyle(el); var dec=(cs.textDecorationLine||cs.textDecoration||'');
+    switch(cmd){
+      case 'bold': { var w=cs.fontWeight; return w==='bold'||w==='bolder'||(parseInt(w,10)||400)>=600; }
+      case 'italic': return cs.fontStyle==='italic'||cs.fontStyle==='oblique';
+      case 'underline': return dec.indexOf('underline')>=0;
+      case 'strikeThrough': return dec.indexOf('line-through')>=0;
+      case 'justifyLeft': return ['left','start','-webkit-left',''].indexOf(cs.textAlign)>=0;
+      case 'justifyCenter': return ['center','-webkit-center'].indexOf(cs.textAlign)>=0;
+      case 'justifyRight': return ['right','end','-webkit-right'].indexOf(cs.textAlign)>=0;
+      case 'justifyFull': return cs.textAlign==='justify';
+      case 'insertUnorderedList': return !!(el.closest&&el.closest('ul'));
+      case 'insertOrderedList': return !!(el.closest&&el.closest('ol'));
+    }
+    return qcs(cmd);
+  }
+  var refT=null;
+  window.wordRefreshStates=function(){ if(refT)return; refT=setTimeout(function(){ refT=null; var tb=document.getElementById('word-toolbar'); if(!tb)return;
+    tb.querySelectorAll('.word-tg[data-cmd]').forEach(function(bt){ bt.classList.toggle('on',activeState(bt.getAttribute('data-cmd'))); });
+    var lf=document.getElementById('wdd-font'); if(lf)lf.textContent=fontLabel();
+    var ls=document.getElementById('wdd-size'); if(ls)ls.textContent=sizeLabel();
+    var lb=document.getElementById('wdd-block'); if(lb)lb.textContent=blockLabel();
+  },30); };
   window.wordColor=function(inp){ window.wordCmd('foreColor',inp.value); };
   window.wordHilite=function(inp){ try{ document.execCommand('styleWithCSS',false,true); }catch(e){} focusDoc(); if(!document.execCommand('hiliteColor',false,inp.value)) document.execCommand('backColor',false,inp.value); saveSoon(); };
+  /* Importer une image → insertion dans le document (data URL, ajustée à la largeur de la page) */
+  window.wordImage=function(){ try{
+      var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.style.display='none';
+      inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(!f){ if(inp.parentNode)inp.parentNode.removeChild(inp); return; }
+        if(!/^image\//.test(f.type)){ if(typeof toast==='function')toast('Fichier non image ignoré.'); return; }
+        var rd=new FileReader();
+        rd.onload=function(){ focusDoc();
+          var html='<img src="'+rd.result+'" alt="'+((f.name||'image').replace(/"/g,''))+'" style="max-width:100%;height:auto;display:block;margin:8px auto;">';
+          if(!document.execCommand('insertHTML',false,html)){ var dg=document.querySelector('#de-preview .doc-gen'); if(dg)dg.insertAdjacentHTML('beforeend',html); }
+          if(typeof saveSoon==='function')saveSoon();
+          if(inp.parentNode)inp.parentNode.removeChild(inp);
+        };
+        rd.onerror=function(){ if(typeof toast==='function')toast('Lecture de l\'image impossible.'); if(inp.parentNode)inp.parentNode.removeChild(inp); };
+        rd.readAsDataURL(f);
+      };
+      document.body.appendChild(inp); inp.click();
+    }catch(e){ if(typeof toast==='function')toast('Import d\'image indisponible.'); } };
   window.wordLink=function(){ var u=window.prompt('Adresse du lien :','https://'); if(u) window.wordCmd('createLink',u); };
   window.wordTable=function(){ var r=parseInt(window.prompt('Nombre de lignes :','3'),10); if(!r||r<1)return; var c=parseInt(window.prompt('Nombre de colonnes :','3'),10); if(!c||c<1)return; var h='<table style="border-collapse:collapse;width:100%;margin:8px 0">'; for(var i=0;i<r;i++){ h+='<tr>'; for(var j=0;j<c;j++) h+='<td style="border:1px solid #333;padding:5px 7px;min-width:40px">&nbsp;</td>'; h+='</tr>'; } h+='</table><p><br></p>'; focusDoc(); document.execCommand('insertHTML',false,h); saveSoon(); };
   window.wordRegen=function(){ var id=curId(),k=curK(); var d=doss(id); if(d&&d.docCustom){ delete d.docCustom[k]; try{if(typeof save==='function')save();}catch(e){} } if(typeof espEdRefresh==='function') espEdRefresh(id); var b=document.getElementById('word-saved'); if(b){b.textContent='Régénéré depuis les champs';b.className='word-saved on';} };
 
+  var NF='onmousedown="return false"'; /* préserve la sélection du document */
   function toolbarHTML(){ return '<div id="word-toolbar" class="word-tb">'
-    +'<div class="word-grp"><button class="word-b" title="Annuler" onclick="wordCmd(\'undo\')">↶</button><button class="word-b" title="Rétablir" onclick="wordCmd(\'redo\')">↷</button></div>'
-    +'<div class="word-grp"><select class="word-sel" title="Police" onchange="wordFont(this)"><option value="">Police</option><option value="Times New Roman">Times New Roman</option><option value="Georgia">Georgia</option><option value="Arial">Arial</option><option value="Calibri">Calibri</option><option value="Verdana">Verdana</option><option value="Cambria">Cambria</option><option value="Courier New">Courier New</option></select>'
-    +'<select class="word-sel" title="Taille" onchange="wordSize(this)"><option value="">Taille</option><option value="1">Très petit</option><option value="2">Petit</option><option value="3">Normal</option><option value="4">Moyen</option><option value="5">Grand</option><option value="6">Très grand</option><option value="7">Énorme</option></select>'
-    +'<select class="word-sel" title="Style" onchange="wordBlock(this)"><option value="">Style</option><option value="P">Normal</option><option value="H1">Titre 1</option><option value="H2">Titre 2</option><option value="H3">Titre 3</option><option value="BLOCKQUOTE">Citation</option></select></div>'
-    +'<div class="word-grp"><button class="word-b wb-strong" title="Gras" onclick="wordCmd(\'bold\')">G</button><button class="word-b wb-em" title="Italique" onclick="wordCmd(\'italic\')">I</button><button class="word-b wb-u" title="Souligné" onclick="wordCmd(\'underline\')">S</button><button class="word-b wb-strike" title="Barré" onclick="wordCmd(\'strikeThrough\')">S</button></div>'
-    +'<div class="word-grp"><label class="word-cl" title="Couleur du texte">A<input type="color" value="#111111" oninput="wordColor(this)"></label><label class="word-cl word-hl" title="Surligneur">H<input type="color" value="#ffff00" oninput="wordHilite(this)"></label></div>'
-    +'<div class="word-grp"><button class="word-b" title="Aligner à gauche" onclick="wordCmd(\'justifyLeft\')">⯇</button><button class="word-b" title="Centrer" onclick="wordCmd(\'justifyCenter\')">≡</button><button class="word-b" title="Aligner à droite" onclick="wordCmd(\'justifyRight\')">⯈</button><button class="word-b" title="Justifier" onclick="wordCmd(\'justifyFull\')">☰</button></div>'
-    +'<div class="word-grp"><button class="word-b" title="Liste à puces" onclick="wordCmd(\'insertUnorderedList\')">•—</button><button class="word-b" title="Liste numérotée" onclick="wordCmd(\'insertOrderedList\')">1.</button><button class="word-b" title="Diminuer le retrait" onclick="wordCmd(\'outdent\')">⇤</button><button class="word-b" title="Augmenter le retrait" onclick="wordCmd(\'indent\')">⇥</button></div>'
-    +'<div class="word-grp"><button class="word-b" title="Lien" onclick="wordLink()">Lien</button><button class="word-b" title="Tableau" onclick="wordTable()">Tableau</button><button class="word-b" title="Ligne horizontale" onclick="wordCmd(\'insertHorizontalRule\')">―</button><button class="word-b" title="Effacer la mise en forme" onclick="wordCmd(\'removeFormat\')">Effacer</button></div>'
-    +'<div class="word-grp word-grp-end"><button class="word-b word-regen" title="Régénérer le document depuis les champs" onclick="wordRegen()">↻ Régénérer</button><span class="word-saved" id="word-saved">Éditable</span></div>'
+    +'<div class="word-grp"><button class="word-b" '+NF+' title="Annuler" onclick="wordCmd(\'undo\')">↶</button><button class="word-b" '+NF+' title="Rétablir" onclick="wordCmd(\'redo\')">↷</button></div>'
+    +'<div class="word-grp"><button class="word-b word-dd" '+NF+' title="Police utilisée — cliquer pour changer" onclick="wordMenu(\'font\',this)"><span class="word-dd-lbl" id="wdd-font">Police</span><span class="word-dd-car">▾</span></button>'
+    +'<button class="word-b word-dd" '+NF+' title="Taille de police — cliquer pour changer" onclick="wordMenu(\'size\',this)"><span class="word-dd-lbl" id="wdd-size">Taille</span><span class="word-dd-car">▾</span></button>'
+    +'<button class="word-b word-dd" '+NF+' title="Style de paragraphe" onclick="wordMenu(\'block\',this)"><span class="word-dd-lbl" id="wdd-block">Style</span><span class="word-dd-car">▾</span></button></div>'
+    +'<div class="word-grp"><button class="word-b word-tg wb-strong" data-cmd="bold" '+NF+' title="Gras" onclick="wordToggle(\'bold\')">G</button><button class="word-b word-tg wb-em" data-cmd="italic" '+NF+' title="Italique" onclick="wordToggle(\'italic\')">I</button><button class="word-b word-tg wb-u" data-cmd="underline" '+NF+' title="Souligné" onclick="wordToggle(\'underline\')">S</button><button class="word-b word-tg wb-strike" data-cmd="strikeThrough" '+NF+' title="Barré" onclick="wordToggle(\'strikeThrough\')">S</button><button class="word-b word-tg" data-cmd="superscript" '+NF+' title="Exposant" onclick="wordToggle(\'superscript\')">x²</button><button class="word-b word-tg" data-cmd="subscript" '+NF+' title="Indice" onclick="wordToggle(\'subscript\')">x₂</button></div>'
+    +'<div class="word-grp"><label class="word-cl" title="Couleur du texte">A<input type="color" value="#111111" oninput="wordColor(this)"></label><label class="word-cl word-hl" title="Surligneur">H<input type="color" value="#ffff00" oninput="wordHilite(this)"></label><button class="word-b word-dd" '+NF+' title="Couleurs rapides (texte + surlignage)" onclick="wordPalette(this)"><span>Couleurs</span><span class="word-dd-car">▾</span></button></div>'
+    +'<div class="word-grp"><button class="word-b word-tg" data-cmd="justifyLeft" '+NF+' title="Aligner à gauche" onclick="wordToggle(\'justifyLeft\')">⯇</button><button class="word-b word-tg" data-cmd="justifyCenter" '+NF+' title="Centrer" onclick="wordToggle(\'justifyCenter\')">≡</button><button class="word-b word-tg" data-cmd="justifyRight" '+NF+' title="Aligner à droite" onclick="wordToggle(\'justifyRight\')">⯈</button><button class="word-b word-tg" data-cmd="justifyFull" '+NF+' title="Justifier" onclick="wordToggle(\'justifyFull\')">☰</button></div>'
+    +'<div class="word-grp"><button class="word-b word-tg" data-cmd="insertUnorderedList" '+NF+' title="Liste à puces" onclick="wordToggle(\'insertUnorderedList\')">•—</button><button class="word-b word-tg" data-cmd="insertOrderedList" '+NF+' title="Liste numérotée" onclick="wordToggle(\'insertOrderedList\')">1.</button><button class="word-b" '+NF+' title="Diminuer le retrait" onclick="wordCmd(\'outdent\')">⇤</button><button class="word-b" '+NF+' title="Augmenter le retrait" onclick="wordCmd(\'indent\')">⇥</button><button class="word-b word-dd" '+NF+' title="Interligne" onclick="wordLineMenu(this)"><span>Interligne</span><span class="word-dd-car">▾</span></button><button class="word-b" '+NF+' title="Alinéa (retrait de première ligne)" onclick="wordAlinea()">Alinéa</button></div>'
+    +'<div class="word-grp"><button class="word-b" '+NF+' title="Lien" onclick="wordLink()">Lien</button><button class="word-b" '+NF+' title="Insérer une image" onclick="wordImage()">Image</button><button class="word-b" '+NF+' title="Coller sans mise en forme (Ctrl+Maj+V)" onclick="wordPastePlain()">Coller</button><button class="word-b word-dd" '+NF+' title="Insérer un tableau" onclick="wordTableMenu(this)"><span>Tableau</span><span class="word-dd-car">▾</span></button><button class="word-b" '+NF+' title="Ligne horizontale" onclick="wordCmd(\'insertHorizontalRule\')">―</button><button class="word-b" '+NF+' title="Saut de page (impression A4)" onclick="wordPageBreak()">Saut de page</button></div>'
+    +'<div class="word-grp"><button class="word-b" '+NF+' title="Rechercher / Remplacer" onclick="wordFindToggle()">Rechercher</button><button class="word-b" '+NF+' title="Effacer la mise en forme" onclick="wordCmd(\'removeFormat\')">Effacer</button></div>'
+    +'<div class="word-grp word-grp-end"><button class="word-b word-regen" '+NF+' title="Régénérer le document depuis les champs" onclick="wordRegen()">↻ Régénérer</button><span class="word-saved" id="word-saved">Éditable</span></div>'
     +'</div>'; }
 
   function setup(){ var pv=document.getElementById('de-preview'); if(!pv)return; var dg=pv.querySelector('.doc-gen'); if(!dg)return;
-    if(!document.getElementById('word-toolbar')){ pv.insertAdjacentHTML('afterbegin',toolbarHTML()); }
-    if(dg.getAttribute('contenteditable')!=='true'){ dg.setAttribute('contenteditable','true'); dg.setAttribute('spellcheck','true'); dg.classList.add('word-editable'); dg.addEventListener('input',saveSoon); dg.addEventListener('blur',saveSoon); }
+    if(!document.getElementById('word-toolbar')){ pv.insertAdjacentHTML('afterbegin',toolbarHTML()); if(typeof wordRefreshStates==='function')setTimeout(wordRefreshStates,0); }
+    if(dg.getAttribute('contenteditable')!=='true'){ dg.setAttribute('contenteditable','true'); dg.setAttribute('spellcheck','true'); dg.classList.add('word-editable');
+      dg.addEventListener('input',function(){saveSoon();if(typeof wordRefreshStates==='function')wordRefreshStates();});
+      dg.addEventListener('blur',saveSoon);
+      dg.addEventListener('keyup',function(){if(typeof wordRefreshStates==='function')wordRefreshStates();});
+      dg.addEventListener('mouseup',function(){if(typeof wordRefreshStates==='function')wordRefreshStates();});
+    }
+    if(!window.__wordSelWired){ window.__wordSelWired=1;
+      document.addEventListener('selectionchange',function(){ var el=docEl(); if(!el)return; var a=document.activeElement; if(a&&(a===el||el.contains(a))){ if(typeof wordRefreshStates==='function')wordRefreshStates(); } });
+      document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&document.getElementById('word-menu')) wordCloseMenu();
+        if((e.ctrlKey||e.metaKey)&&e.shiftKey&&(e.key==='v'||e.key==='V')){ var el=docEl(); var a=document.activeElement; if(el&&a&&(a===el||el.contains(a))){ e.preventDefault(); if(typeof wordPastePlain==='function')wordPastePlain(); } } });
+    }
   }
   var mt=null; function schedule(){ if(mt)return; mt=setTimeout(function(){mt=null;setup();},60); }
   function css(){ if(document.getElementById('word-editor-css')){(document.body||document.documentElement).appendChild(document.getElementById('word-editor-css'));return;} var st=document.createElement('style'); st.id='word-editor-css';
     st.textContent=[
       '#de-preview{position:relative}',
-      '.word-tb{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;margin:-22px -22px 16px;background:#0b0b0d;border-bottom:1px solid #262629;box-shadow:0 4px 12px -6px rgba(0,0,0,.7)}',
-      '.word-grp{display:flex;align-items:center;gap:3px;padding-right:8px;border-right:1px solid #24242a}',
-      '.word-grp-end{border-right:0;margin-left:auto}',
-      '.word-b{min-width:30px;height:30px;padding:0 8px;background:#161619;border:1px solid #2a2a2e;border-radius:7px;color:#e6e8ee;font:600 13px/1 system-ui,sans-serif;cursor:pointer;transition:background .12s,border-color .12s}',
+      '.word-tb{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;padding:8px 12px;margin:-22px -22px 16px;background:#0b0b0d;border-bottom:1px solid #262629;box-shadow:0 4px 12px -6px rgba(0,0,0,.7)}',
+      '.word-grp{display:flex;align-items:center;gap:5px;flex:1 1 auto;justify-content:center;padding-right:10px;border-right:1px solid #24242a}',
+      '.word-grp-end{flex:1 1 auto;border-right:0;justify-content:flex-end}',
+      '.word-b{display:inline-flex;align-items:center;justify-content:center;text-align:center;gap:5px;min-width:32px;height:32px;padding:0 10px;background:#161619;border:1px solid #2a2a2e;border-radius:9px;color:#e6e8ee;font:600 13px/1 system-ui,sans-serif;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease,transform .08s ease,box-shadow .16s ease}',
       '.word-b:hover{background:#212127;border-color:#3a3a40}',
-      '.word-b:active{background:#2a2a30}',
+      '.word-b:active{transform:translateY(1px)}',
+      '.word-b.on{background:#eef0f4;border-color:#eef0f4;color:#0b0b0d;box-shadow:0 2px 9px -3px rgba(255,255,255,.28),inset 0 0 0 1px rgba(0,0,0,.06)}',
+      '.word-b.on:hover{background:#fff;border-color:#fff}',
       '.wb-strong{font-weight:800}.wb-em{font-style:italic}.wb-u{text-decoration:underline}.wb-strike{text-decoration:line-through}',
+      '.word-dd{padding:0 9px}',
+      '.word-dd-lbl{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}',
+      '.word-dd-car{font-size:9px;opacity:.55;margin-left:1px}',
+      '.word-menu{position:fixed;z-index:100060;background:#111114;border:1px solid #2a2a2e;border-radius:11px;padding:6px;box-shadow:0 16px 40px -10px rgba(0,0,0,.85),0 2px 8px -4px rgba(0,0,0,.6);max-height:min(60vh,360px);overflow:auto;min-width:170px;animation:wordMenuIn .13s ease}',
+      '@keyframes wordMenuIn{from{opacity:0;transform:translateY(-6px) scale(.98)}to{opacity:1;transform:none}}',
+      '.word-menu-item{display:block;width:100%;text-align:center;padding:8px 14px;border:0;background:none;color:#e6e8ee;border-radius:8px;font:inherit;font-size:13px;cursor:pointer;transition:background .12s ease,color .12s ease}',
+      '.word-menu-item:hover{background:#22222a}',
+      '.word-menu-item.on{background:#eef0f4;color:#0b0b0d;font-weight:700}',
+      '.word-menu-font{min-width:230px;padding:0}',
+      '.word-search-wrap{position:sticky;top:0;background:#111114;padding:8px;border-bottom:1px solid #24242a;z-index:1}',
+      '.word-search{width:100%;box-sizing:border-box;height:34px;padding:0 12px;background:#17171b;border:1px solid #2f2f36;border-radius:8px;color:#eceff5;font:inherit;font-size:13px;outline:none;transition:border-color .15s ease,box-shadow .15s ease}',
+      '.word-search:focus{border-color:#5a5a63;box-shadow:0 0 0 3px rgba(120,120,130,.22)}',
+      '.word-search::placeholder{color:#7a7a82}',
+      '.word-menu-list{padding:6px;max-height:min(48vh,300px);overflow:auto}',
+      '.word-menu-empty{padding:14px;text-align:center;color:#8a8a90;font-size:12.5px}',
+      '.word-menu-grid{min-width:auto}',
+      '.word-grid{display:grid;grid-template-columns:repeat(8,20px);gap:4px}',
+      '.word-gc{width:20px;height:20px;border:1px solid #2f2f36;border-radius:4px;background:#17171b;cursor:pointer;transition:background .08s ease,border-color .08s ease}',
+      '.word-gc.hot{background:#eef0f4;border-color:#eef0f4}',
+      '.word-grid-lbl{text-align:center;font-size:11.5px;color:#c9cbce;margin-top:8px;font-weight:600}',
+      '.wp-break{margin:14px 0;border-top:2px dashed #9aa0ad;text-align:center;color:#8a90a0;font:600 10.5px/1 system-ui,sans-serif;letter-spacing:1px;text-transform:uppercase;padding-top:6px;user-select:none;break-after:page;page-break-after:always}',
+      '@media print{.wp-break{border:0!important;color:transparent!important;height:0;margin:0;padding:0;break-after:page;page-break-after:always}}',
+      '.word-menu-pal{min-width:auto;padding:10px}',
+      '.word-pal-t{font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;color:#8a8a90;font-weight:700;margin:2px 2px 6px}',
+      '.word-pal{display:grid;grid-template-columns:repeat(8,22px);gap:6px;margin-bottom:8px}',
+      '.word-sw{width:22px;height:22px;border:1px solid rgba(255,255,255,.25);border-radius:6px;cursor:pointer;padding:0;transition:transform .08s ease,box-shadow .12s ease}',
+      '.word-sw:hover{transform:scale(1.12);box-shadow:0 0 0 2px rgba(255,255,255,.25)}',
+      '.word-sw-none{position:relative;background:#17171b}',
+      '.word-sw-none::after{content:"";position:absolute;left:2px;right:2px;top:50%;height:2px;background:#e5484d;transform:rotate(-45deg)}',
+      '.word-find{position:absolute;top:64px;right:26px;z-index:30;display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#111114;border:1px solid #2a2a2e;border-radius:11px;padding:10px 12px;box-shadow:0 16px 40px -10px rgba(0,0,0,.85)}',
+      '.word-find input[type=text]{height:32px;padding:0 10px;background:#17171b;border:1px solid #2f2f36;border-radius:8px;color:#eceff5;font:inherit;font-size:13px;outline:none;min-width:150px}',
+      '.word-find input[type=text]:focus{border-color:#5a5a63;box-shadow:0 0 0 3px rgba(120,120,130,.22)}',
+      '.wf-ci{display:flex;align-items:center;gap:5px;color:#c9cbce;font-size:12px}',
+      '.wf-msg{color:#9a9aa3;font-size:12px;min-width:60px}',
       '.word-regen{width:auto;color:#cbced6}',
       '.word-sel{height:30px;background:#161619;border:1px solid #2a2a2e;border-radius:7px;color:#e6e8ee;font:600 12px/1 system-ui,sans-serif;padding:0 6px;cursor:pointer}',
       '.word-cl{display:inline-flex;align-items:center;gap:3px;height:30px;padding:0 7px;background:#161619;border:1px solid #2a2a2e;border-radius:7px;color:#e6e8ee;font:800 13px/1 system-ui,sans-serif;cursor:pointer;position:relative}',
-      '.word-cl input[type=color]{width:18px;height:18px;border:0;background:none;padding:0;cursor:pointer}',
+      '.word-cl input[type=color]{width:16px;height:16px;border:0;background:none;padding:0;cursor:pointer;-webkit-appearance:none;appearance:none;border-radius:50%;overflow:hidden}',
+      '.word-cl input[type=color]::-webkit-color-swatch-wrapper{padding:0}',
+      '.word-cl input[type=color]::-webkit-color-swatch{border:1px solid rgba(255,255,255,.35);border-radius:50%}',
+      '.word-cl input[type=color]::-moz-color-swatch{border:1px solid rgba(255,255,255,.35);border-radius:50%}',
       '.word-saved{font:600 11.5px/1 system-ui,sans-serif;color:#8a8a90;padding:0 6px;white-space:nowrap}',
       '.word-saved.on{color:#f4f6fa}',
       '.word-editable{outline:none}',
       '.word-editable:focus{outline:none}',
       'body[data-page] .word-editable table{border-collapse:collapse}',
-      '@media(hover:none){.word-b{height:34px;min-width:34px}.word-sel,.word-cl{height:34px}}'
+      '@media(hover:none){.word-b{height:36px;min-width:36px}.word-cl{height:36px}.word-menu-item{padding:10px 16px}.word-gc{width:24px;height:24px}}'
     ].join(''); (document.body||document.documentElement).appendChild(st);
   }
   function init(){ css();
