@@ -60,14 +60,14 @@ const r = await page.evaluate(() => {
   vueScroll('Pièces');
   out.scrollSafe = true;
 
-  // Greffe : la vue apparaît en tête de la colonne principale du dossier (espPanel)
+  // Nouveau design Traitement : en-tête compact du dossier en tête de colonne (la carte « Vue d'ensemble » est retirée)
   const panel = (typeof espPanel === 'function') ? espPanel(d, DB.dossiers.filter(x => !x.archived), 'd-vue') : '';
-  out.greffe = /esp-main/.test(panel) && panel.indexOf('vue-card') > panel.indexOf('esp-main') && panel.indexOf('vue-card') >= 0;
+  out.greffe = /esp-main/.test(panel) && /tr-head/.test(panel) && panel.indexOf('vue-card') < 0;
 
   // rendu de la page espace complète (intégration réelle)
   state.page = 'espace'; state.espaceDossier = 'd-vue';
   const full = pageEspace();
-  out.pageInteg = /Vue d.ensemble du dossier/.test(full);
+  out.pageInteg = /tr-head/.test(full) && !/Vue d.ensemble du dossier/.test(full);
 
   return out;
 });
@@ -84,8 +84,8 @@ check('pilule de statut du dossier', r.statut);
 check('pièces reçues → axe pièces présent', r.piecesOk);
 check('dossier avancé → ≥ 1 étape finalisée', r.someDone);
 check('vueScroll sûr sans cible', r.scrollSafe);
-check('greffe en tête de la colonne principale (espPanel)', r.greffe);
-check('intégré dans la page Traitement (pageEspace)', r.pageInteg);
+check('en-tête compact du dossier en tête de colonne (espPanel)', r.greffe);
+check('nouveau design intégré dans la page Traitement (sans « Vue d’ensemble »)', r.pageInteg);
 check('aucun pageerror', perr.length === 0);
 
 const ok = results.filter(x => x.ok).length, tot = results.length;

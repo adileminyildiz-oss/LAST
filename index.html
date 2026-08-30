@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=270;
+var LAST_VER=271;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -6574,6 +6574,100 @@ body.dark .doc-gen,body.dark .doc-gen b,body.dark .inv,body.dark .inv b,body.dar
 body.dark .fv-view-scroll{border-color:#ccc!important}
 </style>
 
+<script id="trait-redesign">
+/* Nouveau design de l'onglet Traitement : retrait des cartes « Vue d'ensemble » et « Modèle de dossier »,
+   en-tête compact du dossier (identité + statut + progression + actions clés) et grille 2 colonnes. */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function has(f){return typeof window[f]==='function';}
+  function stripCard(h,cls){
+    var i=h.indexOf('<div class="'+cls); if(i<0) return h;
+    var re=/<div\b|<\/div>/g; re.lastIndex=i; var depth=0,m;
+    while((m=re.exec(h))){ if(m[0]==='</div>'){ depth--; if(depth===0) return h.slice(0,i)+h.slice(re.lastIndex); } else depth++; }
+    return h;
+  }
+  function extractCard(h,cls){ var i=h.indexOf('<div class="'+cls); if(i<0) return ''; var re=/<div\b|<\/div>/g; re.lastIndex=i; var depth=0,m; while((m=re.exec(h))){ if(m[0]==='</div>'){ depth--; if(depth===0) return h.slice(i,re.lastIndex); } else depth++; } return ''; }
+  function progress(d){ try{
+    var ok=0,total=6;
+    if(has('piecesEtat')){var pi=piecesEtat(d); if(pi&&pi.t&&pi.ok)ok++;}
+    if(has('actesEtat')){var ac=actesEtat(d); if(ac&&ac.t&&ac.n===ac.t)ok++;}
+    if(has('cqEtat')){var cq=cqEtat(d); if(cq&&!cq.ko&&!cq.warn)ok++;}
+    if(has('sigEtat')){var sg=sigEtat(d); if(sg&&sg.total&&sg.tous)ok++;}
+    if(has('depose')&&depose(d))ok++;
+    if(has('clot')&&clot(d))ok++;
+    return {ok:ok,total:total,pct:Math.round(ok/total*100)};
+  }catch(e){ return {ok:0,total:6,pct:0}; } }
+  function nomD(d){ try{ var n=dossierClients(d); if(n) return n; }catch(e){} return (d&&(d.ref||d.numeroDossier))||'Dossier'; }
+  function trHead(d){
+    var col=(has('statColor')?statColor(d.statut):'#6a6a72');
+    var pr=progress(d);
+    var syn='',prof='';
+    try{ if(has('avocatFiscaliste')){var a=window.avocatFiscaliste(d); syn=(a&&a.synthese)||''; if(a&&a.profil){prof=[a.profil.forme,a.profil.regimeFiscal].filter(Boolean).join(' · ');} } }catch(e){}
+    var next=''; try{ if(has('tacheDossier')){var t=window.tacheDossier(d); if(t&&t.act){ next='<button class="tr-act tr-act-pri" onclick="'+t.act.replace(/"/g,'&quot;')+'">Traiter</button>'; } } }catch(e){}
+    var acts='<div class="tr-actions">'
+      +next
+      +(has('iaResumeDossier')?'<button class="tr-act" onclick="iaResumeDossier(\''+d.id+'\')">Résumé IA</button>':'')
+      +(has('ouvrirAvocatFiscaliste')?'<button class="tr-act" onclick="ouvrirAvocatFiscaliste(\''+d.id+'\')">Analyse fiscaliste</button>':'')
+      +(has('fiscalHubOpen')?'<button class="tr-act tr-act-fisc" onclick="fiscalHubOpen(\''+d.id+'\')">Module fiscal</button>':'')
+      +'</div>';
+    return '<div class="tr-head">'
+      +'<div class="tr-head-row">'
+        +'<div class="tr-id"><div class="tr-name">'+E(nomD(d))+'</div>'
+          +'<div class="tr-meta"><span>'+E(d.ref||d.numeroDossier||'')+'</span>'+(syn?('<span class="tr-dot"></span><span>'+E(syn)+'</span>'):'')+'</div>'
+        +'</div>'
+        +'<span class="tr-stat" style="color:'+col+';border-color:'+col+'66;background:'+col+'1f">'+E(d.statut||'—')+'</span>'
+      +'</div>'
+      +'<div class="tr-prog"><div class="tr-prog-track"><div class="tr-prog-bar" style="width:'+pr.pct+'%"></div></div><span class="tr-prog-lbl">'+pr.ok+'/'+pr.total+' étapes · '+pr.pct+'%</span></div>'
+      +acts
+      +'</div>';
+  }
+  if(typeof window.espPanel==='function'){ var _p=window.espPanel;
+    window.espPanel=function(d,list,id){ var h=_p(d,list,id); if(!d||!h||h.indexOf('<div class="esp-main"')<0) return h;
+      try{
+        var docCard='';
+        try{ if(typeof modeleDossierCard==='function'){ var mdc=modeleDossierCard(d); var inner=extractCard(mdc,'md-docs'); if(inner){ docCard='<div class="card tr-doccard"><div class="card-h"><h2>Documents à générer</h2><span class="sub" style="margin-left:auto">Générés depuis les informations du dossier</span></div><div class="card-b">'+inner+'</div></div>'; } } }catch(e){}
+        h=stripCard(h,'card vue-card');
+        h=stripCard(h,'card md-card');
+        h=stripCard(h,'ia-resume-bar');
+        h=stripCard(h,'card pj-card');
+        h=h.replace('<div class="esp-main">','<div class="esp-main esp-grid">'+trHead(d)+docCard);
+      }catch(e){}
+      return h;
+    };
+  }
+  /* CSS (fin de body → prime sur le thème) */
+  function css(){ if(document.getElementById('trait-redesign-css')) { (document.body||document.documentElement).appendChild(document.getElementById('trait-redesign-css')); return; }
+    var st=document.createElement('style'); st.id='trait-redesign-css';
+    st.textContent=[
+      '.esp-main.esp-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:16px!important;align-items:start!important}',
+      '.esp-main.esp-grid>.tr-head{grid-column:1/-1}',
+      '.esp-main.esp-grid>.pj-card,.esp-main.esp-grid>.esp-mailcard,.esp-main.esp-grid>.tr-doccard{grid-column:1/-1}',
+      '.tr-doccard .md-docs{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}',
+      '.tr-doccard .md-doc{display:flex;align-items:center;gap:8px;background:#101012;border:1px solid #26262b;border-radius:10px;padding:8px 11px}',
+      '.tr-doccard .md-doc .nm{flex:1;font-size:12.5px}',
+      '@media(max-width:1200px){.esp-main.esp-grid{grid-template-columns:1fr!important}}',
+      '.tr-head{background:linear-gradient(180deg,#16161a,#101012);border:1px solid #26262b;border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:12px}',
+      '.tr-head-row{display:flex;align-items:flex-start;gap:12px}',
+      '.tr-name{font-size:20px;font-weight:800;color:#f4f6fa;line-height:1.2}',
+      '.tr-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;font-size:12px;color:#aeb3be}',
+      '.tr-dot{width:3px;height:3px;border-radius:50%;background:#55555c;display:inline-block}',
+      '.tr-stat{margin-left:auto;font-size:12px;font-weight:700;padding:5px 12px;border-radius:20px;border:1px solid;white-space:nowrap}',
+      '.tr-prog{display:flex;align-items:center;gap:12px}',
+      '.tr-prog-track{flex:1;height:7px;border-radius:20px;background:#202024;overflow:hidden}',
+      '.tr-prog-bar{height:100%;border-radius:20px;background:linear-gradient(90deg,#55555c,#8a8a93)}',
+      '.tr-prog-lbl{font-size:11.5px;color:#aeb3be;white-space:nowrap}',
+      '.tr-actions{display:flex;gap:8px;flex-wrap:wrap}',
+      '.tr-act{background:linear-gradient(180deg,#242428,#161619);border:1px solid #34343a;color:#eef0f4;font:inherit;font-size:12.5px;font-weight:600;padding:9px 14px;border-radius:10px;cursor:pointer}',
+      '.tr-act:hover{background:linear-gradient(180deg,#2b2b30,#1d1d21);border-color:#45454d}',
+      '.tr-act-pri{border-color:#4a4a52}',
+      '.tr-act-fisc{border-color:#45454d}',
+      '.esp-main.esp-grid>.card{margin:0!important}'
+    ].join('');
+    (document.body||document.documentElement).appendChild(st);
+  }
+  try{ css(); var _r=window.render; if(typeof _r==='function'&&!window.__traitCss){ window.__traitCss=1; window.render=function(){ var x=_r.apply(this,arguments); try{ var st=document.getElementById('trait-redesign-css'); if(st&&st.parentNode) st.parentNode.appendChild(st); }catch(e){} return x; }; } }catch(e){}
+})();
+</script>
 <script id="no-emoji-mod">
 /* Retrait de TOUS les emojis (pictogrammes) — glyphes fonctionnels conservés (✕ ✓ ‹ › → ↺) */
 (function(){
@@ -12077,6 +12171,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   'html body.dark .esp-mail,html body.dark .esp-item{border-left-color:#34343a!important;background:#121214!important}',
   'html body.dark .nav-badge{background:#34343a!important;color:#f4f6fa!important;box-shadow:none!important}',
   'html body.dark .vue-fisc b,html body.dark .is-in label,html body.dark .mix-in label,html body.dark .simu-hh label,html body.dark .af-item span,html body.dark .af-k{color:#cbced6!important}',
+  'html body.dark .iatb-t,html body.dark .iatb-h,html body.dark .esp-sec,html body.dark .md-sec{color:#aeb3be!important}',
   'html body.dark .tr-b svg,html body.dark .esp-from,html body.dark .esp-subj,html body.dark .esp-meta,html body.dark .esp-time,html body.dark .esp-mail b,html body.dark .esp-mail a{color:#cbced6!important}',
   'html body.dark .tag[style]{border-color:#34343a!important}',
   'html body.dark .kanban-col-h,html body.dark .kb-col-h{border-color:#34343a!important}'
