@@ -2358,13 +2358,12 @@ function stAdrPerso(ex){ex=ex||{};var a=((ex.adresse||'')+'').trim();var cp=((ex
 function stDateSlash(v){var MO=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];function p2(n){n=String(parseInt(n,10)||0);return n.length<2?('0'+n):n;}var s=((v==null?'':v)+'').trim();if(!s){var t=new Date();return p2(t.getDate())+'/'+p2(t.getMonth()+1)+'/'+t.getFullYear();}var low=s.toLowerCase(),moi=0;for(var i=0;i<12;i++){if(low.indexOf(MO[i])>=0){moi=i+1;break;}}var nums=(s.match(/\d+/g)||[]);if(moi){var jj=nums[0]||'',an=(nums[1]||'');if(an.length===2)an='20'+an;if(jj)return p2(jj)+'/'+p2(moi)+'/'+(an||(''+new Date().getFullYear()));return s;}if(nums.length>=3){var an3=nums[2];if(an3.length===2)an3='20'+an3;return p2(nums[0])+'/'+p2(nums[1])+'/'+an3;}var d=s.replace(/\D/g,'');if(d.length>=8)return d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4,8);if(d.length===6)return d.slice(0,2)+'/'+d.slice(2,4)+'/20'+d.slice(4,6);return s;}
 /* Remplace les « … » restants (trous non renseignés) par une ligne à compléter, sans les guillemets */
 /* Placeholder = guillemets SERRÉS «X» (sans espace interne). Les vraies citations « X » (avec espaces) sont conservées. */
-function stCleanHoles(html){return (''+html).replace(/«(?!\s)([^«»]{0,80})(?<!\s)»|«»/g,function(m,inner){var h=(inner||'').replace(/\s+/g,' ').trim();return '<span class="doc-fill" title="À compléter" data-fill="'+esc(h)+'"></span>';});}
+function stCleanHoles(html){return (''+html).replace(/«[^«»]{0,200}»/g,'<span class="doc-fill"></span>');}
 function stCivil(a,ph){var nom=esc((a&&a.nom||'').trim())||'«nom prénom»';var civ=(a&&a.civilite)?esc(a.civilite):'M.';
   var naiss=(a&&a.naissance)?esc(a.naissance):'«…»';var lieu=(a&&a.lieuNaissance)?esc(a.lieuNaissance):'«lieu»';
   var pays=(a&&a.pays)?esc(a.pays):'«pays»';var nat=(a&&a.nationalite)?esc(a.nationalite):'«…»';
   var adr=(a&&a.adresse)?esc(a.adresse):(ph||'«adresse»');
-  var estF=/^(mme|mlle|madame|mademoiselle)/i.test((a&&a.civilite)||civ||'');
-  return civ+' '+nom+' '+(estF?'née':'né')+' le '+naiss+' à '+lieu+' en '+pays+', de nationalité '+nat+', demeurant au '+adr+'.';}
+  return civ+' '+nom+' né le '+naiss+' à '+lieu+' en '+pays+', de nationalité '+nat+', demeurant au '+adr+'.';}
 function stFormeLabel(f){return {SAS:'Société par actions simplifiée',SASU:'Société par actions simplifiée Unipersonnelle',SARL:'Société à responsabilité limitée',EURL:'Entreprise unipersonnelle à responsabilité limitée',SCI:'Société civile immobilière',SA:'Société anonyme'}[f]||'Société par actions simplifiée';}
 function stQualite(f){return (f==='SARL'||f==='EURL'||f==='SCI')?'gérant':'Président';}
 function stDossData(d){
@@ -2454,7 +2453,7 @@ function pouvoirHTML(d){
   var repFirm=((s.representant||s.dirigeant||s.raison||'')+'').trim()||'«représentant»';
   var repTit=/^(M\.|Mme|M |Mr|Monsieur|Madame)/i.test(repFirm)?esc(repFirm):'M. '+esc(repFirm);
   var adrFirm=((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«adresse du mandataire»';
-  var mandataire=repTit+', dirigeant de la société '+esc(s.raison||'AEM CONSEIL')+', sise '+esc(adrFirm);
+  var mandataire=repTit+' dirigeant de la société '+esc(s.raison||'AEM CONSEIL')+' situé au '+esc(adrFirm);
   var villeFait=x.villeSignature;
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
   var dateTxt=x.dateActe;
@@ -2476,8 +2475,7 @@ function dncHTML(d){
   var adr=dcl.adresse?esc(dcl.adresse):'«adresse»';
   var pere=(x.pere||((dcl.pereNom||c.pereNom||'')+'')).trim();
   var mere=(x.mere||((dcl.mereNom||c.mereNom||'')+'')).trim();
-  var estF=/^(mme|mlle|madame|mademoiselle)/i.test((dcl.civilite||'')+'');var enfant=estF?'la fille':'le fils';
-  var filiation=(pere||mere)?('Déclare être '+enfant+' de '+esc(pere||'«père»')+' et de '+esc(mere||'«mère»')):('Déclare être '+enfant+' de «père» et de «mère»');
+  var filiation=(pere||mere)?('Déclare être le fils ou la fille de '+esc(pere||'«père»')+' et de '+esc(mere||'«mère»')):'Déclare être le fils ou la fille de «père» et de «mère»';
   var qualite=stQualite(x.forme);
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
   var dateTxt=x.dateActe;
@@ -2562,7 +2560,7 @@ function statutsSasHTML(d){
   // TITRE II
   A.push('<div class="st-titre">TITRE II — APPORTS · CAPITAL SOCIAL · FORME DES ACTIONS · DROITS ET OBLIGATIONS ATTACHÉS AUX ACTIONS</div>');
   var apports=assoc.map(function(a){var p=Number(a.parts)||0;var m=(nominal&&p)?stNum(Math.round(nominal*p)):'«…»';
-    return '<p>- '+ (esc((a.nom||'').trim())||'«associé»') +', une somme en numéraire de '+((nominal&&p)?stLettres(Math.round(nominal*p))+' euros':'«…»')+', ci '+m+' euros ;</p>';}).join('');
+    return '<p>- M. '+ (esc((a.nom||'').trim())||'«associé»') +', une somme en numéraire de '+((nominal&&p)?stLettres(Math.round(nominal*p))+' euros':'«…»')+' ci '+m+' euros ;</p>';}).join('');
   A.push('<div class="st-art">ARTICLE 6 — Apports</div><p>Les soussignés apportent à la société, à savoir :</p>'+apports
     +'<p>Soit au total la somme de '+capL+' euros, ci '+capN+' euros.</p>'
     +'<p>Ladite somme correspond à la souscription de '+(nbActions||'«…»')+' actions ordinaires de '+stNum(Math.round(nominal))+' euros et libérées entièrement, ainsi que l\'atteste le certificat de la banque.</p>');
@@ -3094,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=277;
+var LAST_VER=278;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -5740,9 +5738,9 @@ window.modalDemandeView=function(id){
 </script>
 <style id="a4-pages-css">
 .doc-gen .a4-doc{display:flex;flex-direction:column;align-items:center;gap:16px;background:transparent!important;box-shadow:none!important;width:210mm}
-.doc-fill{display:inline-block;min-width:80px;border-bottom:1px dotted #9a8a63;color:#a99a7c;font-style:italic;font-size:.95em;padding:0 3px;vertical-align:baseline}
-.doc-fill:empty{min-width:120px}
-@media print{.doc-fill{border-bottom:1px dotted #555;color:#6a6250}}
+.doc-fill{display:inline;min-width:0;border-bottom:none;color:transparent;font-size:0;padding:0;vertical-align:baseline}
+.doc-fill:empty{min-width:0}
+@media print{.doc-fill{border-bottom:none;color:transparent}}
 .a4-page{width:210mm;height:297mm;box-sizing:border-box;background:#fff;position:relative;overflow:hidden;padding:20mm;box-shadow:0 8px 24px rgba(60,45,20,.28);border-radius:2px}
 .a4-page.a4-tall{height:auto;min-height:297mm;overflow:visible}
 .a4-page.a4-cover{padding:0}
@@ -5890,6 +5888,8 @@ window.modalDemandeView=function(id){
   }
   function espEdPreviewHTML(d){
     var k=window.__edDoc||'statuts';
+    /* édition libre (façon Word) conservée : la version éditée à la main prime */
+    try{ if(d.docCustom&&d.docCustom[k]) return '<div class="doc-gen">'+d.docCustom[k]+'</div>'; }catch(e){}
     var html=(k==='fiche')?ficheTechniqueHTML(d):espDocHTML(d,{k:k,l:k});
     var dd=((d.docState&&d.docState[k]&&d.docState[k].dateDoc)||'');
     return '<div class="doc-gen">'+a4Paginate(html,{dateFoot:dd})+'</div>';
@@ -6617,7 +6617,7 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
     var total=0; parts.forEach(function(p){total+=p.length;}); var out=new Uint8Array(total),pos=0; parts.forEach(function(p){out.set(p,pos);pos+=p.length;});
     return out;
   }
-  var DOC_CSS='<style>*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}body{margin:0;background:#eef0f2;font-family:Georgia,"Times New Roman",serif;color:#111}.doc-gen{width:210mm;min-height:297mm;box-sizing:border-box;margin:22px auto;background:#fff;padding:22mm 20mm;box-shadow:0 2px 12px rgba(0,0,0,.15);line-height:1.65}h1,h2,h3{font-family:Georgia,serif;page-break-after:avoid}p,tr,li,.sign,.art{page-break-inside:avoid}table{border-collapse:collapse;width:100%;margin:8px 0}td,th{border:1px solid #999;padding:4px 7px;font-size:13px}img{max-width:100%;image-rendering:-webkit-optimize-contrast}@page{size:A4;margin:0}@media print{html,body{background:#fff}.doc-gen{box-shadow:none;margin:0;width:auto;min-height:0;padding:16mm 15mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>';
+  var DOC_CSS='<style>body{margin:0;background:#eef0f2;font-family:Georgia,"Times New Roman",serif;color:#111}.doc-gen{max-width:820px;margin:22px auto;background:#fff;padding:42px 48px;box-shadow:0 2px 12px rgba(0,0,0,.15);line-height:1.65}h1,h2,h3{font-family:Georgia,serif}table{border-collapse:collapse;width:100%;margin:8px 0}td,th{border:1px solid #999;padding:4px 7px;font-size:13px}@media print{body{background:#fff}.doc-gen{box-shadow:none;margin:0;max-width:none;padding:0}}</style>';
 
   window.docDownloadFolder=function(id){ var d=doss(id); if(!d)return;
     var docs=reqDocs(d), gen=docs.filter(function(dc){return isGen(d,dc.k);});
@@ -7370,7 +7370,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       ['Les parts sociales ne peuvent être représentées par des titres négociables. Le titre de chaque associé résulte des présents statuts, des actes modificatifs ultérieurs et des cessions régulièrement consenties.',
        'Chaque part sociale confère à son propriétaire un droit proportionnel dans les bénéfices et l\'actif social ; elle est indivisible à l\'égard de la Société.']));
     A.push(art('ARTICLE 9 — Cession et transmission des parts',
-      ['Les parts sociales sont librement cessibles entre associés, ainsi qu\'entre conjoints, ascendants et descendants.',
+      ['Les parts sociales sont librement cessibles entre associés'+(eurl?'':'')+' , ainsi qu\'entre conjoints, ascendants et descendants.',
        'La cession de parts à des tiers étrangers à la Société est soumise à l\'agrément préalable de la majorité des associés représentant au moins la moitié des parts sociales, conformément à l\'article L. 223-14 du Code de commerce.',
        'Toute cession de parts doit être constatée par écrit et devient opposable à la Société après signification ou dépôt d\'un original au siège social.']));
     A.push(titre('TITRE III — GÉRANCE'));
@@ -13655,29 +13655,139 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     'html body #ov.show,html body #modal.show,html body #fiscal-ov.show,html body #fiscal-ov,html body #fiscal-doc-ov{animation:lastFade .16s '+EASE+'}',
     'html body #ov.show .modal-card,html body #modal.show #modal-c,html body #modal.show .modal-card,html body #fiscal-ov .fx-shell,html body #fiscal-doc-ov .fxd-card{animation:lastPop .2s '+EASE+'}',
     'html body .fv-view-scroll .doc-gen{animation:lastFade .22s '+EASE+'}',
-    /* ---- Defilement doux ---- */
-    'html body .content,html body #view,html body .fv-view-scroll,html body .fx-content,html body #modal-c{scroll-behavior:smooth}',
-    /* ---- Qualite de rendu des documents (crispness, sans changer le fond) ---- */
-    'html body .doc-gen,html body .doc-gen *,html body .a4-doc,html body .a4-page,html body .st-doc,html body .ft-doc{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}',
-    /* Police UNIQUE : tous les documents alignés sur la police des statuts (Times serif) */
-    'html body .doc-gen,html body .doc-gen .st-doc,html body .doc-gen .ft-doc,html body .doc-gen .pv-doc,html body .doc-gen .ct-doc,html body .doc-gen .rb-doc,html body .doc-gen .dg-page,html body .doc-gen .pv-doc *,html body .doc-gen .ct-doc *,html body .doc-gen .rb-doc *,html body .doc-gen .ft-doc *,html body .doc-gen .dg-page *{font-family:"Times New Roman",Georgia,serif!important}',
-    'html body .doc-gen img,html body .a4-page img{image-rendering:-webkit-optimize-contrast}',
-    /* rendu net des pages A4 a l ecran (ombre douce, bord franc) */
-    'html body .fv-view-scroll .a4-page,html body .fv-view-scroll .st-doc,html body .fv-view-scroll .ft-doc{box-shadow:0 6px 22px -8px rgba(0,0,0,.35)!important;border-radius:2px}'
+    /* ---- Defilement doux (presentation) ---- */
+    'html body .content,html body #view,html body .fv-view-scroll,html body .fx-content,html body #modal-c{scroll-behavior:smooth}'
+    /* NB : aucune règle appliquée aux documents (police/rendu/impression) — documents laissés tels quels */
   ].join('');
-  /* Impression : A4 exact + couleurs fideles (documents imprimes sans alteration) */
-  var PRINT='@media print{html,body{background:#fff!important}@page{size:A4;margin:16mm}'
-    +'.doc-gen,.a4-doc,.a4-page,.st-doc,.ft-doc{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important;transform:none!important;margin:0!important}'
-    +'.a4-page{page-break-after:always}.a4-page:last-child{page-break-after:auto}'
-    +'.doc-gen h1,.doc-gen h2,.doc-gen h3,.doc-gen tr,.doc-gen .sign,.doc-gen .art{page-break-inside:avoid}}';
   function ensure(){ try{
     var st=document.getElementById('gen-quality-css'); if(!st){st=document.createElement('style');st.id='gen-quality-css';} st.textContent=CSS; (document.body||document.documentElement).appendChild(st);
-    var pr=document.getElementById('gen-quality-print'); if(!pr){pr=document.createElement('style');pr.id='gen-quality-print';pr.media='print';} pr.textContent=PRINT; (document.body||document.documentElement).appendChild(pr);
+    var old=document.getElementById('gen-quality-print'); if(old&&old.parentNode) old.parentNode.removeChild(old);
   }catch(e){} }
   try{ if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches){ CSS=CSS.replace(/@keyframes[^}]*\}[^}]*\}/g,'').replace(/animation:[^;]*;?/g,'').replace(/transition:[^;]*;?/g,'').replace(/transform:translate[^;]*;?/g,''); } }catch(e){}
   ensure();
   try{ var _r=window.render; if(typeof _r==='function'&&!window.__genqLast){ window.__genqLast=1; window.render=function(){ var x=_r.apply(this,arguments); try{ var a=document.getElementById('gen-quality-css'); if(a&&a.parentNode&&a!==a.parentNode.lastElementChild) a.parentNode.appendChild(a); var b2=document.getElementById('gen-quality-print'); if(b2&&b2.parentNode) b2.parentNode.appendChild(b2); }catch(e){} return x; }; } }catch(e){}
   setTimeout(ensure,0); setTimeout(ensure,500);
+})();
+</script>
+<script id="word-editor-mod">
+/* Éditeur de document façon Word : le document (volet droit de l'éditeur) devient entièrement
+   éditable avec une barre d'outils complète (police, taille, styles, couleurs, alignement,
+   listes, titres, tableaux, liens, annuler/rétablir). Les modifications sont conservées
+   (docCustom). Un bouton régénère depuis les champs. */
+(function(){
+  function doss(id){return (typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;});}
+  function curId(){return window.__edId;}
+  function curK(){return window.__edDoc||'statuts';}
+  /* capture de l'id du dossier édité */
+  ['espEdOpen','espEdDoc','espEdRefresh','espEdCat','espEdSet','espEdAssoc','espEdAssocAdd','espEdAssocDel'].forEach(function(fn){
+    if(typeof window[fn]==='function' && !window[fn].__wid){ var _o=window[fn]; window[fn]=function(){ try{ if(arguments[0]) window.__edId=arguments[0]; }catch(e){} return _o.apply(this,arguments); }; window[fn].__wid=true; }
+  });
+  function docEl(){ return document.querySelector('#de-preview .doc-gen'); }
+  var saveT=null;
+  function saveSoon(){ if(saveT)return; saveT=setTimeout(function(){ saveT=null; var el=docEl(),id=curId(),k=curK(); if(!el||!id)return; var d=doss(id); if(!d)return; d.docCustom=d.docCustom||{}; d.docCustom[k]=el.innerHTML; try{if(typeof save==='function')save();}catch(e){} var b=document.getElementById('word-saved'); if(b){b.textContent='Enregistré';b.className='word-saved on';clearTimeout(window.__wsT);window.__wsT=setTimeout(function(){if(b)b.className='word-saved';},1600);} },400); }
+  function focusDoc(){ var el=docEl(); if(el) el.focus(); }
+  window.wordCmd=function(cmd,val){ try{ document.execCommand('styleWithCSS',false,true); }catch(e){} focusDoc(); try{ document.execCommand(cmd,false,val==null?null:val); }catch(e){} saveSoon(); };
+  window.wordFont=function(sel){ if(sel.value) window.wordCmd('fontName',sel.value); sel.selectedIndex=0; };
+  window.wordSize=function(sel){ if(sel.value) window.wordCmd('fontSize',sel.value); sel.selectedIndex=0; };
+  window.wordBlock=function(sel){ if(sel.value) window.wordCmd('formatBlock',sel.value); sel.selectedIndex=0; };
+  window.wordColor=function(inp){ window.wordCmd('foreColor',inp.value); };
+  window.wordHilite=function(inp){ try{ document.execCommand('styleWithCSS',false,true); }catch(e){} focusDoc(); if(!document.execCommand('hiliteColor',false,inp.value)) document.execCommand('backColor',false,inp.value); saveSoon(); };
+  window.wordLink=function(){ var u=window.prompt('Adresse du lien :','https://'); if(u) window.wordCmd('createLink',u); };
+  window.wordTable=function(){ var r=parseInt(window.prompt('Nombre de lignes :','3'),10); if(!r||r<1)return; var c=parseInt(window.prompt('Nombre de colonnes :','3'),10); if(!c||c<1)return; var h='<table style="border-collapse:collapse;width:100%;margin:8px 0">'; for(var i=0;i<r;i++){ h+='<tr>'; for(var j=0;j<c;j++) h+='<td style="border:1px solid #333;padding:5px 7px;min-width:40px">&nbsp;</td>'; h+='</tr>'; } h+='</table><p><br></p>'; focusDoc(); document.execCommand('insertHTML',false,h); saveSoon(); };
+  window.wordRegen=function(){ var id=curId(),k=curK(); var d=doss(id); if(d&&d.docCustom){ delete d.docCustom[k]; try{if(typeof save==='function')save();}catch(e){} } if(typeof espEdRefresh==='function') espEdRefresh(id); var b=document.getElementById('word-saved'); if(b){b.textContent='Régénéré depuis les champs';b.className='word-saved on';} };
+
+  function toolbarHTML(){ return '<div id="word-toolbar" class="word-tb">'
+    +'<div class="word-grp"><button class="word-b" title="Annuler" onclick="wordCmd(\'undo\')">↶</button><button class="word-b" title="Rétablir" onclick="wordCmd(\'redo\')">↷</button></div>'
+    +'<div class="word-grp"><select class="word-sel" title="Police" onchange="wordFont(this)"><option value="">Police</option><option value="Times New Roman">Times New Roman</option><option value="Georgia">Georgia</option><option value="Arial">Arial</option><option value="Calibri">Calibri</option><option value="Verdana">Verdana</option><option value="Cambria">Cambria</option><option value="Courier New">Courier New</option></select>'
+    +'<select class="word-sel" title="Taille" onchange="wordSize(this)"><option value="">Taille</option><option value="1">Très petit</option><option value="2">Petit</option><option value="3">Normal</option><option value="4">Moyen</option><option value="5">Grand</option><option value="6">Très grand</option><option value="7">Énorme</option></select>'
+    +'<select class="word-sel" title="Style" onchange="wordBlock(this)"><option value="">Style</option><option value="P">Normal</option><option value="H1">Titre 1</option><option value="H2">Titre 2</option><option value="H3">Titre 3</option><option value="BLOCKQUOTE">Citation</option></select></div>'
+    +'<div class="word-grp"><button class="word-b wb-strong" title="Gras" onclick="wordCmd(\'bold\')">G</button><button class="word-b wb-em" title="Italique" onclick="wordCmd(\'italic\')">I</button><button class="word-b wb-u" title="Souligné" onclick="wordCmd(\'underline\')">S</button><button class="word-b wb-strike" title="Barré" onclick="wordCmd(\'strikeThrough\')">S</button></div>'
+    +'<div class="word-grp"><label class="word-cl" title="Couleur du texte">A<input type="color" value="#111111" oninput="wordColor(this)"></label><label class="word-cl word-hl" title="Surligneur">H<input type="color" value="#ffff00" oninput="wordHilite(this)"></label></div>'
+    +'<div class="word-grp"><button class="word-b" title="Aligner à gauche" onclick="wordCmd(\'justifyLeft\')">⯇</button><button class="word-b" title="Centrer" onclick="wordCmd(\'justifyCenter\')">≡</button><button class="word-b" title="Aligner à droite" onclick="wordCmd(\'justifyRight\')">⯈</button><button class="word-b" title="Justifier" onclick="wordCmd(\'justifyFull\')">☰</button></div>'
+    +'<div class="word-grp"><button class="word-b" title="Liste à puces" onclick="wordCmd(\'insertUnorderedList\')">•—</button><button class="word-b" title="Liste numérotée" onclick="wordCmd(\'insertOrderedList\')">1.</button><button class="word-b" title="Diminuer le retrait" onclick="wordCmd(\'outdent\')">⇤</button><button class="word-b" title="Augmenter le retrait" onclick="wordCmd(\'indent\')">⇥</button></div>'
+    +'<div class="word-grp"><button class="word-b" title="Lien" onclick="wordLink()">Lien</button><button class="word-b" title="Tableau" onclick="wordTable()">Tableau</button><button class="word-b" title="Ligne horizontale" onclick="wordCmd(\'insertHorizontalRule\')">―</button><button class="word-b" title="Effacer la mise en forme" onclick="wordCmd(\'removeFormat\')">Effacer</button></div>'
+    +'<div class="word-grp word-grp-end"><button class="word-b word-regen" title="Régénérer le document depuis les champs" onclick="wordRegen()">↻ Régénérer</button><span class="word-saved" id="word-saved">Éditable</span></div>'
+    +'</div>'; }
+
+  function setup(){ var pv=document.getElementById('de-preview'); if(!pv)return; var dg=pv.querySelector('.doc-gen'); if(!dg)return;
+    if(!document.getElementById('word-toolbar')){ pv.insertAdjacentHTML('afterbegin',toolbarHTML()); }
+    if(dg.getAttribute('contenteditable')!=='true'){ dg.setAttribute('contenteditable','true'); dg.setAttribute('spellcheck','true'); dg.classList.add('word-editable'); dg.addEventListener('input',saveSoon); dg.addEventListener('blur',saveSoon); }
+  }
+  var mt=null; function schedule(){ if(mt)return; mt=setTimeout(function(){mt=null;setup();},60); }
+  function css(){ if(document.getElementById('word-editor-css')){(document.body||document.documentElement).appendChild(document.getElementById('word-editor-css'));return;} var st=document.createElement('style'); st.id='word-editor-css';
+    st.textContent=[
+      '#de-preview{position:relative}',
+      '.word-tb{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;margin:-22px -22px 16px;background:#0b0b0d;border-bottom:1px solid #262629;box-shadow:0 4px 12px -6px rgba(0,0,0,.7)}',
+      '.word-grp{display:flex;align-items:center;gap:3px;padding-right:8px;border-right:1px solid #24242a}',
+      '.word-grp-end{border-right:0;margin-left:auto}',
+      '.word-b{min-width:30px;height:30px;padding:0 8px;background:#161619;border:1px solid #2a2a2e;border-radius:7px;color:#e6e8ee;font:600 13px/1 system-ui,sans-serif;cursor:pointer;transition:background .12s,border-color .12s}',
+      '.word-b:hover{background:#212127;border-color:#3a3a40}',
+      '.word-b:active{background:#2a2a30}',
+      '.wb-strong{font-weight:800}.wb-em{font-style:italic}.wb-u{text-decoration:underline}.wb-strike{text-decoration:line-through}',
+      '.word-regen{width:auto;color:#cbced6}',
+      '.word-sel{height:30px;background:#161619;border:1px solid #2a2a2e;border-radius:7px;color:#e6e8ee;font:600 12px/1 system-ui,sans-serif;padding:0 6px;cursor:pointer}',
+      '.word-cl{display:inline-flex;align-items:center;gap:3px;height:30px;padding:0 7px;background:#161619;border:1px solid #2a2a2e;border-radius:7px;color:#e6e8ee;font:800 13px/1 system-ui,sans-serif;cursor:pointer;position:relative}',
+      '.word-cl input[type=color]{width:18px;height:18px;border:0;background:none;padding:0;cursor:pointer}',
+      '.word-saved{font:600 11.5px/1 system-ui,sans-serif;color:#8a8a90;padding:0 6px;white-space:nowrap}',
+      '.word-saved.on{color:#f4f6fa}',
+      '.word-editable{outline:none}',
+      '.word-editable:focus{outline:none}',
+      'body[data-page] .word-editable table{border-collapse:collapse}',
+      '@media(hover:none){.word-b{height:34px;min-width:34px}.word-sel,.word-cl{height:34px}}'
+    ].join(''); (document.body||document.documentElement).appendChild(st);
+  }
+  function init(){ css();
+    try{ var host=document.getElementById('doc-editor'); if(host){ new MutationObserver(function(){schedule();}).observe(host,{childList:true,subtree:true}); } }catch(e){}
+    /* si l'overlay n'existe pas encore, on observe le body pour sa création */
+    try{ new MutationObserver(function(muts){ for(var i=0;i<muts.length;i++){ if(muts[i].addedNodes){ for(var j=0;j<muts[i].addedNodes.length;j++){ var n=muts[i].addedNodes[j]; if(n.id==='doc-editor'){ new MutationObserver(function(){schedule();}).observe(n,{childList:true,subtree:true}); schedule(); } } } } }).observe(document.body,{childList:true}); }catch(e){}
+    schedule();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
+</script>
+<script id="editor-fields-mod">
+/* Éditeur : n'afficher dans la barre latérale que les champs UTILES au document en cours.
+   (ex. un Pouvoir ou une DNC ne montrent pas capital/associés). Les sections non applicables
+   sont masquées, jamais supprimées des données. */
+(function(){
+  function norm(s){return (''+s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+  var ALL=['societe','dirigeant','titres','dates','associes'];
+  /* sections pertinentes par document (défaut = toutes) */
+  var MAP={
+    statuts:ALL, statutssas:ALL, statutssarl:ALL, statutssci:ALL,
+    souscripteurs:['societe','titres','associes','dates'],
+    pouvoir:['societe','dirigeant','dates'],
+    dnc:['societe','dirigeant','dates'],
+    cession:['societe','titres','associes','dates'],
+    presence:['societe','associes','dates'],
+    etatlieux:['societe','dates'],
+    decladomicile:['societe','dirigeant','dates'],
+    acceptation:['societe','dirigeant','dates'],
+    fiche:['societe','dirigeant'],
+    filiation:['societe','dirigeant','dates']
+  };
+  function grpKey(txt){ var t=norm(txt);
+    if(/societe/.test(t))return 'societe';
+    if(/dirigeant/.test(t))return 'dirigeant';
+    if(/titre|montant/.test(t))return 'titres';
+    if(/date|mention/.test(t))return 'dates';
+    if(/associe/.test(t))return 'associes';
+    return null;
+  }
+  function filter(){ try{
+    var side=document.querySelector('#doc-editor .de-side'); if(!side)return;
+    var k=window.__edDoc||'statuts'; var allow=MAP[k]||ALL;
+    var grps=side.querySelectorAll('.de-grp');
+    for(var i=0;i<grps.length;i++){ var h=grps[i].querySelector('.de-grp-h'); var key=h?grpKey(h.textContent):null; if(key){ grps[i].style.display=(allow.indexOf(key)>=0)?'':'none'; } }
+  }catch(e){} }
+  var t=null; function schedule(){ if(t)return; t=setTimeout(function(){t=null;filter();},70); }
+  function init(){
+    ['espEdOpen','espEdDoc','espEdCat','espEdRefresh'].forEach(function(fn){ if(typeof window[fn]==='function' && !window[fn].__efm){ var _o=window[fn]; window[fn]=function(){ var r=_o.apply(this,arguments); schedule(); return r; }; window[fn].__efm=true; } });
+    try{ var host=document.getElementById('doc-editor'); if(host) new MutationObserver(schedule).observe(host,{childList:true,subtree:true}); }catch(e){}
+    try{ new MutationObserver(function(muts){ for(var i=0;i<muts.length;i++){ if(muts[i].addedNodes){ for(var j=0;j<muts[i].addedNodes.length;j++){ if(muts[i].addedNodes[j].id==='doc-editor'){ new MutationObserver(schedule).observe(muts[i].addedNodes[j],{childList:true,subtree:true}); schedule(); } } } } }).observe(document.body,{childList:true}); }catch(e){}
+    schedule();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 })();
 </script>
 <script id="dash-accordion-mod">
@@ -13752,18 +13862,19 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   window.docActDlToggle=function(ev){ if(ev){ev.stopPropagation();} var m=document.getElementById('doc-dl-menu'); if(m) m.classList.toggle('show'); };
   document.addEventListener('click',function(e){ var m=document.getElementById('doc-dl-menu'); if(m&&m.classList.contains('show')&&!e.target.closest('.doc-dl-wrap')) m.classList.remove('show'); });
 
-  window.docActModifier=function(){ var el=docEl(); if(!el)return; var btn=document.getElementById('doc-act-mod');
-    if(el.getAttribute('contenteditable')==='true'){ /* Enregistrer */
-      el.setAttribute('contenteditable','false'); el.classList.remove('doc-editing');
-      try{ var cd=window.__curDoc; if(cd&&cd.id){ var d=doss(cd.id); if(d){ d.docCustom=d.docCustom||{}; d.docCustom[cd.k]=el.innerHTML; if(typeof save==='function')save(); } } }catch(e){}
-      if(btn)btn.textContent='Modifier';
-      var b=document.getElementById('doc-edit-msg'); if(b){b.textContent='✓ Modifications enregistrées';b.className='doc-edit-msg ok';setTimeout(function(){if(b&&b.parentNode)b.remove();},3500);}
-      if(typeof toast==='function')toast('Document modifié ✓');
-    } else { /* passer en édition */
-      el.setAttribute('contenteditable','true'); el.classList.add('doc-editing'); el.focus();
-      if(btn)btn.textContent='Enregistrer';
-      var host=document.getElementById('ov-b'); if(host && !document.getElementById('doc-edit-msg')){ var m=document.createElement('div'); m.id='doc-edit-msg'; m.className='doc-edit-msg'; m.textContent='Édition en cours — modifiez le texte puis « Enregistrer ».'; host.insertBefore(m,host.firstChild); }
-    } };
+  /* Modifier → ouvre l'éditeur en deux volets (barre latérale de champs + document live).
+     Chaque information modifiable est dans la barre latérale ; le sélecteur permet de changer de
+     document du dossier. */
+  window.docActModifier=function(){ try{ var cd=window.__curDoc;
+      if(cd&&cd.id&&typeof window.espEdOpen==='function'){
+        try{ if(typeof espDocCat==='function') window.__edCat=espDocCat(cd.k)||window.__edCat||'creation'; }catch(e){}
+        if(typeof closeModal==='function') closeModal();
+        window.espEdOpen(cd.id, cd.k);
+        return;
+      }
+    }catch(e){}
+    if(typeof toast==='function') toast('Éditeur indisponible pour ce document.');
+  };
 
   window.docActPrint=function(){ if(typeof espDocPrint==='function') espDocPrint(); else window.print(); };
   window.docActPDF=function(){ var m=document.getElementById('doc-dl-menu'); if(m)m.classList.remove('show'); if(typeof toast==='function')toast('Dans la fenêtre d\'impression, choisissez « Enregistrer en PDF ».'); window.docActPrint(); };
@@ -13795,7 +13906,25 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       'html body.dark .btn.btn-ghost:hover,html body.dark .btn-ghost:hover{background:#161619!important;border-color:#3a3a40!important;color:#eef0f4!important}',
       /* modale + KPI en #141b28 bleu-gris → graphite neutre */
       'html body.dark .modal,html body.dark #ov-b,html body.dark .modal-h,html body.dark .modal-card,html body.dark #ov-c{background:#0b0b0d!important}',
-      'html body.dark .kpi{background:#050506!important;border-color:#1c1c1e!important}'
+      'html body.dark .kpi{background:#050506!important;border-color:#1c1c1e!important}',
+      /* Éditeur de documents (deux volets) : chrome en noir monochrome — le DOCUMENT reste blanc */
+      'html body.dark .de-ov{background:#08080a!important}',
+      'html body.dark .de-head{background:#050506!important;border-bottom-color:#1c1c1e!important}',
+      'html body.dark .de-head b{color:#f4f6fa!important}',
+      'html body.dark .de-cats{background:#0d0d0f!important;border-color:#26262b!important}',
+      'html body.dark .de-cat{color:#9a9aa0!important}',
+      'html body.dark .de-cat:hover{color:#eceff5!important}',
+      'html body.dark .de-cat.on{background:#1c1c1e!important;color:#fff!important;box-shadow:none!important}',
+      'html body.dark .de-cat-n{background:#26262b!important;color:#cbced6!important}',
+      'html body.dark .de-cat.on .de-cat-n{background:#8a8a93!important;color:#0a0a0c!important}',
+      'html body.dark .de-tab{border-color:#2a2a2e!important;color:#c9cbce!important}',
+      'html body.dark .de-tab.on{background:#1c1c1e!important;color:#fff!important;border-color:#3a3a40!important}',
+      'html body.dark .de-side{background:#050506!important;border-right-color:#1c1c1e!important}',
+      'html body.dark .de-preview{background:#08080a!important}',
+      'html body.dark .de-i,html body.dark .de-side select,html body.dark .de-side textarea{background:#0d0d0f!important;border-color:#262629!important;color:#eceff5!important}',
+      'html body.dark .de-docpick-sel{background:#0d0d0f!important;border-color:#3a3a40!important;color:#f4f6fa!important;box-shadow:none!important}',
+      'html body.dark .de-assoc{background:#0d0d0f!important;border-color:#262629!important}',
+      'html body.dark .de-add{border-color:#2a2a2e!important;color:#c9cbce!important}'
     ].join(''); (document.body||document.documentElement).appendChild(st);
   }
   try{ css(); var _rr=window.render; if(typeof _rr==='function'&&!window.__docActCss){ window.__docActCss=1; window.render=function(){ var x=_rr.apply(this,arguments); try{ var s=document.getElementById('doc-actions-css'); if(s&&s.parentNode&&s!==s.parentNode.lastElementChild) s.parentNode.appendChild(s); }catch(e){} return x; }; } }catch(e){}
