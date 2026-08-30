@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=297;
+var LAST_VER=299;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -6739,7 +6739,9 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
         h=stripCard(h,'card md-card');
         h=stripCard(h,'ia-resume-bar');
         h=stripCard(h,'card pj-card');
-        h=h.replace('<div class="esp-main">','<div class="esp-main esp-grid">'+trHead(d)+docCard);
+        var pfCard=''; try{ if(typeof window.dossierPreflightCard==='function') pfCard=window.dossierPreflightCard(d)||''; }catch(e){}
+        var rcCard=''; try{ if(typeof window.dossierRecapCard==='function') rcCard=window.dossierRecapCard(d)||''; }catch(e){}
+        h=h.replace('<div class="esp-main">','<div class="esp-main esp-grid">'+trHead(d)+pfCard+rcCard+docCard);
       }catch(e){}
       return h;
     };
@@ -14299,7 +14301,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function fonctionDefaut(t){return (t==='sas'||t==='sasu')?'Président':'Gérant';}
   function estUnipersonnel(t){return t==='sasu'||t==='eurl';}
   var FORMES=[['sas','SAS'],['sasu','SASU'],['sarl','SARL'],['eurl','EURL'],['sci','SCI']];
-  var MODIF_KINDS=[['siege','Transfert de siège social'],['dirigeant','Changement de dirigeant'],['denomination','Changement de dénomination'],['objet','Changement d\'objet social'],['capital','Modification de capital']];
+  var MODIF_KINDS=[['siege','Transfert de siège social'],['dirigeant','Changement de dirigeant'],['denomination','Changement de dénomination'],['objet','Changement d\'objet social'],['capital','Modification de capital'],['transformation','Transformation de la forme sociale'],['cession','Cession de parts / d\'actions'],['dissolution','Dissolution & mise en liquidation'],['cloture','Changement de date de clôture']];
   function modifLabel(k){for(var i=0;i<MODIF_KINDS.length;i++)if(MODIF_KINDS[i][0]===k)return MODIF_KINDS[i][1];return 'Modification statutaire';}
   window.formNature=function(v){FD().nature=v;if(typeof render==='function')render();};
   window.formModifKind=function(v){var o=FD();o.modif=o.modif||{};o.modif.kind=v;if(typeof render==='function')render();};
@@ -14341,6 +14343,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       else if(mk==='denomination'){ nm(N.denomination,'Nouvelle dénomination'); }
       else if(mk==='objet'){ nm(N.objet,'Nouvel objet social'); }
       else if(mk==='capital'){ nm(N.capital,'Nouveau capital'); }
+      else if(mk==='transformation'){ nm(N.formeNouvelle,'Nouvelle forme sociale'); }
+      else if(mk==='cession'){ nm(N.cedant,'Cédant'); nm(N.cessionnaire,'Cessionnaire'); nm(N.nbTitres,'Nombre de titres cédés'); nm(N.prix,'Prix de cession'); }
+      else if(mk==='dissolution'){ nm(N.liquidateur,'Nom du liquidateur'); nm(N.siegeLiquidation,'Siège de la liquidation'); }
+      else if(mk==='cloture'){ nm(N.ancienneCloture,'Ancienne date de clôture'); nm(N.nouvelleCloture,'Nouvelle date de clôture'); }
       return mm;
     }
     var s=o.societe||{},dir=o.direction||{},si=o.siege||{},dt=o.dates||{},dep=o.depot||{},co=o.contact||{}; var m=[];
@@ -14503,6 +14509,20 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       else if(mk==='capital'){ specM=grp('Modification de capital',
           r2('Capital actuel (€)',fI('modif.ancien.capital'),'Nouveau capital (€)',fI('modif.nouveau.capital'))
           +r1('Nature de l\'opération',fSel('modif.nouveau.sens',[['augmentation','Augmentation de capital'],['reduction','Réduction de capital']],get('modif.nouveau.sens')||'augmentation'))); }
+      else if(mk==='transformation'){ specM=grp('Transformation de la forme sociale',
+          r2('Forme actuelle',fSel('modif.societe.forme',FORMES,get('modif.societe.forme')||'sas'),'Nouvelle forme sociale',fSel('modif.nouveau.formeNouvelle',FORMES,get('modif.nouveau.formeNouvelle')||'sas'))
+          +'<div class="hint" style="margin-top:6px">La transformation n\'entraîne pas la création d\'une personne morale nouvelle. Un commissaire à la transformation peut être requis (ex. passage à la SAS).</div>'); }
+      else if(mk==='cession'){ specM=grp('Cession de parts / d\'actions',
+          r2('Cédant (nom et prénom)',fI('modif.nouveau.cedant'),'Cessionnaire (nom et prénom)',fI('modif.nouveau.cessionnaire'))
+          +r2('Nombre de titres cédés',fI('modif.nouveau.nbTitres'),'Prix de cession (€)',fI('modif.nouveau.prix'))
+          +r1('Nature des titres',fSel('modif.nouveau.natureTitres',[['parts sociales','Parts sociales (SARL/EURL/SCI)'],['actions','Actions (SAS/SASU/SA)']],get('modif.nouveau.natureTitres')||'parts sociales'))); }
+      else if(mk==='dissolution'){ specM=grp('Dissolution & mise en liquidation',
+          r2('Liquidateur (nom et prénom)',fI('modif.nouveau.liquidateur'),'Nationalité du liquidateur',fI('modif.nouveau.liquidateurNat','Française'))
+          +r1('Adresse personnelle du liquidateur',fI('modif.nouveau.liquidateurAdr'))
+          +r1('Siège de la liquidation',fI('modif.nouveau.siegeLiquidation'))); }
+      else if(mk==='cloture'){ specM=grp('Changement de date de clôture',
+          r2('Ancienne date de clôture',fI('modif.nouveau.ancienneCloture','ex. 31 décembre'),'Nouvelle date de clôture',fI('modif.nouveau.nouvelleCloture','ex. 30 juin'))
+          +'<div class="hint" style="margin-top:6px">Modification de l\'article « Exercice social » des statuts. Sans effet rétroactif sur un exercice déjà clos.</div>'); }
       var notesM=grp('Notes & observations',
         '<textarea rows="3" oninput="formSet(\'extra.notes\',this.value)" placeholder="Remarques, particularités…">'+esc(get('extra.notes'))+'</textarea>');
       var contactM=grp('Contact',r2('Email',fI('contact.email'),'Téléphone',fI('contact.tel')));
@@ -14784,7 +14804,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     dirigeant:[{k:'pv',label:'PV / décision de nomination du dirigeant'},{k:'cni',label:'Pièce d\'identité du nouveau dirigeant'},{k:'dnc',label:'Déclaration de non-condamnation + filiation'},{k:'annonce',label:'Attestation de parution de l\'annonce légale'},{k:'m3',label:'Formulaire M3 / déclaration de modification'}],
     denomination:[{k:'pv',label:'PV de changement de dénomination'},{k:'statuts',label:'Statuts mis à jour'},{k:'annonce',label:'Attestation de parution de l\'annonce légale'},{k:'m2',label:'Formulaire M2 / déclaration de modification'}],
     objet:[{k:'pv',label:'PV de changement d\'objet social'},{k:'statuts',label:'Statuts mis à jour'},{k:'annonce',label:'Attestation de parution de l\'annonce légale'},{k:'m2',label:'Formulaire M2 / déclaration de modification'}],
-    capital:[{k:'pv',label:'PV décidant la variation de capital'},{k:'statuts',label:'Statuts mis à jour'},{k:'annonce',label:'Attestation de parution de l\'annonce légale'},{k:'m2',label:'Formulaire M2 / déclaration de modification'}]
+    capital:[{k:'pv',label:'PV décidant la variation de capital'},{k:'statuts',label:'Statuts mis à jour'},{k:'annonce',label:'Attestation de parution de l\'annonce légale'},{k:'m2',label:'Formulaire M2 / déclaration de modification'}],
+    transformation:[{k:'pv',label:'PV de transformation de la forme sociale'},{k:'statuts',label:'Statuts refondus (nouvelle forme)'},{k:'rapport',label:'Rapport du commissaire à la transformation (si requis)'},{k:'annonce',label:'Attestation de parution de l\'annonce légale'},{k:'m2',label:'Formulaire M2 / déclaration de modification'}],
+    cession:[{k:'acte',label:'Acte de cession de titres (enregistré aux impôts)'},{k:'pv',label:'PV d\'agrément de la cession (si requis)'},{k:'statuts',label:'Statuts mis à jour (répartition du capital)'},{k:'annonce',label:'Attestation de parution de l\'annonce légale (le cas échéant)'},{k:'m2',label:'Formulaire de déclaration de modification'}],
+    dissolution:[{k:'pv',label:'PV de dissolution & nomination du liquidateur'},{k:'annonce',label:'Attestation de parution de l\'annonce légale de dissolution'},{k:'dnc',label:'Déclaration de non-condamnation du liquidateur'},{k:'m2',label:'Formulaire M2 (dissolution)'}],
+    cloture:[{k:'pv',label:'PV de changement de date de clôture'},{k:'statuts',label:'Statuts mis à jour (article Exercice social)'},{k:'m2',label:'Formulaire M2 / déclaration de modification'}]
   };
   function formeNom(f){var M={sas:'Société par actions simplifiée',sasu:'Société par actions simplifiée à associé unique',sarl:'Société à responsabilité limitée',eurl:'Entreprise unipersonnelle à responsabilité limitée',sci:'Société civile immobilière'};return M[(f||'').toLowerCase()]||((f||'SAS')+'').toUpperCase();}
   function unipersonnelForme(f){f=(f||'').toLowerCase();return f==='sasu'||f==='eurl';}
@@ -14797,6 +14821,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(mk==='denomination') return {objet:'changement de dénomination sociale',res:'L\'assemblée décide de modifier la dénomination sociale, précédemment « '+esc(A.denomination||'…')+' », qui devient : <b>'+esc(N.denomination||'…')+'</b>, à compter du '+esc(eff)+'. L\'article correspondant des statuts est modifié en conséquence.'};
     if(mk==='objet') return {objet:'changement d\'objet social',res:'L\'assemblée décide de modifier l\'objet social de la société, qui sera désormais le suivant : <b>'+esc(N.objet||'…')+'</b>, à compter du '+esc(eff)+'. L\'article « Objet » des statuts est modifié en conséquence.'};
     if(mk==='capital'){ var sens=(N.sens==='reduction')?'réduire':'augmenter'; return {objet:'modification du capital social',res:'L\'assemblée décide de '+sens+' le capital social, qui passe de '+esc(A.capital||'…')+' € à <b>'+esc(N.capital||'…')+' €</b>, à compter du '+esc(eff)+'. L\'article « Capital social » des statuts est modifié en conséquence.'};}
+    if(mk==='transformation'){ var fn=(typeof formeNom==='function')?formeNom(N.formeNouvelle):(N.formeNouvelle||'…'); return {objet:'transformation de la forme sociale',res:'L\'assemblée décide de transformer la société en <b>'+esc(fn)+'</b>, à compter du '+esc(eff)+', sans création d\'une personne morale nouvelle. Les statuts sont refondus pour être mis en conformité avec les règles de la nouvelle forme, et les organes de direction sont désignés en conséquence.'};}
+    if(mk==='cession'){ var nt=N.natureTitres||'parts sociales'; return {objet:'cession de '+nt,res:'L\'assemblée agrée et constate la cession de <b>'+esc(N.nbTitres||'…')+'</b> '+esc(nt)+' consentie par '+esc(N.cedant||'…')+' au profit de <b>'+esc(N.cessionnaire||'…')+'</b>, moyennant le prix de <b>'+esc(N.prix||'…')+' €</b>, à compter du '+esc(eff)+'. La répartition du capital est modifiée en conséquence dans les statuts.'};}
+    if(mk==='dissolution'){ return {objet:'dissolution anticipée & mise en liquidation',res:'L\'assemblée décide la <b>dissolution anticipée</b> de la société à compter du '+esc(eff)+' et sa mise en liquidation amiable. Elle nomme en qualité de liquidateur <b>'+esc(N.liquidateur||'…')+'</b>'+(N.liquidateurNat?(', de nationalité '+esc(N.liquidateurNat)):'')+(N.liquidateurAdr?(', demeurant '+esc(N.liquidateurAdr)):'')+', qui accepte ces fonctions et déclare n\'être frappé(e) d\'aucune interdiction. Le siège de la liquidation est fixé à <b>'+esc(N.siegeLiquidation||'…')+'</b>. Le liquidateur dispose des pouvoirs les plus étendus pour réaliser l\'actif et apurer le passif.'};}
+    if(mk==='cloture'){ return {objet:'changement de date de clôture de l\'exercice',res:'L\'assemblée décide de modifier la date de clôture de l\'exercice social, précédemment fixée au <b>'+esc(N.ancienneCloture||'…')+'</b>, désormais fixée au <b>'+esc(N.nouvelleCloture||'…')+'</b>, à compter de l\'exercice en cours. L\'article « Exercice social » des statuts est modifié en conséquence.'};}
     return {objet:'modification statutaire',res:'L\'assemblée décide la modification statutaire mentionnée ci-dessus.'};
   }
   function pvModifHTML(dos){
@@ -15290,21 +15318,349 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.fisc-note{font-size:11.5px;color:var(--ink-3);margin-top:12px;line-height:1.5}',
     '.fisc-tag{font-size:11px;font-weight:800}',
     '.fisc-act{margin-top:12px;display:flex;justify-content:flex-end}',
-    /* Rendu ACCENTUÉ dans le Module fiscal (overlay sombre) — carte mise en avant */
-    '#fiscal-ov .fisc-card{background:linear-gradient(135deg,rgba(124,108,255,.12),#141418 58%);border:1px solid #4a3fd6;border-radius:16px;margin-bottom:18px;overflow:hidden;box-shadow:0 0 0 1px rgba(124,108,255,.22),0 22px 60px -26px rgba(124,108,255,.55)}',
-    '#fiscal-ov .fisc-card .card-h{padding:14px 18px;border-bottom:1px solid #34305e;display:flex;align-items:center;background:linear-gradient(90deg,rgba(124,108,255,.26),rgba(124,108,255,.04));box-shadow:inset 4px 0 0 0 #7c6cff}',
-    '#fiscal-ov .fisc-card .card-h h2{font-size:16px;margin:0;color:#efeaff;letter-spacing:.2px}',
-    '#fiscal-ov .fisc-card .card-h h2::before{content:"🧮 ";font-size:15px}',
-    '#fiscal-ov .fisc-card .card-b{padding:16px 18px}',
+    /* Rendu dans le Module fiscal (overlay sombre) — sobre, sans couleur ni icône */
+    '#fiscal-ov .fisc-card{background:#141418;border:1px solid #242428;border-radius:14px;margin-bottom:16px;overflow:hidden}',
+    '#fiscal-ov .fisc-card .card-h{padding:13px 16px;border-bottom:1px solid #242428;display:flex;align-items:center}',
+    '#fiscal-ov .fisc-card .card-h h2{font-size:15px;margin:0;color:#eef0f4}',
+    '#fiscal-ov .fisc-card .card-b{padding:15px 16px}',
     '#fiscal-ov .fisc-grid{gap:14px 18px}',
-    '#fiscal-ov .fisc-row label{color:#b7b2dd;font-size:11px}',
-    '#fiscal-ov .fisc-sel{background:#0e0e11;border:1px solid #3a3560;color:#f2f0ff;font-weight:600;padding:10px 12px;border-radius:10px}',
-    '#fiscal-ov .fisc-sel:hover{border-color:#6b5cf0}',
-    '#fiscal-ov .fisc-sel:focus{outline:none;border-color:#7c6cff;box-shadow:0 0 0 3px rgba(124,108,255,.28)}',
-    '#fiscal-ov .fisc-note{color:#b3b0c8;border-top:1px solid #26233f;padding-top:11px}',
-    '#fiscal-ov .fisc-tag{color:#0e0e12;background:linear-gradient(135deg,#8f82ff,#6b5cf0);border:1px solid #4a3fd6;border-radius:20px;padding:3px 11px;font-size:11px}',
-    '#fiscal-ov .fisc-act .btn{background:#17171b;border:1px solid #4a3fd6;color:#c9c2ff;border-radius:10px;padding:9px 14px}',
-    '#fiscal-ov .fisc-act .btn:hover{border-color:#7c6cff;color:#efeaff}'
+    '#fiscal-ov .fisc-row label{color:#8b8e99;font-size:11px}',
+    '#fiscal-ov .fisc-sel{background:#0e0e11;border:1px solid #2a2a2e;color:#eef0f4;padding:9px 11px;border-radius:9px}',
+    '#fiscal-ov .fisc-sel:hover{border-color:#3a3a40}',
+    '#fiscal-ov .fisc-sel:focus{outline:none;border-color:#4a4a52}',
+    '#fiscal-ov .fisc-note{color:#a7abbd;border-top:1px solid #242428;padding-top:11px}',
+    '#fiscal-ov .fisc-tag{color:#c7cad2;background:#1b1b20;border:1px solid #2a2a2e;border-radius:20px;padding:3px 10px;font-size:11px}',
+    '#fiscal-ov .fisc-act .btn{background:#17171b;border:1px solid #2a2a2e;color:#c7cad2;border-radius:9px;padding:9px 14px}',
+    '#fiscal-ov .fisc-act .btn:hover{border-color:#3a3a40;color:#e6e8ee}'
+  ].join('');document.head.appendChild(st); }catch(e){}
+})();
+</script>
+<script id="dossier-preflight-mod">
+/* ===================================================================
+   CONTRÔLE DU DOSSIER — go / no-go en tête du panneau.
+   Agrège, pour CE dossier uniquement : documents validés + cohérence,
+   pièces justificatives réunies, identités complètes (création).
+   Réponse unique « peut-on déposer ? » + liste exacte des points bloquants.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  var FLBL={prenom:'prénom',nom:'nom',naissance:'date de naissance',lieuNaissance:'lieu de naissance',pays:'pays de naissance',nationalite:'nationalité',adresse:'adresse'};
+  function idCheck(d){
+    var o=(d&&d.intake)||{}; var miss=[]; var dir=o.direction||{};
+    ['prenom','nom','naissance','lieuNaissance','nationalite','adresse'].forEach(function(f){ if(!(''+(dir[f]||'')).trim()) miss.push('Dirigeant — '+FLBL[f]); });
+    (o.associes||[]).forEach(function(a,i){ var nm=(''+(a.nom||a.prenom||'')).trim(); if(!nm)return;
+      ['naissance','lieuNaissance','pays','nationalite','adresse'].forEach(function(f){ if(!(''+(a[f]||'')).trim()) miss.push('Associé '+(i+1)+' — '+FLBL[f]); }); });
+    return {ok:miss.length===0,missing:miss};
+  }
+  window.dossierPreflight=function(d){
+    var isModif=(d&&d.formaliteNature==='modification');
+    var T=(typeof window.docTestsDossier==='function')?window.docTestsDossier(d):{total:0,nbValide:0,coherenceOk:true,tous:false,incoherences:[]};
+    var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d; dm.docs=dm.docs||{}; dm.piecesRecues=dm.piecesRecues||{};
+    var pieces=(typeof piecesRequises==='function')?(piecesRequises(d)||[]):[];
+    var recu=function(p){return ((dm.docs[p.k]||[]).length>0)||dm.piecesRecues[p.k]===true;};
+    var pnb=pieces.filter(recu).length, ptot=pieces.length;
+    var idb=isModif?{ok:true,missing:[]}:idCheck(d);
+    var gates=[
+      {l:'Documents générés & validés',ok:T.tous,detail:T.nbValide+'/'+T.total},
+      {l:'Cohérence des informations',ok:T.coherenceOk,detail:T.coherenceOk?'OK':(T.incoherences.length+' à corriger')},
+      {l:'Pièces justificatives réunies',ok:(ptot>0?pnb===ptot:true),detail:pnb+'/'+ptot}
+    ];
+    if(!isModif) gates.push({l:'Identités complètes',ok:idb.ok,detail:idb.ok?'OK':(idb.missing.length+' manquante(s)')});
+    var blockers=[];
+    if(!T.tous) blockers.push('Documents non tous validés ('+T.nbValide+'/'+T.total+')');
+    if(!T.coherenceOk)(T.incoherences||[]).forEach(function(x){blockers.push('Incohérence : '+(x.label||x.k||''));});
+    if(ptot>0&&pnb<ptot) pieces.filter(function(p){return !recu(p);}).forEach(function(p){blockers.push('Pièce manquante : '+(p.label||p.k));});
+    if(!isModif&&!idb.ok) idb.missing.forEach(function(x){blockers.push(x);});
+    return {ready:blockers.length===0,gates:gates,blockers:blockers,isModif:isModif};
+  };
+  window.dossierPreflightCard=function(d){
+    if(!d)return '';
+    var P=window.dossierPreflight(d);
+    var chips=P.gates.map(function(g){return '<div class="pf-gate '+(g.ok?'ok':'ko')+'"><span class="pf-gate-ic">'+(g.ok?'✓':'○')+'</span><span class="pf-gate-l">'+E(g.l)+'</span><span class="pf-gate-d">'+E(g.detail)+'</span></div>';}).join('');
+    var verdict=P.ready
+      ? '<span class="pf-verdict ok">Prêt à déposer</span>'
+      : '<span class="pf-verdict ko">'+P.blockers.length+' point'+(P.blockers.length>1?'s':'')+' à régler</span>';
+    var blk=P.ready?'' : '<div class="pf-blockers"><div class="pf-blockers-h">À régler avant le dépôt</div>'+P.blockers.map(function(b){return '<div class="pf-blk">'+E(b)+'</div>';}).join('')+'</div>';
+    return '<div class="card pf-card '+(P.ready?'is-ready':'is-todo')+'"><div class="card-h"><h2>Contrôle du dossier</h2><span class="sub" style="margin-left:auto">'+verdict+'</span></div>'
+      +'<div class="card-b"><div class="pf-gates">'+chips+'</div>'+blk+'</div></div>';
+  };
+  /* La carte est insérée après l'en-tête du dossier par le pipeline « trait-redesign »
+     (window.dossierPreflightCard). Pas de greffe espPanel séparée ici pour éviter un doublon. */
+  try{ var st=document.createElement('style');st.id='dossier-preflight-css';st.textContent=[
+    '.pf-card{margin-bottom:14px}',
+    '.pf-card.is-ready{border-color:#26332b}.pf-card.is-todo{border-color:#3a2f20}',
+    '.pf-verdict{font-size:11.5px;font-weight:800;padding:3px 11px;border-radius:999px;border:1px solid #2a2a2e}',
+    '.pf-verdict.ok{background:rgba(38,86,52,.30);color:#c3e8d1;border-color:rgba(84,150,104,.55)}',
+    '.pf-verdict.ko{background:rgba(120,90,42,.24);color:#f0d6b6;border-color:rgba(170,130,74,.5)}',
+    '.pf-gates{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:640px){.pf-gates{grid-template-columns:1fr}}',
+    '.pf-gate{display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid #1c1c1e;border-radius:9px;background:#0a0a0c;font-size:12.5px}',
+    '.pf-gate.ok{border-color:#26332b}.pf-gate.ko{border-color:#3a2f20}',
+    '.pf-gate-ic{width:18px;height:18px;flex:0 0 auto;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:#17171a;color:#8f8f98}',
+    '.pf-gate.ok .pf-gate-ic{background:rgba(38,86,52,.4);color:#c3e8d1}.pf-gate.ko .pf-gate-ic{background:rgba(120,90,42,.35);color:#f0d6b6}',
+    '.pf-gate-l{flex:1;color:#c9c9d2}.pf-gate-d{color:#8f8f98;font-size:11px;font-variant-numeric:tabular-nums}',
+    '.pf-blockers{margin-top:12px;border-top:1px solid #242428;padding-top:10px}',
+    '.pf-blockers-h{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#d0a86a;font-weight:700;margin-bottom:6px}',
+    '.pf-blk{font-size:12px;color:#cbb89a;padding:4px 0 4px 14px;position:relative}.pf-blk::before{content:"•";position:absolute;left:2px;color:#d0a86a}'
+  ].join('');document.head.appendChild(st); }catch(e){}
+})();
+</script>
+<script id="dossier-recap-mod">
+/* ===================================================================
+   FICHE DE RENSEIGNEMENTS CONSOLIDÉE — transmission des informations.
+   Récapitule, sur UNE feuille imprimable, toutes les informations d'UN
+   dossier (lues sur d.intake — strictement propres au dossier), à faire
+   valider par le client avant génération/dépôt. Voir · Imprimer/PDF ·
+   Transmettre au client · suivi de validation.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function findDos(id){return (DB.dossiers||[]).find(function(x){return x.id===id;});}
+  function row(l,v){ v=(v==null?'':(''+v)).trim(); return '<tr><td class="rc-l">'+E(l)+'</td><td class="rc-v">'+(v?E(v):'<span class="rc-empty">à compléter</span>')+'</td></tr>'; }
+  function sec(t,rows){ return '<h3 class="rc-sec">'+E(t)+'</h3><table class="rc-t"><tbody>'+rows+'</tbody></table>'; }
+  function fmtFisc(d){ try{ if(typeof window.avocatFiscaliste!=='function')return ''; var p=window.avocatFiscaliste(d).profil||{}; return [p.regimeFiscal,p.regimeSocial,p.tva].filter(Boolean).join(' · ')+(p.acre?' · ACRE':''); }catch(e){ return ''; } }
+
+  window.dossierRecapHTML=function(d){
+    if(!d)return '';
+    var isModif=(d.formaliteNature==='modification');
+    var ref=(d.numeroDossier||d.ref||'')+(d.numeroService?(' · '+d.numeroService):'');
+    var head='<div class="rc-head"><div class="rc-brand">AEM CONSEIL</div>'
+      +'<div class="rc-title">FICHE DE RENSEIGNEMENTS</div>'
+      +'<div class="rc-meta">'+E(d.serviceSouhaite||'')+' — Réf. '+E(ref)+' — établie le '+E((new Date()).toLocaleDateString('fr-FR'))+'</div></div>';
+    var body='';
+    if(isModif){
+      var M=d.modif||{},S=M.societe||{},D=M.dates||{},G=M.signataire||{},N=M.nouveau||{};
+      body+=sec('Société concernée', row('Dénomination',S.denomination)+row('Forme',S.forme)+row('SIREN',S.siren)+row('RCS',S.rcsVille)+row('Siège',[S.siege,S.cp,S.ville].filter(Boolean).join(', '))+row('Capital',S.capital?(S.capital+' €'):''));
+      body+=sec('Décision', row('Type de formalité',d.serviceSouhaite)+row('Date de la décision',D.acte)+row('Date d\'effet',D.effet)+row('Ville',D.ville)+row('Signataire',((G.civilite||'')+' '+(G.prenom||'')+' '+(G.nom||'')).trim()+(G.qualite?(' — '+G.qualite):'')));
+      var det='';
+      var mk=M.kind||'';
+      if(mk==='siege') det=row('Nouveau siège',[N.siege,N.cp,N.ville].filter(Boolean).join(', '))+row('Ressort',N.ressort==='autre'?'Autre ressort (2 publications)':(N.ressort==='meme'?'Même ressort (1 publication)':''));
+      else if(mk==='dirigeant') det=row('Nouveau dirigeant',((N.civilite||'')+' '+(N.prenom||'')+' '+(N.nom||'')).trim())+row('Fonction',N.fonction)+row('Naissance',N.naissance)+row('Adresse',N.adresse);
+      else if(mk==='denomination') det=row('Nouvelle dénomination',N.denomination);
+      else if(mk==='objet') det=row('Nouvel objet',N.objet);
+      else if(mk==='capital') det=row('Nouveau capital',N.capital?(N.capital+' €'):'')+row('Opération',N.sens);
+      else if(mk==='transformation') det=row('Nouvelle forme',N.formeNouvelle);
+      else if(mk==='cession') det=row('Cédant',N.cedant)+row('Cessionnaire',N.cessionnaire)+row('Titres cédés',N.nbTitres)+row('Prix',N.prix?(N.prix+' €'):'');
+      else if(mk==='dissolution') det=row('Liquidateur',N.liquidateur)+row('Siège de liquidation',N.siegeLiquidation);
+      else if(mk==='cloture') det=row('Ancienne clôture',N.ancienneCloture)+row('Nouvelle clôture',N.nouvelleCloture);
+      if(det) body+=sec('Détail de la modification',det);
+    } else {
+      var o=d.intake||{}, s=o.societe||{}, si=o.siege||{}, dir=o.direction||{}, tt=o.titres||{}, dep=o.depot||{}, co=o.contact||{};
+      body+=sec('Société', row('Dénomination',s.denomination)+row('Sigle / nom commercial',s.sigle)+row('Forme',(o.type||'').toUpperCase())+row('Capital',s.capital?(s.capital+' €'):'')+row('Objet social',s.objet)+row('Régime fiscal saisi',s.regime)+row('Début d\'activité',s.debut));
+      body+=sec('Siège social', row('Adresse',si.rue)+row('Code postal',si.cp)+row('Ville',si.ville)+row('Type de local',si.type));
+      body+=sec('Dirigeant', row('Nom',((dir.civilite||'')+' '+(dir.prenom||'')+' '+(dir.nom||'')).trim())+row('Fonction',dir.fonction)+row('Naissance',[dir.naissance,dir.lieuNaissance,dir.pays].filter(Boolean).join(' à ').replace(' à ',' — '))+row('Nationalité',dir.nationalite)+row('Adresse',dir.adresse));
+      var arows=(o.associes||[]).filter(function(a){return (''+(a.nom||a.prenom||'')).trim();}).map(function(a){
+        return '<tr><td>'+E(((a.prenom||'')+' '+(a.nom||'')).trim())+'</td><td class="rc-r">'+E(a.apport?(a.apport+' €'):'')+'</td><td class="rc-r">'+E(a.parts||'')+'</td></tr>';}).join('');
+      body+=sec('Titres & montants', row('Valeur nominale',tt.nominal?(tt.nominal+' €'):'(calculée)')+row('Nombre de titres',tt.nbTitres||'(calculé)'));
+      body+='<h3 class="rc-sec">Associés & répartition</h3><table class="rc-t rc-assoc"><thead><tr><th>Associé</th><th class="rc-r">Apport</th><th class="rc-r">Titres</th></tr></thead><tbody>'+(arows||'<tr><td colspan="3" class="rc-empty">Aucun associé saisi</td></tr>')+'</tbody></table>';
+      body+=sec('Dépôt de capital', row('Dépositaire',dep.type)+row('Établissement',dep.banque)+row('Montant déposé',dep.montant?(dep.montant+' €'):'')+row('Date du dépôt',dep.date));
+      var fisc=fmtFisc(d);
+      if(fisc) body+=sec('Options fiscales retenues', row('Régime',fisc));
+      body+=sec('Contact', row('Email',co.email)+row('Téléphone',co.tel));
+    }
+    var foot='<div class="rc-foot"><div class="rc-valid">Lu et approuvé — le client atteste l\'exactitude des informations ci-dessus.</div>'
+      +'<div class="rc-sign"><div>Date : ..................................</div><div>Signature :</div></div></div>';
+    return '<div class="doc-gen"><div class="rc-doc">'+head+body+foot+'</div></div>';
+  };
+
+  window.dossierRecapVoir=function(id){ var d=findDos(id); if(!d)return;
+    if(typeof openModal==='function') openModal('Fiche de renseignements — '+E((typeof dossierClients==='function')?dossierClients(d):(d.numeroDossier||'')),
+      '<div class="rc-scroll">'+window.dossierRecapHTML(d)+'</div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="dossierRecapImprimer(\''+id+'\')">Imprimer / PDF</button>'); };
+  window.dossierRecapImprimer=function(id){ var d=findDos(id); if(!d)return;
+    try{ if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS(); }catch(e){}
+    var pa=document.getElementById('fv-printarea'); if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}
+    pa.innerHTML=window.dossierRecapHTML(d); setTimeout(function(){window.print();},120); };
+  window.dossierRecapTransmettre=function(id){ var d=findDos(id); if(!d)return;
+    var c=(typeof dosClient==='function')?(dosClient(d)||{}):{}; var to=c.email||((d.intake&&d.intake.contact&&d.intake.contact.email)||'');
+    var nom=(typeof dossierClients==='function')?dossierClients(d):(d.numeroDossier||'');
+    var sujet='Validation des informations de votre dossier — AEM CONSEIL';
+    var corps='Bonjour,\n\nAvant d\'établir les documents de votre dossier ('+(d.serviceSouhaite||'')+', réf. '+(d.numeroDossier||d.ref||'')+'), merci de vérifier la fiche de renseignements ci-jointe et de nous confirmer que toutes les informations sont exactes (dénomination, siège, dirigeant, associés, capital…).\n\nDès votre validation, nous générons les actes et engageons la formalité.\n\nBien cordialement,\nAEM CONSEIL';
+    if(typeof demOuvrirMessagerie==='function') demOuvrirMessagerie(to,sujet,corps);
+    d.recapTransmisLe=(typeof today==='function')?today():new Date().toISOString().slice(0,10);
+    (d.historique=d.historique||[]).unshift({d:d.recapTransmisLe,t:'Fiche de renseignements transmise au client pour validation'});
+    try{save();}catch(e){} if(typeof render==='function')render(); if(typeof toast==='function')toast('Fiche de renseignements préparée pour '+(to||'le client')); };
+  window.dossierRecapValide=function(id,on){ var d=findDos(id); if(!d)return;
+    if(on){ d.recapValideLe=(typeof today==='function')?today():new Date().toISOString().slice(0,10); (d.historique=d.historique||[]).unshift({d:d.recapValideLe,t:'Informations validées par le client'}); }
+    else { delete d.recapValideLe; }
+    try{save();}catch(e){} if(typeof render==='function')render(); };
+
+  window.dossierRecapCard=function(d){
+    if(!d)return '';
+    var transmis=d.recapTransmisLe, valide=d.recapValideLe;
+    var statut=valide?'<span class="rc-badge ok">Validée par le client</span>':(transmis?'<span class="rc-badge wait">Transmise — en attente</span>':'<span class="rc-badge">Non transmise</span>');
+    return '<div class="card rc-card"><div class="card-h"><h2>Fiche de renseignements</h2><span class="sub" style="margin-left:auto">'+statut+'</span></div>'
+      +'<div class="card-b">'
+      +'<div class="rc-intro">Récapitulatif de toutes les informations du dossier — à faire valider par le client avant de générer les actes et de déposer.</div>'
+      +'<div class="rc-actions">'
+      +'<button class="btn btn-sm" onclick="dossierRecapVoir(\''+d.id+'\')">Voir la fiche</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="dossierRecapImprimer(\''+d.id+'\')">Imprimer / PDF</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="dossierRecapTransmettre(\''+d.id+'\')">Transmettre au client</button>'
+      +'</div>'
+      +'<label class="rc-chk"><input type="checkbox" '+(valide?'checked':'')+' onchange="dossierRecapValide(\''+d.id+'\',this.checked)"> Informations validées par le client'+(valide?(' (le '+E((typeof frDate==='function')?frDate(valide):valide)+')'):'')+'</label>'
+      +'</div></div>';
+  };
+  /* La carte est insérée après le contrôle du dossier par le pipeline « trait-redesign »
+     (window.dossierRecapCard). Pas de greffe espPanel séparée ici pour éviter un doublon. */
+  try{ var st=document.createElement('style');st.id='dossier-recap-css';st.textContent=[
+    '.rc-card{margin-bottom:14px}',
+    '.rc-badge{font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid #2a2a2e;color:#9a9aa0}',
+    '.rc-badge.wait{background:rgba(120,90,42,.22);color:#f0d6b6;border-color:rgba(170,130,74,.45)}',
+    '.rc-badge.ok{background:rgba(38,86,52,.30);color:#c3e8d1;border-color:rgba(84,150,104,.55)}',
+    '.rc-intro{font-size:12.5px;color:#a7abbd;margin-bottom:10px;line-height:1.5}',
+    '.rc-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}',
+    '.rc-chk{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#c9c9d2;cursor:pointer}',
+    '.rc-scroll{max-height:70vh;overflow:auto}',
+    /* Feuille imprimable (blanche) */
+    '.rc-doc{background:#fff;color:#1a1a1a;font-family:Georgia,"Times New Roman",serif;padding:18mm 16mm;line-height:1.55;font-size:12.5px}',
+    '.rc-doc .rc-head{text-align:center;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:14px}',
+    '.rc-doc .rc-brand{font-size:12px;letter-spacing:2px;color:#555}',
+    '.rc-doc .rc-title{font-size:18px;font-weight:800;letter-spacing:1px;margin:4px 0}',
+    '.rc-doc .rc-meta{font-size:11px;color:#666}',
+    '.rc-doc .rc-sec{font-size:12.5px;font-weight:700;margin:16px 0 5px;border-bottom:1px solid #bbb;padding-bottom:2px;color:#111}',
+    '.rc-doc .rc-t{width:100%;border-collapse:collapse;font-size:12px}',
+    '.rc-doc .rc-t td,.rc-doc .rc-t th{padding:4px 8px;vertical-align:top}',
+    '.rc-doc .rc-l{width:38%;color:#555;font-weight:600}',
+    '.rc-doc .rc-v{color:#111}',
+    '.rc-doc .rc-r{text-align:right}',
+    '.rc-doc .rc-empty{color:#b08d5a;font-style:italic}',
+    '.rc-doc .rc-assoc th{background:#f2f2f2;border:1px solid #ccc;text-align:left;font-size:11px}',
+    '.rc-doc .rc-assoc td{border:1px solid #ddd}',
+    '.rc-doc .rc-foot{margin-top:22px;border-top:1px solid #333;padding-top:10px}',
+    '.rc-doc .rc-valid{font-size:11.5px;color:#333;margin-bottom:16px}',
+    '.rc-doc .rc-sign{display:flex;justify-content:space-between;font-size:12px}'
+  ].join('');document.head.appendChild(st); }catch(e){}
+})();
+</script>
+<script id="procedure-guide-mod">
+/* ===================================================================
+   GUIDE DE PROCÉDURE — logique des formalités. Pour CE dossier, donne
+   les étapes ordonnées, les délais et le coût (débours) indicatifs de
+   la formalité (création selon la forme, ou modification selon le type).
+   Carte repliable placée près du dépôt INPI.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function formeOf(d){ try{ var c=(typeof dosClient==='function')?dosClient(d):null; var f=(c&&c.forme)||(d.intake&&d.intake.type)||d.forme||'sas'; return (''+f).toUpperCase(); }catch(e){ return 'SAS'; } }
+  function creation(forme){
+    var commerciale=/SAS|SASU|SARL|EURL|SA/.test(forme);
+    return {
+      titre:'Création — '+forme,
+      etapes:[
+        {t:'Rédaction des statuts et des actes',d:'Statuts, liste des souscripteurs, pouvoir, déclaration de non-condamnation et filiation du dirigeant.'},
+        {t:'Dépôt du capital social',d:'Sur un compte bloqué (banque, notaire ou Caisse des dépôts) → attestation de dépôt des fonds.'},
+        {t:'Publication de l\'annonce légale de constitution',d:'Dans un support habilité (JAL) du département du siège → attestation de parution.'},
+        {t:'Constitution du dossier au Guichet unique (INPI)',d:'Statuts signés, formulaire de création, bénéficiaires effectifs (DBE), justificatif de siège, pièce d\'identité + DNC du dirigeant, attestations de dépôt et de parution.'},
+        {t:'Dépôt en ligne au Guichet unique',d:'formalites.entreprises.gouv.fr → transmission automatique au greffe, à l\'INSEE et aux impôts.'},
+        {t:'Immatriculation',d:'Délivrance du K-bis, du SIREN et du SIRET → la société est ajoutée aux clients.'}
+      ],
+      delais:['Annonce légale : parution sous 24-72 h','Immatriculation : de quelques jours à ~2 semaines selon le greffe'],
+      cout:[['Annonce légale (JAL)','~ 120 – 200 €'],['Frais de greffe / INPI',commerciale?'~ 37 € (société commerciale)':'~ 66 € (société civile)'],['Dépôt des bénéficiaires effectifs','~ 22 €'],['Dépôt du capital','Gratuit à ~ 80 € selon l\'établissement']]
+    };
+  }
+  var MODIF={
+    siege:{etapes:[{t:'PV de décision de transfert',d:'Assemblée / associé unique décidant le transfert et modifiant les statuts.'},{t:'Justificatif du nouveau siège',d:'Bail, contrat de domiciliation ou facture récente.'},{t:'Annonce légale',d:'1 publication (même ressort) ou 2 publications (ressorts différents : ancien + nouveau).'},{t:'Dépôt au Guichet unique',d:'PV, statuts à jour, justificatif de siège, attestation de parution, déclaration M2.'},{t:'Inscription modificative',d:'Nouveau K-bis mentionnant le siège.'}],delais:['Annonce sous quelques jours','Inscription ~ 1 semaine'],cout:[['Annonce légale','~ 100 – 200 €'],['Frais de greffe (modification)','~ 190 €']]},
+    dirigeant:{etapes:[{t:'PV de nomination / cessation',d:'Constatant le changement de dirigeant.'},{t:'Pièces du nouveau dirigeant',d:'Pièce d\'identité, déclaration de non-condamnation et filiation.'},{t:'Annonce légale',d:'Publication du changement de représentant légal.'},{t:'Dépôt au Guichet unique',d:'PV, DNC, annonce, déclaration M3.'},{t:'Inscription modificative',d:'K-bis à jour.'}],delais:['Inscription ~ 1 semaine'],cout:[['Annonce légale','~ 110 – 150 €'],['Frais de greffe','~ 190 €']]},
+    denomination:{etapes:[{t:'PV de changement de dénomination',d:'Modifiant l\'article correspondant des statuts.'},{t:'Statuts mis à jour',d:'Nouvelle dénomination.'},{t:'Annonce légale',d:'Publication de la nouvelle dénomination.'},{t:'Dépôt au Guichet unique',d:'PV, statuts, annonce, M2.'}],delais:['Inscription ~ 1 semaine'],cout:[['Annonce légale','~ 100 – 150 €'],['Frais de greffe','~ 190 €']]},
+    objet:{etapes:[{t:'PV de changement d\'objet',d:'Modifiant l\'article « Objet » des statuts.'},{t:'Statuts mis à jour',d:'Nouvel objet social.'},{t:'Annonce légale',d:'Publication du nouvel objet.'},{t:'Dépôt au Guichet unique',d:'PV, statuts, annonce, M2.'}],delais:['Inscription ~ 1 semaine'],cout:[['Annonce légale','~ 100 – 150 €'],['Frais de greffe','~ 190 €']]},
+    capital:{etapes:[{t:'PV de variation de capital',d:'Augmentation ou réduction, modifiant l\'article « Capital ».'},{t:'Statuts mis à jour',d:'Nouveau capital et répartition.'},{t:'Annonce légale',d:'Publication de la variation de capital.'},{t:'Dépôt au Guichet unique',d:'PV, statuts, annonce, M2 (+ rapport si réduction non motivée par des pertes).'}],delais:['Inscription ~ 1 semaine','Réduction : délai d\'opposition des créanciers (20 j) le cas échéant'],cout:[['Annonce légale','~ 120 – 200 €'],['Frais de greffe','~ 190 €']]},
+    transformation:{etapes:[{t:'Rapport du commissaire à la transformation',d:'Si requis (ex. passage en SAS) — désignation préalable.'},{t:'PV de transformation',d:'Décision de transformer la forme, sans création d\'être moral nouveau.'},{t:'Statuts refondus',d:'Adaptés aux règles de la nouvelle forme, nouveaux organes de direction.'},{t:'Annonce légale',d:'Publication de la transformation.'},{t:'Dépôt au Guichet unique',d:'PV, statuts, rapport, annonce, M2.'}],delais:['Prévoir le délai de désignation et de rapport du commissaire','Inscription ~ 1-2 semaines'],cout:[['Annonce légale','~ 150 – 250 €'],['Commissaire à la transformation','Sur devis'],['Frais de greffe','~ 190 €']]},
+    cession:{etapes:[{t:'Agrément (si requis)',d:'PV d\'agrément de la cession (parts de SARL : agrément des associés).'},{t:'Acte de cession',d:'Signé puis enregistré au service des impôts (droits d\'enregistrement).'},{t:'Statuts mis à jour',d:'Nouvelle répartition du capital.'},{t:'Formalités au Guichet unique',d:'Selon la forme : mise à jour de la répartition, déclaration.'}],delais:['Enregistrement de l\'acte : 1 mois','Inscription ~ 1 semaine'],cout:[['Droits d\'enregistrement','Parts : 3 % après abattement · Actions : 0,1 %'],['Frais de greffe (le cas échéant)','~ 190 €']]},
+    dissolution:{etapes:[{t:'PV de dissolution',d:'Dissolution anticipée + nomination du liquidateur (pouvoirs, siège de liquidation).'},{t:'Annonce légale de dissolution',d:'Publication de la dissolution et du liquidateur.'},{t:'Dépôt au Guichet unique',d:'PV, DNC du liquidateur, annonce, M2 (dissolution).'},{t:'Liquidation puis radiation',d:'Ultérieurement : comptes de liquidation, PV de clôture, annonce de clôture, radiation.'}],delais:['Inscription de la dissolution ~ 1 semaine','Clôture de liquidation : formalité distincte, plus tard'],cout:[['Annonce de dissolution','~ 150 €'],['Frais de greffe (dissolution)','~ 195 €'],['Annonce + greffe de clôture (ultérieur)','~ 150 € + ~ 14 €']]},
+    cloture:{etapes:[{t:'PV de changement de date de clôture',d:'Modifiant l\'article « Exercice social ».'},{t:'Statuts mis à jour',d:'Nouvelle date de clôture.'},{t:'Dépôt au Guichet unique',d:'PV, statuts, M2. Pas d\'annonce légale obligatoire.'}],delais:['Inscription ~ 1 semaine','Sans effet rétroactif sur un exercice déjà clos'],cout:[['Frais de greffe','~ 190 €']]}
+  };
+  window.procedureGuide=function(d){
+    if(d&&d.formaliteNature==='modification'){ var g=MODIF[d.modifKind]||{etapes:[],delais:[],cout:[]}; return {titre:(d.serviceSouhaite||'Modification'),etapes:g.etapes,delais:g.delais,cout:g.cout}; }
+    return creation(formeOf(d));
+  };
+  window.procedureCard=function(d){
+    if(!d)return '';
+    var g=window.procedureGuide(d); if(!g||!g.etapes||!g.etapes.length)return '';
+    var steps=g.etapes.map(function(s,i){return '<div class="pg-step"><span class="pg-n">'+(i+1)+'</span><div class="pg-tx"><b>'+E(s.t)+'</b><span>'+E(s.d)+'</span></div></div>';}).join('');
+    var delais=(g.delais||[]).map(function(x){return '<li>'+E(x)+'</li>';}).join('');
+    var cout=(g.cout||[]).map(function(x){return '<div class="pg-cr"><span>'+E(x[0])+'</span><b>'+E(x[1])+'</b></div>';}).join('');
+    return '<details class="card pg-card"><summary class="pg-sum"><span class="pg-sum-t">Guide de procédure — '+E(g.titre)+'</span><span class="pg-sum-h">'+g.etapes.length+' étapes · délais · coût</span></summary>'
+      +'<div class="card-b">'
+      +'<div class="pg-steps">'+steps+'</div>'
+      +(delais?('<div class="pg-h">Délais indicatifs</div><ul class="pg-ul">'+delais+'</ul>'):'')
+      +(cout?('<div class="pg-h">Coût (débours indicatifs)</div><div class="pg-cout">'+cout+'</div>'):'')
+      +'<div class="pg-note">Repères indicatifs — les débours (annonce légale, greffe, INPI) et délais varient selon le support de publication, le greffe et la situation.</div>'
+      +'</div></details>';
+  };
+  /* Insérée juste avant la carte de dépôt INPI. */
+  try{ if(typeof window.espPanel==='function' && !window.espPanel.__proc){ var _p=window.espPanel;
+    window.espPanel=function(d,list,id){ var h=_p.apply(this,arguments); try{
+      if(d&&typeof window.procedureCard==='function'){ var card=window.procedureCard(d);
+        if(card){ var m=h.replace('<div class="card inpi-card">', card+'<div class="card inpi-card">'); if(m!==h)h=m; }
+      }
+    }catch(e){} return h; }; window.espPanel.__proc=1; } }catch(e){}
+  try{ var st=document.createElement('style');st.id='procedure-guide-css';st.textContent=[
+    '.pg-card{margin-bottom:14px}',
+    '.pg-sum{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:14px 16px;font-weight:700;color:#eef0f4}',
+    '.pg-sum::-webkit-details-marker{display:none}',
+    '.pg-sum::before{content:"▸";color:#8f8f98;font-size:12px;transition:transform .15s}',
+    'details[open] .pg-sum::before{transform:rotate(90deg)}',
+    '.pg-sum-t{font-size:14px}.pg-sum-h{margin-left:auto;font-size:11px;color:#8f8f98;font-weight:600}',
+    '.pg-steps{display:flex;flex-direction:column;gap:8px;margin-bottom:6px}',
+    '.pg-step{display:flex;gap:11px;align-items:flex-start;padding:9px 11px;border:1px solid #1c1c1e;border-radius:9px;background:#0a0a0c}',
+    '.pg-n{flex:0 0 22px;height:22px;border-radius:6px;background:#17171a;color:#c9c9d2;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}',
+    '.pg-tx{display:flex;flex-direction:column;gap:2px}.pg-tx b{font-size:12.5px;color:#e6e8ee}.pg-tx span{font-size:11.5px;color:#9a9aa0;line-height:1.45}',
+    '.pg-h{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin:12px 0 5px}',
+    '.pg-ul{margin:0;padding-left:18px;font-size:12px;color:#c1c1c9;line-height:1.6}',
+    '.pg-cout{display:flex;flex-direction:column;gap:4px}',
+    '.pg-cr{display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:5px 0;border-bottom:1px solid #16161a;color:#b6b6bf}.pg-cr b{color:#e6e8ee}',
+    '.pg-note{font-size:11px;color:#7f8290;margin-top:10px;line-height:1.5}'
+  ].join('');document.head.appendChild(st); }catch(e){}
+})();
+</script>
+<script id="traitement-summary-mod">
+/* ===================================================================
+   BANDEAU DE PILOTAGE — en tête de la page Traitement. Vue d'ensemble
+   du portefeuille (lecture seule, agrégats de comptage — aucune donnée
+   d'un dossier n'est mêlée à un autre) : total, prêts à déposer (via le
+   contrôle du dossier), en attente de pièces, validés par le client,
+   immatriculés, et répartition Créations / Modifications.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function activeList(){ try{ var l=(typeof espDoss==='function')?espDoss():(DB.dossiers||[]); return l.filter(function(d){return d&&!d.archived;}); }catch(e){ return (DB.dossiers||[]).filter(function(d){return d&&!d.archived;}); } }
+  window.traitementSummary=function(){
+    var list=activeList(); var total=list.length;
+    var pret=0,attente=0,valide=0,cr=0,md=0;
+    list.forEach(function(d){
+      var P=null; try{ if(typeof window.dossierPreflight==='function')P=window.dossierPreflight(d); }catch(e){}
+      if(P){ if(P.ready)pret++; var pg=(P.gates||[]).filter(function(g){return /Pièces/.test(g.l);})[0]; if(pg&&!pg.ok)attente++; }
+      if(d.formaliteNature==='modification')md++; else cr++;
+      if(d.recapValideLe)valide++;
+    });
+    var immat=0; try{ immat=(DB.clients||[]).filter(function(c){return c&&c.immatricule;}).length; }catch(e){}
+    return {total:total,pret:pret,attente:attente,valide:valide,immat:immat,cr:cr,md:md};
+  };
+  window.traitementSummaryBar=function(){
+    var s=window.traitementSummary(); if(!s.total)return '';
+    function k(v,l,cls){return '<div class="ts-kpi '+(cls||'')+'"><div class="ts-v">'+v+'</div><div class="ts-l">'+E(l)+'</div></div>';}
+    return '<div class="ts-bar">'
+      +k(s.total,'Dossiers actifs','')
+      +k(s.pret,'Prêts à déposer',(s.pret?'ok':''))
+      +k(s.attente,'En attente de pièces',(s.attente?'warn':''))
+      +k(s.valide,'Validés par le client','')
+      +k(s.immat,'Immatriculés',(s.immat?'ok':''))
+      +k('<span class="ts-split">'+s.cr+'<i>CR</i> · '+s.md+'<i>MD</i></span>','Créations / Modifications','')
+      +'</div>';
+  };
+  try{ if(typeof window.pageEspace==='function' && !window.pageEspace.__tsbar){ var _pe=window.pageEspace;
+    window.pageEspace=function(){ var h=_pe.apply(this,arguments); try{
+      if(h&&h.indexOf('esp-main')>=0 && typeof window.traitementSummaryBar==='function'){ var bar=window.traitementSummaryBar(); if(bar)h=bar+h; }
+    }catch(e){} return h; }; window.pageEspace.__tsbar=1; } }catch(e){}
+  try{ var st=document.createElement('style');st.id='traitement-summary-css';st.textContent=[
+    '.ts-bar{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}',
+    '@media(max-width:1000px){.ts-bar{grid-template-columns:repeat(3,1fr)}}',
+    '@media(max-width:560px){.ts-bar{grid-template-columns:repeat(2,1fr)}}',
+    '.ts-kpi{border:1px solid #1f1f22;border-radius:12px;background:linear-gradient(180deg,#141416,#0d0d0f);padding:12px 14px}',
+    '.ts-kpi .ts-v{font-size:23px;font-weight:800;color:#f1f2f6;line-height:1;font-variant-numeric:tabular-nums}',
+    '.ts-kpi .ts-l{font-size:11px;color:#8a8a92;margin-top:6px;line-height:1.3}',
+    '.ts-kpi.ok{border-color:#26332b}.ts-kpi.ok .ts-v{color:#bfe6cd}',
+    '.ts-kpi.warn{border-color:#3a2f20}.ts-kpi.warn .ts-v{color:#f0d6b6}',
+    '.ts-split{display:inline-flex;align-items:baseline;gap:4px}.ts-split i{font-size:11px;font-style:normal;color:#8a8a92;font-weight:600;margin-right:6px}'
   ].join('');document.head.appendChild(st); }catch(e){}
 })();
 </script>
