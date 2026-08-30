@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=264;
+var LAST_VER=265;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -12085,12 +12085,30 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     return '<div class="fx-h1">Régime fiscal & social</div><div class="fx-grid">'+opt+groups+'</div>';
   }
 
-  function m_exon(d){var i=info(d),p=i._p;
+  function solutionGain(a,d){var i=info(d),p=i._p;var is=(typeof calculISDetail==='function')?calculISDetail({benefice:Math.max(0,i.benefice),ca:i.caPrev,capitalLibere:i.capitalLibere,detentionPP:i.detentionPP}):{isTotal:0};
+    switch(a.t){
+      case 'ACRE — exonération de charges sociales': return i.remSouhaitee>0?('~ '+eu(i.remSouhaitee*(p.tns?0.45:0.42)*0.5)+' d\'économie de cotisations la 1ʳᵉ année (exonération partielle).'):'Exonération partielle des cotisations la 1ʳᵉ année.';
+      case 'Zones France Ruralités Revitalisation (ex-ZRR)': return i.benefice>0?('Jusqu\'à ~ '+eu(is.isTotal)+' d\'IS exonéré la 1ʳᵉ année (100 %), puis dégressif.'):'Exonération d\'IS dégressive sur ~5 ans.';
+      case 'Zone Franche Urbaine — Territoire Entrepreneur (ZFU-TE)': return i.benefice>0?('Jusqu\'à ~ '+eu(Math.min(is.isTotal,is.isTotal))+' d\'impôt sur les bénéfices exonéré (sous plafond).'):'Exonération d\'impôt sur les bénéfices sous plafond.';
+      case 'Taux réduit d\'IS à 15 %': return ('Économie ~ '+eu(Math.min(i.benefice,42500)*0.10)+' vs 25 % (10 points sur la tranche ≤ 42 500 €).');
+      case 'Jeune Entreprise Innovante (JEI / JEIC)': return i.masseSalariale>0?('Exonération de cotisations patronales sur les personnels de R&D (~ '+eu(i.masseSalariale*0.42*0.5)+' potentiel selon la part R&D).'):'Exonérations de cotisations patronales sur la R&D.';
+      case 'Crédit d\'Impôt Recherche (CIR) & Innovation (CII)': return '30 % des dépenses de R&D (CIR) / 20 % des dépenses d\'innovation (CII) en crédit d\'impôt — renseigner les dépenses R&D.';
+      case 'Aides à l\'embauche & réductions de charges': return i.masseSalariale>0?('Réduction générale de cotisations patronales sur les bas salaires (~ '+eu(i.masseSalariale*0.10)+' potentiel).'):'Réduction générale de cotisations sur les salaires ≤ 1,6 SMIC.';
+      default: return '';
+    }
+  }
+  window.fiscalSolutions=function(d){return aidesEligibles(d).map(function(a){return {t:a.t,th:a.th,gain:solutionGain(a,d)};});}
+  function m_exon(d){var i=info(d),p=i._p;var sol=window.fiscalSolutions(d);
+    var notif=sol.length
+      ?('<div class="fx-solbox"><div class="fx-solb-t">✅ '+sol.length+' solution(s) d\'exonération adaptée(s) à ce dossier</div><ul class="fx-ul">'+sol.map(function(s){return '<li><b>'+E(s.t)+'</b> — '+E(s.gain)+'</li>';}).join('')+'</ul><div class="fx-badge">Notification : dispositifs déclenchés par les données saisies (zone : '+E(i.zone.toUpperCase())+(i.innovant?' · innovation':'')+(i.acre?' · création/ACRE':'')+(i.nbSalaries>0?(' · '+i.nbSalaries+' salarié(s)'):'')+'). À confirmer selon la loi de finances.</div></div>')
+      :'<div class="fx-note warn">Renseignez l\'activité, la zone d\'implantation et le profil (onglet « Infos client ») pour détecter les solutions d\'exonération adaptées.</div>';
     var cards=AIDES.filter(function(a){return a.forme==='*'||a.forme.indexOf(p.forme)>=0;}).map(function(a){
-      var elig=a.ok(i);return card(a.th,(elig?'✅ ':'')+a.t,E(a.d)+(elig?'<div class="fx-badge ok">Potentiellement éligible selon les informations saisies</div>':'<div class="fx-badge">Vérifier l\'éligibilité (zone / profil)</div>'),elig?'is-elig':'');
+      var elig=a.ok(i);var g=elig?solutionGain(a,d):'';
+      return card(a.th,(elig?'✅ ':'')+a.t,E(a.d)+(elig?('<div class="fx-badge ok">Éligible — '+E(g)+'</div>'):'<div class="fx-badge">Vérifier l\'éligibilité (zone / profil)</div>'),elig?'is-elig':'');
     }).join('');
     return '<div class="fx-h1">Exonérations & aides de l\'État</div>'
-      +'<div class="fx-note">Dispositifs d\'aide aux dirigeants et à l\'entreprise, filtrés selon le type de société et les informations du client. Les montants et conditions exacts dépendent de la loi de finances en vigueur et des délibérations locales.</div>'
+      +notif
+      +'<div class="fx-note">Dispositifs filtrés selon le type de société, l\'activité et les informations du client. Montants indicatifs — conditions exactes selon la loi de finances et les délibérations locales.</div>'
       +'<div class="fx-grid">'+cards+'</div>';
   }
 
@@ -12340,9 +12358,104 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<div class="fx-badge">Autres variations à étudier : option IS/IR, augmentation du capital (part de dividendes non cotisée en TNS), intégration d\'un holding, PER du dirigeant.</div>');
   }
 
+  /* ---------- Bilan prévisionnel ---------- */
+  function prevData(d){d.fiscal=d.fiscal||{};if(!d.fiscal.prev){var f=fin(d);d.fiscal.prev={activite:d.fiscal.secteur||'',growth:15,
+    base:{ca:f.caExpl||0,autres:0,achats:f.achats||0,ext:f.chargesExt||0,pers:(f.chargesPers||0)+(f.remDir||0),imp:f.impotsTaxes||0,amort:f.amort||0},
+    fin:{immob:f.amort? f.amort*5:0,frais:1500,bfr:0,capital:f.capitalSocial||0,cca:0,emprunt:0,subv:0}};}
+    return d.fiscal.prev;}
+  function prevYears(d){var pr=prevData(d),b=pr.base,g=1+(pf0(pr.growth)/100),out=[];
+    for(var n=0;n<3;n++){var k=Math.pow(g,n);
+      var ca=b.ca*k,autres=b.autres*k,achats=b.achats*k,ext=b.ext*k,pers=b.pers,imp=b.imp,amort=b.amort;
+      var ebe=ca+autres-achats-ext-pers-imp;var resExpl=ebe-amort;var benef=resExpl;
+      var is=(typeof calculISDetail==='function')?calculISDetail({benefice:Math.max(0,benef),ca:ca,capitalLibere:true,detentionPP:true}).isTotal:0;
+      out.push({ca:ca,autres:autres,achats:achats,ext:ext,pers:pers,imp:imp,amort:amort,ebe:ebe,resExpl:resExpl,benef:benef,is:is,net:benef-is});}
+    return out;}
+  window.fiscalPrevSave=function(id,rer){var d=doss(id);if(!d)return;var pr=prevData(d);var g=function(x){return document.getElementById(x);},q=function(x){return g(x)?g(x).value:'';};
+    if(g('prev-activite'))pr.activite=q('prev-activite');if(g('prev-growth'))pr.growth=pf(q('prev-growth'));
+    ['ca','autres','achats','ext','pers','imp','amort'].forEach(function(k){if(g('prev-'+k))pr.base[k]=pf(q('prev-'+k));});
+    ['immob','frais','bfr','capital','cca','emprunt','subv'].forEach(function(k){if(g('prev-'+k))pr.fin[k]=pf(q('prev-'+k));});
+    if(typeof save==='function')save();if(rer!==false){window.fiscalTab='previsionnel';fiscalRender(id);}};
+
+  function m_previsionnel(d){var pr=prevData(d),y=prevYears(d);
+    var num=function(id2,lbl,val){return '<label>'+E(lbl)+'<input id="prev-'+id2+'" type="number" value="'+(val||0)+'" onchange="fiscalPrevSave(\''+d.id+'\')"></label>';};
+    var form='<div class="fx-form">'
+      +'<label style="grid-column:1/-1">Activité de l\'entreprise<input id="prev-activite" value="'+E(pr.activite)+'" placeholder="Ex : conseil, BTP, e-commerce…" onchange="fiscalPrevSave(\''+d.id+'\')"></label>'
+      +'<label>Croissance annuelle du CA (%)<input id="prev-growth" type="number" value="'+(pr.growth||0)+'" onchange="fiscalPrevSave(\''+d.id+'\')"></label>'
+      +num('ca','CA HT année 1 (€)',pr.base.ca)+num('autres','Autres produits (€)',pr.base.autres)
+      +num('achats','Achats / coûts variables (€)',pr.base.achats)+num('ext','Charges externes (€)',pr.base.ext)
+      +num('pers','Charges de personnel (dont dirigeant) (€)',pr.base.pers)+num('imp','Impôts & taxes (€)',pr.base.imp)
+      +num('amort','Dotations amortissements (€)',pr.base.amort)+'</div>';
+    var finform='<div class="fx-form">'
+      +num('immob','Investissements / immobilisations (€)',pr.fin.immob)+num('frais','Frais d\'établissement (€)',pr.fin.frais)
+      +num('bfr','Besoin en fonds de roulement (€)',pr.fin.bfr)+num('capital','Apports en capital (€)',pr.fin.capital)
+      +num('cca','Apports en compte courant (€)',pr.fin.cca)+num('emprunt','Emprunts (€)',pr.fin.emprunt)
+      +num('subv','Subventions / aides (€)',pr.fin.subv)+'</div>';
+    var cols=['Année 1','Année 2','Année 3'];
+    var line=function(lbl,key,cls){return '<tr class="'+(cls||'')+'"><td>'+E(lbl)+'</td>'+y.map(function(yr){return '<td class="r">'+eu(yr[key])+'</td>';}).join('')+'</tr>';};
+    var cr='<table class="fx-tbl"><thead><tr><th>Compte de résultat prévisionnel</th>'+cols.map(function(c){return '<th class="r">'+c+'</th>';}).join('')+'</tr></thead><tbody>'
+      +line('Chiffre d\'affaires HT','ca')+line('Autres produits','autres')
+      +line('Achats / coûts variables','achats')+line('Charges externes','ext')+line('Charges de personnel','pers')+line('Impôts & taxes','imp')
+      +line('EBITDA (EBE)','ebe','fx-tot')+line('Dotations amortissements','amort')+line('Résultat d\'exploitation','resExpl','fx-tot')
+      +line('Impôt sur les sociétés','is')+line('Résultat net','net','fx-tot')+'</tbody></table>';
+    /* Seuil de rentabilité (année 1) */
+    var y1=y[0];var cf=y1.ext+y1.pers+y1.imp+y1.amort;var mcv=y1.ca>0?((y1.ca-y1.achats)/y1.ca):0;var seuil=mcv>0?(cf/mcv):0;
+    var besoins=pf0(pr.fin.immob)+pf0(pr.fin.frais)+pf0(pr.fin.bfr);var ressources=pf0(pr.fin.capital)+pf0(pr.fin.cca)+pf0(pr.fin.emprunt)+pf0(pr.fin.subv);var ecart=ressources-besoins;
+    var pf_table='<table class="fx-tbl"><thead><tr><th>Plan de financement initial</th><th class="r">Besoins</th><th class="r">Ressources</th></tr></thead><tbody>'
+      +'<tr><td>Immobilisations</td><td class="r">'+eu(pr.fin.immob)+'</td><td></td></tr>'
+      +'<tr><td>Frais d\'établissement</td><td class="r">'+eu(pr.fin.frais)+'</td><td></td></tr>'
+      +'<tr><td>BFR</td><td class="r">'+eu(pr.fin.bfr)+'</td><td></td></tr>'
+      +'<tr><td>Capital</td><td></td><td class="r">'+eu(pr.fin.capital)+'</td></tr>'
+      +'<tr><td>Comptes courants d\'associés</td><td></td><td class="r">'+eu(pr.fin.cca)+'</td></tr>'
+      +'<tr><td>Emprunts</td><td></td><td class="r">'+eu(pr.fin.emprunt)+'</td></tr>'
+      +'<tr><td>Subventions / aides</td><td></td><td class="r">'+eu(pr.fin.subv)+'</td></tr>'
+      +'<tr class="fx-tot"><td><b>Total</b></td><td class="r"><b>'+eu(besoins)+'</b></td><td class="r"><b>'+eu(ressources)+'</b></td></tr>'
+      +'<tr class="fx-tot"><td><b>Écart (trésorerie de départ)</b></td><td></td><td class="r"><b style="color:'+(ecart>=0?'#8fe0ad':'#ff9583')+'">'+eu(ecart)+'</b></td></tr></tbody></table>';
+    return '<div class="fx-h1">Bilan prévisionnel</div>'
+      +'<div class="fx-note">Renseignez l\'activité, les produits/charges et le plan de financement : LAST génère un prévisionnel sur 3 ans (compte de résultat, plan de financement, seuil de rentabilité) que vous pourrez imprimer et compléter.</div>'
+      +'<div class="fx-h2">Activité & compte d\'exploitation (année 1)</div>'+form
+      +'<div class="fx-h2">Plan de financement</div>'+finform
+      +'<div class="fx-h2">Prévisionnel sur 3 ans</div><div class="fx-grid" style="grid-template-columns:1fr">'+card('Prévisionnel','Compte de résultat prévisionnel',cr)+'</div>'
+      +'<div class="fx-grid">'
+      +card('Rentabilité','Seuil de rentabilité (année 1)','Charges fixes : <b>'+eu(cf)+'</b> · Taux de marge sur coûts variables : <b>'+pct(mcv)+'</b>.<br>Seuil de rentabilité (CA minimum) : <b>'+eu(seuil)+'</b>'+(y1.ca>0?(' — soit '+pct(seuil/y1.ca)+' du CA prévu.'):'.'))
+      +card('Financement','Équilibre du plan',pf_table)
+      +'</div>'
+      +'<div class="fx-formact"><button class="fx-btn" onclick="fiscalPrevGen(\''+d.id+'\')">📄 Générer le bilan prévisionnel (à compléter)</button></div>';
+  }
+  function previsionnelDocHTML(d){var pr=prevData(d),y=prevYears(d);var soc=nomD(d);
+    var cols=['Année 1','Année 2','Année 3'];
+    var line=function(lbl,key,b){return '<tr'+(b?' class="pv-tot"':'')+'><td>'+E(lbl)+'</td>'+y.map(function(yr){return '<td class="r">'+eu(yr[key])+'</td>';}).join('')+'</tr>';};
+    var besoins=pf0(pr.fin.immob)+pf0(pr.fin.frais)+pf0(pr.fin.bfr);var ressources=pf0(pr.fin.capital)+pf0(pr.fin.cca)+pf0(pr.fin.emprunt)+pf0(pr.fin.subv);
+    return '<div class="doc-gen"><div class="dg-page pv-doc">'
+      +'<div class="pv-hd"><b>BILAN PRÉVISIONNEL</b><span>'+E(soc)+(pr.activite?(' — '+E(pr.activite)):'')+'</span></div>'
+      +'<div class="pv-sub">Document de travail à compléter et à valider — établi par AEM CONSEIL le '+E((new Date()).toLocaleDateString('fr-FR'))+'.</div>'
+      +'<h3>1. Compte de résultat prévisionnel (3 ans)</h3>'
+      +'<table class="pv-t"><thead><tr><th>Poste</th>'+cols.map(function(c){return '<th class="r">'+c+'</th>';}).join('')+'</tr></thead><tbody>'
+      +line('Chiffre d\'affaires HT','ca')+line('Autres produits','autres')+line('Achats / coûts variables','achats')+line('Charges externes','ext')+line('Charges de personnel','pers')+line('Impôts & taxes','imp')
+      +line('EBITDA (EBE)','ebe',1)+line('Dotations amortissements','amort')+line('Résultat d\'exploitation','resExpl',1)+line('Impôt sur les sociétés','is')+line('Résultat net','net',1)+'</tbody></table>'
+      +'<h3>2. Plan de financement initial</h3>'
+      +'<table class="pv-t"><thead><tr><th>Besoins</th><th class="r">Montant</th><th>Ressources</th><th class="r">Montant</th></tr></thead><tbody>'
+      +'<tr><td>Immobilisations</td><td class="r">'+eu(pr.fin.immob)+'</td><td>Capital</td><td class="r">'+eu(pr.fin.capital)+'</td></tr>'
+      +'<tr><td>Frais d\'établissement</td><td class="r">'+eu(pr.fin.frais)+'</td><td>Comptes courants</td><td class="r">'+eu(pr.fin.cca)+'</td></tr>'
+      +'<tr><td>BFR</td><td class="r">'+eu(pr.fin.bfr)+'</td><td>Emprunts</td><td class="r">'+eu(pr.fin.emprunt)+'</td></tr>'
+      +'<tr><td></td><td></td><td>Subventions</td><td class="r">'+eu(pr.fin.subv)+'</td></tr>'
+      +'<tr class="pv-tot"><td>Total besoins</td><td class="r">'+eu(besoins)+'</td><td>Total ressources</td><td class="r">'+eu(ressources)+'</td></tr></tbody></table>'
+      +'<h3>3. Observations / à compléter</h3><div class="pv-fill">…………………………………………………………………………………………………………………………<br><br>…………………………………………………………………………………………………………………………<br><br>…………………………………………………………………………………………………………………………</div>'
+      +'<div class="pv-sign">Le dirigeant (nom, date, signature) : ……………………………………</div>'
+      +'</div></div>';
+  }
+  window.fiscalPrevGen=function(id){var d=doss(id);if(!d)return;
+    var ov=document.getElementById('fiscal-doc-ov');if(!ov){ov=document.createElement('div');ov.id='fiscal-doc-ov';document.body.appendChild(ov);}
+    ov.innerHTML='<div class="fxd-shell"><header class="fxd-top"><b>📄 Bilan prévisionnel — '+E(nomD(d))+'</b><div class="fxd-act"><button class="fx-btn" onclick="fiscalPrevPrint(\''+id+'\')">🖨 Imprimer / PDF</button><button class="fxd-x" onclick="fiscalDocClose()">✕</button></div></header><div class="fxd-body">'+previsionnelDocHTML(d)+'</div></div>';
+    ov.classList.add('show');
+  };
+  window.fiscalDocClose=function(){var o=document.getElementById('fiscal-doc-ov');if(o)o.classList.remove('show');};
+  window.fiscalPrevPrint=function(id){var d=doss(id);if(!d)return;try{if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();}catch(e){}
+    var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}pa.innerHTML=previsionnelDocHTML(d);setTimeout(function(){window.print();},140);};
+
   var MODULES=[
     {k:'apercu',ic:'▦',l:'Synthèse',f:m_apercu},
     {k:'societe',ic:'▤',l:'Société & associés',f:m_societe},
+    {k:'previsionnel',ic:'∿',l:'Bilan prévisionnel',f:m_previsionnel},
     {k:'infos',ic:'✎',l:'Infos client',f:m_infos},
     {k:'regime',ic:'⚖',l:'Régime fiscal & social',f:m_regime},
     {k:'exon',ic:'★',l:'Exonérations & aides',f:m_exon},
@@ -12405,6 +12518,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.fx-ck{flex-direction:row!important;align-items:center;gap:8px!important}.fx-formact{margin-top:14px}'
       +'.fx-btn{background:linear-gradient(135deg,#7c6cff,#5646f0);border:1px solid #4a3fd6;color:#fff;font:inherit;font-weight:700;padding:10px 16px;border-radius:10px;cursor:pointer}'
       +'.fx-h2{font-size:14px;font-weight:800;color:#eef0f4;margin:20px 0 8px;padding-bottom:4px;border-bottom:1px solid #242428}'
+      +'.fx-solbox{background:linear-gradient(135deg,rgba(63,107,70,.18),rgba(124,108,255,.08));border:1px solid #2f5b3a;border-radius:12px;padding:12px 14px;margin-bottom:14px}.fx-solb-t{font-weight:800;color:#a6e6c2;margin-bottom:6px}'
+      +'.pv-doc{padding:22mm 18mm;font-size:11px;line-height:1.6}body.dark .pv-doc,html .pv-doc{background:#fff!important;color:#1a1a1a!important}body.dark .pv-doc *,html .pv-doc *{color:#1a1a1a!important}.pv-hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #333;padding-bottom:6px}.pv-hd b{font-size:16px;letter-spacing:.5px}.pv-hd span{font-size:12px}.pv-sub{font-size:10px!important;font-style:italic;margin:6px 0 14px}body.dark .pv-doc .pv-sub{color:#666!important}.pv-doc h3{font-size:12.5px;margin:16px 0 6px}'
+      +'.pv-t{width:100%;border-collapse:collapse;font-size:10.5px}.pv-t th,.pv-t td{padding:4px 7px}.pv-t .r{text-align:right}.pv-t th{text-align:left}body.dark .pv-doc .pv-t th,html .pv-doc .pv-t th{background:#f2f2f2!important;border:1px solid #ccc!important}body.dark .pv-doc .pv-t td,html .pv-doc .pv-t td{background:#fff!important;border:1px solid #ccc!important}body.dark .pv-doc .pv-t .pv-tot td{background:#f7f7f7!important;font-weight:700}.pv-fill{border:1px dashed #bbb;border-radius:6px;padding:10px;font-size:11px;min-height:70px}body.dark .pv-doc .pv-fill{color:#999!important}.pv-sign{margin-top:18px;font-size:11px}'
+      +'@media print{#fiscal-doc-ov{position:static!important;background:#fff!important;padding:0!important}#fiscal-doc-ov .fxd-top{display:none!important}.pv-doc,.pv-doc *,.pv-t td,.pv-t th{background:#fff!important;color:#111!important}}'
+      +'#fiscal-doc-ov{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.72);display:none;padding:22px}#fiscal-doc-ov.show{display:block}.fxd-shell{max-width:920px;margin:0 auto;height:100%;display:flex;flex-direction:column;background:#0e0e12;border:1px solid #242428;border-radius:16px;overflow:hidden}.fxd-top{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #202024;color:#eef0f4}.fxd-top b{font-size:14px}.fxd-act{margin-left:auto;display:flex;gap:8px;align-items:center}.fxd-x{background:#17171b;border:1px solid #2a2a2e;color:#c7cad2;width:34px;height:34px;border-radius:9px;cursor:pointer}.fxd-body{flex:1;overflow:auto;padding:18px;background:#1a1a1e}'
       +'.fx-del{background:#2a1416;border:1px solid #5a2c24;color:#ff9583;width:26px;height:26px;border-radius:7px;cursor:pointer}.fx-tbl input,.fx-tbl select{background:#0e0e11;border:1px solid #2a2a2e;border-radius:6px;padding:5px 7px;color:#eef0f4;font:inherit;width:100%}'
       +'@media(max-width:820px){.fx-body{grid-template-columns:1fr}.fx-side{border-right:0;border-bottom:1px solid #202024;flex-direction:row;flex-wrap:wrap;overflow-x:auto}}';
     document.head.appendChild(st);} }catch(e){}
