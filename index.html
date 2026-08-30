@@ -142,8 +142,8 @@ kbd{display:inline-block;min-width:16px;text-align:center;padding:2px 6px;font:6
 .kpi .val.blue{color:var(--espresso)} .kpi .val.ok{color:var(--sage)} .kpi .val.hot{color:var(--terracotta)}
 
 /* ============ BOUTONS ============ */
-.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:var(--radius-sm);border:1px solid var(--line-2);
-  background:var(--paper);color:var(--ink);font:inherit;font-size:11px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s}
+.btn{display:inline-flex;align-items:center;justify-content:center;text-align:center;gap:5px;padding:5px 10px;border-radius:var(--radius-sm);border:1px solid var(--line-2);
+  background:var(--paper);color:var(--ink);font:inherit;font-size:11px;font-weight:600;line-height:1.15;box-sizing:border-box;cursor:pointer;transition:background .15s,border-color .15s}
 .btn:hover{border-color:#cbbc93;background:var(--paper-2)}
 .btn svg{width:12px;height:12px}
 .btn-pri{border:1px solid #7a6e58;color:#fdfaf3;background:#7a6e58}
@@ -2187,7 +2187,7 @@ function espEnvoyerMail(id){var d=espDoss().find(function(x){return x.id===id;})
 function espPanel(d,list,id){
   return '<div class="esp-shell">'
    +espMiniList(list,id)
-   +'<div class="esp-main">'+espMailCard(d)+espTraitementCard(d)+((typeof iaFormaliteCard==='function')?iaFormaliteCard(d):'')+((typeof actesCard==='function')?actesCard(d):'')+espNotesCard(d)+espPiecesCard(d)+espDocsPretsCard(d)+'</div>'
+   +'<div class="esp-main">'+espMailCard(d)+espTraitementCard(d)+espNotesCard(d)+espPiecesCard(d)+espDocsPretsCard(d)+'</div>'
    +'</div>';
 }
 function espStatutsCard(d){
@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=289;
+var LAST_VER=294;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14893,6 +14893,133 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.inpi-pc-ic{width:18px;height:18px;flex:0 0 auto;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:#17171a;color:#8f8f98}',
     '.inpi-pc.ok .inpi-pc-ic{background:rgba(38,86,52,.4);color:#c3e8d1}',
     '.inpi-pc-l{flex:1;color:#c9c9d2}.inpi-pc-t{color:#8f8f98;font-size:11px}.inpi-pc.ok .inpi-pc-t{color:#9fd0af}'
+  ].join('');document.head.appendChild(st); }catch(e){}
+})();
+</script>
+<script id="dossier-finalisation-mod">
+/* Finalisation du dossier : export du DOSSIER COMPLET (bundle PDF / Word)
+   + ENVOI au client pour signature + suivi des statuts signés. */
+(function(){
+  if(window.__dossierFinalInit)return; window.__dossierFinalInit=1;
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function dget(id){return (typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;});}
+  function socName(d){ var c=(typeof clientById==='function')?clientById((d.clientIds||[])[0]):null; return ((c&&c.denomination)||(d.intake&&d.intake.societe&&d.intake.societe.denomination)||((typeof dossierClients==='function')?dossierClients(d):'')||'dossier'); }
+  function safe(s){return (''+(s||'dossier')).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9 _-]+/g,'').trim().replace(/\s+/g,'-').slice(0,60)||'dossier';}
+  function validDocs(d){ var T=(typeof window.docTestsDossier==='function')?window.docTestsDossier(d):{docs:[]}; return (T.docs||[]).filter(function(x){return x.valide;}); }
+  /* ---- Bundle : cover + documents validés + liste des pièces ---- */
+  function bundleInner(d){
+    var soc=socName(d); var vd=validDocs(d);
+    var pieces=(typeof piecesRequises==='function')?piecesRequises(d):[];
+    var cover='<div class="fin-page fin-cover"><h1>DOSSIER DE CONSTITUTION</h1><h2>'+E(soc)+'</h2>'
+      +'<div class="fin-meta">Formalité : Création '+E(((d.intake&&d.intake.type)||'').toUpperCase())+' — Réf. '+E(d.ref||'')+(d.numeroDossier?(' — N° '+E(d.numeroDossier)):'')+'</div>'
+      +'<div class="fin-meta">Établi le '+E((typeof today==='function')?((typeof frDate==='function')?frDate(today()):today()):'')+' par AEM CONSEIL</div>'
+      +'<div class="fin-sec">Documents inclus</div><ol class="fin-list">'+vd.map(function(x){return '<li>'+E(x.l)+'</li>';}).join('')+'</ol>'
+      +'<div class="fin-sec">Pièces justificatives à joindre</div><ol class="fin-list">'+pieces.map(function(p){return '<li>'+E(p.label)+'</li>';}).join('')+'</ol>'
+      +'</div>';
+    var docs=vd.map(function(x){ var h=''; try{ h=(typeof espDocRender==='function')?espDocRender(d,x.k):''; }catch(e){ h=''; } return '<div class="fin-page fin-doc">'+h+'</div>'; }).join('');
+    return cover+docs;
+  }
+  window.dossierBundleReady=function(d){ return validDocs(d).length>0; };
+  window.dossierBundlePDF=function(id){ var d=dget(id); if(!d)return; if(!validDocs(d).length){ if(typeof toast==='function')toast('Aucun document validé à exporter.'); return; }
+    try{ if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS(); }catch(e){}
+    var pa=document.getElementById('fv-printarea'); if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}
+    pa.innerHTML='<div class="doc-gen fin-bundle">'+bundleInner(d)+'</div>';
+    if(typeof toast==='function')toast('Dans la fenêtre d\'impression, choisissez « Enregistrer en PDF ».');
+    setTimeout(function(){ try{window.print();}catch(e){} },140);
+  };
+  window.dossierBundleWord=function(id){ var d=dget(id); if(!d)return; if(!validDocs(d).length){ if(typeof toast==='function')toast('Aucun document validé à exporter.'); return; }
+    if(typeof window.buildDocxBlob!=='function'){ if(typeof toast==='function')toast('Export Word indisponible.'); return; }
+    var host=document.createElement('div'); host.className='doc-gen'; host.style.cssText='position:fixed;left:-99999px;top:0;width:794px;background:#fff;color:#111'; host.innerHTML=bundleInner(d); document.body.appendChild(host);
+    try{ var blob=window.buildDocxBlob(host); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='dossier-'+safe(socName(d))+'.docx'; document.body.appendChild(a); a.click(); setTimeout(function(){try{URL.revokeObjectURL(a.href);a.remove();}catch(e){}},1500); if(typeof toast==='function')toast('Dossier complet (Word) téléchargé'); }
+    catch(e){ if(typeof toast==='function')toast('Export Word impossible.'); }
+    finally{ setTimeout(function(){try{host.remove();}catch(e){}},50); }
+  };
+  window.dossierBundleToggle=function(ev){ if(ev){ev.stopPropagation();} var m=document.getElementById('fin-dl-menu'); if(m)m.classList.toggle('show'); };
+  document.addEventListener('click',function(e){ var m=document.getElementById('fin-dl-menu'); if(m&&m.classList.contains('show')&&!(e.target.closest&&e.target.closest('.fin-dl-wrap'))) m.classList.remove('show'); });
+  /* ---- Envoi au client pour signature + suivi des statuts signés ---- */
+  function sig(d){ d.signature=d.signature||{envoyeLe:'',signeLe:'',file:null}; return d.signature; }
+  window.dossierEnvoiSignature=function(id){ var d=dget(id); if(!d)return; var c=(typeof clientById==='function')?clientById((d.clientIds||[])[0]):{}; c=c||{}; var to=(c.email||(d.intake&&d.intake.contact&&d.intake.contact.email)||'').trim();
+    var soc=socName(d); var vd=validDocs(d); var liste=vd.map(function(x){return '- '+x.l;}).join('\n')||'- (documents du dossier)';
+    var s=sig(d); s.envoyeLe=(typeof today==='function')?today():''; d.historique=d.historique||[]; d.historique.unshift({d:s.envoyeLe,t:'Documents envoyés au client pour signature'}); if(typeof save==='function')save(); if(typeof render==='function')render();
+    var subj='Documents à signer — '+soc; var body='Bonjour,\n\nVeuillez trouver les documents de constitution de votre société '+soc+' à signer :\n'+liste+'\n\nMerci de nous retourner les exemplaires signés (statuts, pouvoir, déclaration de non-condamnation).\n\nCordialement,\nAEM CONSEIL';
+    try{ window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body); }catch(e){}
+    if(typeof toast==='function')toast('E-mail de signature préparé'+(to?(' pour '+to):'')+'.');
+  };
+  window.statutsSignesUpload=function(id,input){ var d=dget(id); if(!d)return; var f=input&&input.files&&input.files[0]; if(!f)return; var r=new FileReader(); r.onload=function(ev){ var s=sig(d); s.file={name:f.name,type:f.type||'application/octet-stream',dataUrl:''+ev.target.result,ts:Date.now()}; s.signeLe=(typeof today==='function')?today():'';
+      var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d; dm.piecesRecues=dm.piecesRecues||{}; dm.piecesRecues['statutsSig']=true;
+      d.historique=d.historique||[]; d.historique.unshift({d:s.signeLe,t:'Statuts signés reçus'}); if(typeof save==='function')save(); if(typeof render==='function')render(); if(typeof toast==='function')toast('Statuts signés ajoutés'); }; r.readAsDataURL(f); input.value=''; };
+  window.statutsSignesVoir=function(id){ var d=dget(id); var s=d&&d.signature; if(!s||!s.file)return; var f=s.file; var isImg=/^image\//.test(f.type||'')||/\.(png|jpe?g|webp|gif)$/i.test(f.name||''); var isPdf=/pdf/i.test(f.type||'')||/\.pdf$/i.test(f.name||''); var inner=isImg?('<img src="'+f.dataUrl+'" style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:8px">'):isPdf?('<iframe src="'+f.dataUrl+'" style="width:100%;height:70vh;border:0;background:#fff;border-radius:8px"></iframe>'):'<div class="hint">Aperçu indisponible.</div>'; if(typeof openModal==='function')openModal('Statuts signés — '+E(socName(d)),inner,'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><a class="btn btn-pri" href="'+f.dataUrl+'" download="'+E(f.name)+'">Télécharger</a>'); };
+  window.statutsSignesSuppr=function(id){ var d=dget(id); var s=d&&d.signature; if(!s||!s.file)return; if(typeof confirm==='function'&&!confirm('Retirer les statuts signés ?'))return; s.file=null; s.signeLe=''; var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d; if(dm.piecesRecues)delete dm.piecesRecues['statutsSig']; if(typeof save==='function')save(); if(typeof render==='function')render(); };
+  /* ---- Carte « Finalisation & remise » (surface à étapes) ---- */
+  var FIN_IC={
+    bundle:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l3 3v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v3h3"/><path d="M9 12h6M9 16h4"/></svg>',
+    sign:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19c2.5-.6 4-2.4 6.5-7S15 5.5 16 7s-1.2 4.7-3 6.6"/><path d="M13.5 13.6c.8.9 1.8.9 2.7.1"/><path d="M4 20.5h7"/></svg>',
+    check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l3 3v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M9 13l2 2 4-4.5"/></svg>'
+  };
+  function finStep(done,ic,title,sub,act){
+    return '<div class="fin-step'+(done?' done':'')+'"><span class="fin-step-ic">'+ic+'</span>'
+      +'<div class="fin-step-main"><b>'+title+'</b><span>'+sub+'</span></div>'
+      +'<div class="fin-step-act">'+act+'</div></div>';
+  }
+  window.dossierFinalisationCard=function(d){
+    if(!d)return '';
+    var vd=validDocs(d); var ready=vd.length>0; var s=sig(d);
+    var d1=ready,d2=!!s.envoyeLe,d3=!!s.file; var fr=function(x){return (typeof frDate==='function')?frDate(x):x;};
+    var dlBtn=ready
+      ? '<span class="fin-dl-wrap"><button class="btn btn-sm btn-pri" onclick="dossierBundleToggle(event)">Exporter <span class="fin-caret">▾</span></button><span class="fin-dl-menu" id="fin-dl-menu"><button class="btn btn-ghost" onclick="dossierBundlePDF(\''+d.id+'\')">PDF</button><button class="btn btn-ghost" onclick="dossierBundleWord(\''+d.id+'\')">Word (.docx)</button></span></span>'
+      : '<button class="btn btn-sm btn-pri is-disabled" disabled title="Validez d\'abord les documents">Exporter</button>';
+    var sigStat = s.file
+      ? '<span class="fin-file" title="'+E(s.file.name)+'">'+E(s.file.name)+'</span><button class="btn btn-sm btn-ghost" onclick="statutsSignesVoir(\''+d.id+'\')">Voir</button><button class="btn btn-sm btn-ghost" onclick="statutsSignesSuppr(\''+d.id+'\')">Retirer</button>'
+      : '<label class="btn btn-sm btn-ghost fin-sig-add">Ajouter les statuts signés<input type="file" accept="image/*,application/pdf" style="display:none" onchange="statutsSignesUpload(\''+d.id+'\',this)"></label>';
+    var prog='<span class="fin-prog">'
+      +'<span class="fin-prog-i'+(d1?' on':'')+'">Validés</span><span class="fin-prog-s"></span>'
+      +'<span class="fin-prog-i'+(d2?' on':'')+'">Envoyé</span><span class="fin-prog-s"></span>'
+      +'<span class="fin-prog-i'+(d3?' on':'')+'">Signé</span></span>';
+    return '<div class="card fin-card"><div class="card-h"><h2>Finalisation &amp; remise</h2>'+prog+'</div>'
+      +'<div class="card-b fin-steps">'
+      +finStep(d1, d1?FIN_IC.check:FIN_IC.bundle, 'Dossier complet',
+          ready?(vd.length+' document'+(vd.length>1?'s':'')+' validé'+(vd.length>1?'s':'')+' + pièces — prêt pour le dépôt'):'Validez les documents pour activer l\'export',
+          dlBtn)
+      +finStep(d2, d2?FIN_IC.check:FIN_IC.sign, 'Signature du client',
+          s.envoyeLe?('Envoyé au client le '+E(fr(s.envoyeLe))):'Envoyez les documents au client pour signature',
+          '<button class="btn btn-sm '+(d2?'btn-ghost':'btn-pri')+'" onclick="dossierEnvoiSignature(\''+d.id+'\')">'+(d2?'Renvoyer':'Envoyer pour signature')+'</button>')
+      +finStep(d3, FIN_IC.check, 'Statuts signés',
+          s.signeLe?('Reçus le '+E(fr(s.signeLe))+' — pièce du dépôt INPI cochée'):'À réception, joignez les statuts signés (pièce du dépôt INPI)',
+          sigStat)
+      +'</div></div>';
+  };
+  /* Greffe la carte au dossier (colonne principale), après la carte INPI. */
+  try{ if(typeof window.espPanel==='function' && !window.espPanel.__final){ var _pp=window.espPanel; window.espPanel=function(d,list,id){ var h=_pp.apply(this,arguments); try{ if(d&&window.dossierFinalisationCard){ var card=window.dossierFinalisationCard(d); if(card){ var mm=h.replace(/(<\/div>\s*<\/div>\s*)$/, card+'$1'); h=(mm!==h)?mm:(h+card); } } }catch(e){} return h; }; window.espPanel.__final=1; } }catch(e){}
+  try{ var st=document.createElement('style');st.id='dossier-finalisation-css';st.textContent=[
+    /* Surface à étapes */
+    '.fin-card .card-h{align-items:center}',
+    '.fin-prog{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}',
+    '.fin-prog-i{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid #262629;background:#0d0d0f;color:#7f7f88}',
+    '.fin-prog-i.on{background:rgba(38,86,52,.28);color:#c3e8d1;border-color:rgba(84,150,104,.5)}',
+    '.fin-prog-s{width:12px;height:1px;background:#2a2a2e}',
+    '.fin-steps{padding-top:4px}',
+    '.fin-step{display:flex;align-items:center;gap:13px;flex-wrap:wrap;padding:13px 0;border-top:1px solid #17171a}.fin-step:first-child{border-top:0}',
+    '.fin-step-ic{width:36px;height:36px;flex:0 0 auto;border-radius:10px;border:1px solid #262629;background:#0d0d0f;color:#9a9aa0;display:flex;align-items:center;justify-content:center;transition:.15s ease}',
+    '.fin-step-ic svg{width:19px;height:19px}',
+    '.fin-step.done .fin-step-ic{border-color:rgba(84,150,104,.55);background:rgba(38,86,52,.22);color:#a9d9ba}',
+    '.fin-step-main{flex:1;min-width:190px;display:flex;flex-direction:column;gap:2px}',
+    '.fin-step-main b{color:#eef0f4;font-size:13.5px;font-weight:650}.fin-step-main span{color:#8f8f98;font-size:11.5px;line-height:1.5}',
+    '.fin-step-act{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}',
+    '.fin-file{font-size:12px;color:#cbced6;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.fin-caret{font-size:9px;opacity:.85;margin-left:2px}',
+    '.fin-card .btn.is-disabled,.fin-card .btn[disabled]{opacity:.4;cursor:not-allowed;filter:grayscale(.4)}',
+    '.fin-dl-wrap{position:relative;display:inline-block}',
+    '.fin-dl-menu{position:absolute;right:0;top:calc(100% + 6px);display:none;flex-direction:column;gap:4px;background:#0d0d0f;border:1px solid #2a2a2e;border-radius:10px;padding:6px;min-width:130px;box-shadow:0 12px 30px -8px rgba(0,0,0,.8);z-index:8}',
+    '.fin-dl-menu.show{display:flex}.fin-dl-menu .btn{width:100%;justify-content:center}',
+    '@media(max-width:560px){.fin-step-act{width:100%;margin-left:0;justify-content:flex-start}}',
+    /* Bundle (impression) — document blanc, une page par élément */
+    '.fin-bundle .fin-page{page-break-after:always}',
+    '.fin-bundle .fin-cover{font-family:Georgia,"Times New Roman",serif;color:#111;padding:20px 8px}',
+    '.fin-bundle .fin-cover h1{font-size:22px;text-align:center;letter-spacing:1px;margin:40px 0 6px}',
+    '.fin-bundle .fin-cover h2{font-size:18px;text-align:center;font-weight:600;margin:0 0 18px}',
+    '.fin-bundle .fin-meta{text-align:center;font-size:12px;color:#333;margin:2px 0}',
+    '.fin-bundle .fin-sec{font-weight:700;font-size:13px;margin:26px 0 6px;border-bottom:1px solid #333;padding-bottom:3px}',
+    '.fin-bundle .fin-list{margin:0;padding-left:22px;font-size:13px;line-height:1.7}'
   ].join('');document.head.appendChild(st); }catch(e){}
 })();
 </script>
