@@ -2363,7 +2363,8 @@ function stCivil(a,ph){var nom=esc((a&&a.nom||'').trim())||'«nom prénom»';var
   var naiss=(a&&a.naissance)?esc(a.naissance):'«…»';var lieu=(a&&a.lieuNaissance)?esc(a.lieuNaissance):'«lieu»';
   var pays=(a&&a.pays)?esc(a.pays):'«pays»';var nat=(a&&a.nationalite)?esc(a.nationalite):'«…»';
   var adr=(a&&a.adresse)?esc(a.adresse):(ph||'«adresse»');
-  return civ+' '+nom+' né le '+naiss+' à '+lieu+' en '+pays+', de nationalité '+nat+', demeurant au '+adr+'.';}
+  var estF=/^(mme|mlle|madame|mademoiselle)/i.test((a&&a.civilite)||civ||'');
+  return civ+' '+nom+' '+(estF?'née':'né')+' le '+naiss+' à '+lieu+' en '+pays+', de nationalité '+nat+', demeurant au '+adr+'.';}
 function stFormeLabel(f){return {SAS:'Société par actions simplifiée',SASU:'Société par actions simplifiée Unipersonnelle',SARL:'Société à responsabilité limitée',EURL:'Entreprise unipersonnelle à responsabilité limitée',SCI:'Société civile immobilière',SA:'Société anonyme'}[f]||'Société par actions simplifiée';}
 function stQualite(f){return (f==='SARL'||f==='EURL'||f==='SCI')?'gérant':'Président';}
 function stDossData(d){
@@ -2453,7 +2454,7 @@ function pouvoirHTML(d){
   var repFirm=((s.representant||s.dirigeant||s.raison||'')+'').trim()||'«représentant»';
   var repTit=/^(M\.|Mme|M |Mr|Monsieur|Madame)/i.test(repFirm)?esc(repFirm):'M. '+esc(repFirm);
   var adrFirm=((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«adresse du mandataire»';
-  var mandataire=repTit+' dirigeant de la société '+esc(s.raison||'AEM CONSEIL')+' situé au '+esc(adrFirm);
+  var mandataire=repTit+', dirigeant de la société '+esc(s.raison||'AEM CONSEIL')+', sise '+esc(adrFirm);
   var villeFait=x.villeSignature;
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
   var dateTxt=x.dateActe;
@@ -2475,7 +2476,8 @@ function dncHTML(d){
   var adr=dcl.adresse?esc(dcl.adresse):'«adresse»';
   var pere=(x.pere||((dcl.pereNom||c.pereNom||'')+'')).trim();
   var mere=(x.mere||((dcl.mereNom||c.mereNom||'')+'')).trim();
-  var filiation=(pere||mere)?('Déclare être le fils ou la fille de '+esc(pere||'«père»')+' et de '+esc(mere||'«mère»')):'Déclare être le fils ou la fille de «père» et de «mère»';
+  var estF=/^(mme|mlle|madame|mademoiselle)/i.test((dcl.civilite||'')+'');var enfant=estF?'la fille':'le fils';
+  var filiation=(pere||mere)?('Déclare être '+enfant+' de '+esc(pere||'«père»')+' et de '+esc(mere||'«mère»')):('Déclare être '+enfant+' de «père» et de «mère»');
   var qualite=stQualite(x.forme);
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
   var dateTxt=x.dateActe;
@@ -2560,7 +2562,7 @@ function statutsSasHTML(d){
   // TITRE II
   A.push('<div class="st-titre">TITRE II — APPORTS · CAPITAL SOCIAL · FORME DES ACTIONS · DROITS ET OBLIGATIONS ATTACHÉS AUX ACTIONS</div>');
   var apports=assoc.map(function(a){var p=Number(a.parts)||0;var m=(nominal&&p)?stNum(Math.round(nominal*p)):'«…»';
-    return '<p>- M. '+ (esc((a.nom||'').trim())||'«associé»') +', une somme en numéraire de '+((nominal&&p)?stLettres(Math.round(nominal*p))+' euros':'«…»')+' ci '+m+' euros ;</p>';}).join('');
+    return '<p>- '+ (esc((a.nom||'').trim())||'«associé»') +', une somme en numéraire de '+((nominal&&p)?stLettres(Math.round(nominal*p))+' euros':'«…»')+', ci '+m+' euros ;</p>';}).join('');
   A.push('<div class="st-art">ARTICLE 6 — Apports</div><p>Les soussignés apportent à la société, à savoir :</p>'+apports
     +'<p>Soit au total la somme de '+capL+' euros, ci '+capN+' euros.</p>'
     +'<p>Ladite somme correspond à la souscription de '+(nbActions||'«…»')+' actions ordinaires de '+stNum(Math.round(nominal))+' euros et libérées entièrement, ainsi que l\'atteste le certificat de la banque.</p>');
@@ -3092,7 +3094,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=276;
+var LAST_VER=277;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -6615,7 +6617,7 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
     var total=0; parts.forEach(function(p){total+=p.length;}); var out=new Uint8Array(total),pos=0; parts.forEach(function(p){out.set(p,pos);pos+=p.length;});
     return out;
   }
-  var DOC_CSS='<style>body{margin:0;background:#eef0f2;font-family:Georgia,"Times New Roman",serif;color:#111}.doc-gen{max-width:820px;margin:22px auto;background:#fff;padding:42px 48px;box-shadow:0 2px 12px rgba(0,0,0,.15);line-height:1.65}h1,h2,h3{font-family:Georgia,serif}table{border-collapse:collapse;width:100%;margin:8px 0}td,th{border:1px solid #999;padding:4px 7px;font-size:13px}@media print{body{background:#fff}.doc-gen{box-shadow:none;margin:0;max-width:none;padding:0}}</style>';
+  var DOC_CSS='<style>*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}body{margin:0;background:#eef0f2;font-family:Georgia,"Times New Roman",serif;color:#111}.doc-gen{width:210mm;min-height:297mm;box-sizing:border-box;margin:22px auto;background:#fff;padding:22mm 20mm;box-shadow:0 2px 12px rgba(0,0,0,.15);line-height:1.65}h1,h2,h3{font-family:Georgia,serif;page-break-after:avoid}p,tr,li,.sign,.art{page-break-inside:avoid}table{border-collapse:collapse;width:100%;margin:8px 0}td,th{border:1px solid #999;padding:4px 7px;font-size:13px}img{max-width:100%;image-rendering:-webkit-optimize-contrast}@page{size:A4;margin:0}@media print{html,body{background:#fff}.doc-gen{box-shadow:none;margin:0;width:auto;min-height:0;padding:16mm 15mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>';
 
   window.docDownloadFolder=function(id){ var d=doss(id); if(!d)return;
     var docs=reqDocs(d), gen=docs.filter(function(dc){return isGen(d,dc.k);});
@@ -7368,7 +7370,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       ['Les parts sociales ne peuvent être représentées par des titres négociables. Le titre de chaque associé résulte des présents statuts, des actes modificatifs ultérieurs et des cessions régulièrement consenties.',
        'Chaque part sociale confère à son propriétaire un droit proportionnel dans les bénéfices et l\'actif social ; elle est indivisible à l\'égard de la Société.']));
     A.push(art('ARTICLE 9 — Cession et transmission des parts',
-      ['Les parts sociales sont librement cessibles entre associés'+(eurl?'':'')+' , ainsi qu\'entre conjoints, ascendants et descendants.',
+      ['Les parts sociales sont librement cessibles entre associés, ainsi qu\'entre conjoints, ascendants et descendants.',
        'La cession de parts à des tiers étrangers à la Société est soumise à l\'agrément préalable de la majorité des associés représentant au moins la moitié des parts sociales, conformément à l\'article L. 223-14 du Code de commerce.',
        'Toute cession de parts doit être constatée par écrit et devient opposable à la Société après signification ou dépôt d\'un original au siège social.']));
     A.push(titre('TITRE III — GÉRANCE'));
@@ -13458,22 +13460,22 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   window.fiscalOptTampon=function(id){var d=doss(id);if(!d)return;var o=optData(d);o.optTampon={date:(new Date()).toLocaleDateString('fr-FR'),by:'AEM CONSEIL',ts:Date.now()};if(typeof save==='function')save();fiscalOptGen(id);if(typeof toast==='function')toast('✅ Note de recommandation finalisée et tamponnée');};
 
   var MODULES=[
-    {k:'apercu',ic:'▦',l:'Synthèse',f:m_apercu},
-    {k:'societe',ic:'▤',l:'Société & associés',f:m_societe},
-    {k:'optimiseur',ic:'🏆',l:'Meilleure société (stratégie)',f:m_optimiseur},
-    {k:'previsionnel',ic:'∿',l:'Bilan prévisionnel',f:m_previsionnel},
-    {k:'questionnaire',ic:'✍',l:'Questionnaire dirigeant',f:m_questionnaire},
-    {k:'soustraitance',ic:'📝',l:'Contrat de sous-traitance',f:m_soustraitance},
-    {k:'remboursement',ic:'💧',l:'Remboursement de TVA',f:m_remboursement},
-    {k:'infos',ic:'✎',l:'Infos client',f:m_infos},
-    {k:'regime',ic:'⚖',l:'Régime fiscal & social',f:m_regime},
-    {k:'exon',ic:'★',l:'Exonérations & aides',f:m_exon},
-    {k:'tva',ic:'%',l:'TVA',f:m_tva},
-    {k:'calendrier',ic:'▤',l:'Calendrier fiscal',f:m_calendrier},
-    {k:'dirigeant',ic:'€',l:'Rémunération dirigeant',f:m_dirigeant},
-    {k:'compta',ic:'▣',l:'Comptabilité & formalités',f:m_compta},
-    {k:'simulateur',ic:'∑',l:'Simulateur',f:m_simulateur},
-    {k:'actu',ic:'✦',l:'Actualités fiscales',f:m_actu}
+    {k:'apercu',ic:'',l:'Synthèse',f:m_apercu},
+    {k:'societe',ic:'',l:'Société & associés',f:m_societe},
+    {k:'optimiseur',ic:'',l:'Meilleure société (stratégie)',f:m_optimiseur},
+    {k:'previsionnel',ic:'',l:'Bilan prévisionnel',f:m_previsionnel},
+    {k:'questionnaire',ic:'',l:'Questionnaire dirigeant',f:m_questionnaire},
+    {k:'soustraitance',ic:'',l:'Contrat de sous-traitance',f:m_soustraitance},
+    {k:'remboursement',ic:'',l:'Remboursement de TVA',f:m_remboursement},
+    {k:'infos',ic:'',l:'Infos client',f:m_infos},
+    {k:'regime',ic:'',l:'Régime fiscal & social',f:m_regime},
+    {k:'exon',ic:'',l:'Exonérations & aides',f:m_exon},
+    {k:'tva',ic:'',l:'TVA',f:m_tva},
+    {k:'calendrier',ic:'',l:'Calendrier fiscal',f:m_calendrier},
+    {k:'dirigeant',ic:'',l:'Rémunération dirigeant',f:m_dirigeant},
+    {k:'compta',ic:'',l:'Comptabilité & formalités',f:m_compta},
+    {k:'simulateur',ic:'',l:'Simulateur',f:m_simulateur},
+    {k:'actu',ic:'',l:'Actualités fiscales',f:m_actu}
   ];
 
   window.fiscalHubOpen=function(id){window.fiscalDossierId=id;window.fiscalTab=window.fiscalTab||'apercu';
@@ -13598,7 +13600,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 (function(){
   var CSS=[
     /* ---- 1. Élévation à 3 niveaux (toujours noir, mais les plans se lisent) ---- */
-    'html body.dark .card,html body.dark .tr-head,html body.dark .tr-doccard,html body.dark .pj-card,html body.dark .esp-mailcard{background:#0e0e11!important;border:1px solid #202024!important;border-radius:14px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 2px 8px -3px rgba(0,0,0,.65)!important}',
+    'html body.dark .card,html body.dark .tr-head,html body.dark .tr-doccard,html body.dark .pj-card,html body.dark .esp-mailcard{background:#050506!important;border:1px solid #1c1c1e!important;border-radius:14px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 2px 8px -3px rgba(0,0,0,.6)!important}',
+    /* UNIFORMITÉ — couleur de la page Traitement sur toutes les pages + toutes les barres latérales */
+    'html body.dark aside,html body.dark aside#side,html body.dark .fx-shell aside,html body.dark .fx-side,html body.dark .esp-mini,html body.dark .esp-mini-list,html body.dark .esp-shell{background:#050506!important;background-image:none!important;border-right-color:#1c1c1e!important}',
+    'html body.dark .layout,html body.dark .content,html body.dark #view,html body.dark main{background:#08080a!important;background-image:none!important}',
     'html body.dark .esp-shell{background:#08080a!important}',
     'html body.dark .dfd-row,html body.dark .esp-mail,html body.dark .esp-item{background:#17171a!important;border-color:#26262b!important;border-radius:10px!important}',
     'html body.dark .card-h{border-bottom:1px solid rgba(255,255,255,.06)!important}',
@@ -13629,6 +13634,239 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   ensure();
   try{ var _r=window.render; if(typeof _r==='function'&&!window.__polishLast){ window.__polishLast=1; window.render=function(){ var x=_r.apply(this,arguments); try{ var st=document.getElementById('style-polish-css'); if(st&&st.parentNode&&st!==st.parentNode.lastElementChild) st.parentNode.appendChild(st); }catch(e){} return x; }; } }catch(e){}
   setTimeout(ensure,0); setTimeout(ensure,500);
+})();
+</script>
+<script id="gen-quality-mod">
+/* fluidité/lisseur (transitions douces) + qualité de rendu des documents
+   (antialiasing, impression A4 fidèle) + finitions. N'altère pas le fond des documents.
+   Injecté en dernier → prime. Retirable d'un bloc si non validé. */
+(function(){
+  var EASE='cubic-bezier(.4,0,.2,1)';
+  var CSS=[
+    /* ---- Fluidité : transitions douces sur les éléments interactifs ---- */
+    'html body.dark .btn,html body.dark .tr-act,html body.dark .tr-b,html body.dark .dfd-a,html body.dark .dfd-b,html body.dark .nav-btn,html body.dark .esp-mini-item,html body.dark .tab,html body.dark .seg-btn,html body.dark .pill,html body.dark .dem-nat-b,html body.dark input,html body.dark select,html body.dark textarea,html body.dark .fx-mi,html body.dark .card{transition:background-color .18s '+EASE+',border-color .18s '+EASE+',color .15s '+EASE+',box-shadow .22s '+EASE+',transform .16s '+EASE+',opacity .18s '+EASE+'!important}',
+    /* leger soulevement au survol des elements cliquables (pas les cartes statiques) */
+    'html body.dark .btn:hover,html body.dark .tr-act:hover,html body.dark .dfd-a:hover,html body.dark .dfd-b:hover,html body.dark .tr-b:hover,html body.dark .tr-primary:hover{transform:translateY(-1px)!important}',
+    'html body.dark .btn:active,html body.dark .tr-act:active,html body.dark .dfd-a:active,html body.dark .dfd-b:active,html body.dark .tr-primary:active{transform:translateY(0)!important;transition-duration:.06s!important}',
+    'html body.dark .esp-mini-item:hover{transform:translateX(1px)!important}',
+    /* ---- Apparition douce des overlays / modales / module fiscal ---- */
+    '@keyframes lastFade{from{opacity:0}to{opacity:1}}',
+    '@keyframes lastPop{from{opacity:0;transform:translateY(6px) scale(.985)}to{opacity:1;transform:none}}',
+    'html body #ov.show,html body #modal.show,html body #fiscal-ov.show,html body #fiscal-ov,html body #fiscal-doc-ov{animation:lastFade .16s '+EASE+'}',
+    'html body #ov.show .modal-card,html body #modal.show #modal-c,html body #modal.show .modal-card,html body #fiscal-ov .fx-shell,html body #fiscal-doc-ov .fxd-card{animation:lastPop .2s '+EASE+'}',
+    'html body .fv-view-scroll .doc-gen{animation:lastFade .22s '+EASE+'}',
+    /* ---- Defilement doux ---- */
+    'html body .content,html body #view,html body .fv-view-scroll,html body .fx-content,html body #modal-c{scroll-behavior:smooth}',
+    /* ---- Qualite de rendu des documents (crispness, sans changer le fond) ---- */
+    'html body .doc-gen,html body .doc-gen *,html body .a4-doc,html body .a4-page,html body .st-doc,html body .ft-doc{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}',
+    /* Police UNIQUE : tous les documents alignés sur la police des statuts (Times serif) */
+    'html body .doc-gen,html body .doc-gen .st-doc,html body .doc-gen .ft-doc,html body .doc-gen .pv-doc,html body .doc-gen .ct-doc,html body .doc-gen .rb-doc,html body .doc-gen .dg-page,html body .doc-gen .pv-doc *,html body .doc-gen .ct-doc *,html body .doc-gen .rb-doc *,html body .doc-gen .ft-doc *,html body .doc-gen .dg-page *{font-family:"Times New Roman",Georgia,serif!important}',
+    'html body .doc-gen img,html body .a4-page img{image-rendering:-webkit-optimize-contrast}',
+    /* rendu net des pages A4 a l ecran (ombre douce, bord franc) */
+    'html body .fv-view-scroll .a4-page,html body .fv-view-scroll .st-doc,html body .fv-view-scroll .ft-doc{box-shadow:0 6px 22px -8px rgba(0,0,0,.35)!important;border-radius:2px}'
+  ].join('');
+  /* Impression : A4 exact + couleurs fideles (documents imprimes sans alteration) */
+  var PRINT='@media print{html,body{background:#fff!important}@page{size:A4;margin:16mm}'
+    +'.doc-gen,.a4-doc,.a4-page,.st-doc,.ft-doc{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-shadow:none!important;transform:none!important;margin:0!important}'
+    +'.a4-page{page-break-after:always}.a4-page:last-child{page-break-after:auto}'
+    +'.doc-gen h1,.doc-gen h2,.doc-gen h3,.doc-gen tr,.doc-gen .sign,.doc-gen .art{page-break-inside:avoid}}';
+  function ensure(){ try{
+    var st=document.getElementById('gen-quality-css'); if(!st){st=document.createElement('style');st.id='gen-quality-css';} st.textContent=CSS; (document.body||document.documentElement).appendChild(st);
+    var pr=document.getElementById('gen-quality-print'); if(!pr){pr=document.createElement('style');pr.id='gen-quality-print';pr.media='print';} pr.textContent=PRINT; (document.body||document.documentElement).appendChild(pr);
+  }catch(e){} }
+  try{ if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches){ CSS=CSS.replace(/@keyframes[^}]*\}[^}]*\}/g,'').replace(/animation:[^;]*;?/g,'').replace(/transition:[^;]*;?/g,'').replace(/transform:translate[^;]*;?/g,''); } }catch(e){}
+  ensure();
+  try{ var _r=window.render; if(typeof _r==='function'&&!window.__genqLast){ window.__genqLast=1; window.render=function(){ var x=_r.apply(this,arguments); try{ var a=document.getElementById('gen-quality-css'); if(a&&a.parentNode&&a!==a.parentNode.lastElementChild) a.parentNode.appendChild(a); var b2=document.getElementById('gen-quality-print'); if(b2&&b2.parentNode) b2.parentNode.appendChild(b2); }catch(e){} return x; }; } }catch(e){}
+  setTimeout(ensure,0); setTimeout(ensure,500);
+})();
+</script>
+<script id="dash-accordion-mod">
+/* Page d'accueil « Demandes » : tableau de bord interactif & tactile.
+   Chaque carte se replie/déplie au clic (ou tap) sur son titre (accordéon), animation douce,
+   chevron, état mémorisé. Défilement fluide. Scopé à la page Demandes. */
+(function(){
+  function onDemandes(){ try{ return (window.state&&state.page==='demandes')||document.body.getAttribute('data-page')==='demandes'; }catch(e){ return false; } }
+  var SECTIONS=[['.card','.card-h','.card-b'],['.poste-banner','.poste-hd','.poste-stats']];
+  function key(card,head){ var h=(head&&(head.querySelector('h2,.poste-hi')||head))||card; return 'last-acc-'+((h?h.textContent:'').replace(/\s+/g,' ').trim().slice(0,44)); }
+  function toggle(card,head){ var col=!card.classList.contains('acc-collapsed'); card.classList.toggle('acc-collapsed',col); try{localStorage.setItem(key(card,head),col?'1':'0');}catch(e){} }
+  function apply(){ if(!onDemandes()) return;
+    var scope=document.getElementById('view')||document.querySelector('.content')||document.querySelector('main')||document.body;
+    for(var s=0;s<SECTIONS.length;s++){ var sec=SECTIONS[s]; var conts=scope.querySelectorAll(sec[0]);
+      for(var i=0;i<conts.length;i++){ (function(card,headSel,bodySel){
+        var head=card.querySelector(':scope > '+headSel); var body=card.querySelector(':scope > '+bodySel);
+        if(!head||!body) return;
+        if(!head.getAttribute('data-acc')){ head.setAttribute('data-acc','1'); head.classList.add('acc-head');
+          var chev=document.createElement('span'); chev.className='acc-chev'; chev.textContent='›'; head.appendChild(chev);
+          head.addEventListener('click',function(e){ if(e.target.closest('button,a,input,select,textarea,label,.btn')) return; toggle(card,head); });
+        }
+        var col=false; try{col=localStorage.getItem(key(card,head))==='1';}catch(e){}
+        card.classList.toggle('acc-collapsed',col);
+      })(conts[i],sec[1],sec[2]); }
+    }
+  }
+  var t=null; function schedule(){ if(t)return; t=setTimeout(function(){t=null;apply();},30); }
+  function css(){ if(document.getElementById('dash-acc-css')){(document.body||document.documentElement).appendChild(document.getElementById('dash-acc-css'));return;} var st=document.createElement('style'); st.id='dash-acc-css';
+    st.textContent=[
+      'body[data-page="demandes"] .acc-head{position:relative;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;transition:background-color .15s ease}',
+      'body[data-page="demandes"] .acc-head:hover{background:rgba(255,255,255,.035)}',
+      'body[data-page="demandes"] .acc-head:active{background:rgba(255,255,255,.06)}',
+      'body[data-page="demandes"] .acc-chev{position:absolute;right:16px;top:50%;margin-top:-9px;font-size:18px;line-height:1;color:#9a9aa0;transition:transform .26s cubic-bezier(.4,0,.2,1);pointer-events:none}',
+      'body[data-page="demandes"] .card:not(.acc-collapsed) .acc-chev{transform:rotate(90deg)}',
+      'body[data-page="demandes"] .card > .card-b,body[data-page="demandes"] .poste-banner > .poste-stats{overflow:hidden;transition:max-height .3s cubic-bezier(.4,0,.2,1),opacity .22s ease,padding .3s ease,margin .3s ease;max-height:4000px;opacity:1}',
+      'body[data-page="demandes"] .card.acc-collapsed > .card-b,body[data-page="demandes"] .poste-banner.acc-collapsed > .poste-stats{max-height:0!important;opacity:0;padding-top:0!important;padding-bottom:0!important;margin-top:0!important;border-top:0!important}',
+      'body[data-page="demandes"] .poste-hd.acc-head{padding-right:34px}',
+      /* tactile : cibles confortables + défilement fluide */
+      'body[data-page="demandes"] .content,body[data-page="demandes"] #view{scroll-behavior:smooth;-webkit-overflow-scrolling:touch}',
+      '@media(hover:none){body[data-page="demandes"] .acc-head{padding-top:13px;padding-bottom:13px}}'
+    ].join(''); (document.body||document.documentElement).appendChild(st);
+  }
+  function init(){ css(); apply();
+    try{ var _r=window.render; if(typeof _r==='function'&&!window.__dashAcc){ window.__dashAcc=1; window.render=function(){ var x=_r.apply(this,arguments); try{ var s=document.getElementById('dash-acc-css'); if(s&&s.parentNode&&s!==s.parentNode.lastElementChild) s.parentNode.appendChild(s); }catch(e){} schedule(); return x; }; } }catch(e){}
+    setTimeout(apply,250); setTimeout(apply,700);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
+</script>
+<script id="doc-actions-mod">
+/* Barre d'actions commune à TOUS les documents du dossier :
+   Fermer · Modifier · Imprimer · Télécharger (PDF · Excel). Modifier = édition en place ;
+   à l'enregistrement un message de confirmation apparaît et la version est conservée. */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function doss(id){return (typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;});}
+  function safe(s){return (''+(s||'document')).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9 _-]+/g,'').trim().replace(/\s+/g,'-').slice(0,60)||'document';}
+  function dl(blob,name){try{var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){try{URL.revokeObjectURL(a.href);a.remove();}catch(e){}},1500);}catch(e){if(typeof toast==='function')toast('Téléchargement impossible.');}}
+  function docEl(){return document.querySelector('#ov-b .doc-gen')||document.querySelector('#ov .doc-gen');}
+
+  /* la version modifiée d'un document prime sur la version générée */
+  if(typeof window.espDocRender==='function' && !window.espDocRender.__custom){
+    var _r=window.espDocRender; window.espDocRender=function(d,k){ try{ if(d&&d.docCustom&&d.docCustom[k]) return d.docCustom[k]; }catch(e){} return _r.call(this,d,k); }; window.espDocRender.__custom=true;
+  }
+
+  window.docActBar=function(){ return '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+    +'<button class="btn btn-ghost" id="doc-act-mod" onclick="docActModifier()">Modifier</button>'
+    +'<button class="btn btn-ghost" onclick="docActPrint()">Imprimer</button>'
+    +'<span class="doc-dl-wrap"><button class="btn btn-pri" onclick="docActDlToggle(event)">Télécharger ▾</button>'
+    +'<span class="doc-dl-menu" id="doc-dl-menu"><button class="btn btn-ghost" onclick="docActPDF()">PDF</button><button class="btn btn-ghost" onclick="docActExcel()">Excel</button></span></span>'; };
+
+  window.docActDlToggle=function(ev){ if(ev){ev.stopPropagation();} var m=document.getElementById('doc-dl-menu'); if(m) m.classList.toggle('show'); };
+  document.addEventListener('click',function(e){ var m=document.getElementById('doc-dl-menu'); if(m&&m.classList.contains('show')&&!e.target.closest('.doc-dl-wrap')) m.classList.remove('show'); });
+
+  window.docActModifier=function(){ var el=docEl(); if(!el)return; var btn=document.getElementById('doc-act-mod');
+    if(el.getAttribute('contenteditable')==='true'){ /* Enregistrer */
+      el.setAttribute('contenteditable','false'); el.classList.remove('doc-editing');
+      try{ var cd=window.__curDoc; if(cd&&cd.id){ var d=doss(cd.id); if(d){ d.docCustom=d.docCustom||{}; d.docCustom[cd.k]=el.innerHTML; if(typeof save==='function')save(); } } }catch(e){}
+      if(btn)btn.textContent='Modifier';
+      var b=document.getElementById('doc-edit-msg'); if(b){b.textContent='✓ Modifications enregistrées';b.className='doc-edit-msg ok';setTimeout(function(){if(b&&b.parentNode)b.remove();},3500);}
+      if(typeof toast==='function')toast('Document modifié ✓');
+    } else { /* passer en édition */
+      el.setAttribute('contenteditable','true'); el.classList.add('doc-editing'); el.focus();
+      if(btn)btn.textContent='Enregistrer';
+      var host=document.getElementById('ov-b'); if(host && !document.getElementById('doc-edit-msg')){ var m=document.createElement('div'); m.id='doc-edit-msg'; m.className='doc-edit-msg'; m.textContent='Édition en cours — modifiez le texte puis « Enregistrer ».'; host.insertBefore(m,host.firstChild); }
+    } };
+
+  window.docActPrint=function(){ if(typeof espDocPrint==='function') espDocPrint(); else window.print(); };
+  window.docActPDF=function(){ var m=document.getElementById('doc-dl-menu'); if(m)m.classList.remove('show'); if(typeof toast==='function')toast('Dans la fenêtre d\'impression, choisissez « Enregistrer en PDF ».'); window.docActPrint(); };
+  window.docActExcel=function(){ var m=document.getElementById('doc-dl-menu'); if(m)m.classList.remove('show'); var el=docEl(); if(!el)return;
+    var title=(document.getElementById('ov-t')&&document.getElementById('ov-t').textContent)||'document';
+    var tables=el.querySelectorAll('table'), inner='';
+    if(tables.length){ for(var i=0;i<tables.length;i++) inner+=tables[i].outerHTML+'<br>'; }
+    else { var ns=el.querySelectorAll('h1,h2,h3,.st-titre,.st-art,p,li'); inner='<table border="1" cellspacing="0" cellpadding="4">'; for(var j=0;j<ns.length;j++){ var tx=(ns[j].textContent||'').replace(/\s+/g,' ').trim(); if(tx) inner+='<tr><td>'+E(tx)+'</td></tr>'; } inner+='</table>'; }
+    var xls='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>'+E(title).slice(0,28)+'</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>'+inner+'</body></html>';
+    dl(new Blob(['﻿'+xls],{type:'application/vnd.ms-excel'}), safe(title)+'.xls');
+    if(typeof toast==='function')toast('Export Excel téléchargé');
+  };
+
+  function enhance(){ setTimeout(function(){ try{ if(!docEl())return; var f=document.getElementById('ov-f'); if(f) f.innerHTML=window.docActBar(); }catch(e){} },20); }
+  if(typeof window.espDocVoir==='function' && !window.espDocVoir.__acts){ var _v=window.espDocVoir; window.espDocVoir=function(id,k){ window.__curDoc={id:id,k:k}; var r=_v.call(this,id,k); enhance(); return r; }; window.espDocVoir.__acts=true; }
+  if(typeof window.espFicheTechnique==='function' && !window.espFicheTechnique.__acts){ var _ft=window.espFicheTechnique; window.espFicheTechnique=function(id){ window.__curDoc={id:id,k:'fiche'}; var r=_ft.call(this,id); enhance(); return r; }; window.espFicheTechnique.__acts=true; }
+
+  function css(){ if(document.getElementById('doc-actions-css')){(document.body||document.documentElement).appendChild(document.getElementById('doc-actions-css'));return;} var st=document.createElement('style'); st.id='doc-actions-css';
+    st.textContent=[
+      '.doc-dl-wrap{position:relative;display:inline-block}',
+      '.doc-dl-menu{position:absolute;right:0;bottom:calc(100% + 6px);display:none;flex-direction:column;gap:4px;background:#0d0d0f;border:1px solid #2a2a2e;border-radius:10px;padding:6px;min-width:120px;box-shadow:0 10px 26px -8px rgba(0,0,0,.7);z-index:5}',
+      '.doc-dl-menu.show{display:flex}',
+      '.doc-dl-menu .btn{width:100%;justify-content:center}',
+      '.doc-editing{outline:2px dashed #55555c;outline-offset:6px;cursor:text}',
+      '.doc-edit-msg{margin:0 0 10px;padding:8px 12px;border-radius:9px;background:#141416;border:1px solid #2a2a2e;color:#cbced6;font:600 12.5px system-ui,sans-serif}',
+      '.doc-edit-msg.ok{color:#eef0f4;border-color:#3a3a40}',
+      /* boutons « ghost » (bleu-gris résiduel #141b28/#2c3849) → graphite neutre, partout */
+      'html body.dark .btn.btn-ghost,html body.dark .btn-ghost{background:#0d0d0f!important;border-color:#262629!important;color:#c9cbce!important}',
+      'html body.dark .btn.btn-ghost:hover,html body.dark .btn-ghost:hover{background:#161619!important;border-color:#3a3a40!important;color:#eef0f4!important}',
+      /* modale + KPI en #141b28 bleu-gris → graphite neutre */
+      'html body.dark .modal,html body.dark #ov-b,html body.dark .modal-h,html body.dark .modal-card,html body.dark #ov-c{background:#0b0b0d!important}',
+      'html body.dark .kpi{background:#050506!important;border-color:#1c1c1e!important}'
+    ].join(''); (document.body||document.documentElement).appendChild(st);
+  }
+  try{ css(); var _rr=window.render; if(typeof _rr==='function'&&!window.__docActCss){ window.__docActCss=1; window.render=function(){ var x=_rr.apply(this,arguments); try{ var s=document.getElementById('doc-actions-css'); if(s&&s.parentNode&&s!==s.parentNode.lastElementChild) s.parentNode.appendChild(s); }catch(e){} return x; }; } }catch(e){}
+})();
+</script>
+<script id="sidebar-polish-mod">
+/* barres latérales interactives & lisses (menu principal, module fiscal,
+   liste des dossiers). Transitions douces, survol réactif, indicateur d'actif net, défilement
+   fluide, violet fiscal neutralisé. 100% CSS (aucune erreur de génération). Injecté en dernier. */
+(function(){
+  var E='cubic-bezier(.4,0,.2,1)';
+  var CSS=[
+    /* transitions communes aux 3 barres */
+    'html body.dark .nav-btn,html body.dark .esp-mini-item,html body.dark .fx-mi,html body.dark .fx-infobtn{transition:background-color .16s '+E+',color .14s '+E+',box-shadow .2s '+E+',transform .16s '+E+',border-color .16s '+E+'!important;border-radius:10px!important}',
+    /* survol réactif : léger glissement + fond qui s\'éclaire */
+    'html body.dark .nav-btn:hover,html body.dark .fx-mi:hover,html body.dark .fx-infobtn:hover{background:rgba(255,255,255,.055)!important;color:#fff!important;transform:translateX(2px)!important}',
+    'html body.dark .esp-mini-item:hover{background:rgba(255,255,255,.05)!important;transform:translateX(2px)!important}',
+    /* actif : fond graphite lisse + barre latérale blanche nette */
+    'html body.dark .nav-btn.on,html body.dark .nav-btn.active{background:linear-gradient(90deg,#17171b,#050506)!important;color:#fff!important;box-shadow:inset 3px 0 0 0 #e8e8ea!important}',
+    'html body.dark .fx-mi.on{background:linear-gradient(90deg,#17171b,#050506)!important;color:#fff!important;box-shadow:inset 3px 0 0 0 #e8e8ea!important}',
+    'html body.dark .esp-mini-item.on{background:#141417!important;color:#fff!important;box-shadow:inset 3px 0 0 0 #e8e8ea!important;border-color:#242428!important}',
+    /* module fiscal : violet résiduel → neutre (icône, actif) */
+    'html body.dark .fx-mi-ic{color:#cfd2d8!important}',
+    'html body.dark .fx-mi.on .fx-mi-ic{color:#fff!important}',
+    'html body.dark .fx-infobtn{background:#0d0d0f!important;border:1px solid #262629!important;color:#eceff5!important}',
+    /* barres latérales : défilement fluide + barre de défilement fine et douce */
+    'html body.dark aside,html body.dark #side,html body.dark .fx-shell aside,html body.dark .fx-side,html body.dark .esp-mini,html body.dark .esp-mini-list{scroll-behavior:smooth;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#2a2a2e transparent}',
+    'html body.dark aside::-webkit-scrollbar,html body.dark .fx-shell aside::-webkit-scrollbar,html body.dark .fx-side::-webkit-scrollbar,html body.dark .esp-mini-list::-webkit-scrollbar{width:8px;height:8px}',
+    'html body.dark aside::-webkit-scrollbar-thumb,html body.dark .fx-shell aside::-webkit-scrollbar-thumb,html body.dark .fx-side::-webkit-scrollbar-thumb,html body.dark .esp-mini-list::-webkit-scrollbar-thumb{background:#26262b;border-radius:8px;border:2px solid transparent;background-clip:content-box}',
+    'html body.dark aside::-webkit-scrollbar-thumb:hover,html body.dark .fx-side::-webkit-scrollbar-thumb:hover,html body.dark .esp-mini-list::-webkit-scrollbar-thumb:hover{background:#3a3a40;background-clip:content-box}',
+    'html body.dark aside::-webkit-scrollbar-track,html body.dark .fx-side::-webkit-scrollbar-track,html body.dark .esp-mini-list::-webkit-scrollbar-track{background:transparent}',
+    /* appui (tactile) : retour visuel immédiat */
+    'html body.dark .nav-btn:active,html body.dark .fx-mi:active,html body.dark .esp-mini-item:active{transform:translateX(1px) scale(.995)!important;transition-duration:.06s!important}',
+    /* libellés de section de la barre : lisibles et discrets */
+    'html body.dark .nav-lbl{transition:color .14s '+E+'!important}'
+  ].join('');
+  function ensure(){ try{ var st=document.getElementById('sidebar-polish-css'); if(!st){st=document.createElement('style');st.id='sidebar-polish-css';} st.textContent=CSS; (document.body||document.documentElement).appendChild(st); }catch(e){} }
+  ensure();
+  try{ var _r=window.render; if(typeof _r==='function'&&!window.__sidePolish){ window.__sidePolish=1; window.render=function(){ var x=_r.apply(this,arguments); try{ var s=document.getElementById('sidebar-polish-css'); if(s&&s.parentNode&&s!==s.parentNode.lastElementChild) s.parentNode.appendChild(s); }catch(e){} return x; }; } }catch(e){}
+  setTimeout(ensure,0); setTimeout(ensure,500);
+})();
+</script>
+<script id="fiscal-glyph-clean-mod">
+/* Module fiscal : retrait des emojis ET des caractères décoratifs hors écriture
+   (▦ ▤ ▣ ∿ ∑ ✦ ✍ ✎ ⚖ ★ ◆ ● § ¶ …) dans les libellés, titres et boutons.
+   On conserve l'écriture, les chiffres, la ponctuation, % € $ £ et les contrôles ✕ ✓ →. */
+(function(){
+  var DECO='[\\u25A0-\\u25FF\\u2B00-\\u2BFF\\u2200-\\u22FF\\u2600-\\u26FF\\u2700-\\u27BF\\u00A7\\u00B6\\u2020-\\u2027\\u2032-\\u203C\\u222B\\u2211\\u221A\\u221E\\u2248\\u2260]';
+  var KEEP={'✕':1,'✓':1,'→':1,'‹':1,'›':1,'←':1,'↑':1,'↓':1,'€':1,'£':1,'$':1,'%':1};
+  var RE;
+  try{ RE=new RegExp('(?:\\p{Extended_Pictographic}[\\uFE0F\\u200D\\u{1F3FB}-\\u{1F3FF}]*)|'+DECO,'gu'); }
+  catch(e){ try{ RE=new RegExp('\\p{Extended_Pictographic}|'+DECO,'gu'); }catch(e2){ RE=null; } }
+  var SKIP={SCRIPT:1,STYLE:1,TEXTAREA:1,INPUT:1};
+  function clean(s){ if(!RE) return s; return s.replace(RE,function(m){ return KEEP[m]?m:''; }).replace(/[ \t]{2,}/g,' ').replace(/^\s+/,function(x){return x.indexOf('\n')>=0?x:'';}); }
+  var busy=false;
+  function sweep(){ if(!RE||busy) return; var root=document.getElementById('fiscal-ov')||document.querySelector('.fx-shell'); var root2=document.getElementById('fiscal-doc-ov');
+    var roots=[root,root2].filter(Boolean); if(!roots.length) return; busy=true;
+    try{ roots.forEach(function(rt){
+      var w=document.createTreeWalker(rt,NodeFilter.SHOW_TEXT,{acceptNode:function(n){ if(!n.nodeValue||!n.parentNode||SKIP[n.parentNode.nodeName])return NodeFilter.FILTER_REJECT; return RE.test(n.nodeValue)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT; }});
+      var arr=[],x; while((x=w.nextNode()))arr.push(x); arr.forEach(function(n){ var v=clean(n.nodeValue); if(v!==n.nodeValue) n.nodeValue=v; });
+      var els=rt.querySelectorAll('[title],[aria-label],[placeholder]'); for(var i=0;i<els.length;i++){ ['title','aria-label','placeholder'].forEach(function(a){ var val=els[i].getAttribute&&els[i].getAttribute(a); if(val&&RE.test(val)){ var nv=clean(val); if(nv!==val) els[i].setAttribute(a,nv); } }); }
+    }); }catch(e){}
+    busy=false;
+  }
+  var t=null; function schedule(){ if(t)return; t=setTimeout(function(){t=null;sweep();},40); }
+  function init(){ sweep();
+    try{ var _r=window.render; if(typeof _r==='function'&&!window.__fxGlyph){ window.__fxGlyph=1; window.render=function(){ var x=_r.apply(this,arguments); schedule(); return x; }; } }catch(e){}
+    try{ var mo=new MutationObserver(function(muts){ for(var i=0;i<muts.length;i++){ if(muts[i].addedNodes&&muts[i].addedNodes.length){ schedule(); break; } if(muts[i].type==='characterData'){ schedule(); break; } } }); mo.observe(document.body,{childList:true,subtree:true,characterData:true}); }catch(e){}
+    setTimeout(sweep,250); setTimeout(sweep,800);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 })();
 </script>
 </body>
