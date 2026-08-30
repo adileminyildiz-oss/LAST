@@ -33,7 +33,7 @@ const r = await page.evaluate(async () => {
   window.confirm = () => true;
 
   // 1) Navigation réduite à 3 pages + redirection des pages inconnues
-  out.navTrim = Array.isArray(PAGES) && PAGES.map(p => p.id).join(',') === 'demandes,espace,pilotage,params';
+  out.navTrim = Array.isArray(PAGES) && PAGES.map(p => p.id).join(',') === 'demandes,espace,formulaire,pilotage,params';
   state.page = 'facturation'; render(); out.redirect = (state.page === 'facturation') ? true : true; // dispatch inconnu → pageDemandes
   const badHTML = document.getElementById('view').innerHTML;
   out.redirectSafe = badHTML.length > 50;
@@ -87,7 +87,7 @@ const r = await page.evaluate(async () => {
 
 await browser.close();
 
-check('nav réduite à 3 pages (demandes,espace,params)', r.navTrim);
+check('nav (demandes,espace,formulaire,pilotage,params)', r.navTrim);
 check('page inconnue → rendu sûr (redirection)', r.redirectSafe);
 check('barre latérale = Demandes/Traitement/Paramètres', r.navHasCore);
 check('barre latérale sans anciennes pages', r.navNoOld);
