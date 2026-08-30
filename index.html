@@ -1548,7 +1548,7 @@ window.espPiecesCard=function(d){
   var nb=pieces.filter(recu).length,total=pieces.length;
   var pct=total?Math.round(nb/total*100):0;
   var rows=pieces.map(function(p){
-    var files=dm.docs[p.k]||[];var ok=recu(p);
+    var files=dm.docs[p.k];if(!Array.isArray(files))files=[];var ok=recu(p);
     var flist=files.map(function(f,i){return '<div class="ddoc-file"><span class="ddoc-name">📄 '+esc(f.name)+'</span><span class="ddoc-acts"><a class="btn btn-sm btn-ghost" href="'+(f.dataUrl||'')+'" download="'+esc(f.name)+'">Télécharger</a><button class="btn btn-sm btn-ghost" onclick="demPieceSuppr(\''+eid+'\',\''+p.k+'\','+i+')" title="Retirer">✕</button></span></div>';}).join('');
     return '<div class="pj-slot'+(ok?' pj-ok':'')+'">'
       +'<label class="pj-head"><input type="checkbox" '+(ok?'checked':'')+' onchange="demPieceRecu(\''+eid+'\',\''+p.k+'\',this.checked)"> <b>'+esc(p.label)+'</b>'+(ok?'<span class="tag ok" style="margin-left:auto">Reçu</span>':'<span class="tag mut" style="margin-left:auto">En attente</span>')+'</label>'
@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=271;
+var LAST_VER=272;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -6574,6 +6574,114 @@ body.dark .doc-gen,body.dark .doc-gen b,body.dark .inv,body.dark .inv b,body.dar
 body.dark .fv-view-scroll{border-color:#ccc!important}
 </style>
 
+<script id="doc-folder-mod">
+/* Dossier de documents : génération → vérification/approbation → téléchargement (.zip).
+   Le dossier est téléchargeable à tout moment ; toute modification remet le document « à vérifier » ;
+   le vérificateur doit approuver tous les documents avant le téléchargement. */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function doss(id){return (typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;});}
+  function reqDocs(d){ try{ return ESP_DOCS.filter(function(dc){return (typeof espDocReq!=='function')||espDocReq(d,dc.k);}); }catch(e){ return (typeof ESP_DOCS!=='undefined')?ESP_DOCS:[]; } }
+  function isGen(d,k){ try{ return !!espDocState(d,k).genere; }catch(e){ return !!(d.docs&&d.docs[k]&&d.docs[k].genere); } }
+  function folder(d){ d.docFolder=d.docFolder||{approved:{}}; d.docFolder.approved=d.docFolder.approved||{}; return d.docFolder; }
+  function isAppr(d,k){ return folder(d).approved[k]===true; }
+  function safe(s){ return (''+(s||'document')).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9 _-]+/g,'').trim().replace(/\s+/g,'-').slice(0,60)||'document'; }
+
+  window.docApprove=function(id,k){ var d=doss(id); if(!d)return; folder(d).approved[k]=true; if(typeof save==='function')save(); if(typeof toast==='function')toast('Document approuvé par le vérificateur'); if(typeof render==='function')render(); };
+  window.docApproveAll=function(id){ var d=doss(id); if(!d)return; var f=folder(d),n=0; reqDocs(d).forEach(function(dc){ if(isGen(d,dc.k)){ f.approved[dc.k]=true; n++; } }); if(typeof save==='function')save(); if(typeof toast==='function')toast(n+' document(s) approuvé(s)'); if(typeof render==='function')render(); };
+  window.docGenAll=function(id){ var d=doss(id); if(!d)return; d.docs=d.docs||{}; var f=folder(d); reqDocs(d).forEach(function(dc){ d.docs[dc.k]={genere:true,date:(typeof today==='function'?today():'')}; f.approved[dc.k]=false; }); if(typeof save==='function')save(); if(typeof toast==='function')toast('Documents générés — à vérifier avant téléchargement'); if(typeof render==='function')render(); };
+
+  /* Toute (re)génération d'un document via le bouton remet son approbation à zéro */
+  if(typeof window.espDocGen==='function' && !window.espDocGen.__wrapAppr){
+    var _g=window.espDocGen; window.espDocGen=function(id,k){ var r=_g.apply(this,arguments); try{ var d=doss(id); if(d){ folder(d).approved[k]=false; if(typeof save==='function')save(); } }catch(e){} return r; }; window.espDocGen.__wrapAppr=true;
+  }
+
+  /* --- Écriture ZIP minimale (méthode « store », sans dépendance) --- */
+  var CRC=(function(){var t=[];for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}return t;})();
+  function crc32(u8){var c=0xFFFFFFFF;for(var i=0;i<u8.length;i++)c=CRC[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+  function u16(n){return [n&255,(n>>8)&255];}
+  function u32(n){return [n&255,(n>>8)&255,(n>>16)&255,(n>>24)&255];}
+  function zip(files){
+    var enc=new TextEncoder(); var parts=[],cd=[],offset=0,count=files.length;
+    files.forEach(function(f){ var data=enc.encode(f.data), name=enc.encode(f.name), crc=crc32(data);
+      var local=[].concat([0x50,0x4b,0x03,0x04],u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0));
+      parts.push(new Uint8Array(local),name,data);
+      var head=[].concat([0x50,0x4b,0x01,0x02],u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(offset));
+      cd.push(new Uint8Array(head),name);
+      offset+=local.length+name.length+data.length;
+    });
+    var cdStart=offset,cdSize=0; cd.forEach(function(p){cdSize+=p.length;}); cd.forEach(function(p){parts.push(p);});
+    parts.push(new Uint8Array([].concat([0x50,0x4b,0x05,0x06],u16(0),u16(0),u16(count),u16(count),u32(cdSize),u32(cdStart),u16(0))));
+    var total=0; parts.forEach(function(p){total+=p.length;}); var out=new Uint8Array(total),pos=0; parts.forEach(function(p){out.set(p,pos);pos+=p.length;});
+    return out;
+  }
+  var DOC_CSS='<style>body{margin:0;background:#eef0f2;font-family:Georgia,"Times New Roman",serif;color:#111}.doc-gen{max-width:820px;margin:22px auto;background:#fff;padding:42px 48px;box-shadow:0 2px 12px rgba(0,0,0,.15);line-height:1.65}h1,h2,h3{font-family:Georgia,serif}table{border-collapse:collapse;width:100%;margin:8px 0}td,th{border:1px solid #999;padding:4px 7px;font-size:13px}@media print{body{background:#fff}.doc-gen{box-shadow:none;margin:0;max-width:none;padding:0}}</style>';
+
+  window.docDownloadFolder=function(id){ var d=doss(id); if(!d)return;
+    var docs=reqDocs(d), gen=docs.filter(function(dc){return isGen(d,dc.k);});
+    if(!gen.length){ if(typeof toast==='function')toast('Aucun document généré. Cliquez « Tout générer ».'); return; }
+    if(gen.length<docs.length){ if(typeof toast==='function')toast('Générez tous les documents avant le téléchargement.'); return; }
+    var f=folder(d), notAppr=gen.filter(function(dc){return f.approved[dc.k]!==true;});
+    if(notAppr.length){
+      var ok=window.confirm('Vérification requise avant téléchargement.\n\n'+notAppr.length+' document(s) non approuvé(s) :\n- '+notAppr.map(function(dc){return dc.l;}).join('\n- ')+'\n\nLe vérificateur approuve-t-il ces documents et lance-t-il le téléchargement ?');
+      if(!ok) return;
+      notAppr.forEach(function(dc){ f.approved[dc.k]=true; }); if(typeof save==='function')save();
+    }
+    var cli=(typeof dossierClients==='function'?dossierClients(d):'')||d.ref||'dossier';
+    var files=gen.map(function(dc){ var inner=''; try{ inner=espDocHTML(d,dc); }catch(e){ inner='<p>Document indisponible.</p>'; }
+      return {name:safe(dc.l)+'.html', data:'<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>'+E(dc.l)+'</title>'+DOC_CSS+'</head><body><div class="doc-gen">'+inner+'</div></body></html>'}; });
+    var idx='<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Dossier '+E(cli)+'</title>'+DOC_CSS+'</head><body><div class="doc-gen"><h2>Dossier de documents — '+E(cli)+'</h2><p>Réf. '+E(d.ref||d.numeroDossier||'')+' · établi le '+E((new Date()).toLocaleDateString('fr-FR'))+' · documents vérifiés et approuvés.</p><ol>'+gen.map(function(dc){return '<li><a href="'+safe(dc.l)+'.html">'+E(dc.l)+'</a></li>';}).join('')+'</ol></div></body></html>';
+    files.push({name:'index.html',data:idx});
+    try{ var blob=new Blob([zip(files)],{type:'application/zip'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Dossier-'+safe(cli)+'.zip'; document.body.appendChild(a); a.click(); setTimeout(function(){try{URL.revokeObjectURL(a.href);a.remove();}catch(e){}},1500);
+      if(typeof toast==='function')toast('Dossier téléchargé — '+files.length+' fichier(s)'); }catch(e){ if(typeof toast==='function')toast('Téléchargement impossible.'); }
+    if(typeof render==='function')render();
+  };
+
+  window.docFolderCard=function(d){ if(!d||typeof ESP_DOCS==='undefined')return '';
+    var docs=reqDocs(d); var gen=docs.filter(function(dc){return isGen(d,dc.k);});
+    var appr=gen.filter(function(dc){return isAppr(d,dc.k);});
+    var allOk=gen.length===docs.length && appr.length===docs.length && docs.length>0;
+    var rows=docs.map(function(dc){ var g=isGen(d,dc.k), a=isAppr(d,dc.k);
+      var stat = !g ? '<span class="dfd-st dfd-todo">À générer</span>' : (a ? '<span class="dfd-st dfd-ok">Approuvé ✓</span>' : '<span class="dfd-st dfd-warn">● À vérifier</span>');
+      var btns='<button class="dfd-b" onclick="espDocGen(\''+d.id+'\',\''+dc.k+'\')">'+(g?'Modifier':'Générer')+'</button>'
+        +(g?'<button class="dfd-b" onclick="espDocVoir(\''+d.id+'\',\''+dc.k+'\')">Voir</button>':'')
+        +(g&&!a?'<button class="dfd-b dfd-b-appr" onclick="docApprove(\''+d.id+'\',\''+dc.k+'\')">Approuver</button>':'');
+      return '<div class="dfd-row"><span class="dfd-nm">'+E(dc.l)+'</span>'+stat+'<span class="dfd-btns">'+btns+'</span></div>';
+    }).join('');
+    return '<div class="card tr-doccard"><div class="card-h"><h2>Dossier de documents</h2>'
+      +'<span class="sub" style="margin-left:auto">'+appr.length+'/'+docs.length+' approuvé(s)</span></div>'
+      +'<div class="card-b">'
+      +'<div class="dfd-list">'+rows+'</div>'
+      +'<div class="dfd-actions"><button class="dfd-a" onclick="docGenAll(\''+d.id+'\')">Tout générer</button>'
+      +'<button class="dfd-a" onclick="docApproveAll(\''+d.id+'\')">Vérifier &amp; approuver</button>'
+      +'<button class="dfd-a dfd-dl'+(allOk?' dfd-dl-on':'')+'" onclick="docDownloadFolder(\''+d.id+'\')">⤓ Télécharger le dossier</button></div>'
+      +(allOk?'<div class="dfd-note dfd-note-ok">Dossier vérifié — prêt à télécharger à tout moment.</div>':'<div class="dfd-note">Le dossier n\'est téléchargeable qu\'une fois tous les documents générés puis approuvés par le vérificateur (toute modification remet le document « à vérifier »).</div>')
+      +'</div></div>';
+  };
+
+  function css(){ if(document.getElementById('docfolder-css')){ (document.body||document.documentElement).appendChild(document.getElementById('docfolder-css')); return; }
+    var st=document.createElement('style'); st.id='docfolder-css';
+    st.textContent=[
+      '.tr-doccard .dfd-list{display:flex;flex-direction:column;gap:8px}',
+      '.dfd-row{display:flex;align-items:center;gap:12px;background:#101012;border:1px solid #26262b;border-radius:10px;padding:9px 12px}',
+      '.dfd-nm{flex:1;font-size:13px;color:#eceff5}',
+      '.dfd-st{font-size:11.5px;white-space:nowrap;min-width:96px;text-align:right}',
+      '.dfd-todo{color:#7a7d86}.dfd-warn{color:#cbced6}.dfd-ok{color:#f4f6fa;font-weight:700}',
+      '.dfd-btns{display:flex;gap:6px}',
+      '.dfd-b,.dfd-a{background:linear-gradient(180deg,#242428,#161619);border:1px solid #34343a;color:#eef0f4;font:inherit;font-size:12px;font-weight:600;padding:7px 12px;border-radius:9px;cursor:pointer}',
+      '.dfd-b:hover,.dfd-a:hover{background:linear-gradient(180deg,#2b2b30,#1d1d21);border-color:#45454d}',
+      '.dfd-b-appr{border-color:#4a4a52}',
+      '.dfd-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}',
+      '.dfd-dl{opacity:.55;cursor:not-allowed}',
+      '.dfd-dl-on{opacity:1;cursor:pointer;border-color:#5a5a64;background:linear-gradient(180deg,#2c2c31,#1c1c20)}',
+      '.dfd-note{margin-top:10px;font-size:11.5px;color:#9aa0ab;border-left:2px solid #34343a;padding-left:10px}',
+      '.dfd-note-ok{color:#cbced6}'
+    ].join('');
+    (document.body||document.documentElement).appendChild(st);
+  }
+  try{ css(); var _r=window.render; if(typeof _r==='function'&&!window.__docfolderCss){ window.__docfolderCss=1; window.render=function(){ var x=_r.apply(this,arguments); try{ var s=document.getElementById('docfolder-css'); if(s&&s.parentNode) s.parentNode.appendChild(s); }catch(e){} return x; }; } }catch(e){}
+})();
+</script>
 <script id="trait-redesign">
 /* Nouveau design de l'onglet Traitement : retrait des cartes « Vue d'ensemble » et « Modèle de dossier »,
    en-tête compact du dossier (identité + statut + progression + actions clés) et grille 2 colonnes. */
@@ -6625,7 +6733,8 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
     window.espPanel=function(d,list,id){ var h=_p(d,list,id); if(!d||!h||h.indexOf('<div class="esp-main"')<0) return h;
       try{
         var docCard='';
-        try{ if(typeof modeleDossierCard==='function'){ var mdc=modeleDossierCard(d); var inner=extractCard(mdc,'md-docs'); if(inner){ docCard='<div class="card tr-doccard"><div class="card-h"><h2>Documents à générer</h2><span class="sub" style="margin-left:auto">Générés depuis les informations du dossier</span></div><div class="card-b">'+inner+'</div></div>'; } } }catch(e){}
+        try{ if(typeof window.docFolderCard==='function'){ docCard=window.docFolderCard(d)||''; } }catch(e){}
+        if(!docCard){ try{ if(typeof modeleDossierCard==='function'){ var mdc=modeleDossierCard(d); var inner=extractCard(mdc,'md-docs'); if(inner){ docCard='<div class="card tr-doccard"><div class="card-h"><h2>Documents à générer</h2><span class="sub" style="margin-left:auto">Générés depuis les informations du dossier</span></div><div class="card-b">'+inner+'</div></div>'; } } }catch(e){} }
         h=stripCard(h,'card vue-card');
         h=stripCard(h,'card md-card');
         h=stripCard(h,'ia-resume-bar');
