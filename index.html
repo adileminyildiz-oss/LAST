@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=265;
+var LAST_VER=266;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -12358,104 +12358,337 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<div class="fx-badge">Autres variations à étudier : option IS/IR, augmentation du capital (part de dividendes non cotisée en TNS), intégration d\'un holding, PER du dirigeant.</div>');
   }
 
-  /* ---------- Bilan prévisionnel ---------- */
-  function prevData(d){d.fiscal=d.fiscal||{};if(!d.fiscal.prev){var f=fin(d);d.fiscal.prev={activite:d.fiscal.secteur||'',growth:15,
-    base:{ca:f.caExpl||0,autres:0,achats:f.achats||0,ext:f.chargesExt||0,pers:(f.chargesPers||0)+(f.remDir||0),imp:f.impotsTaxes||0,amort:f.amort||0},
-    fin:{immob:f.amort? f.amort*5:0,frais:1500,bfr:0,capital:f.capitalSocial||0,cca:0,emprunt:0,subv:0}};}
-    return d.fiscal.prev;}
-  function prevYears(d){var pr=prevData(d),b=pr.base,g=1+(pf0(pr.growth)/100),out=[];
-    for(var n=0;n<3;n++){var k=Math.pow(g,n);
-      var ca=b.ca*k,autres=b.autres*k,achats=b.achats*k,ext=b.ext*k,pers=b.pers,imp=b.imp,amort=b.amort;
-      var ebe=ca+autres-achats-ext-pers-imp;var resExpl=ebe-amort;var benef=resExpl;
-      var is=(typeof calculISDetail==='function')?calculISDetail({benefice:Math.max(0,benef),ca:ca,capitalLibere:true,detentionPP:true}).isTotal:0;
-      out.push({ca:ca,autres:autres,achats:achats,ext:ext,pers:pers,imp:imp,amort:amort,ebe:ebe,resExpl:resExpl,benef:benef,is:is,net:benef-is});}
-    return out;}
-  window.fiscalPrevSave=function(id,rer){var d=doss(id);if(!d)return;var pr=prevData(d);var g=function(x){return document.getElementById(x);},q=function(x){return g(x)?g(x).value:'';};
-    if(g('prev-activite'))pr.activite=q('prev-activite');if(g('prev-growth'))pr.growth=pf(q('prev-growth'));
-    ['ca','autres','achats','ext','pers','imp','amort'].forEach(function(k){if(g('prev-'+k))pr.base[k]=pf(q('prev-'+k));});
-    ['immob','frais','bfr','capital','cca','emprunt','subv'].forEach(function(k){if(g('prev-'+k))pr.fin[k]=pf(q('prev-'+k));});
+  /* ---------- Bilan prévisionnel (modèle expert-comptable AEM CONSEIL) ---------- */
+  var FORME_LONG={SASU:'SOCIÉTÉ PAR ACTIONS SIMPLIFIÉE UNIPERSONNELLE',SAS:'SOCIÉTÉ PAR ACTIONS SIMPLIFIÉE',SARL:'SOCIÉTÉ À RESPONSABILITÉ LIMITÉE',EURL:'ENTREPRISE UNIPERSONNELLE À RESPONSABILITÉ LIMITÉE',SA:'SOCIÉTÉ ANONYME',SCI:'SOCIÉTÉ CIVILE IMMOBILIÈRE',SNC:'SOCIÉTÉ EN NOM COLLECTIF'};
+  var INVEST_TYPES=[
+    ['materiel','Matériel & outillage'],['info','Matériel informatique'],['vehicule','Véhicule utilitaire'],
+    ['amenagement','Aménagement de locaux'],['immobilier','Immobilier / local'],['logiciels','Logiciels & licences'],
+    ['rd','R&D / innovation'],['stock','Stock initial / marchandises'],['communication','Communication & marketing'],['web','Site web / e-commerce']
+  ];
+  var EXON_ETAPES=[
+    ['acre','Demander l’ACRE dès l’immatriculation (exonération partielle de cotisations la 1ʳᵉ année)'],
+    ['zone','S’implanter en zone aidée (FRR/ex-ZRR, ZFU-TE, QPV) → exonération d’impôt sur les bénéfices'],
+    ['jei','Obtenir le statut JEI + CIR/CII si dépenses de R&D ≥ 15 % des charges'],
+    ['emploi','Recruter en alternance / emploi franc (aides à l’embauche, réduction de charges)'],
+    ['bpi','Solliciter Bpifrance / prêt d’honneur (financement de l’amorçage)'],
+    ['is15','Opter pour le taux réduit d’IS à 15 % (capital libéré, détenu ≥ 75 % par des PP)'],
+    ['oga','Tenue rigoureuse / centre de gestion agréé (sécurisation fiscale)']
+  ];
+  function formeOf(d){var p=profil(d);return (d.fiscal&&d.fiscal.typeOverride||p.forme||'SAS').toUpperCase();}
+  function prevData(d){d.fiscal=d.fiscal||{};
+    if(!d.fiscal.prev){var f=fin(d);d.fiscal.prev={activite:d.fiscal.secteur||'',growth:15,
+      base:{ca:f.caExpl||0,autres:0,achats:f.achats||0,ext:f.chargesExt||0,pers:(f.chargesPers||0)+(f.remDir||0),imp:f.impotsTaxes||0,amort:f.amort||0},
+      fin:{immob:f.amort?f.amort*5:0,frais:1500,bfr:0,capital:f.capitalSocial||0,cca:0,emprunt:0,subv:0}};}
+    var pr=d.fiscal.prev,f=fin(d);
+    if(pr.periode==null)pr.periode=12; if(!pr.activiteType)pr.activiteType='normale';
+    if(pr.dividendes==null)pr.dividendes=0;
+    pr.prod=pr.prod||{ventes:0,presta20:pr.base.ca||0,presta10:0,presta55:0,autoliq:0};
+    pr.det=pr.det||{varStock:0,fournitures:0,servExt1:pr.base.ext||0,servExt2:0,taxeApp:0,cfe:pr.base.imp||0,autresImp:0,
+      salaries:0,chSocSal:0,remDir:pr.base.pers||0,cotDir:0,autresGestion:0,provisions:0,interets:0,agios:0,prodFin:0,prodExcept:0,chExcept:0};
+    pr.bilan=pr.bilan||{immobIncorp:0,immobCorp:pr.fin.immob||0,immobFin:0,stock:0,tvaCred:0,
+      capital:pr.fin.capital||f.capitalSocial||0,cca:pr.fin.cca||0,empBanque:pr.fin.emprunt||0,empAutre:0,dettesFourn:0};
+    pr.bfr=pr.bfr||{delaiClients:30,delaiFourn:30};
+    pr.invests=pr.invests||{}; pr.exon=pr.exon||{}; pr.quiz=pr.quiz||{};
+    return pr;}
+  function prevCols(pr){var m=+pr.periode||12,cols=[],full=Math.floor(m/12),rem=m%12;
+    if(m<=12){cols.push({label:m<12?('Exercice ('+m+' mois)'):'Exercice',frac:m/12,idx:0});}
+    else{for(var n=0;n<full;n++)cols.push({label:n===0?'N':('N+'+n),frac:1,idx:n});
+      if(rem>0)cols.push({label:'N+'+full+' ('+rem+' mois)',frac:rem/12,idx:full});}
+    return cols;}
+  function prevAB(d){var pr=prevData(d),P=pr.prod,T=pr.det;
+    var caTot=pf0(P.ventes)+pf0(P.presta20)+pf0(P.presta10)+pf0(P.presta55)+pf0(P.autoliq); if(caTot<=0)caTot=pf0(pr.base.ca);
+    var servExt=pf0(T.servExt1)+pf0(T.servExt2); if(servExt<=0)servExt=pf0(pr.base.ext);
+    var impots=pf0(T.taxeApp)+pf0(T.cfe)+pf0(T.autresImp); if(impots<=0)impots=pf0(pr.base.imp);
+    var persTot=pf0(T.salaries)+pf0(T.chSocSal)+pf0(T.remDir)+pf0(T.cotDir); if(persTot<=0)persTot=pf0(pr.base.pers);
+    return {caTot:caTot,autres:pf0(pr.base.autres),achats:pf0(pr.base.achats)+pf0(T.varStock),fournitures:pf0(T.fournitures),servExt:servExt,
+      impots:impots,persTot:persTot,amort:pf0(pr.base.amort),provisions:pf0(T.provisions),autresGestion:pf0(T.autresGestion),
+      interets:pf0(T.interets)+pf0(T.agios),prodFin:pf0(T.prodFin),resExcept:pf0(T.prodExcept)-pf0(T.chExcept)};}
+  function prevModel(d){var pr=prevData(d),AB=prevAB(d),cols=prevCols(pr),g=1+(pf0(pr.growth)/100);
+    var forme=formeOf(d),ir=/SCI|SNC/.test(forme),liber=info(d).capitalLibere,ppd=info(d).detentionPP;
+    var Y=cols.map(function(c){var k=Math.pow(g,c.idx),fr=c.frac;
+      var CA=AB.caTot*k*fr,autres=AB.autres*k*fr,achats=AB.achats*k*fr,fourn=AB.fournitures*k*fr,serv=AB.servExt*k*fr,
+        impots=AB.impots*k*fr,pers=AB.persTot*k*fr,amort=AB.amort*fr,prov=AB.provisions*fr,
+        interets=AB.interets*fr,prodFin=AB.prodFin*k*fr,resExc=AB.resExcept*fr,autresG=AB.autresGestion*k*fr;
+      var margeBrute=CA-achats,VA=margeBrute-fourn-serv,EBE=VA-impots-pers,
+        resExpl=EBE+autres-autresG-amort-prov,resCourant=resExpl+prodFin-interets,benef=resCourant+resExc;
+      var is=ir?0:((typeof calculISDetail==='function')?calculISDetail({benefice:Math.max(0,benef),ca:CA,capitalLibere:liber,detentionPP:ppd}).isTotal:0);
+      var resNet=benef-is,caf=resNet+amort+prov,div=pf0(pr.dividendes)*fr;
+      return {label:c.label,CA:CA,ventes:pf0(pr.prod.ventes)*k*fr,autoliq:pf0(pr.prod.autoliq)*k*fr,p20:pf0(pr.prod.presta20)*k*fr,p10:pf0(pr.prod.presta10)*k*fr,p55:pf0(pr.prod.presta55)*k*fr,
+        autres:autres,achats:achats,fourn:fourn,serv:serv,impots:impots,pers:pers,amort:amort,prov:prov,autresG:autresG,interets:interets,prodFin:prodFin,resExc:resExc,
+        margeBrute:margeBrute,VA:VA,EBE:EBE,resExpl:resExpl,resCourant:resCourant,benef:benef,is:is,resNet:resNet,caf:caf,div:div,autofin:caf-div,
+        totChargesExpl:achats+fourn+serv+impots+pers+autresG+amort+prov,totGlobal:achats+fourn+serv+impots+pers+autresG+amort+prov+interets};});
+    var B=pr.bilan,actifImmob=pf0(B.immobIncorp)+pf0(B.immobCorp)+pf0(B.immobFin),stock=pf0(B.stock),creances=pf0(B.tvaCred),
+      passifCap=pf0(B.capital)+pf0(B.cca),passifEmp=pf0(B.empBanque)+pf0(B.empAutre),passifDettes=pf0(B.dettesFourn),
+      totalPassif=passifCap+passifEmp+passifDettes,banque=Math.max(0,totalPassif-(actifImmob+stock+creances)),
+      totalActif=actifImmob+stock+creances+banque;
+    return {pr:pr,forme:forme,ir:ir,cols:Y,bilan:{immobIncorp:pf0(B.immobIncorp),immobCorp:pf0(B.immobCorp),immobFin:pf0(B.immobFin),actifImmob:actifImmob,stock:stock,creances:creances,banque:banque,totalActif:totalActif,
+      capital:pf0(B.capital),cca:pf0(B.cca),passifCap:passifCap,empBanque:pf0(B.empBanque),empAutre:pf0(B.empAutre),passifEmp:passifEmp,dettesFourn:passifDettes,passifDettes:passifDettes,totalPassif:totalPassif}};}
+  window.fiscalPrevSave=function(id,rer){var d=doss(id);if(!d)return;var pr=prevData(d);var g=function(x){return document.getElementById(x);},q=function(x){return g(x)?g(x).value:'';},nn=function(x){return pf(q(x));};
+    if(g('prev-activite'))pr.activite=q('prev-activite');
+    if(g('prev-growth'))pr.growth=nn('prev-growth');
+    if(g('prev-periode'))pr.periode=+q('prev-periode')||12;
+    if(g('prev-activiteType'))pr.activiteType=q('prev-activiteType');
+    if(g('prev-dividendes'))pr.dividendes=nn('prev-dividendes');
+    ['ventes','presta20','presta10','presta55','autoliq'].forEach(function(k){if(g('prev-p-'+k))pr.prod[k]=nn('prev-p-'+k);});
+    if(g('prev-autres'))pr.base.autres=nn('prev-autres');
+    if(g('prev-achats'))pr.base.achats=nn('prev-achats');
+    if(g('prev-amort'))pr.base.amort=nn('prev-amort');
+    ['varStock','fournitures','servExt1','servExt2','taxeApp','cfe','autresImp','salaries','chSocSal','remDir','cotDir','autresGestion','provisions','interets','agios','prodFin','prodExcept','chExcept'].forEach(function(k){if(g('prev-d-'+k))pr.det[k]=nn('prev-d-'+k);});
+    ['immobIncorp','immobCorp','immobFin','stock','tvaCred','capital','cca','empBanque','empAutre','dettesFourn'].forEach(function(k){if(g('prev-b-'+k))pr.bilan[k]=nn('prev-b-'+k);});
+    if(g('prev-bfr-clients'))pr.bfr.delaiClients=nn('prev-bfr-clients');
+    if(g('prev-bfr-fourn'))pr.bfr.delaiFourn=nn('prev-bfr-fourn');
+    /* miroir des agrégats de base */
+    var AB=prevAB(d);pr.base.ca=AB.caTot;pr.base.ext=AB.fournitures+AB.servExt;pr.base.imp=AB.impots;pr.base.pers=AB.persTot;
+    pr.fin.immob=pr.bilan.immobIncorp+pr.bilan.immobCorp+pr.bilan.immobFin;pr.fin.capital=pr.bilan.capital;pr.fin.cca=pr.bilan.cca;pr.fin.emprunt=pr.bilan.empBanque+pr.bilan.empAutre;
     if(typeof save==='function')save();if(rer!==false){window.fiscalTab='previsionnel';fiscalRender(id);}};
+  window.fiscalPrevInvest=function(id){var d=doss(id);if(!d)return;var pr=prevData(d),g=function(x){return document.getElementById(x);};
+    INVEST_TYPES.forEach(function(t){var c=g('inv-ck-'+t[0]),m=g('inv-m-'+t[0]);if(c){if(c.checked)pr.invests[t[0]]=m?pf(m.value):(pr.invests[t[0]]||0);else delete pr.invests[t[0]];}});
+    EXON_ETAPES.forEach(function(e){var c=g('exo-ck-'+e[0]);if(c)pr.exon[e[0]]=c.checked;});
+    var somme=0;Object.keys(pr.invests).forEach(function(k){somme+=pf0(pr.invests[k]);});
+    if(somme>0){pr.bilan.immobCorp=somme;pr.fin.immob=somme;}
+    if(typeof save==='function')save();window.fiscalTab='previsionnel';fiscalRender(id);};
 
-  function m_previsionnel(d){var pr=prevData(d),y=prevYears(d);
-    var num=function(id2,lbl,val){return '<label>'+E(lbl)+'<input id="prev-'+id2+'" type="number" value="'+(val||0)+'" onchange="fiscalPrevSave(\''+d.id+'\')"></label>';};
-    var form='<div class="fx-form">'
-      +'<label style="grid-column:1/-1">Activité de l\'entreprise<input id="prev-activite" value="'+E(pr.activite)+'" placeholder="Ex : conseil, BTP, e-commerce…" onchange="fiscalPrevSave(\''+d.id+'\')"></label>'
+  function m_previsionnel(d){var pr=prevData(d),M=prevModel(d),Y=M.cols,forme=M.forme;
+    var num=function(id2,lbl,val){return '<label>'+E(lbl)+'<input id="'+id2+'" type="number" value="'+(val||0)+'" onchange="fiscalPrevSave(\''+d.id+'\')"></label>';};
+    var perOpt=[[3,'3 mois'],[6,'6 mois'],[12,'12 mois'],[24,'24 mois'],[36,'36 mois']].map(function(o){return '<option value="'+o[0]+'" '+(+pr.periode===o[0]?'selected':'')+'>'+o[1]+'</option>';}).join('');
+    var actOpt=[['normale','Activité normale'],['reglementee','Activité réglementée']].map(function(o){return '<option value="'+o[0]+'" '+(pr.activiteType===o[0]?'selected':'')+'>'+o[1]+'</option>';}).join('');
+    var head='<div class="fx-form">'
+      +'<label style="grid-column:1/-1">Activité de l\'entreprise<input id="prev-activite" value="'+E(pr.activite)+'" placeholder="Ex : conseil, BTP, e-commerce, transport…" onchange="fiscalPrevSave(\''+d.id+'\')"></label>'
+      +'<label>Période du prévisionnel<select id="prev-periode" onchange="fiscalPrevSave(\''+d.id+'\')">'+perOpt+'</select></label>'
+      +'<label>Nature de l\'activité<select id="prev-activiteType" onchange="fiscalPrevSave(\''+d.id+'\')">'+actOpt+'</select></label>'
       +'<label>Croissance annuelle du CA (%)<input id="prev-growth" type="number" value="'+(pr.growth||0)+'" onchange="fiscalPrevSave(\''+d.id+'\')"></label>'
-      +num('ca','CA HT année 1 (€)',pr.base.ca)+num('autres','Autres produits (€)',pr.base.autres)
-      +num('achats','Achats / coûts variables (€)',pr.base.achats)+num('ext','Charges externes (€)',pr.base.ext)
-      +num('pers','Charges de personnel (dont dirigeant) (€)',pr.base.pers)+num('imp','Impôts & taxes (€)',pr.base.imp)
-      +num('amort','Dotations amortissements (€)',pr.base.amort)+'</div>';
-    var finform='<div class="fx-form">'
-      +num('immob','Investissements / immobilisations (€)',pr.fin.immob)+num('frais','Frais d\'établissement (€)',pr.fin.frais)
-      +num('bfr','Besoin en fonds de roulement (€)',pr.fin.bfr)+num('capital','Apports en capital (€)',pr.fin.capital)
-      +num('cca','Apports en compte courant (€)',pr.fin.cca)+num('emprunt','Emprunts (€)',pr.fin.emprunt)
-      +num('subv','Subventions / aides (€)',pr.fin.subv)+'</div>';
-    var cols=['Année 1','Année 2','Année 3'];
-    var line=function(lbl,key,cls){return '<tr class="'+(cls||'')+'"><td>'+E(lbl)+'</td>'+y.map(function(yr){return '<td class="r">'+eu(yr[key])+'</td>';}).join('')+'</tr>';};
-    var cr='<table class="fx-tbl"><thead><tr><th>Compte de résultat prévisionnel</th>'+cols.map(function(c){return '<th class="r">'+c+'</th>';}).join('')+'</tr></thead><tbody>'
-      +line('Chiffre d\'affaires HT','ca')+line('Autres produits','autres')
-      +line('Achats / coûts variables','achats')+line('Charges externes','ext')+line('Charges de personnel','pers')+line('Impôts & taxes','imp')
-      +line('EBITDA (EBE)','ebe','fx-tot')+line('Dotations amortissements','amort')+line('Résultat d\'exploitation','resExpl','fx-tot')
-      +line('Impôt sur les sociétés','is')+line('Résultat net','net','fx-tot')+'</tbody></table>';
-    /* Seuil de rentabilité (année 1) */
-    var y1=y[0];var cf=y1.ext+y1.pers+y1.imp+y1.amort;var mcv=y1.ca>0?((y1.ca-y1.achats)/y1.ca):0;var seuil=mcv>0?(cf/mcv):0;
-    var besoins=pf0(pr.fin.immob)+pf0(pr.fin.frais)+pf0(pr.fin.bfr);var ressources=pf0(pr.fin.capital)+pf0(pr.fin.cca)+pf0(pr.fin.emprunt)+pf0(pr.fin.subv);var ecart=ressources-besoins;
-    var pf_table='<table class="fx-tbl"><thead><tr><th>Plan de financement initial</th><th class="r">Besoins</th><th class="r">Ressources</th></tr></thead><tbody>'
-      +'<tr><td>Immobilisations</td><td class="r">'+eu(pr.fin.immob)+'</td><td></td></tr>'
-      +'<tr><td>Frais d\'établissement</td><td class="r">'+eu(pr.fin.frais)+'</td><td></td></tr>'
-      +'<tr><td>BFR</td><td class="r">'+eu(pr.fin.bfr)+'</td><td></td></tr>'
-      +'<tr><td>Capital</td><td></td><td class="r">'+eu(pr.fin.capital)+'</td></tr>'
-      +'<tr><td>Comptes courants d\'associés</td><td></td><td class="r">'+eu(pr.fin.cca)+'</td></tr>'
-      +'<tr><td>Emprunts</td><td></td><td class="r">'+eu(pr.fin.emprunt)+'</td></tr>'
-      +'<tr><td>Subventions / aides</td><td></td><td class="r">'+eu(pr.fin.subv)+'</td></tr>'
-      +'<tr class="fx-tot"><td><b>Total</b></td><td class="r"><b>'+eu(besoins)+'</b></td><td class="r"><b>'+eu(ressources)+'</b></td></tr>'
-      +'<tr class="fx-tot"><td><b>Écart (trésorerie de départ)</b></td><td></td><td class="r"><b style="color:'+(ecart>=0?'#8fe0ad':'#ff9583')+'">'+eu(ecart)+'</b></td></tr></tbody></table>';
+      +'<label>Forme juridique<input value="'+E(forme)+'" disabled></label></div>';
+    var prodForm='<div class="fx-form">'
+      +num('prev-p-ventes','Ventes de marchandises (€)',pr.prod.ventes)
+      +num('prev-p-autoliq','Prestations autoliquidées (€)',pr.prod.autoliq)
+      +num('prev-p-presta20','Prestations de services 20 % (€)',pr.prod.presta20)
+      +num('prev-p-presta10','Prestations de services 10 % (€)',pr.prod.presta10)
+      +num('prev-p-presta55','Prestations de services 5,5 % (€)',pr.prod.presta55)
+      +num('prev-autres','Autres produits (€)',pr.base.autres)+'</div>';
+    var chForm='<div class="fx-form">'
+      +num('prev-achats','Achats de matière première / marchandises (€)',pr.base.achats)
+      +num('prev-d-varStock','Variation de stock (€)',pr.det.varStock)
+      +num('prev-d-fournitures','Fournitures & matières consommables (€)',pr.det.fournitures)
+      +num('prev-d-servExt1','Services extérieurs I (loyers, crédit-bail, assurances) (€)',pr.det.servExt1)
+      +num('prev-d-servExt2','Services extérieurs II (honoraires, publicité, déplacements) (€)',pr.det.servExt2)
+      +num('prev-d-taxeApp','Taxe d\'apprentissage & formation (€)',pr.det.taxeApp)
+      +num('prev-d-cfe','CFE & impôts locaux (€)',pr.det.cfe)
+      +num('prev-d-autresImp','Autres impôts & taxes (€)',pr.det.autresImp)
+      +num('prev-d-autresGestion','Autres charges de gestion courante (€)',pr.det.autresGestion)
+      +num('prev-amort','Dotations aux amortissements (€)',pr.base.amort)
+      +num('prev-d-provisions','Dotations aux provisions (€)',pr.det.provisions)
+      +num('prev-d-interets','Intérêts des emprunts (€)',pr.det.interets)
+      +num('prev-d-agios','Agios & autres charges financières (€)',pr.det.agios)
+      +num('prev-d-prodFin','Produits financiers (€)',pr.det.prodFin)+'</div>';
+    var persForm='<div class="fx-form">'
+      +num('prev-d-salaries','Salaires bruts du personnel (€)',pr.det.salaries)
+      +num('prev-d-chSocSal','Charges sociales sur salaires (€)',pr.det.chSocSal)
+      +num('prev-d-remDir','Rémunération du dirigeant (€)',pr.det.remDir)
+      +num('prev-d-cotDir','Cotisations sociales du dirigeant (€)',pr.det.cotDir)
+      +num('prev-dividendes','Dividendes à distribuer (€)',pr.dividendes)+'</div>';
+    var bilForm='<div class="fx-form">'
+      +num('prev-b-immobIncorp','Immobilisations incorporelles (€)',pr.bilan.immobIncorp)
+      +num('prev-b-immobCorp','Immobilisations corporelles (€)',pr.bilan.immobCorp)
+      +num('prev-b-immobFin','Immobilisations financières (€)',pr.bilan.immobFin)
+      +num('prev-b-stock','Stock de marchandises (€)',pr.bilan.stock)
+      +num('prev-b-tvaCred','Créances de TVA (€)',pr.bilan.tvaCred)
+      +num('prev-b-capital','Capital social (€)',pr.bilan.capital)
+      +num('prev-b-cca','Comptes courants d\'associés (€)',pr.bilan.cca)
+      +num('prev-b-empBanque','Emprunt bancaire (€)',pr.bilan.empBanque)
+      +num('prev-b-empAutre','Autres emprunts (€)',pr.bilan.empAutre)
+      +num('prev-b-dettesFourn','Dettes fournisseurs (€)',pr.bilan.dettesFourn)
+      +num('prev-bfr-clients','Délai moyen clients (jours)',pr.bfr.delaiClients)
+      +num('prev-bfr-fourn','Délai moyen fournisseurs (jours)',pr.bfr.delaiFourn)+'</div>';
+    /* Sous-mini-formulaire : investissements & étapes d'exonération */
+    var invRows=INVEST_TYPES.map(function(t){var on=pr.invests[t[0]]!=null;
+      return '<div class="fx-inv-row"><label class="fx-ck"><input type="checkbox" id="inv-ck-'+t[0]+'" '+(on?'checked':'')+' onchange="fiscalPrevInvest(\''+d.id+'\')"> '+E(t[1])+'</label>'
+        +'<input id="inv-m-'+t[0]+'" type="number" placeholder="Montant €" value="'+(on?pf0(pr.invests[t[0]]):'')+'" onchange="fiscalPrevInvest(\''+d.id+'\')"></div>';}).join('');
+    var exoRows=EXON_ETAPES.map(function(e){return '<label class="fx-ck fx-exo-row"><input type="checkbox" id="exo-ck-'+e[0]+'" '+(pr.exon[e[0]]?'checked':'')+' onchange="fiscalPrevInvest(\''+d.id+'\')"> '+E(e[1])+'</label>';}).join('');
+    var totInv=0;Object.keys(pr.invests).forEach(function(k){totInv+=pf0(pr.invests[k]);});
+    var subform=card('Décisions du dirigeant','Investissements & étapes d\'exonération',
+      '<div class="fx-inv-t">Investissements envisagés</div><div class="fx-inv-grid">'+invRows+'</div>'
+      +(totInv>0?('<div class="fx-badge ok">Total investissements : '+eu(totInv)+' → reporté au plan de financement (immobilisations).</div>'):'')
+      +'<div class="fx-inv-t" style="margin-top:12px">Étapes à suivre pour l\'exonération (adaptées à '+E(forme)+')</div>'+exoRows);
+    /* Tableaux de synthèse à l'écran */
+    var lab=Y.map(function(c){return '<th class="r">'+E(c.label)+'</th>';}).join('');
+    var line=function(l,key,cls){return '<tr class="'+(cls||'')+'"><td>'+E(l)+'</td>'+Y.map(function(c){return '<td class="r">'+eu(c[key])+'</td>';}).join('')+'</tr>';};
+    var cr='<table class="fx-tbl"><thead><tr><th>Compte de résultat prévisionnel</th>'+lab+'</tr></thead><tbody>'
+      +line('Chiffre d\'affaires HT','CA')+line('+ Autres produits','autres')+line('– Achats consommés','achats')
+      +line('= Marge brute','margeBrute','fx-tot')
+      +line('– Fournitures consommables','fourn')+line('– Services extérieurs','serv')
+      +line('= Valeur ajoutée','VA','fx-tot')
+      +line('– Impôts & taxes','impots')+line('– Charges de personnel','pers')
+      +line('= EBE (EBITDA)','EBE','fx-tot')
+      +line('– Dotations amortissements','amort')+line('– Dotations provisions','prov')+line('– Autres charges gestion','autresG')
+      +line('= Résultat d\'exploitation','resExpl','fx-tot')
+      +line('+ Produits financiers','prodFin')+line('– Charges financières','interets')
+      +line('= Résultat courant','resCourant','fx-tot')
+      +line('± Résultat exceptionnel','resExc')+line('= Résultat avant impôt','benef','fx-tot')
+      +line('– Impôt sur les bénéfices','is')+line('= Résultat net','resNet','fx-tot')
+      +line('+ Dotations (CAF)','caf','')+'</tbody></table>';
+    var caf='<table class="fx-tbl"><thead><tr><th>Capacité d\'autofinancement</th>'+lab+'</tr></thead><tbody>'
+      +line('Résultat après impôts','resNet')
+      +'<tr><td>+ Dotations amort. & prov.</td>'+Y.map(function(c){return '<td class="r">'+eu(c.amort+c.prov)+'</td>';}).join('')+'</tr>'
+      +line('= C.A.F.','caf','fx-tot')+line('– Dividendes','div')+line('= Autofinancement','autofin','fx-tot')+'</tbody></table>';
+    var B=M.bilan;
+    var bilan='<table class="fx-tbl"><thead><tr><th>ACTIF</th><th class="r">Montant</th><th>PASSIF</th><th class="r">Montant</th></tr></thead><tbody>'
+      +'<tr><td>Immobilisations</td><td class="r">'+eu(B.actifImmob)+'</td><td>Capitaux (capital + CCA)</td><td class="r">'+eu(B.passifCap)+'</td></tr>'
+      +'<tr><td>Stock</td><td class="r">'+eu(B.stock)+'</td><td>Emprunts</td><td class="r">'+eu(B.passifEmp)+'</td></tr>'
+      +'<tr><td>Créances (TVA)</td><td class="r">'+eu(B.creances)+'</td><td>Dettes fournisseurs</td><td class="r">'+eu(B.passifDettes)+'</td></tr>'
+      +'<tr><td>Banque (trésorerie)</td><td class="r">'+eu(B.banque)+'</td><td></td><td></td></tr>'
+      +'<tr class="fx-tot"><td><b>TOTAL ACTIF</b></td><td class="r"><b>'+eu(B.totalActif)+'</b></td><td><b>TOTAL PASSIF</b></td><td class="r"><b>'+eu(B.totalPassif)+'</b></td></tr></tbody></table>';
+    var y1=Y[0];var cf=y1.serv+y1.fourn+y1.pers+y1.impots+y1.amort;var mcv=y1.CA>0?((y1.CA-y1.achats)/y1.CA):0;var seuil=mcv>0?(cf/mcv):0;
+    var adapt=pr.activiteType==='reglementee'
+      ?'<div class="fx-note warn">Activité <b>réglementée</b> : pensez aux charges spécifiques (assurance RC professionnelle, cotisation ordre/chambre, garantie financière, formation obligatoire) et aux autorisations d\'exercice. La TVA et le régime social suivent la forme <b>'+E(forme)+'</b>.</div>'
+      :'<div class="fx-note">Activité <b>normale</b> — calculs adaptés à la forme <b>'+E(forme)+'</b> ('+(M.ir?'IR — transparence fiscale, résultat imposé chez les associés':'IS — impôt sur les sociétés')+').</div>';
     return '<div class="fx-h1">Bilan prévisionnel</div>'
-      +'<div class="fx-note">Renseignez l\'activité, les produits/charges et le plan de financement : LAST génère un prévisionnel sur 3 ans (compte de résultat, plan de financement, seuil de rentabilité) que vous pourrez imprimer et compléter.</div>'
-      +'<div class="fx-h2">Activité & compte d\'exploitation (année 1)</div>'+form
-      +'<div class="fx-h2">Plan de financement</div>'+finform
-      +'<div class="fx-h2">Prévisionnel sur 3 ans</div><div class="fx-grid" style="grid-template-columns:1fr">'+card('Prévisionnel','Compte de résultat prévisionnel',cr)+'</div>'
-      +'<div class="fx-grid">'
-      +card('Rentabilité','Seuil de rentabilité (année 1)','Charges fixes : <b>'+eu(cf)+'</b> · Taux de marge sur coûts variables : <b>'+pct(mcv)+'</b>.<br>Seuil de rentabilité (CA minimum) : <b>'+eu(seuil)+'</b>'+(y1.ca>0?(' — soit '+pct(seuil/y1.ca)+' du CA prévu.'):'.'))
-      +card('Financement','Équilibre du plan',pf_table)
-      +'</div>'
-      +'<div class="fx-formact"><button class="fx-btn" onclick="fiscalPrevGen(\''+d.id+'\')">📄 Générer le bilan prévisionnel (à compléter)</button></div>';
+      +'<div class="fx-note">Renseignez les produits, les charges détaillées, le personnel et le bilan de création : LAST calcule le compte de résultat, la CAF, le BFR et le bilan (actif/passif) sur la période choisie, puis génère le document professionnel à tamponner.</div>'
+      +adapt
+      +'<div class="fx-h2">Paramètres & activité</div>'+head
+      +'<div class="fx-h2">Produits (chiffre d\'affaires)</div>'+prodForm
+      +'<div class="fx-h2">Charges d\'exploitation & financières</div>'+chForm
+      +'<div class="fx-h2">Personnel & dividendes (prévisualisation salariale)</div>'+persForm
+      +'<div class="fx-h2">Bilan de création (actif / passif) & délais</div>'+bilForm
+      +'<div class="fx-h2">Décisions du dirigeant</div><div class="fx-grid" style="grid-template-columns:1fr">'+subform+'</div>'
+      +'<div class="fx-h2">Synthèse chiffrée</div><div class="fx-grid" style="grid-template-columns:1fr">'+card('Prévisionnel','Compte de résultat prévisionnel',cr)+'</div>'
+      +'<div class="fx-grid">'+card('Autofinancement','Capacité d\'autofinancement',caf)+card('Bilan','Bilan de création (équilibré)',bilan)+'</div>'
+      +'<div class="fx-grid"><div class="fx-card"><div class="fx-card-th">Rentabilité</div><div class="fx-card-t">Seuil de rentabilité (année 1)</div><div class="fx-card-b">Charges fixes : <b>'+eu(cf)+'</b> · Taux de marge sur coûts variables : <b>'+pct(mcv)+'</b>.<br>Seuil de rentabilité : <b>'+eu(seuil)+'</b>'+(y1.CA>0?(' — soit '+pct(seuil/y1.CA)+' du CA prévu.'):'.')+'</div></div></div>'
+      +'<div class="fx-formact"><button class="fx-btn" onclick="fiscalPrevGen(\''+d.id+'\')">📄 Générer le bilan prévisionnel (document AEM CONSEIL)</button></div>';
   }
-  function previsionnelDocHTML(d){var pr=prevData(d),y=prevYears(d);var soc=nomD(d);
-    var cols=['Année 1','Année 2','Année 3'];
-    var line=function(lbl,key,b){return '<tr'+(b?' class="pv-tot"':'')+'><td>'+E(lbl)+'</td>'+y.map(function(yr){return '<td class="r">'+eu(yr[key])+'</td>';}).join('')+'</tr>';};
-    var besoins=pf0(pr.fin.immob)+pf0(pr.fin.frais)+pf0(pr.fin.bfr);var ressources=pf0(pr.fin.capital)+pf0(pr.fin.cca)+pf0(pr.fin.emprunt)+pf0(pr.fin.subv);
+
+  function cachetHTML(pr){var dt=(pr&&pr.tampon&&pr.tampon.date)||'';
+    return '<div class="pv-cachet"><div class="pv-cachet-in"><div class="pv-cachet-firm">AEM CONSEIL</div><div class="pv-cachet-role">EXPERT-COMPTABLE</div><div class="pv-cachet-adr">83, rue du Château des Rentiers — 75013 PARIS</div><div class="pv-cachet-tel">Tél. 01 45 86 30 11</div>'+(dt?('<div class="pv-cachet-dt">Établi le '+E(dt)+'</div>'):'')+'</div></div>';}
+  function previsionnelDocHTML(d){var pr=prevData(d),M=prevModel(d),Y=M.cols,soc=nomD(d),forme=M.forme,B=M.bilan;
+    var c=(typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};
+    var adr=(c.adresse||c.siege||'')||'', cp=(c.cp||c.codePostal||''), ville=(c.ville||''), rcs=(c.rcs||c.siren||'');
+    var lab=Y.map(function(x){return '<th class="r">'+E(x.label)+'</th>';}).join('');
+    var L=function(l,key,b){return '<tr'+(b?' class="pv-tot"':'')+'><td>'+E(l)+'</td>'+Y.map(function(x){return '<td class="r">'+eu(x[key])+'</td>';}).join('')+'</tr>';};
+    var Lc=function(l,fn,b){return '<tr'+(b?' class="pv-tot"':'')+'><td>'+E(l)+'</td>'+Y.map(function(x){return '<td class="r">'+eu(fn(x))+'</td>';}).join('')+'</tr>';};
+    var tampon=pr.tampon?cachetHTML(pr):'';
+    var final=pr.tampon?('<div class="pv-final">✓ Document finalisé et tamponné le '+E(pr.tampon.date)+' — établi par AEM CONSEIL.</div>'):'';
+    /* Page de garde */
+    var garde='<div class="pv-garde">'
+      +'<div class="pv-forme">('+E(forme)+')<br>'+E(FORME_LONG[forme]||'')+'</div>'
+      +'<div class="pv-box"><b>'+E(soc)+'</b>'+(adr?('<br>'+E(adr)):'')+((cp||ville)?('<br>'+E(cp)+' '+E(ville)):'')+(rcs?('<br>R C S '+E(rcs)):'')+'</div>'
+      +'<div class="pv-garde-t">BILAN PRÉVISIONNEL'+(pr.activite?(' — '+E(pr.activite)):'')+'</div>'
+      +'<div class="pv-garde-sub">Période : '+(+pr.periode)+' mois'+(pr.activiteType==='reglementee'?' · activité réglementée':'')+' · '+(M.ir?'régime IR (transparence)':'régime IS')+'</div>'
+      +tampon+'</div>';
+    /* B) Détail des charges */
+    var charges='<h3>B) Détail des charges d\'exploitation et financières</h3><table class="pv-t"><thead><tr><th>Nature des charges</th>'+lab+'</tr></thead><tbody>'
+      +L('I. Achats de matière première / marchandises','achats',1)
+      +Lc('II. Fournitures & matières consommables',function(x){return x.fourn;},1)
+      +Lc('III. Services extérieurs',function(x){return x.serv;},1)
+      +L('IV. Impôts & taxes','impots',1)
+      +L('V. Charges de personnel','pers',1)
+      +L('VI. Autres charges de gestion courante','autresG',1)
+      +Lc('VII. Dotations amortissements & provisions',function(x){return x.amort+x.prov;},1)
+      +Lc('TOTAL DES CHARGES D\'EXPLOITATION',function(x){return x.totChargesExpl;},1)
+      +L('VIII. Charges financières','interets',1)
+      +Lc('TOTAL GLOBAL',function(x){return x.totGlobal;},1)+'</tbody></table>';
+    /* C) Compte de résultat en liste */
+    var cr='<h3>C) Compte de résultat prévisionnel</h3><table class="pv-t"><thead><tr><th>Compte de résultat en liste</th>'+lab+'</tr></thead><tbody>'
+      +L('A. Les produits = CA','CA')+L('D. Les achats consommés','achats')
+      +L('E. Marge brute (A − D)','margeBrute',1)
+      +Lc('F. Fournitures & services extérieurs',function(x){return x.fourn+x.serv;})
+      +L('G. Valeur ajoutée','VA',1)
+      +L('Impôts & taxes','impots')+L('Charges du personnel','pers')
+      +L('I. Excédent brut d\'exploitation','EBE',1)
+      +L('+ Autres produits','autres')+L('− Autres charges de gestion','autresG')
+      +Lc('− Dotations (amort. & prov.)',function(x){return x.amort+x.prov;})
+      +L('K. Résultat d\'exploitation','resExpl',1)
+      +L('+ Produits financiers','prodFin')+L('− Charges financières','interets')
+      +L('M. Résultat courant','resCourant',1)
+      +L('± Résultat exceptionnel','resExc')
+      +L('P. Impôt sur les bénéfices','is')
+      +L('Q. Résultat net','resNet',1)+'</tbody></table>';
+    /* D) CAF */
+    var caf='<h3>D) Capacité d\'autofinancement</h3><table class="pv-t"><thead><tr><th>Nature</th>'+lab+'</tr></thead><tbody>'
+      +L('1. Résultat après impôts','resNet')
+      +Lc('2. Dotations amort. & prov.',function(x){return x.amort+x.prov;})
+      +L('3. C.A.F. (1 + 2)','caf',1)+L('4. Dividendes','div')
+      +L('Autofinancement (3 − 4)','autofin',1)+'</tbody></table>';
+    /* E) BFR */
+    var bfr='<h3>E) Besoin en financement d\'exploitation</h3><table class="pv-t"><tbody>'
+      +'<tr><td>Délai moyen de règlement clients</td><td class="r">'+pf0(pr.bfr.delaiClients)+' jours</td></tr>'
+      +'<tr><td>Délai moyen de règlement fournisseurs</td><td class="r">'+pf0(pr.bfr.delaiFourn)+' jours</td></tr></tbody></table>';
+    /* F) Bilan de création */
+    var bilan='<h3>F) Bilan de création</h3><table class="pv-t"><thead><tr><th>ACTIF</th><th class="r">Montant</th><th>PASSIF</th><th class="r">Montant</th></tr></thead><tbody>'
+      +'<tr><td>1. Immobilisations (incorp./corp./fin.)</td><td class="r">'+eu(B.actifImmob)+'</td><td>1. Capitaux (capital + CCA)</td><td class="r">'+eu(B.passifCap)+'</td></tr>'
+      +'<tr><td>2. Stock (marchandises)</td><td class="r">'+eu(B.stock)+'</td><td>2. Emprunts (banque + autres)</td><td class="r">'+eu(B.passifEmp)+'</td></tr>'
+      +'<tr><td>3. Créances (T.V.A.)</td><td class="r">'+eu(B.creances)+'</td><td>3. Dettes (fournisseurs)</td><td class="r">'+eu(B.passifDettes)+'</td></tr>'
+      +'<tr><td>4. Banque</td><td class="r">'+eu(B.banque)+'</td><td></td><td></td></tr>'
+      +'<tr class="pv-tot"><td>TOTAL GÉNÉRAL</td><td class="r">'+eu(B.totalActif)+'</td><td>TOTAL GÉNÉRAL</td><td class="r">'+eu(B.totalPassif)+'</td></tr></tbody></table>';
+    /* Investissements & étapes d'exonération choisis */
+    var invKeys=Object.keys(pr.invests||{});var exoKeys=EXON_ETAPES.filter(function(e){return pr.exon&&pr.exon[e[0]];});
+    var invBlock=(invKeys.length||exoKeys.length)?('<h3>G) Investissements & démarche d\'exonération</h3>'
+      +(invKeys.length?('<table class="pv-t"><thead><tr><th>Investissement prévu</th><th class="r">Montant</th></tr></thead><tbody>'+invKeys.map(function(k){var t=INVEST_TYPES.filter(function(x){return x[0]===k;})[0];return '<tr><td>'+E(t?t[1]:k)+'</td><td class="r">'+eu(pf0(pr.invests[k]))+'</td></tr>';}).join('')+'</tbody></table>'):'')
+      +(exoKeys.length?('<div class="pv-etapes"><b>Étapes d\'exonération retenues :</b><ul>'+exoKeys.map(function(e){return '<li>'+E(e[1])+'</li>';}).join('')+'</ul></div>'):'')):'';
+    var obs='<h3>H) Observations / à compléter</h3><div class="pv-fill">…………………………………………………………………………………………………………………………<br><br>…………………………………………………………………………………………………………………………<br><br>…………………………………………………………………………………………………………………………</div>';
     return '<div class="doc-gen"><div class="dg-page pv-doc">'
-      +'<div class="pv-hd"><b>BILAN PRÉVISIONNEL</b><span>'+E(soc)+(pr.activite?(' — '+E(pr.activite)):'')+'</span></div>'
-      +'<div class="pv-sub">Document de travail à compléter et à valider — établi par AEM CONSEIL le '+E((new Date()).toLocaleDateString('fr-FR'))+'.</div>'
-      +'<h3>1. Compte de résultat prévisionnel (3 ans)</h3>'
-      +'<table class="pv-t"><thead><tr><th>Poste</th>'+cols.map(function(c){return '<th class="r">'+c+'</th>';}).join('')+'</tr></thead><tbody>'
-      +line('Chiffre d\'affaires HT','ca')+line('Autres produits','autres')+line('Achats / coûts variables','achats')+line('Charges externes','ext')+line('Charges de personnel','pers')+line('Impôts & taxes','imp')
-      +line('EBITDA (EBE)','ebe',1)+line('Dotations amortissements','amort')+line('Résultat d\'exploitation','resExpl',1)+line('Impôt sur les sociétés','is')+line('Résultat net','net',1)+'</tbody></table>'
-      +'<h3>2. Plan de financement initial</h3>'
-      +'<table class="pv-t"><thead><tr><th>Besoins</th><th class="r">Montant</th><th>Ressources</th><th class="r">Montant</th></tr></thead><tbody>'
-      +'<tr><td>Immobilisations</td><td class="r">'+eu(pr.fin.immob)+'</td><td>Capital</td><td class="r">'+eu(pr.fin.capital)+'</td></tr>'
-      +'<tr><td>Frais d\'établissement</td><td class="r">'+eu(pr.fin.frais)+'</td><td>Comptes courants</td><td class="r">'+eu(pr.fin.cca)+'</td></tr>'
-      +'<tr><td>BFR</td><td class="r">'+eu(pr.fin.bfr)+'</td><td>Emprunts</td><td class="r">'+eu(pr.fin.emprunt)+'</td></tr>'
-      +'<tr><td></td><td></td><td>Subventions</td><td class="r">'+eu(pr.fin.subv)+'</td></tr>'
-      +'<tr class="pv-tot"><td>Total besoins</td><td class="r">'+eu(besoins)+'</td><td>Total ressources</td><td class="r">'+eu(ressources)+'</td></tr></tbody></table>'
-      +'<h3>3. Observations / à compléter</h3><div class="pv-fill">…………………………………………………………………………………………………………………………<br><br>…………………………………………………………………………………………………………………………<br><br>…………………………………………………………………………………………………………………………</div>'
-      +'<div class="pv-sign">Le dirigeant (nom, date, signature) : ……………………………………</div>'
+      +garde+final
+      +charges+cr+caf+bfr+bilan+invBlock+obs
+      +'<div class="pv-sign-row"><div class="pv-sign">Le dirigeant (nom, date, signature) :<br>………………………………………</div>'+(pr.tampon?cachetHTML(pr):'<div class="pv-sign">Cachet du cabinet :<br><i>— à tamponner —</i></div>')+'</div>'
       +'</div></div>';
   }
-  window.fiscalPrevGen=function(id){var d=doss(id);if(!d)return;
+  window.fiscalPrevGen=function(id){var d=doss(id);if(!d)return;var pr=prevData(d);
     var ov=document.getElementById('fiscal-doc-ov');if(!ov){ov=document.createElement('div');ov.id='fiscal-doc-ov';document.body.appendChild(ov);}
-    ov.innerHTML='<div class="fxd-shell"><header class="fxd-top"><b>📄 Bilan prévisionnel — '+E(nomD(d))+'</b><div class="fxd-act"><button class="fx-btn" onclick="fiscalPrevPrint(\''+id+'\')">🖨 Imprimer / PDF</button><button class="fxd-x" onclick="fiscalDocClose()">✕</button></div></header><div class="fxd-body">'+previsionnelDocHTML(d)+'</div></div>';
+    var tbtn=pr.tampon?'<button class="fx-btn fx-btn-2" onclick="fiscalTamponner(\''+id+'\')">🔏 Re-tamponner</button>':'<button class="fx-btn fx-tampon" onclick="fiscalTamponner(\''+id+'\')">🔏 Tamponner (cachet AEM CONSEIL)</button>';
+    ov.innerHTML='<div class="fxd-shell"><header class="fxd-top"><b>📄 Bilan prévisionnel — '+E(nomD(d))+'</b><div class="fxd-act">'+tbtn+'<button class="fx-btn fx-btn-2" onclick="fiscalPrevPrint(\''+id+'\')">🖨 Imprimer / PDF</button><button class="fxd-x" onclick="fiscalDocClose()">✕</button></div></header>'
+      +(pr.tampon?'':'<div class="fxd-msg">Document généré. Vérifiez les montants puis cliquez « Tamponner » pour finaliser avec le cachet du cabinet.</div>')
+      +'<div class="fxd-body" id="fiscal-doc-body">'+previsionnelDocHTML(d)+'</div></div>';
     ov.classList.add('show');
+    if(typeof toast==='function')toast('Bilan prévisionnel généré');
+  };
+  window.fiscalTamponner=function(id){var d=doss(id);if(!d)return;var pr=prevData(d);
+    pr.tampon={date:(new Date()).toLocaleDateString('fr-FR'),by:'AEM CONSEIL',ts:Date.now()};
+    if(typeof save==='function')save();
+    fiscalPrevGen(id);
+    var ov=document.getElementById('fiscal-doc-ov');if(ov){var h=ov.querySelector('.fxd-shell');if(h){var b=document.createElement('div');b.className='fxd-final';b.innerHTML='✅ Document finalisé et tamponné le '+E(pr.tampon.date)+' — cachet AEM CONSEIL apposé.';h.insertBefore(b,h.querySelector('.fxd-body'));}}
+    if(typeof toast==='function')toast('✅ Bilan prévisionnel finalisé et tamponné');
   };
   window.fiscalDocClose=function(){var o=document.getElementById('fiscal-doc-ov');if(o)o.classList.remove('show');};
   window.fiscalPrevPrint=function(id){var d=doss(id);if(!d)return;try{if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();}catch(e){}
     var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}pa.innerHTML=previsionnelDocHTML(d);setTimeout(function(){window.print();},140);};
 
+  /* ---------- Questionnaire dirigeant (onglet dédié) ---------- */
+  var QUIZ=[
+    ['projet','Décrivez votre projet et votre activité en quelques mots','textarea'],
+    ['objectifCA','Objectif de chiffre d\'affaires la 1ʳᵉ année (€)','number'],
+    ['clients','Qui sont vos clients cibles (particuliers, entreprises, collectivités) ?','text'],
+    ['financement','Comment financez-vous le démarrage (apport, emprunt, aides) ?','text'],
+    ['apport','Montant de votre apport personnel (€)','number'],
+    ['embauches','Prévoyez-vous des embauches ? Combien la 1ʳᵉ année ?','text'],
+    ['investissements','Quels investissements envisagez-vous (matériel, local, véhicule…) ?','textarea'],
+    ['local','Aurez-vous un local ? Dans quelle zone (FRR/ZRR, ZFU, QPV, standard) ?','text'],
+    ['remuneration','Rémunération souhaitée du dirigeant (€/mois)','number'],
+    ['risque','Votre appétence au risque (prudent, équilibré, offensif) ?','select:Prudent,Équilibré,Offensif'],
+    ['horizon','Horizon de développement (revente, transmission, croissance…)','text'],
+    ['idees','Vos idées / questions pour optimiser la fiscalité','textarea']
+  ];
+  window.fiscalQuizSave=function(id){var d=doss(id);if(!d)return;var pr=prevData(d);pr.quiz=pr.quiz||{};
+    QUIZ.forEach(function(q){var el=document.getElementById('quiz-'+q[0]);if(el)pr.quiz[q[0]]=el.value;});
+    if(typeof save==='function')save();window.fiscalTab='questionnaire';fiscalRender(id);
+    if(typeof toast==='function')toast('Réponses enregistrées');};
+  function m_questionnaire(d){var pr=prevData(d),q=pr.quiz||{};
+    var field=function(item){var k=item[0],lbl=item[1],t=item[2],v=q[k]||'';
+      if(t==='textarea')return '<label class="quiz-full">'+E(lbl)+'<textarea id="quiz-'+k+'" rows="2" onchange="fiscalQuizSave(\''+d.id+'\')">'+E(v)+'</textarea></label>';
+      if(t.indexOf('select:')===0){var opts=t.slice(7).split(',');return '<label>'+E(lbl)+'<select id="quiz-'+k+'" onchange="fiscalQuizSave(\''+d.id+'\')"><option value="">—</option>'+opts.map(function(o){return '<option '+(v===o?'selected':'')+'>'+E(o)+'</option>';}).join('')+'</select></label>';}
+      return '<label'+(t==='text'?' class="quiz-full"':'')+'>'+E(lbl)+'<input id="quiz-'+k+'" type="'+(t==='number'?'number':'text')+'" value="'+E(v)+'" onchange="fiscalQuizSave(\''+d.id+'\')"></label>';};
+    var form='<div class="fx-form quiz-form">'+QUIZ.map(field).join('')+'</div>';
+    /* Synthèse des réponses */
+    var rep=QUIZ.filter(function(it){return (q[it[0]]||'').toString().trim()!=='';}).map(function(it){var k=it[0],v=q[k];if(it[2]==='number')v=eu(pf0(v));return '<div class="quiz-a"><div class="quiz-a-q">'+E(it[1])+'</div><div class="quiz-a-v">'+E(v)+'</div></div>';}).join('');
+    var synth=rep?('<div class="fx-h2">Vos réponses</div><div class="quiz-answers">'+rep+'</div>'):'';
+    return '<div class="fx-h1">Questionnaire du dirigeant</div>'
+      +'<div class="fx-note">Complétez ce mini-formulaire pour préciser votre projet : vos réponses alimentent les conseils, le bilan prévisionnel et les pistes d\'exonération. Elles s\'affichent directement ci-dessous.</div>'
+      +form+'<div class="fx-formact"><button class="fx-btn" onclick="fiscalQuizSave(\''+d.id+'\')">💾 Enregistrer mes réponses</button></div>'
+      +synth;
+  }
+
   var MODULES=[
     {k:'apercu',ic:'▦',l:'Synthèse',f:m_apercu},
     {k:'societe',ic:'▤',l:'Société & associés',f:m_societe},
     {k:'previsionnel',ic:'∿',l:'Bilan prévisionnel',f:m_previsionnel},
+    {k:'questionnaire',ic:'✍',l:'Questionnaire dirigeant',f:m_questionnaire},
     {k:'infos',ic:'✎',l:'Infos client',f:m_infos},
     {k:'regime',ic:'⚖',l:'Régime fiscal & social',f:m_regime},
     {k:'exon',ic:'★',l:'Exonérations & aides',f:m_exon},
@@ -12524,6 +12757,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'@media print{#fiscal-doc-ov{position:static!important;background:#fff!important;padding:0!important}#fiscal-doc-ov .fxd-top{display:none!important}.pv-doc,.pv-doc *,.pv-t td,.pv-t th{background:#fff!important;color:#111!important}}'
       +'#fiscal-doc-ov{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.72);display:none;padding:22px}#fiscal-doc-ov.show{display:block}.fxd-shell{max-width:920px;margin:0 auto;height:100%;display:flex;flex-direction:column;background:#0e0e12;border:1px solid #242428;border-radius:16px;overflow:hidden}.fxd-top{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #202024;color:#eef0f4}.fxd-top b{font-size:14px}.fxd-act{margin-left:auto;display:flex;gap:8px;align-items:center}.fxd-x{background:#17171b;border:1px solid #2a2a2e;color:#c7cad2;width:34px;height:34px;border-radius:9px;cursor:pointer}.fxd-body{flex:1;overflow:auto;padding:18px;background:#1a1a1e}'
       +'.fx-del{background:#2a1416;border:1px solid #5a2c24;color:#ff9583;width:26px;height:26px;border-radius:7px;cursor:pointer}.fx-tbl input,.fx-tbl select{background:#0e0e11;border:1px solid #2a2a2e;border-radius:6px;padding:5px 7px;color:#eef0f4;font:inherit;width:100%}'
+      +'.fxd-msg{background:#141826;border-bottom:1px solid #26304a;color:#a9c0ff;font-size:12px;padding:8px 16px}.fxd-final{background:linear-gradient(135deg,rgba(46,160,90,.22),rgba(124,108,255,.10));border-bottom:1px solid #2f6b45;color:#a6e6c2;font-size:12.5px;font-weight:700;padding:9px 16px}'
+      +'.fx-btn-2{background:#17171b!important;border:1px solid #33333a!important;color:#dfe2ea!important}.fx-tampon{background:linear-gradient(135deg,#2e6bff,#1c3f8f)!important;border:1px solid #2e6bff!important}'
+      +'.fx-inv-t{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#8b7bff;font-weight:700;margin:2px 0 6px}.fx-inv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px}.fx-inv-row{display:flex;align-items:center;gap:8px;background:#101014;border:1px solid #242428;border-radius:9px;padding:6px 9px}.fx-inv-row label{flex:1;font-size:12px;color:#cdd0da;cursor:pointer}.fx-inv-row input[type=number]{width:96px;background:#0e0e11;border:1px solid #2a2a2e;border-radius:6px;padding:5px 7px;color:#eef0f4;font:inherit}.fx-exo-row{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#cdd0da;padding:5px 0;cursor:pointer}'
+      +'.quiz-form{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}.quiz-form .quiz-full{grid-column:1/-1}.quiz-form textarea{background:#0e0e11;border:1px solid #2a2a2e;border-radius:8px;padding:8px 10px;color:#eef0f4;font:inherit;resize:vertical}.quiz-answers{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}.quiz-a{background:#141418;border:1px solid #242428;border-left:3px solid #7c6cff;border-radius:10px;padding:10px 12px}.quiz-a-q{font-size:11px;color:#8b8e99;margin-bottom:4px}.quiz-a-v{font-size:13px;color:#eef0f4;white-space:pre-wrap}'
+      +'.pv-garde{text-align:center;padding:6px 0 12px;margin-bottom:8px}body.dark .pv-doc .pv-forme,html .pv-doc .pv-forme{font-size:11px!important;letter-spacing:2px;color:#333!important;margin:4px 0 18px}.pv-box{max-width:420px;margin:0 auto 16px;border:1px solid #333;border-radius:2px;padding:14px 16px;text-align:center}body.dark .pv-doc .pv-box b,html .pv-doc .pv-box b{font-size:14px!important;letter-spacing:.5px}body.dark .pv-doc .pv-garde-t,html .pv-doc .pv-garde-t{font-size:15px!important;font-weight:800;letter-spacing:1px;margin:10px 0 4px}body.dark .pv-doc .pv-garde-sub,html .pv-doc .pv-garde-sub{font-size:10px!important;color:#666!important}'
+      +'.pv-cachet{display:flex;justify-content:flex-end;margin:14px 0}.pv-cachet-in{transform:rotate(-7deg);border:2px solid #1c3f8f;border-radius:8px;padding:8px 14px;text-align:center;background:rgba(28,63,143,.04);max-width:260px}body.dark .pv-doc .pv-cachet-in,html .pv-doc .pv-cachet-in{border-color:#1c3f8f!important}body.dark .pv-doc .pv-cachet-firm,html .pv-doc .pv-cachet-firm{font-size:15px!important;font-weight:800;letter-spacing:1px;color:#1c3f8f!important}body.dark .pv-doc .pv-cachet-role,html .pv-doc .pv-cachet-role{font-size:9px!important;letter-spacing:2px;color:#1c3f8f!important}body.dark .pv-doc .pv-cachet-adr,body.dark .pv-doc .pv-cachet-tel,html .pv-doc .pv-cachet-adr,html .pv-doc .pv-cachet-tel{font-size:8.5px!important;color:#1c3f8f!important}body.dark .pv-doc .pv-cachet-dt,html .pv-doc .pv-cachet-dt{font-size:8.5px!important;color:#1c3f8f!important;margin-top:3px;font-style:italic}'
+      +'.pv-final{background:#eafaf0;border:1px solid #86d3a3;border-radius:6px;padding:7px 12px;font-size:11px;margin:6px 0 10px;text-align:center}body.dark .pv-doc .pv-final,html .pv-doc .pv-final{color:#1c6b3a!important}.pv-etapes{font-size:10.5px;margin:6px 0}.pv-etapes ul{margin:4px 0 0;padding-left:18px}.pv-sign-row{display:flex;justify-content:space-between;align-items:flex-end;margin-top:22px;gap:20px}.pv-sign-row .pv-sign{margin-top:0;flex:1}'
       +'@media(max-width:820px){.fx-body{grid-template-columns:1fr}.fx-side{border-right:0;border-bottom:1px solid #202024;flex-direction:row;flex-wrap:wrap;overflow-x:auto}}';
     document.head.appendChild(st);} }catch(e){}
 })();
