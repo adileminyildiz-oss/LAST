@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=294;
+var LAST_VER=296;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -6581,7 +6581,7 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
 (function(){
   function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
   function doss(id){return (typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;});}
-  function reqDocs(d){ try{ return ESP_DOCS.filter(function(dc){return (typeof espDocReq!=='function')||espDocReq(d,dc.k);}); }catch(e){ return (typeof ESP_DOCS!=='undefined')?ESP_DOCS:[]; } }
+  function reqDocs(d){ try{ if(d&&d.formaliteNature==='modification'&&d.modifDocs)return d.modifDocs.map(function(x){return {k:x.k,l:x.l};}); if(typeof espDocsRequis==='function')return espDocsRequis(d); return ESP_DOCS.filter(function(dc){return (typeof espDocReq!=='function')||espDocReq(d,dc.k);}); }catch(e){ return (typeof ESP_DOCS!=='undefined')?ESP_DOCS:[]; } }
   function isGen(d,k){ try{ return !!espDocState(d,k).genere; }catch(e){ return !!(d.docs&&d.docs[k]&&d.docs[k].genere); } }
   function folder(d){ d.docFolder=d.docFolder||{approved:{}}; d.docFolder.approved=d.docFolder.approved||{}; return d.docFolder; }
   function isAppr(d,k){ return folder(d).approved[k]===true; }
@@ -6721,7 +6721,7 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
     return '<div class="tr-head">'
       +'<div class="tr-head-row">'
         +'<div class="tr-id"><div class="tr-name">'+E(nomD(d))+'</div>'
-          +'<div class="tr-meta"><span>'+E(d.ref||d.numeroDossier||'')+'</span>'+(syn?('<span class="tr-dot"></span><span>'+E(syn)+'</span>'):'')+'</div>'
+          +'<div class="tr-meta"><span>'+E(d.numeroDossier||d.ref||'')+'</span>'+(d.numeroService?('<span class="tr-dot"></span><span>'+E(d.numeroService)+'</span>'):'')+(syn?('<span class="tr-dot"></span><span>'+E(syn)+'</span>'):'')+'</div>'
         +'</div>'
         +'<span class="tr-stat" style="color:'+col+';border-color:'+col+'66;background:'+col+'1f">'+E(d.statut||'—')+'</span>'
       +'</div>'
@@ -14286,12 +14286,27 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   if(window.__formIntakeInit)return; window.__formIntakeInit=1;
   function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   function num(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.]/g,''));return isNaN(n)?null:n;}
-  function blank(){return {type:'sas',numeroDossier:'',societe:{},siege:{},direction:{},dirx:{},titres:{},dates:{},associes:[],contact:{},depot:{},apports:{},conjoint:{},cac:{},extra:{},beneficiaires:[]};}
+  function blank(){return {type:'sas',numeroDossier:'',nature:'creation',modif:{kind:'siege',societe:{},dates:{},signataire:{},ancien:{},nouveau:{}},societe:{},siege:{},direction:{},dirx:{},titres:{},dates:{},associes:[],contact:{},depot:{},apports:{},conjoint:{},cac:{},extra:{},beneficiaires:[]};}
   function FD(){ if(!window.__formData||typeof window.__formData!=='object')window.__formData=blank(); return window.__formData; }
   function get(path){var o=FD();var ks=path.split('.');for(var i=0;i<ks.length;i++){o=(o&&o[ks[i]]);if(o==null)return '';}return o;}
   function fonctionDefaut(t){return (t==='sas'||t==='sasu')?'Président':'Gérant';}
   function estUnipersonnel(t){return t==='sasu'||t==='eurl';}
   var FORMES=[['sas','SAS'],['sasu','SASU'],['sarl','SARL'],['eurl','EURL'],['sci','SCI']];
+  var MODIF_KINDS=[['siege','Transfert de siège social'],['dirigeant','Changement de dirigeant'],['denomination','Changement de dénomination'],['objet','Changement d\'objet social'],['capital','Modification de capital']];
+  function modifLabel(k){for(var i=0;i<MODIF_KINDS.length;i++)if(MODIF_KINDS[i][0]===k)return MODIF_KINDS[i][1];return 'Modification statutaire';}
+  window.formNature=function(v){FD().nature=v;if(typeof render==='function')render();};
+  window.formModifKind=function(v){var o=FD();o.modif=o.modif||{};o.modif.kind=v;if(typeof render==='function')render();};
+  /* Numérotation automatique à deux niveaux :
+     - Numéro de dossier (suivi global, tous dossiers) : DOS00001, DOS00002, …
+     - Sous-référence par type de service : Création → CR00001 · Modification → MD00001 */
+  function pad5(n){return String(n).replace(/[^0-9]/g,'').padStart(5,'0');}
+  function maxSeq(prefix,field){var mx=0;var re=new RegExp('^'+prefix+'0*([0-9]+)$');try{(DB.dossiers||[]).forEach(function(d){var v=(''+((field==='service')?(d.numeroService||''):(d.numeroDossier||''))).trim();var m=re.exec(v);if(m){var n=parseInt(m[1],10)||0;if(n>mx)mx=n;}});}catch(e){}return mx;}
+  window.formNextDossierNum=function(){try{DB.seq=DB.seq||{};var cur=parseInt(DB.seq.numDossier,10)||0;return 'DOS'+pad5(Math.max(cur,maxSeq('DOS','dossier'))+1);}catch(e){return 'DOS00001';}};
+  window.formTakeDossierNum=function(){try{DB.seq=DB.seq||{};var cur=parseInt(DB.seq.numDossier,10)||0;var next=Math.max(cur,maxSeq('DOS','dossier'))+1;DB.seq.numDossier=next;return 'DOS'+pad5(next);}catch(e){return 'DOS00001';}};
+  function svcPre(nature){return (nature==='modification')?'MD':'CR';}
+  function svcKey(nature){return (nature==='modification')?'numMD':'numCR';}
+  window.formNextServiceNum=function(nature){var pre=svcPre(nature),key=svcKey(nature);try{DB.seq=DB.seq||{};var cur=parseInt(DB.seq[key],10)||0;return pre+pad5(Math.max(cur,maxSeq(pre,'service'))+1);}catch(e){return pre+'00001';}};
+  window.formTakeServiceNum=function(nature){var pre=svcPre(nature),key=svcKey(nature);try{DB.seq=DB.seq||{};var cur=parseInt(DB.seq[key],10)||0;var next=Math.max(cur,maxSeq(pre,'service'))+1;DB.seq[key]=next;return pre+pad5(next);}catch(e){return pre+'00001';}};
 
   window.formSet=function(path,val){var o=FD();var ks=path.split('.');for(var i=0;i<ks.length-1;i++){o[ks[i]]=o[ks[i]]||{};o=o[ks[i]];}o[ks[ks.length-1]]=val;};
   window.formAssocSet=function(i,key,val){var o=FD();o.associes=o.associes||[];o.associes[i]=o.associes[i]||{};o.associes[i][key]=val;};
@@ -14309,7 +14324,19 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   window.formReprendre=function(){var d=formDraft();if(d&&d.data){try{window.__formData=JSON.parse(JSON.stringify(d.data));}catch(e){window.__formData=d.data;}if(typeof render==='function')render();window.scrollTo(0,0);if(typeof toast==='function')toast('Brouillon repris');}};
   window.formBrouillonSuppr=function(){try{if(DB.parametres)delete DB.parametres.formDraft;if(typeof save==='function')save();if(typeof render==='function')render();if(typeof toast==='function')toast('Brouillon supprimé');}catch(e){}};
   /* Champs requis pour un dossier COMPLET (jusqu'au dépôt). Renvoie la liste des manques. */
-  window.formManques=function(){ var o=FD(),s=o.societe||{},dir=o.direction||{},si=o.siege||{},dt=o.dates||{},dep=o.depot||{},co=o.contact||{}; var m=[];
+  window.formManques=function(){ var o=FD();
+    if(o.nature==='modification'){ var M=o.modif||{},S=M.societe||{},D=M.dates||{},G=M.signataire||{},N=M.nouveau||{}; var mm=[];
+      function nm(v,l){ if(!(''+(v==null?'':v)).trim())mm.push(l); }
+      nm(S.denomination,'Dénomination de la société'); nm(S.siren,'SIREN'); nm(D.acte,'Date de la décision'); nm(D.effet,'Date d\'effet'); nm(D.ville,'Ville de signature'); nm(G.prenom,'Prénom du signataire'); nm(G.nom,'Nom du signataire');
+      var mk=M.kind||'siege';
+      if(mk==='siege'){ nm(N.siege,'Nouvelle adresse du siège'); nm(N.cp,'Nouveau code postal'); nm(N.ville,'Nouvelle ville'); }
+      else if(mk==='dirigeant'){ nm(N.prenom,'Prénom du nouveau dirigeant'); nm(N.nom,'Nom du nouveau dirigeant'); nm(N.naissance,'Date de naissance du nouveau dirigeant'); nm(N.adresse,'Adresse du nouveau dirigeant'); }
+      else if(mk==='denomination'){ nm(N.denomination,'Nouvelle dénomination'); }
+      else if(mk==='objet'){ nm(N.objet,'Nouvel objet social'); }
+      else if(mk==='capital'){ nm(N.capital,'Nouveau capital'); }
+      return mm;
+    }
+    var s=o.societe||{},dir=o.direction||{},si=o.siege||{},dt=o.dates||{},dep=o.depot||{},co=o.contact||{}; var m=[];
     function need(v,label){ if(!(''+(v==null?'':v)).trim())m.push(label); }
     need(s.denomination,'Dénomination'); need(s.capital,'Capital social'); need(s.objet,'Objet social');
     need(si.rue,'Adresse du siège'); need(si.cp,'Code postal du siège'); need(si.ville,'Ville du siège');
@@ -14394,7 +14421,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     return items;
   };
   window.formCoherence=function(){
-    var o=FD(),s=o.societe||{},tt=o.titres||{},ap=o.apports||{};
+    var o=FD(); if(o.nature==='modification')return [];
+    var s=o.societe||{},tt=o.titres||{},ap=o.apports||{};
     return window.coherenceItems({capital:s.capital,nominal:tt.nominal,nbTitres:tt.nbTitres,associes:o.associes||[],numeraire:ap.numeraire,nature:ap.nature});
   };
   window.fmtNombre=function(n){try{return (Math.round(n*100)/100).toLocaleString('fr-FR');}catch(e){return ''+n;}};
@@ -14420,12 +14448,68 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<button class="btn btn-sm btn-ghost" onclick="formBrouillonSuppr()">Supprimer</button></span>'
       +'</div></div>'):'';
     /* Formalité */
+    var nature=o.nature||'creation';
+    var natSel='<div class="fi-nature"><button type="button" class="fi-nat'+(nature==='creation'?' on':'')+'" onclick="formNature(\'creation\')">Création de société</button>'
+      +'<button type="button" class="fi-nat'+(nature==='modification'?' on':'')+'" onclick="formNature(\'modification\')">Modification statutaire</button></div>';
     var head='<div class="card fi-card fi-head"><div class="card-b">'
-      +'<div class="fi-intro">Saisie manuelle du dossier — renseignez les informations directement avec le client. À l\'enregistrement, le dossier est créé et l\'ensemble des documents (statuts, pouvoir, DNC, souscripteurs…) est généré automatiquement.</div>'
-      +'<div class="frow"><div><label>Type de formalité</label>'
-      +'<select onchange="formType(this.value)">'+FORMES.map(function(f){return '<option value="'+f[0]+'"'+(t===f[0]?' selected':'')+'>Création '+f[1]+'</option>';}).join('')+'</select></div>'
-      +'<div><label>N° de dossier (facultatif)</label>'+fI('numeroDossier','ex. 2025-014')+'</div></div>'
+      +'<div class="fi-intro">Saisie manuelle du dossier — renseignez les informations directement avec le client. À l\'enregistrement, le dossier est créé et les documents sont générés, testés (validité + cohérence) puis dirigés vers l\'INPI.</div>'
+      +natSel
+      +(nature==='creation'
+        ? ('<div class="frow"><div><label>Type de formalité</label>'
+           +'<select onchange="formType(this.value)">'+FORMES.map(function(f){return '<option value="'+f[0]+'"'+(t===f[0]?' selected':'')+'>Création '+f[1]+'</option>';}).join('')+'</select></div>'
+           +'<div><label>Numéro de dossier</label><input value="'+esc(window.formNextDossierNum?window.formNextDossierNum():'DOS0001')+'" readonly title="Attribué automatiquement à l\'enregistrement"><div class="hint" style="margin-top:4px">Suivi global du dossier · sous-référence <b>'+esc(window.formNextServiceNum?window.formNextServiceNum(nature):'')+'</b> ('+(nature==='modification'?'modification':'création')+') — attribués automatiquement.</div></div></div>')
+        : ('<div class="frow"><div><label>Type de modification</label>'
+           +'<select onchange="formModifKind(this.value)">'+MODIF_KINDS.map(function(k){return '<option value="'+k[0]+'"'+(((o.modif&&o.modif.kind)||'siege')===k[0]?' selected':'')+'>'+esc(k[1])+'</option>';}).join('')+'</select></div>'
+           +'<div><label>Numéro de dossier</label><input value="'+esc(window.formNextDossierNum?window.formNextDossierNum():'DOS0001')+'" readonly title="Attribué automatiquement à l\'enregistrement"><div class="hint" style="margin-top:4px">Suivi global du dossier · sous-référence <b>'+esc(window.formNextServiceNum?window.formNextServiceNum(nature):'')+'</b> ('+(nature==='modification'?'modification':'création')+') — attribués automatiquement.</div></div></div>'))
       +'</div></div>';
+    /* ---- Branche MODIFICATION : société existante + décision + champs du type ---- */
+    if(nature==='modification'){
+      var mk=(o.modif&&o.modif.kind)||'siege';
+      var socM=grp('Société concernée',
+        r2('Dénomination sociale',fI('modif.societe.denomination','ex. AEM CONSEIL'),'Forme juridique',fSel('modif.societe.forme',FORMES,get('modif.societe.forme')||'sas'))
+        +r2('SIREN',fI('modif.societe.siren','9 chiffres'),'RCS (ville du greffe)',fI('modif.societe.rcsVille'))
+        +r1('Adresse du siège actuel',fI('modif.societe.siege'))
+        +r2('Code postal',fI('modif.societe.cp'),'Ville',fI('modif.societe.ville'))
+        +r1('Capital social actuel (€)',fI('modif.societe.capital')));
+      var decM=grp('Décision & signataire',
+        r2('Date de la décision (acte)',fD('modif.dates.acte'),'Date d\'effet',fD('modif.dates.effet'))
+        +r2('Ville de signature',fI('modif.dates.ville'),'Qualité du signataire',fSel('modif.signataire.qualite',[['Président','Président'],['Gérant','Gérant'],['Représentant légal','Représentant légal']],get('modif.signataire.qualite')||'Président'))
+        +r2('Civilité',fSel('modif.signataire.civilite',[['M.','M.'],['Mme','Mme']],get('modif.signataire.civilite')||'M.'),'Prénom',fI('modif.signataire.prenom'))
+        +r1('Nom',fI('modif.signataire.nom')));
+      var specM='';
+      if(mk==='siege'){ specM=grp('Nouveau siège social',
+          r1('Ancien siège (rappel)',fI('modif.ancien.siege'))
+          +r1('Nouvelle adresse du siège',fI('modif.nouveau.siege'))
+          +r2('Nouveau code postal',fI('modif.nouveau.cp'),'Nouvelle ville',fI('modif.nouveau.ville'))
+          +r1('Ressort du greffe',fSel('modif.nouveau.ressort',[['','—'],['meme','Même ressort (1 publication)'],['autre','Autre ressort (2 publications)']],get('modif.nouveau.ressort')))); }
+      else if(mk==='dirigeant'){ specM=grp('Nouveau dirigeant',
+          r1('Ancien dirigeant (nom et prénom)',fI('modif.ancien.dirigeant'))
+          +r2('Civilité',fSel('modif.nouveau.civilite',[['M.','M.'],['Mme','Mme']],get('modif.nouveau.civilite')||'M.'),'Fonction',fI('modif.nouveau.fonction',(get('modif.societe.forme')==='sas'||get('modif.societe.forme')==='sasu')?'Président':'Gérant'))
+          +r2('Prénom',fI('modif.nouveau.prenom'),'Nom',fI('modif.nouveau.nom'))
+          +r2('Date de naissance',fD('modif.nouveau.naissance'),'Lieu de naissance',fI('modif.nouveau.lieuNaissance'))
+          +r2('Nationalité',fI('modif.nouveau.nationalite','Française'),'Adresse personnelle',fI('modif.nouveau.adresse'))); }
+      else if(mk==='denomination'){ specM=grp('Changement de dénomination',
+          r2('Ancienne dénomination',fI('modif.ancien.denomination'),'Nouvelle dénomination',fI('modif.nouveau.denomination'))); }
+      else if(mk==='objet'){ specM=grp('Changement d\'objet social',
+          r1('Ancien objet (rappel, facultatif)',fT('modif.ancien.objet'))
+          +r1('Nouvel objet social',fT('modif.nouveau.objet','Décrire le nouvel objet'))); }
+      else if(mk==='capital'){ specM=grp('Modification de capital',
+          r2('Capital actuel (€)',fI('modif.ancien.capital'),'Nouveau capital (€)',fI('modif.nouveau.capital'))
+          +r1('Nature de l\'opération',fSel('modif.nouveau.sens',[['augmentation','Augmentation de capital'],['reduction','Réduction de capital']],get('modif.nouveau.sens')||'augmentation'))); }
+      var notesM=grp('Notes & observations',
+        '<textarea rows="3" oninput="formSet(\'extra.notes\',this.value)" placeholder="Remarques, particularités…">'+esc(get('extra.notes'))+'</textarea>');
+      var contactM=grp('Contact',r2('Email',fI('contact.email'),'Téléphone',fI('contact.tel')));
+      var mqM=window.formManques?window.formManques():[]; var okM=mqM.length===0; var disM=okM?'':' disabled';
+      var gateM='<div id="fi-gate" class="fi-gate '+(okM?'ok':'ko')+'">'+(okM?'✓ Modification complète — documents prêts à générer.':('À compléter avant de générer ('+mqM.length+') : '+esc(mqM.join(', '))))+'</div>';
+      var actM='<div class="fi-actions"><div class="fi-actions-col">'+gateM+'<div class="fi-actions-in">'
+        +'<button class="btn btn-ghost" onclick="formReset()">Réinitialiser</button>'
+        +'<button class="btn btn-ghost" onclick="formBrouillon()">Brouillon</button>'
+        +'<div class="fi-actions-r">'
+        +'<button class="btn'+(okM?'':' is-disabled')+'" id="fi-save"'+disM+' onclick="formCreerDossier(false)">Enregistrer le dossier</button>'
+        +'<button class="btn btn-pri'+(okM?'':' is-disabled')+'" id="fi-save-doc"'+disM+' onclick="formCreerDossier(true)">Enregistrer &amp; ouvrir les documents</button>'
+        +'</div></div></div></div>';
+      return '<div class="fi-wrap" oninput="formUpdateGate()" onchange="formUpdateGate()">'+resume+head+socM+specM+decM+notesM+contactM+actM+'</div>';
+    }
     /* Société */
     var soc=grp('Société',
       r1('Dénomination sociale',fI('societe.denomination','ex. AEM CONSEIL'))
@@ -14536,6 +14620,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
      (ils doivent tous porter exactement les mêmes informations, complètes et cohérentes). */
   window.formCreerDossier=function(ouvrirDocs){
     var o=FD(),s=o.societe||{},dir=o.direction||{};
+    /* Branche MODIFICATION : vérification stricte (pas de contrôle de cohérence de capital/parts). */
+    if(o.nature==='modification'){
+      var mqm=window.formManques?window.formManques():[];
+      if(mqm.length){ if(typeof openModal==='function')window.formControleModal(mqm,'manques'); else if(typeof toast==='function')toast('Modification incomplète — documents non générés.'); if(typeof formUpdateGate==='function')formUpdateGate(); return; }
+      if(typeof toast==='function')toast('Contrôles validés — génération des documents');
+      window.formDoCreateModif(ouvrirDocs); return;
+    }
     if(!(s.denomination||'').trim() && !((dir.nom||'')+(dir.prenom||'')).trim()){ if(typeof toast==='function')toast('Renseignez au moins la dénomination ou le dirigeant.'); return; }
     /* 1) Vérification : dossier complet exigé (le Brouillon reste possible via « Brouillon »). */
     var manques=window.formManques?window.formManques():[];
@@ -14646,9 +14737,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
         return {nom:full,prenom:a.prenom||'',nomFamille:a.nom||'',apport:a.apport||'',parts:(pr!=null?pr:(a.parts||'')),role:a.role||'',civilite:a.civilite||'',naissance:a.naissance||'',lieuNaissance:a.lieuNaissance||'',pays:a.pays||'',nationalite:a.nationalite||'',adresse:a.adresse||''};});
     }
     /* Dossier */
-    var ref='DOS-'+(DB.seq.dossier++);
+    var ref=window.formTakeDossierNum();
     var dos={id:uid('do'),ref:ref,clientIds:[c.id],serviceIds:[],statut:'Qualification',pretDepot:true,createdAt:today(),historique:[{d:today(),t:'Dossier complet créé manuellement (formulaire) — prêt au dépôt'}]};
-    if(c.forme)dos.forme=c.forme; dos.formalite=intake.type; dos.intake=intake; if(intake.numeroDossier)dos.numeroDossier=intake.numeroDossier;
+    if(c.forme)dos.forme=c.forme; dos.formalite=intake.type; dos.intake=intake; dos.numeroDossier=ref; dos.numeroService=window.formTakeServiceNum('creation');
     /* Dirigeant → verif.extract (lu par l'éditeur de documents) */
     dos.verif=dos.verif||{};dos.verif.extract=Object.assign(dos.verif.extract||{},{
       civilite:dir.civilite||'M.',prenom:dir.prenom||'',nom:dir.nom||'',dateNaissance:dir.naissance||'',lieuNaissance:dir.lieuNaissance||'',paysNaissance:dir.pays||'',nationalite:dir.nationalite||'',adresse:dir.adresse||'',cpPerso:dx.cp||'',villePerso:dx.ville||'',typePiece:dx.typePiece||'',numPiece:dx.numPiece||''});
@@ -14679,6 +14770,100 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(typeof render==='function')render();window.scrollTo(0,0);
     if(ouvrirDocs){ try{ if(typeof window.espEdOpen==='function'){ window.__edCat='creation'; setTimeout(function(){ window.espEdOpen(dos.id,'statuts'); },60); } }catch(e){} }
   };
+
+  /* ================= FORMALITÉS DE MODIFICATION ================= */
+  var PIECES_MODIF_FI={
+    siege:[{k:'pv',label:'PV / décision de transfert de siège'},{k:'siege',label:'Justificatif du nouveau siège (bail, domiciliation ou facture)'},{k:'annonce',label:'Attestation de parution de l\'annonce légale'},{k:'m2',label:'Formulaire M2 / déclaration de modification'}],
+    dirigeant:[{k:'pv',label:'PV / décision de nomination du dirigeant'},{k:'cni',label:'Pièce d\'identité du nouveau dirigeant'},{k:'dnc',label:'Déclaration de non-condamnation + filiation'},{k:'annonce',label:'Attestation de parution de l\'annonce légale'},{k:'m3',label:'Formulaire M3 / déclaration de modification'}],
+    denomination:[{k:'pv',label:'PV de changement de dénomination'},{k:'statuts',label:'Statuts mis à jour'},{k:'annonce',label:'Attestation de parution de l\'annonce légale'},{k:'m2',label:'Formulaire M2 / déclaration de modification'}],
+    objet:[{k:'pv',label:'PV de changement d\'objet social'},{k:'statuts',label:'Statuts mis à jour'},{k:'annonce',label:'Attestation de parution de l\'annonce légale'},{k:'m2',label:'Formulaire M2 / déclaration de modification'}],
+    capital:[{k:'pv',label:'PV décidant la variation de capital'},{k:'statuts',label:'Statuts mis à jour'},{k:'annonce',label:'Attestation de parution de l\'annonce légale'},{k:'m2',label:'Formulaire M2 / déclaration de modification'}]
+  };
+  function formeNom(f){var M={sas:'Société par actions simplifiée',sasu:'Société par actions simplifiée à associé unique',sarl:'Société à responsabilité limitée',eurl:'Entreprise unipersonnelle à responsabilité limitée',sci:'Société civile immobilière'};return M[(f||'').toLowerCase()]||((f||'SAS')+'').toUpperCase();}
+  function unipersonnelForme(f){f=(f||'').toLowerCase();return f==='sasu'||f==='eurl';}
+  /* Corps de la résolution selon le type */
+  function modifResolution(M){
+    var mk=M.kind||'siege',N=M.nouveau||{},A=M.ancien||{},D=M.dates||{};
+    var eff=D.effet||'';
+    if(mk==='siege') return {objet:'transfert du siège social',res:'L\'assemblée décide de transférer le siège social '+(A.siege?('précédemment situé « '+esc(A.siege)+' » '):'')+'à l\'adresse suivante : <b>'+esc((N.siege||'')+', '+(N.cp||'')+' '+(N.ville||''))+'</b>, à compter du '+esc(eff)+'. Les statuts sont modifiés en conséquence.'};
+    if(mk==='dirigeant') return {objet:'changement de dirigeant',res:'L\'assemblée prend acte de la cessation des fonctions de '+esc(A.dirigeant||'l\'ancien dirigeant')+' et nomme en qualité de '+esc(N.fonction||'dirigeant')+', à compter du '+esc(eff)+', <b>'+esc(((N.civilite||'')+' '+(N.prenom||'')+' '+(N.nom||'')).trim())+'</b>, né(e) le '+esc(N.naissance||'…')+' à '+esc(N.lieuNaissance||'…')+', de nationalité '+esc(N.nationalite||'française')+', demeurant '+esc(N.adresse||'…')+', qui accepte ledit mandat et déclare n\'être frappé(e) d\'aucune interdiction.'};
+    if(mk==='denomination') return {objet:'changement de dénomination sociale',res:'L\'assemblée décide de modifier la dénomination sociale, précédemment « '+esc(A.denomination||'…')+' », qui devient : <b>'+esc(N.denomination||'…')+'</b>, à compter du '+esc(eff)+'. L\'article correspondant des statuts est modifié en conséquence.'};
+    if(mk==='objet') return {objet:'changement d\'objet social',res:'L\'assemblée décide de modifier l\'objet social de la société, qui sera désormais le suivant : <b>'+esc(N.objet||'…')+'</b>, à compter du '+esc(eff)+'. L\'article « Objet » des statuts est modifié en conséquence.'};
+    if(mk==='capital'){ var sens=(N.sens==='reduction')?'réduire':'augmenter'; return {objet:'modification du capital social',res:'L\'assemblée décide de '+sens+' le capital social, qui passe de '+esc(A.capital||'…')+' € à <b>'+esc(N.capital||'…')+' €</b>, à compter du '+esc(eff)+'. L\'article « Capital social » des statuts est modifié en conséquence.'};}
+    return {objet:'modification statutaire',res:'L\'assemblée décide la modification statutaire mentionnée ci-dessus.'};
+  }
+  function pvModifHTML(dos){
+    var M=dos.modif||{},S=M.societe||{},D=M.dates||{},G=M.signataire||{};
+    var forme=S.forme||'sas'; var uni=unipersonnelForme(forme);
+    var r=modifResolution(M);
+    var entete='<b>'+esc(S.denomination||'…')+'</b><br>'+esc(formeNom(forme))+(S.capital?(' au capital de '+esc(S.capital)+' euros'):'')+'<br>Siège social : '+esc(((S.siege||'')+', '+(S.cp||'')+' '+(S.ville||'')).trim())+'<br>'+esc(S.siren?('RCS '+(S.rcsVille||'')+' '+S.siren):(S.rcsVille?('RCS '+S.rcsVille):''));
+    var titre=uni?'PROCÈS-VERBAL DES DÉCISIONS DE L\'ASSOCIÉ UNIQUE':'PROCÈS-VERBAL DE L\'ASSEMBLÉE GÉNÉRALE EXTRAORDINAIRE';
+    var qui=uni?'L\'associé unique de la société':'La collectivité des associés de la société';
+    var sign=((G.civilite||'')+' '+(G.prenom||'')+' '+(G.nom||'')).trim();
+    return '<div class="doc-gen"><div class="st-doc" style="font-family:Georgia,\'Times New Roman\',serif;color:#111;line-height:1.7">'
+      +'<div style="text-align:center;font-size:12px;margin-bottom:14px">'+entete+'</div>'
+      +'<h1 style="text-align:center;font-size:16px;letter-spacing:.5px;margin:16px 0;color:#111">'+titre+'</h1>'
+      +'<p>Le '+esc(D.acte||'…')+', à '+esc(D.ville||'…')+', '+qui+' <b>'+esc(S.denomination||'…')+'</b>, '+esc(formeNom(forme))+', a pris les décisions suivantes.</p>'
+      +'<p style="font-weight:700;margin-top:14px">Résolution — '+esc(r.objet)+'</p>'
+      +'<p>'+r.res+'</p>'
+      +'<p>Tous pouvoirs sont conférés au porteur d\'un original ou d\'une copie des présentes pour accomplir les formalités de publicité, de dépôt et d\'inscription modificative au registre du commerce et des sociétés.</p>'
+      +'<p style="margin-top:22px">Cette résolution est adoptée.</p>'
+      +'<p style="margin-top:30px">Fait à '+esc(D.ville||'…')+', le '+esc(D.acte||'…')+'.</p>'
+      +'<div style="margin-top:34px">'+esc(G.qualite||'Le représentant légal')+'<br><b>'+esc(sign||'…')+'</b><br><span style="color:#555">(signature)</span></div>'
+      +'</div></div>';
+  }
+  function annonceModifHTML(dos){
+    var M=dos.modif||{},S=M.societe||{},D=M.dates||{}; var r=modifResolution(M); var forme=S.forme||'sas';
+    var head=esc(S.denomination||'…')+' — '+esc(formeNom(forme))+(S.capital?(' au capital de '+esc(S.capital)+' €'):'')+' — Siège : '+esc(((S.siege||'')+', '+(S.cp||'')+' '+(S.ville||'')).trim())+' — '+esc(S.siren?('RCS '+(S.rcsVille||'')+' '+S.siren):('RCS '+(S.rcsVille||'…')));
+    return '<div class="doc-gen"><div class="st-doc" style="font-family:Georgia,\'Times New Roman\',serif;color:#111;line-height:1.7">'
+      +'<h1 style="text-align:center;font-size:15px;letter-spacing:.5px;margin:6px 0 16px;color:#111">AVIS DE MODIFICATION</h1>'
+      +'<p style="font-size:12px">'+head+'</p>'
+      +'<p>Aux termes d\'une décision '+(unipersonnelForme(forme)?'de l\'associé unique':'de l\'assemblée générale')+' en date du '+esc(D.acte||'…')+', il a été décidé le '+esc(r.objet)+'.</p>'
+      +'<p>'+r.res+'</p>'
+      +'<p>Mention sera faite au registre du commerce et des sociétés de '+esc(S.rcsVille||'…')+'.</p>'
+      +'<p style="margin-top:18px;text-align:right">Pour avis.</p>'
+      +'</div></div>';
+  }
+  window.pvModifHTML=pvModifHTML; window.annonceModifHTML=annonceModifHTML;
+  window.formDoCreateModif=function(ouvrirDocs){
+    var o=FD(),M=o.modif||{},S=M.societe||{},G=M.signataire||{},N=M.nouveau||{};
+    var mk=M.kind||'siege'; var label=modifLabel(mk);
+    /* Client (société existante) */
+    var c={id:uid('c'),prenom:'',nom:S.denomination||'Société',denomination:S.denomination||'',email:(o.contact&&o.contact.email)||'',tel:(o.contact&&o.contact.tel)||'',siren:S.siren||'',forme:S.forme||'sas',adresse:((S.siege||'')+'').trim(),cp:S.cp||'',ville:S.ville||'',createdAt:today()};
+    DB.clients.push(c);
+    var ref=window.formTakeDossierNum();
+    var dos={id:uid('do'),ref:ref,clientIds:[c.id],serviceIds:[],statut:'Qualification',pretDepot:true,createdAt:today(),
+      formaliteNature:'modification',modifKind:mk,serviceSouhaite:label,modif:JSON.parse(JSON.stringify(M)),
+      historique:[{d:today(),t:'Modification créée manuellement (formulaire) : '+label}]};
+    dos.numeroDossier=ref; dos.numeroService=window.formTakeServiceNum('modification');
+    dos.intake={type:mk,societe:{denomination:S.denomination||'',siren:S.siren||''}}; /* pour les tests (dénomination) + cohérence vide */
+    /* Documents de la modification */
+    dos.modifDocs=[{k:'pvmodif',l:'Procès-verbal de décision'},{k:'avismodif',l:'Avis de modification (annonce légale)'}];
+    dos.docCustom=dos.docCustom||{}; dos.docCustom.pvmodif=pvModifHTML(dos); dos.docCustom.avismodif=annonceModifHTML(dos);
+    dos.docs={pvmodif:{genere:true,date:today()},avismodif:{genere:true,date:today()}};
+    dos.piecesModif=(PIECES_MODIF_FI[mk]||[]).map(function(p){return {k:p.k,label:p.label};});
+    if(o.extra&&o.extra.notes)dos.notes=o.extra.notes;
+    /* Tests de validité (cohérence vide pour une modification) */
+    var Tnb=0,Ttot=0,Tinpi=false;
+    try{ if(typeof window.docTestsDossier==='function'){ var T=window.docTestsDossier(dos); Ttot=T.total; Tnb=T.nbValide; Tinpi=T.tous&&T.coherenceOk;
+      T.docs.forEach(function(x){ if(dos.docs[x.k]){ dos.docs[x.k].valide=x.valide; dos.docs[x.k].coherent=x.coherent; dos.docs[x.k].teste=today(); } });
+      dos.pretInpi=Tinpi; dos.docsTest={nb:Tnb,total:Ttot,coherenceOk:T.coherenceOk,ts:Date.now()};
+      dos.historique.unshift({d:today(),t:'Documents contrôlés (validité) : '+Tnb+'/'+Ttot+' validés'+(Tinpi?' — dossier prêt pour l\'INPI':'')});
+    } }catch(e){}
+    DB.dossiers.unshift(dos);
+    window.__formData=blank();
+    try{ if(DB.parametres)delete DB.parametres.formDraft; }catch(e){}
+    if(typeof save==='function')save();
+    if(typeof toast==='function')toast('Modification '+ref+' créée — '+(Ttot?(Tnb+'/'+Ttot+' documents validés'):'documents générés'));
+    state.page='espace';state.espaceDossier=dos.id;
+    if(typeof render==='function')render();window.scrollTo(0,0);
+    if(ouvrirDocs){ try{ if(typeof window.espDocVoir==='function'){ setTimeout(function(){ window.espDocVoir(dos.id,'pvmodif'); },60); } }catch(e){} }
+  };
+  /* Le pipeline (documents requis, pièces INPI) reconnaît les dossiers de modification. */
+  try{ if(typeof window.espDocsRequis==='function' && !window.espDocsRequis.__modif){ var _edr=window.espDocsRequis; window.espDocsRequis=function(d){ if(d&&d.formaliteNature==='modification'&&d.modifDocs)return d.modifDocs.map(function(x){return {k:x.k,l:x.l};}); return _edr.apply(this,arguments); }; window.espDocsRequis.__modif=1; }
+    else if(typeof espDocsRequis==='function' && !window.__modifDocsReqPatched){ window.__modifDocsReqPatched=1; var _edr2=espDocsRequis; window.espDocsRequis=function(d){ if(d&&d.formaliteNature==='modification'&&d.modifDocs)return d.modifDocs.map(function(x){return {k:x.k,l:x.l};}); return _edr2.apply(this,arguments); }; }
+  }catch(e){}
+  try{ if(typeof window.piecesRequises==='function' && !window.piecesRequises.__modif){ var _pr=window.piecesRequises; window.piecesRequises=function(d){ if(d&&d.formaliteNature==='modification'&&d.piecesModif&&d.piecesModif.length)return d.piecesModif; return _pr.apply(this,arguments); }; window.piecesRequises.__modif=1; } }catch(e){}
 
   /* ---- Enregistrement de la page dans le routage ---- */
   try{ if(typeof PAGES!=='undefined' && !PAGES.some(function(p){return p.id==='formulaire';})){
@@ -14750,6 +14935,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.fi-gate.ko{background:rgba(120,42,42,.24);color:#f0bcb6;border-color:rgba(170,74,74,.5)}',
     '.fi-actions .btn.is-disabled,.fi-actions .btn[disabled]{opacity:.4;cursor:not-allowed;filter:grayscale(.4)}',
     '.fi-siren{display:flex;gap:8px;align-items:center}.fi-siren input{flex:1}.fi-siren-btn{white-space:nowrap;flex:0 0 auto}',
+    '.fi-nature{display:flex;gap:8px;margin:0 0 12px;flex-wrap:wrap}',
+    '.fi-nat{flex:1;min-width:180px;padding:9px 12px;border:1px solid #262629;border-radius:10px;background:#0d0d0f;color:#c9cbce;font:600 12.5px system-ui,sans-serif;cursor:pointer;transition:.15s ease}',
+    '.fi-nat:hover{border-color:#3a3a40;color:#eef0f4}',
+    '.fi-nat.on{background:#1c1c1e;color:#fff;border-color:#4a4a52;box-shadow:inset 0 0 0 1px #4a4a52}',
     '.fi-coh{margin-top:14px;border:1px solid #232326;border-radius:12px;background:#0a0a0c;padding:12px 14px}',
     '.fi-coh.has-bad{border-color:rgba(170,74,74,.5)}',
     '.fi-coh-h{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin-bottom:8px}',
