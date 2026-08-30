@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=286;
+var LAST_VER=287;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14548,7 +14548,61 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       rows=all.map(function(x){return '<div class="fi-coh-row '+(x.ok?'ok':'ko')+'"><span class="fi-coh-ic">'+(x.ok?'✓':'!')+'</span><span class="fi-coh-l">'+esc(x.label)+'</span><span class="fi-coh-v">'+(x.ok?'OK':(fmtN(x.got)+' ≠ '+fmtN(x.exp)))+'</span></div>';}).join('');
       body='<div class="hint" style="margin:0 0 10px"><b>Contrôle non validé.</b> '+items.length+' incohérence'+(items.length>1?'s':'')+' détectée'+(items.length>1?'s':'')+'. Les documents ne sont pas générés tant que les montants ne sont pas cohérents.</div><div class="fi-coh" style="margin-top:0">'+rows+'</div>';
     }
-    openModal('Contrôle non validé — documents non générés',body,'<button class="btn btn-pri" onclick="closeModal()">Corriger le dossier</button>');
+    var foot=(kind==='manques')
+      ? '<button class="btn btn-pri" onclick="closeModal()">Compléter le dossier</button>'
+      : '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="window.formCorriger()">Corriger le dossier</button>';
+    openModal('Contrôle non validé — documents non générés',body,foot);
+  };
+  /* Répartit un total sur des poids (proportionnel), somme exacte ; entier ou 2 décimales. */
+  function reparti(weights,target,integer){
+    var n=weights.length; if(!n)return []; var sum=weights.reduce(function(a,b){return a+b;},0);
+    var raw=weights.map(function(w){return sum>0?(w/sum*target):(target/n);});
+    var iMax=0; for(var k=1;k<n;k++){ if(weights[k]>weights[iMax])iMax=k; }
+    if(integer){
+      var fl=raw.map(function(x){return Math.floor(x);}); var used=fl.reduce(function(a,b){return a+b;},0); var rem=Math.round(target)-used;
+      var order=raw.map(function(x,i){return {i:i,f:x-Math.floor(x)};}).sort(function(a,b){return b.f-a.f;});
+      for(var r=0;r<rem;r++){ fl[order[r%n].i]++; }
+      return fl;
+    }
+    var v=raw.map(function(x){return Math.round(x*100)/100;});
+    var s2=v.reduce(function(a,b){return a+b;},0); v[iMax]=Math.round((v[iMax]+(target-s2))*100)/100; return v;
+  }
+  function assocName(a,i){ return (((a.prenom||'')+' '+(a.nom||'')).trim())||a.nom||('Associé '+(i+1)); }
+  /* Corrige automatiquement les incohérences (ancre = capital), puis présente les modifications établies. */
+  window.formCorriger=function(){
+    var o=FD(),s=(o.societe=o.societe||{}),tt=(o.titres=o.titres||{}),ap=(o.apports=o.apports||{}),A=(o.associes||[]);
+    var changes=[];
+    function rec(label,before,after){ var b=(before===''||before==null)?'—':(''+before); if(b!==(''+after))changes.push({label:label,before:b,after:after}); }
+    var cap=num(s.capital);
+    if(cap==null){ var sa=A.reduce(function(x,a){return x+(num(a.apport)||0);},0);
+      if(sa>0){ rec('Capital social',s.capital,fmtN(sa)); s.capital=''+sa; cap=sa; }
+      else { openModal('Correction impossible','<div class="hint">Renseignez d\'abord le <b>capital social</b> pour permettre la correction automatique des montants.</div>','<button class="btn btn-pri" onclick="closeModal()">OK</button>'); return; } }
+    /* A) numéraire + nature = capital (on ajuste le numéraire) */
+    var nt=num(ap.nature),nn=num(ap.numeraire),natVal=(nt!=null?nt:0),newNum=Math.round((cap-natVal)*100)/100;
+    if(nn==null||Math.abs(nn-newNum)>0.01){ rec('Apport en numéraire',ap.numeraire,fmtN(newNum)); ap.numeraire=''+newNum; }
+    /* B) nombre de titres = capital ÷ valeur nominale (ou nominale déduite) */
+    var nominal=num(tt.nominal),nbT=num(tt.nbTitres);
+    if(nominal!=null&&nominal>0){ var newNb=Math.round(cap/nominal); if(nbT==null||nbT!==newNb){ rec('Nombre de titres',tt.nbTitres,newNb); tt.nbTitres=''+newNb; } }
+    else if(nbT!=null&&nbT>0){ var newNom=Math.round((cap/nbT)*100)/100; if(nominal==null||Math.abs(nominal-newNom)>0.01){ rec('Valeur nominale',tt.nominal,fmtN(newNom)); tt.nominal=''+newNom; } }
+    var totalTitres=num(tt.nbTitres);
+    /* C) Σ apports des associés = capital (proportionnel aux apports actuels) */
+    if(A.length){ var wA=A.map(function(a){return Math.max(0,num(a.apport)||0);}); var vA=reparti(wA,cap,false);
+      A.forEach(function(a,i){ if((''+(a.apport||''))!==(''+vA[i])){ rec('Apport — '+assocName(a,i),a.apport,fmtN(vA[i])); a.apport=''+vA[i]; } }); }
+    /* D) Σ parts / actions = nombre total de titres (proportionnel aux apports corrigés) */
+    if(A.length&&totalTitres!=null&&totalTitres>0){ var wP=A.map(function(a){return Math.max(0,num(a.apport)||0);}); var vP=reparti(wP,totalTitres,true);
+      A.forEach(function(a,i){ if((''+(a.parts||''))!==(''+vP[i])){ rec('Parts / actions — '+assocName(a,i),a.parts,vP[i]); a.parts=''+vP[i]; } }); }
+    if(typeof render==='function')render();
+    if(typeof formUpdateGate==='function')formUpdateGate();
+    window.formModifsModal(changes);
+  };
+  /* Présente les modifications établies après correction. */
+  window.formModifsModal=function(changes){
+    var inc=(window.formCoherence?window.formCoherence():[]).filter(function(x){return !x.ok;});
+    var body;
+    if(!changes.length){ body='<div class="hint">Aucune correction nécessaire — les montants étaient déjà cohérents.</div>'; }
+    else { var rows=changes.map(function(c){return '<div class="fi-coh-row ok"><span class="fi-coh-ic">✓</span><span class="fi-coh-l">'+esc(c.label)+'</span><span class="fi-coh-v">'+esc(''+c.before)+' → <b>'+esc(''+c.after)+'</b></span></div>';}).join('');
+      body='<div class="hint" style="margin:0 0 10px"><b>'+changes.length+' correction'+(changes.length>1?'s':'')+' appliquée'+(changes.length>1?'s':'')+'</b> — les documents porteront des informations cohérentes'+(inc.length?' (des points restent à vérifier).':'.')+'</div><div class="fi-coh" style="margin-top:0">'+rows+'</div>'; }
+    openModal('Corrections établies',body,'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'+(inc.length?'':'<button class="btn btn-pri" onclick="closeModal();window.formCreerDossier(false)">Générer les documents</button>'));
   };
   window.formDoCreate=function(ouvrirDocs){
     var o=FD();var s=o.societe||{},dir=o.direction||{},dx=o.dirx||{},tt=o.titres||{},dt=o.dates||{},si=o.siege||{},co=o.contact||{};
