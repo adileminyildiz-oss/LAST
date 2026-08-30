@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=288;
+var LAST_VER=289;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14776,7 +14776,32 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
   var STATUTS=[['afaire','À faire'],['depose','Déposé au Guichet unique'],['immatricule','Immatriculée']];
   function suivi(d){ d.inpiSuivi=d.inpiSuivi||{statut:'afaire',reference:'',dateDepot:'',ts:0}; return d.inpiSuivi; }
-  window.inpiSetStatut=function(id,v){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); if(!d)return; var su=suivi(d); su.statut=v; if(v!=='afaire'&&!su.dateDepot&&typeof today==='function')su.dateDepot=today(); su.ts=Date.now(); d.historique=d.historique||[]; d.historique.unshift({d:(typeof today==='function'?today():''),t:'Guichet unique : '+((STATUTS.filter(function(s){return s[0]===v;})[0]||[])[1]||v)}); if(typeof save==='function')save(); if(typeof render==='function')render(); };
+  function dosClient(d){ try{ return (typeof clientById==='function')?clientById((d.clientIds||[])[0]):null; }catch(e){ return null; } }
+  /* Marque le client comme société immatriculée (ajout à la liste des clients) / annule si retour en arrière. */
+  function inpiMarkClient(d,on){ var c=dosClient(d); if(!c)return; c.immatricule=!!on;
+    if(on){ if(!c.dateImmat&&typeof today==='function')c.dateImmat=today();
+      var den=(d.intake&&d.intake.societe&&d.intake.societe.denomination)||''; if(den)c.denomination=den;
+      var sir=(d.intake&&d.intake.societe&&d.intake.societe.siren)||c.siren||''; if(sir)c.siren=sir;
+      if(d.intake&&d.intake.type)c.forme=c.forme||d.intake.type; c.dossierRef=d.ref||c.dossierRef; }
+  }
+  window.inpiSetStatut=function(id,v){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); if(!d)return; var su=suivi(d); su.statut=v; if(v!=='afaire'&&!su.dateDepot&&typeof today==='function')su.dateDepot=today(); su.ts=Date.now(); inpiMarkClient(d,v==='immatricule'); d.historique=d.historique||[]; d.historique.unshift({d:(typeof today==='function'?today():''),t:'Guichet unique : '+((STATUTS.filter(function(s){return s[0]===v;})[0]||[])[1]||v)+(v==='immatricule'?' — société ajoutée aux clients':'')}); if(typeof save==='function')save(); if(typeof render==='function')render(); };
+  window.clientSetSiren=function(id,val){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); var c=d&&dosClient(d); if(!c)return; c.siren=(''+(val||'')).replace(/[^0-9]/g,'').slice(0,9); if(typeof save==='function')save(); };
+  /* K-bis du client (déposé une fois la société immatriculée) */
+  window.clientKbisUpload=function(id,input){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); var c=d&&dosClient(d); if(!c){ if(typeof toast==='function')toast('Client introuvable.'); return; } var f=input&&input.files&&input.files[0]; if(!f)return; var r=new FileReader(); r.onload=function(ev){ c.kbis={name:f.name,type:f.type||'application/octet-stream',dataUrl:''+ev.target.result,ts:Date.now()}; c.kbisRecu=true; c.immatricule=true; if(!c.dateImmat&&typeof today==='function')c.dateImmat=today(); if(typeof save==='function')save(); if(typeof render==='function')render(); if(typeof toast==='function')toast('K-bis ajouté au client'); }; r.readAsDataURL(f); input.value=''; };
+  window.clientKbisVoir=function(id){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); var c=d&&dosClient(d); if(!c||!c.kbis)return; var f=c.kbis; var isImg=/^image\//.test(f.type||'')||/\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name||''); var isPdf=/pdf/i.test(f.type||'')||/\.pdf$/i.test(f.name||''); var inner=isImg?('<img src="'+f.dataUrl+'" alt="'+E(f.name)+'" style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:8px">'):isPdf?('<iframe src="'+f.dataUrl+'" style="width:100%;height:70vh;border:0;background:#fff;border-radius:8px"></iframe>'):'<div class="hint">Aperçu indisponible pour ce type de fichier.</div>'; if(typeof openModal==='function')openModal('K-bis — '+E(c.denomination||''),inner,'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><a class="btn btn-pri" href="'+f.dataUrl+'" download="'+E(f.name)+'">Télécharger</a>'); };
+  window.clientKbisSuppr=function(id){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); var c=d&&dosClient(d); if(!c||!c.kbis)return; if(typeof confirm==='function'&&!confirm('Retirer le K-bis de ce client ?'))return; delete c.kbis; c.kbisRecu=false; if(typeof save==='function')save(); if(typeof render==='function')render(); };
+  /* Registre des clients (sociétés immatriculées) — greffé sur la page Traitement. */
+  window.clientsImmatriculesCard=function(){
+    var ds=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).filter(function(d){return d.inpiSuivi&&d.inpiSuivi.statut==='immatricule';});
+    if(!ds.length)return '';
+    var rows=ds.map(function(d){ var c=dosClient(d)||{}; var den=c.denomination||(d.intake&&d.intake.societe&&d.intake.societe.denomination)||((typeof dossierClients==='function')?dossierClients(d):'')||'—'; var k=c.kbis;
+      return '<div class="cli-row"><div class="cli-main"><b>'+E(den)+'</b><span>'+E(c.siren?('SIREN '+c.siren):'SIREN à renseigner')+' · immatriculée'+(c.dateImmat?(' le '+E((typeof frDate==='function')?frDate(c.dateImmat):c.dateImmat)):'')+' · '+E(d.ref||'')+'</span></div>'
+        +'<div class="cli-k">'+(k?('<span class="tag ok">K-bis ✓</span><button class="btn btn-sm btn-ghost" onclick="clientKbisVoir(\''+d.id+'\')">Voir</button><button class="btn btn-sm btn-ghost" onclick="clientKbisSuppr(\''+d.id+'\')">Retirer</button>'):('<label class="btn btn-sm btn-pri cli-kbis-add">Ajouter le K-bis<input type="file" accept="image/*,application/pdf" style="display:none" onchange="clientKbisUpload(\''+d.id+'\',this)"></label>'))+'</div></div>';
+    }).join('');
+    return '<div class="card cli-card"><div class="card-h"><h2>Clients — sociétés immatriculées</h2><span class="sub" style="margin-left:auto">'+ds.length+'</span></div>'
+      +'<div class="card-b"><div class="hint" style="margin:-2px 0 10px">Sociétés immatriculées à l\'INPI. Ajoutez le K-bis dès réception.</div>'+rows+'</div></div>';
+  };
+  try{ if(typeof window.pageEspace==='function' && !window.pageEspace.__cliimm){ var _pe=window.pageEspace; window.pageEspace=function(){ var h=_pe.apply(this,arguments); try{ var reg=window.clientsImmatriculesCard?window.clientsImmatriculesCard():''; if(reg)h=h+reg; }catch(e){} return h; }; window.pageEspace.__cliimm=1; } }catch(e){}
   window.inpiSetRef=function(id,v){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); if(!d)return; suivi(d).reference=v; if(typeof save==='function')save(); };
   /* Cohérence calculée sur les données STOCKÉES du dossier (mêmes règles que le Formulaire). */
   window.dossierCoherence=function(d){ var o=(d&&d.intake)||{}; var s=o.societe||{},tt=o.titres||{},ap=o.apports||{};
@@ -14818,6 +14843,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var depotBtn=docsOk
       ? '<button class="btn btn-sm btn-pri" onclick="espDepotInpi(\''+d.id+'\')">Diriger le dossier vers l\'INPI</button>'
       : '<button class="btn btn-sm btn-pri is-disabled" disabled title="Validez d\'abord les documents (validité + cohérence)">Diriger le dossier vers l\'INPI</button>';
+    /* Société immatriculée → dépôt du K-bis + ajout aux clients */
+    var immatBlock='';
+    if(su.statut==='immatricule'){ var c=dosClient(d)||{}; var k=c.kbis;
+      immatBlock='<div class="inpi-chk-h">Société immatriculée — K-bis</div>'
+        +'<div class="inpi-imm">'
+        +'<div class="inpi-ref" style="margin-bottom:8px"><label>SIREN attribué</label><input value="'+E(c.siren||'')+'" oninput="clientSetSiren(\''+d.id+'\',this.value)" placeholder="9 chiffres"></div>'
+        +(k?('<div class="cli-kbis-file"><span>📄 '+E(k.name)+'</span><span class="cli-kbis-a"><button class="btn btn-sm btn-ghost" onclick="clientKbisVoir(\''+d.id+'\')">Voir</button><button class="btn btn-sm btn-ghost" onclick="clientKbisSuppr(\''+d.id+'\')">Retirer</button></span></div>')
+          :('<label class="btn btn-sm btn-pri cli-kbis-add">Ajouter le K-bis<input type="file" accept="image/*,application/pdf" style="display:none" onchange="clientKbisUpload(\''+d.id+'\',this)"></label>'))
+        +'<div class="hint" style="margin-top:6px">La société est ajoutée à vos <b>clients</b> ; joignez le K-bis dès réception.</div>'
+        +'</div>';
+    }
     return '<div class="card inpi-card"><div class="card-h"><h2>Dépôt au Guichet unique (INPI)</h2><span class="sub" style="margin-left:auto">'+nb+' / '+total+' pièces prêtes</span></div>'
       +'<div class="card-b">'
       +'<div class="inpi-seg-wrap">'+seg+'</div>'
@@ -14826,6 +14862,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<div class="hint" style="margin-top:8px">'+(docsOk?('<b>'+T.nbValide+'/'+T.total+' documents validés</b> — le dossier peut être dirigé vers l\'INPI (tous portent les mêmes informations, complètes et cohérentes).'):('<b>'+T.nbValide+'/'+T.total+' documents validés</b> — corrigez les documents « à vérifier »'+(T.coherenceOk?'':' et les incohérences')+' avant de diriger le dossier vers l\'INPI.'))+'</div>'
       +'<div class="inpi-ref" style="margin-top:12px"><label>N° de dossier / référence INPI</label><input value="'+E(su.reference||'')+'" oninput="inpiSetRef(\''+d.id+'\',this.value)" placeholder="ex. dossier INPI, n° de formalité"></div>'
       +(su.dateDepot?('<div class="inpi-date">Déposé le '+E((typeof frDate==='function')?frDate(su.dateDepot):su.dateDepot)+'</div>'):'')
+      +immatBlock
       +'<div class="inpi-chk-h">Pièces justificatives à déposer</div><div class="inpi-chk">'+(rows||'<div class="hint">Aucune pièce listée.</div>')+'</div>'
       +(manque>0?('<div class="hint" style="margin-top:8px">'+manque+' pièce'+(manque>1?'s':'')+' à compléter avant le dépôt (voir « Pièces justificatives »).</div>'):'')
       +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+depotBtn+'</div>'
@@ -14844,6 +14881,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.inpi-badge.ok{background:rgba(38,86,52,.30);color:#c3e8d1;border-color:rgba(84,150,104,.55)}',
     '.inpi-badge.ko{background:rgba(120,42,42,.24);color:#f0bcb6;border-color:rgba(170,74,74,.5)}',
     '.inpi-card .btn.is-disabled,.inpi-card .btn[disabled]{opacity:.4;cursor:not-allowed;filter:grayscale(.4)}',
+    '.inpi-imm{border:1px solid #262629;border-radius:10px;padding:12px;background:#0a0a0c;margin-bottom:4px}',
+    '.cli-kbis-file{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:#cbced6}.cli-kbis-file .cli-kbis-a{margin-left:auto;display:flex;gap:6px}',
+    '.cli-card .cli-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;border:1px solid #1c1c1e;border-radius:10px;background:#0a0a0c;margin-bottom:8px}',
+    '.cli-card .cli-main{display:flex;flex-direction:column;gap:2px;min-width:0}.cli-card .cli-main b{color:#eef0f4;font-size:13.5px}.cli-card .cli-main span{color:#8f8f98;font-size:11.5px}',
+    '.cli-card .cli-k{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
     '.inpi-chk-h{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin:10px 0 6px}',
     '.inpi-chk{display:flex;flex-direction:column;gap:4px}',
     '.inpi-pc{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid #1c1c1e;border-radius:8px;background:#0a0a0c;font-size:12.5px}',
