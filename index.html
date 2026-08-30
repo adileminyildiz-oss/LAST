@@ -3092,7 +3092,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=266;
+var LAST_VER=267;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -12453,7 +12453,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var perOpt=[[3,'3 mois'],[6,'6 mois'],[12,'12 mois'],[24,'24 mois'],[36,'36 mois']].map(function(o){return '<option value="'+o[0]+'" '+(+pr.periode===o[0]?'selected':'')+'>'+o[1]+'</option>';}).join('');
     var actOpt=[['normale','Activité normale'],['reglementee','Activité réglementée']].map(function(o){return '<option value="'+o[0]+'" '+(pr.activiteType===o[0]?'selected':'')+'>'+o[1]+'</option>';}).join('');
     var head='<div class="fx-form">'
-      +'<label style="grid-column:1/-1">Activité de l\'entreprise<input id="prev-activite" value="'+E(pr.activite)+'" placeholder="Ex : conseil, BTP, e-commerce, transport…" onchange="fiscalPrevSave(\''+d.id+'\')"></label>'
+      +'<label style="grid-column:1/-1">Activité de l\'entreprise<input id="prev-activite" list="fx-act-list" value="'+E(pr.activite)+'" placeholder="Rechercher une activité (tapez pour proposer)…" onchange="fiscalPrevSave(\''+d.id+'\')"></label>'
       +'<label>Période du prévisionnel<select id="prev-periode" onchange="fiscalPrevSave(\''+d.id+'\')">'+perOpt+'</select></label>'
       +'<label>Nature de l\'activité<select id="prev-activiteType" onchange="fiscalPrevSave(\''+d.id+'\')">'+actOpt+'</select></label>'
       +'<label>Croissance annuelle du CA (%)<input id="prev-growth" type="number" value="'+(pr.growth||0)+'" onchange="fiscalPrevSave(\''+d.id+'\')"></label>'
@@ -12684,11 +12684,246 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +synth;
   }
 
+  /* ===================== Connexion fiscale, activités, sous-traitance, remboursement TVA ===================== */
+  function eu2(n){n=Math.round((n||0)*100)/100;try{return n.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';}catch(e){return n.toFixed(2)+' €';}}
+  /* ---- Activités françaises (nomenclature indicative NAF/APE) ---- */
+  var ACTIVITES=[
+    '01.11Z — Culture de céréales, légumineuses','01.13Z — Culture de légumes','01.41Z — Élevage de vaches laitières','01.50Z — Culture et élevage associés','02.10Z — Sylviculture',
+    '03.11Z — Pêche en mer','08.11Z — Extraction de pierres','10.11Z — Transformation et conservation de viande','10.71C — Boulangerie et boulangerie-pâtisserie','10.71D — Pâtisserie',
+    '11.05Z — Fabrication de bière','13.10Z — Filature textile','14.13Z — Fabrication de vêtements de dessus','15.20Z — Fabrication de chaussures','16.23Z — Fabrication de charpentes et menuiseries',
+    '18.12Z — Autre imprimerie (labeur)','20.42Z — Fabrication de parfums et produits de toilette','22.29A — Fabrication de pièces techniques en plastique','23.61Z — Fabrication d’éléments en béton pour la construction',
+    '25.11Z — Fabrication de structures métalliques','25.62B — Mécanique industrielle','27.12Z — Fabrication de matériel de distribution électrique','28.22Z — Fabrication de matériel de levage et de manutention',
+    '31.09B — Fabrication d’autres meubles','32.12Z — Fabrication d’articles de joaillerie','33.12Z — Réparation de machines et équipements mécaniques',
+    '35.11Z — Production d’électricité','36.00Z — Captage, traitement et distribution d’eau','38.11Z — Collecte des déchets non dangereux',
+    '41.10A — Promotion immobilière de logements','41.20A — Construction de maisons individuelles','41.20B — Construction d’autres bâtiments','42.11Z — Construction de routes et autoroutes',
+    '43.11Z — Travaux de démolition','43.21A — Travaux d’installation électrique','43.22A — Travaux d’installation de plomberie et de chauffage','43.29A — Travaux d’isolation',
+    '43.31Z — Travaux de plâtrerie','43.32A — Travaux de menuiserie bois et PVC','43.33Z — Travaux de revêtement des sols et des murs','43.34Z — Travaux de peinture et vitrerie',
+    '43.39Z — Autres travaux de finition','43.91A — Travaux de charpente','43.99C — Maçonnerie générale et gros œuvre de bâtiment','43.99D — Autres travaux spécialisés de construction',
+    '45.11Z — Commerce de voitures et de véhicules légers','45.20A — Entretien et réparation de véhicules automobiles légers','45.32Z — Commerce de détail d’équipements automobiles',
+    '46.19B — Autres intermédiaires du commerce','46.90Z — Commerce de gros non spécialisé','47.11B — Commerce d’alimentation générale','47.11F — Supermarchés',
+    '47.19B — Autres commerces de détail en magasin non spécialisé','47.25Z — Commerce de détail de boissons','47.30Z — Commerce de détail de carburants (station-service)',
+    '47.71Z — Commerce de détail d’habillement','47.72A — Commerce de détail de la chaussure','47.73Z — Commerce de détail de produits pharmaceutiques (pharmacie)',
+    '47.76Z — Commerce de détail de fleurs, plantes, jardinerie','47.78C — Autres commerces de détail spécialisés','47.91A — Vente à distance sur catalogue général (e-commerce)','47.91B — Vente à distance spécialisée (e-commerce)',
+    '49.32Z — Transports de voyageurs par taxis','49.39B — Transports routiers réguliers de voyageurs','49.41A — Transports routiers de fret interurbains','49.41B — Transports routiers de fret de proximité',
+    '49.42Z — Services de déménagement','50.10Z — Transports maritimes de passagers','52.10B — Entreposage et stockage non frigorifique','52.29A — Messagerie, fret express','53.20Z — Autres activités de poste et de courrier (livraison)',
+    '55.10Z — Hôtels et hébergement similaire','55.20Z — Hébergement touristique et autre hébergement de courte durée','56.10A — Restauration traditionnelle','56.10C — Restauration de type rapide',
+    '56.21Z — Services des traiteurs','56.30Z — Débits de boissons (bar, café)','58.21Z — Édition de jeux électroniques','58.29C — Édition de logiciels applicatifs',
+    '59.11A — Production de films et de programmes pour la télévision','59.11C — Production de films institutionnels et publicitaires','60.10Z — Édition et diffusion de programmes radio',
+    '62.01Z — Programmation informatique','62.02A — Conseil en systèmes et logiciels informatiques','62.02B — Tierce maintenance de systèmes et d’applications','62.03Z — Gestion d’installations informatiques',
+    '62.09Z — Autres activités informatiques','63.11Z — Traitement de données, hébergement (data center)','63.12Z — Portails Internet','63.99Z — Autres services d’information',
+    '64.19Z — Autres intermédiations monétaires','64.20Z — Activités des sociétés holding','66.19B — Autres activités auxiliaires de services financiers','66.22Z — Activités des agents et courtiers d’assurances',
+    '68.10Z — Achat-revente de biens immobiliers (marchand de biens)','68.20A — Location de logements','68.20B — Location de terrains et d’autres biens immobiliers','68.31Z — Agences immobilières','68.32A — Administration d’immeubles (syndic)',
+    '69.10Z — Activités juridiques (avocat, notaire, huissier)','69.20Z — Activités comptables (expert-comptable, commissaire aux comptes)','70.10Z — Activités des sièges sociaux',
+    '70.21Z — Conseil en relations publiques et communication','70.22Z — Conseil pour les affaires et autres conseils de gestion','71.11Z — Activités d’architecture','71.12A — Activité des géomètres',
+    '71.12B — Ingénierie, études techniques','71.20B — Analyses, essais et inspections techniques','72.19Z — Recherche-développement en sciences physiques et naturelles','73.11Z — Activités des agences de publicité',
+    '73.20Z — Études de marché et sondages','74.10Z — Activités spécialisées de design','74.20Z — Activités photographiques','74.30Z — Traduction et interprétation','74.90A — Activités des économistes de la construction',
+    '77.11A — Location de courte durée de voitures','77.32Z — Location de machines et équipements pour la construction','78.10Z — Activités des agences de placement de main-d’œuvre','78.20Z — Activités des agences de travail temporaire (intérim)',
+    '79.11Z — Activités des agences de voyage','80.10Z — Activités de sécurité privée','81.21Z — Nettoyage courant des bâtiments','81.22Z — Autres activités de nettoyage des bâtiments',
+    '81.30Z — Services d’aménagement paysager (paysagiste)','82.11Z — Services administratifs combinés de bureau','82.20Z — Activités de centres d’appels','82.30Z — Organisation de foires, salons et congrès','82.99Z — Autres activités de soutien aux entreprises',
+    '85.10Z — Enseignement pré-primaire','85.32Z — Enseignement secondaire technique ou professionnel','85.59A — Formation continue d’adultes','85.59B — Autres enseignements (soutien scolaire, auto-école théorie)',
+    '86.21Z — Activité des médecins généralistes','86.22Z — Activité des médecins spécialistes','86.23Z — Pratique dentaire','86.90A — Ambulances','86.90D — Activités des infirmiers et sages-femmes','86.90E — Activités des kinésithérapeutes',
+    '87.10A — Hébergement médicalisé pour personnes âgées (EHPAD)','88.10A — Aide à domicile','88.91A — Accueil de jeunes enfants (crèche)',
+    '90.01Z — Arts du spectacle vivant','93.11Z — Gestion d’installations sportives','93.13Z — Activités des centres de culture physique (salle de sport)','93.29Z — Autres activités récréatives et de loisirs',
+    '95.11Z — Réparation d’ordinateurs et d’équipements périphériques','95.21Z — Réparation de produits électroniques grand public','96.01B — Blanchisserie-teinturerie de détail (pressing)','96.02A — Coiffure','96.02B — Soins de beauté (institut, esthétique)',
+    '96.04Z — Entretien corporel (spa, bien-être)','96.09Z — Autres services personnels'
+  ];
+  function fiscalActDatalist(){return '<datalist id="fx-act-list">'+ACTIVITES.map(function(a){return '<option value="'+E(a)+'"></option>';}).join('')+'</datalist>';}
+  function actNorm(s){return (''+(s||'')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+  function activiteTVA(label){var s=actNorm(label);
+    var has=function(){for(var i=0;i<arguments.length;i++){if(s.indexOf(arguments[i])>=0)return true;}return false;};
+    if(has('medecin','dentaire','infirmier','kinesith','sage-femme','ambulance','hospit','sante','ehpad'))
+      return {regime:'Activité exonérée de TVA (soins à la personne)',deductible:false,remboursable:'rare',note:'Actes de soins exonérés (art. 261-4 CGI) : pas de TVA facturée ni de droit à déduction. Pas de remboursement de TVA (hors option/secteurs taxables).'};
+    if(has('enseign','formation','soutien scolaire','auto-ecole'))
+      return {regime:'Formation / enseignement — souvent exonéré',deductible:false,remboursable:'rare',note:'Formation professionnelle exonérée sur attestation ; enseignement exonéré : pas de droit à déduction sur la part exonérée.'};
+    if(has('assurance','courtier','financ','holding','intermediation'))
+      return {regime:'Activité financière / assurance — exonérée',deductible:false,remboursable:'rare',note:'Opérations financières et d’assurance exonérées : droit à déduction limité (coefficient de déduction).'};
+    if(has('location de logements','location de logement','hebergement','ehpad')&&!has('touristique','hotel'))
+      return {regime:'Location nue d’habitation — exonérée',deductible:false,remboursable:'rare',note:'Location nue à usage d’habitation exonérée : pas de TVA ni de déduction (sauf option pour locaux professionnels).'};
+    if(has('promotion immob','construction de maisons','construction d','travaux','maconnerie','plomberie','electriqu','electr','peinture','charpente','menuiserie','platrerie','isolation','demolition','revetement','gros oeuvre','routes'))
+      return {regime:'BTP / construction — autoliquidation possible',deductible:true,remboursable:'possible',note:'TVA déductible sur achats et sous-traitance. En sous-traitance BTP : autoliquidation par le donneur d’ordre (art. 283-2 nonies CGI). Crédit de TVA fréquent en phase de chantier.'};
+    if(has('e-commerce','vente a distance','exportation','commerce de gros','transport','messagerie','fret','logistique','entreposage'))
+      return {regime:'Négoce / export / transport — crédit structurel probable',deductible:true,remboursable:'probable',note:'Livraisons intracommunautaires et exportations exonérées mais ouvrant droit à déduction → crédit de TVA récurrent, remboursement mensuel/trimestriel conseillé (formulaire 3519).'};
+    if(has('hotel','restaur','traiteur','debits de boissons','bar','cafe','hebergement touristique'))
+      return {regime:'Hôtellerie-restauration — taux multiples',deductible:true,remboursable:'possible',note:'TVA à 10 % (restauration sur place, hébergement) et 5,5 % (ventes à emporter de produits alimentaires) / 20 % (alcools). TVA déductible sur investissements et achats.'};
+    if(has('fabric','industri','mecaniqu','metall','plastique','beton','imprimerie','textile','menuiseries'))
+      return {regime:'Industrie / production — TVA normale',deductible:true,remboursable:'possible',note:'TVA déductible sur matières et équipements. Investissement lourd → crédit de TVA remboursable en phase de démarrage.'};
+    return {regime:'Régime normal de TVA (20 %)',deductible:true,remboursable:'possible',note:'TVA collectée sur les ventes, déductible sur les achats. En cas de crédit (déductible > collectée), remboursement possible (annuel, ou mensuel/trimestriel si crédit ≥ 760 €).'};
+  }
+
+  /* ---- Vérification & approbation (connexion des espaces) ---- */
+  function approval(d){d.fiscal=d.fiscal||{};return d.fiscal.approval||{approved:false};}
+  window.fiscalApprove=function(id){var d=doss(id);if(!d)return;d.fiscal=d.fiscal||{};
+    d.fiscal.approval={approved:true,date:(new Date()).toLocaleDateString('fr-FR'),by:'AEM CONSEIL',ts:Date.now()};
+    if(typeof save==='function')save();if(typeof toast==='function')toast('✅ Informations vérifiées, sûres et approuvées');fiscalRender(id);};
+  window.fiscalUnapprove=function(id){var d=doss(id);if(!d)return;if(d.fiscal)d.fiscal.approval={approved:false};
+    if(typeof save==='function')save();if(typeof toast==='function')toast('Approbation retirée — à re-vérifier');fiscalRender(id);};
+  function approvalBanner(d){var a=approval(d);
+    if(a.approved)return '<div class="fx-appr ok"><div><b>✅ Données fiscales vérifiées, sûres et approuvées</b><span>le '+E(a.date)+' — par '+E(a.by)+'. Connectées au bilan prévisionnel et aux modules.</span></div><button class="fx-btn fx-btn-2" onclick="fiscalUnapprove(\''+d.id+'\')">Retirer l’approbation</button></div>';
+    return '<div class="fx-appr warn"><div><b>⚠ Données à vérifier et à approuver</b><span>Contrôlez les informations (Infos client · Société & associés) puis approuvez-les : elles seront alors sûres et partagées entre l’espace fiscal et le bilan prévisionnel.</span></div><button class="fx-btn" onclick="fiscalApprove(\''+d.id+'\')">✓ Vérifier & approuver</button></div>';}
+  /* Panneau de connexion fiscal → prévisionnel (consultation de toutes les infos) */
+  function fiscalLinkPanel(d){var i=info(d),p=i._p;
+    var is=(typeof calculISDetail==='function')?calculISDetail({benefice:Math.max(0,i.benefice),ca:i.caPrev,capitalLibere:i.capitalLibere,detentionPP:i.detentionPP}):{isTotal:0,tauxEffectif:0};
+    var tva=tvaRegime(i.caPrev,p.forme);var act=(d.fiscal&&(d.fiscal.prev&&d.fiscal.prev.activite||d.fiscal.secteur))||'';var atv=activiteTVA(act);
+    return '<div class="fx-linkp"><div class="fx-linkp-h">🔗 Connecté à l’espace fiscal — informations vérifiées</div>'
+      +'<div class="fx-linkp-grid">'
+      +'<div><span>Forme</span><b>'+E(p.forme||'—')+'</b></div>'
+      +'<div><span>Régime fiscal</span><b>'+E(p.regimeFiscal)+'</b></div>'
+      +'<div><span>Régime social</span><b style="font-size:12px">'+E(p.regimeSocial)+'</b></div>'
+      +'<div><span>IS estimé</span><b>'+(i.benefice>0?eu(is.isTotal):'—')+'</b></div>'
+      +'<div><span>Régime de TVA</span><b style="font-size:12px">'+E(tva.reg)+'</b></div>'
+      +'<div><span>Zone</span><b>'+E(i.zone==='standard'?'Standard':i.zone.toUpperCase())+'</b></div>'
+      +'</div>'
+      +(act?('<div class="fx-linkp-tva">💧 TVA de l’activité : <b>'+E(atv.regime)+'</b> — '+E(atv.note)+'</div>'):'')
+      +'<div class="fx-linkp-act"><button class="fx-btn fx-btn-2" onclick="fiscalGo(\'apercu\')">Ouvrir la synthèse fiscale</button><button class="fx-btn fx-btn-2" onclick="fiscalGo(\'regime\')">Régime & obligations</button><button class="fx-btn fx-btn-2" onclick="fiscalGo(\'remboursement\')">Remboursement de TVA</button></div></div>';}
+  function apercuLinks(d){return '<div class="fx-formact" style="display:flex;gap:8px;flex-wrap:wrap"><button class="fx-btn" onclick="fiscalGo(\'previsionnel\')">∿ Ouvrir le bilan prévisionnel connecté</button><button class="fx-btn fx-btn-2" onclick="fiscalGo(\'soustraitance\')">📝 Contrat de sous-traitance</button><button class="fx-btn fx-btn-2" onclick="fiscalGo(\'remboursement\')">💧 Demande de remboursement de TVA</button></div>';}
+
+  /* Générateur de document générique (overlay + impression + tampon) */
+  window.fiscalShowDoc=function(id,title,html,extraBtns){var ov=document.getElementById('fiscal-doc-ov');if(!ov){ov=document.createElement('div');ov.id='fiscal-doc-ov';document.body.appendChild(ov);}
+    ov.innerHTML='<div class="fxd-shell"><header class="fxd-top"><b>'+E(title)+'</b><div class="fxd-act">'+(extraBtns||'')+'<button class="fx-btn fx-btn-2" onclick="fiscalPrintDoc()">🖨 Imprimer / PDF</button><button class="fxd-x" onclick="fiscalDocClose()">✕</button></div></header><div class="fxd-body" id="fiscal-doc-body">'+html+'</div></div>';
+    ov.classList.add('show');window.__fiscalDocPrint=html;if(typeof toast==='function')toast('Document généré');};
+  window.fiscalPrintDoc=function(){try{if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();}catch(e){}
+    var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}
+    pa.innerHTML=window.__fiscalDocPrint||'';setTimeout(function(){window.print();},140);};
+
+  /* ---------- Contrat de sous-traitance ---------- */
+  function stData(d){d.fiscal=d.fiscal||{};if(!d.fiscal.soustraitance)d.fiscal.soustraitance={stNom:'',stForme:'',stSiret:'',stAdresse:'',stRep:'',objet:'',lieu:'',montant:0,tva:'normale',dateDebut:'',dateFin:'',delai:30,penalites:'',assurance:true,confid:true};return d.fiscal.soustraitance;}
+  window.fiscalStSave=function(id,rer){var d=doss(id);if(!d)return;var st=stData(d),g=function(x){return document.getElementById(x);},q=function(x){return g(x)?g(x).value:'';},c=function(x){return g(x)?g(x).checked:false;};
+    ['stNom','stForme','stSiret','stAdresse','stRep','objet','lieu','tva','dateDebut','dateFin','penalites'].forEach(function(k){if(g('st-'+k))st[k]=q('st-'+k);});
+    if(g('st-montant'))st.montant=pf(q('st-montant'));if(g('st-delai'))st.delai=pf(q('st-delai'));
+    if(g('st-assurance'))st.assurance=c('st-assurance');if(g('st-confid'))st.confid=c('st-confid');
+    if(typeof save==='function')save();if(rer!==false){window.fiscalTab='soustraitance';fiscalRender(id);}};
+  function m_soustraitance(d){var st=stData(d),i=info(d),p=i._p;var act=(d.fiscal.prev&&d.fiscal.prev.activite)||d.fiscal.secteur||'';var btp=/BTP|construction|travaux|maconnerie|batiment/i.test(actNorm(act))||/travaux|construction|maconnerie/i.test(actNorm(st.objet));
+    var inp=function(id2,lbl,val,ph,full){return '<label'+(full?' style="grid-column:1/-1"':'')+'>'+E(lbl)+'<input id="'+id2+'" value="'+E(val||'')+'"'+(ph?(' placeholder="'+E(ph)+'"'):'')+' onchange="fiscalStSave(\''+d.id+'\')"></label>';};
+    var numi=function(id2,lbl,val){return '<label>'+E(lbl)+'<input id="'+id2+'" type="number" value="'+(val||0)+'" onchange="fiscalStSave(\''+d.id+'\')"></label>';};
+    var tvaSel='<label>Régime de TVA<select id="st-tva" onchange="fiscalStSave(\''+d.id+'\')"><option value="normale" '+(st.tva!=='autoliq'?'selected':'')+'>TVA 20 % (normale)</option><option value="autoliq" '+(st.tva==='autoliq'?'selected':'')+'>Autoliquidation (sous-traitance BTP)</option></select></label>';
+    var form='<div class="fx-form">'
+      +inp('st-stNom','Sous-traitant — dénomination',st.stNom,'Ex : BAT SERVICES SARL',true)
+      +inp('st-stForme','Forme juridique',st.stForme,'SARL, SAS…')+inp('st-stSiret','SIRET',st.stSiret,'14 chiffres')
+      +inp('st-stAdresse','Adresse du sous-traitant',st.stAdresse,'',true)
+      +inp('st-stRep','Représentant légal',st.stRep,'Nom Prénom, qualité')
+      +inp('st-objet','Objet / prestations sous-traitées',st.objet,'Ex : lot plomberie, développement web…',true)
+      +inp('st-lieu','Lieu d’exécution',st.lieu,'Chantier / adresse')
+      +numi('st-montant','Montant HT du marché (€)',st.montant)+tvaSel
+      +inp('st-dateDebut','Date de début',st.dateDebut,'jj/mm/aaaa')+inp('st-dateFin','Date de fin',st.dateFin,'jj/mm/aaaa')
+      +numi('st-delai','Délai de paiement (jours)',st.delai)
+      +inp('st-penalites','Pénalités de retard',st.penalites,'Ex : 0,5 %/jour de retard')
+      +'<label class="fx-ck"><input type="checkbox" id="st-assurance" '+(st.assurance?'checked':'')+' onchange="fiscalStSave(\''+d.id+'\')"> Attestation d’assurance RC pro exigée</label>'
+      +'<label class="fx-ck"><input type="checkbox" id="st-confid" '+(st.confid?'checked':'')+' onchange="fiscalStSave(\''+d.id+'\')"> Clause de confidentialité</label>'
+      +'</div>';
+    var notice=btp?'<div class="fx-note warn">Activité BTP détectée : en sous-traitance de travaux, la <b>TVA est autoliquidée</b> par le donneur d’ordre (art. 283-2 nonies CGI). Le sous-traitant facture <b>HT sans TVA</b> avec la mention « Autoliquidation ».</div>':'<div class="fx-note">Le contrat s’adapte à la forme <b>'+E(p.forme||'')+'</b> et au régime de TVA choisi. Vérifiez l’obligation de déclaration de sous-traitance (loi 1975) pour les marchés concernés.</div>';
+    return '<div class="fx-h1">Contrat de sous-traitance</div>'+approvalBanner(d)+notice+form
+      +'<div class="fx-formact"><button class="fx-btn" onclick="fiscalStGen(\''+d.id+'\')">📄 Générer le contrat de sous-traitance</button></div>';
+  }
+  function soustraitanceDocHTML(d){var st=stData(d),soc=nomD(d),c=(typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};
+    var don=E(soc)+(c.adresse?(', '+E(c.adresse)):'')+((c.cp||c.ville)?(' '+E(c.cp||'')+' '+E(c.ville||'')):'')+(c.siren||c.siret?(', SIREN/SIRET '+E(c.siren||c.siret)):'');
+    var sst=E(st.stNom||'……………')+(st.stForme?(' ('+E(st.stForme)+')'):'')+(st.stAdresse?(', '+E(st.stAdresse)):'')+(st.stSiret?(', SIRET '+E(st.stSiret)):'');
+    var mnt=pf0(st.montant),tva=st.tva==='autoliq'?0:mnt*0.2,ttc=mnt+tva;
+    var tampon=st.tampon?cachetHTML({tampon:st.tampon}):'';
+    var art=function(n,t,txt){return '<div class="ct-art"><b>Article '+n+' — '+E(t)+'</b><p>'+txt+'</p></div>';};
+    return '<div class="doc-gen"><div class="dg-page ct-doc">'
+      +'<div class="ct-title">CONTRAT DE SOUS-TRAITANCE</div>'
+      +(st.tampon?('<div class="pv-final">✓ Document finalisé et tamponné le '+E(st.tampon.date)+' — AEM CONSEIL.</div>'):'')
+      +'<div class="ct-parties"><p><b>ENTRE LES SOUSSIGNÉS :</b></p><p><b>Le donneur d’ordre :</b> '+don+',</p><p>ci-après « le Donneur d’ordre », d’une part,</p>'
+      +'<p><b>ET le sous-traitant :</b> '+sst+(st.stRep?(', représenté par '+E(st.stRep)):'')+',</p><p>ci-après « le Sous-traitant », d’autre part.</p></div>'
+      +art(1,'Objet',E(st.objet||'…………………')+'. Le Sous-traitant s’engage à réaliser ces prestations conformément aux règles de l’art'+(st.lieu?(', sur le lieu suivant : '+E(st.lieu)):'')+'.')
+      +art(2,'Durée',(st.dateDebut||st.dateFin)?('Le présent contrat prend effet le '+E(st.dateDebut||'…')+' et s’achève le '+E(st.dateFin||'…')+'.'):'Le présent contrat est conclu pour la durée d’exécution des prestations définies à l’article 1.')
+      +art(3,'Prix & TVA','Le montant du marché est fixé à <b>'+eu2(mnt)+' HT</b>'+(st.tva==='autoliq'?' — <b>Autoliquidation de la TVA</b> par le Donneur d’ordre (art. 283-2 nonies du CGI) : le Sous-traitant facture HT, sans TVA, avec la mention « Autoliquidation ».':(' — TVA 20 % : '+eu2(tva)+', soit '+eu2(ttc)+' TTC.'))+' Les prix sont fermes sauf avenant écrit.')
+      +art(4,'Modalités de paiement','Les factures sont réglées à <b>'+pf0(st.delai)+' jours</b>. '+(st.penalites?('Pénalités de retard : '+E(st.penalites)+'.'):'Des pénalités de retard sont applicables de plein droit en cas de retard de paiement (taux légal + indemnité forfaitaire de 40 €).'))
+      +art(5,'Obligations du Sous-traitant','Le Sous-traitant exécute les prestations sous sa responsabilité, avec du personnel qualifié et déclaré, dans le respect des délais et de la réglementation applicable (travail, sécurité, environnement).')
+      +(st.assurance?art(6,'Assurance & responsabilité','Le Sous-traitant justifie d’une assurance de responsabilité civile professionnelle'+(/BTP|travaux|construction/i.test(actNorm(st.objet))?' et, le cas échéant, d’une garantie décennale':'')+' en cours de validité, et en remet l’attestation avant tout commencement d’exécution.'):'')
+      +(st.confid?art(7,'Confidentialité','Chaque partie s’engage à conserver confidentielles les informations échangées dans le cadre du présent contrat, pendant sa durée et 2 ans après son terme.'):'')
+      +art(8,'Résiliation','En cas de manquement grave d’une partie, l’autre peut résilier le contrat de plein droit 15 jours après une mise en demeure restée sans effet.')
+      +art(9,'Litiges','Le présent contrat est soumis au droit français. À défaut d’accord amiable, tout litige relève des tribunaux compétents du siège du Donneur d’ordre.')
+      +'<div class="ct-sign"><div>Fait à ……………………, le ……………………, en deux exemplaires.</div>'
+      +'<div class="ct-sign-row"><div class="pv-sign">Le Donneur d’ordre<br>'+E(soc)+'<br>………………………</div><div class="pv-sign">Le Sous-traitant<br>'+E(st.stNom||'………')+'<br>………………………</div></div>'
+      +(tampon||'')+'</div></div></div>';
+  }
+  window.fiscalStGen=function(id){var d=doss(id);if(!d)return;var st=stData(d);
+    var tb=st.tampon?'<button class="fx-btn fx-btn-2" onclick="fiscalStTampon(\''+id+'\')">🔏 Re-tamponner</button>':'<button class="fx-btn fx-tampon" onclick="fiscalStTampon(\''+id+'\')">🔏 Tamponner (cachet AEM CONSEIL)</button>';
+    fiscalShowDoc(id,'📝 Contrat de sous-traitance — '+nomD(d),soustraitanceDocHTML(d),tb);};
+  window.fiscalStTampon=function(id){var d=doss(id);if(!d)return;var st=stData(d);st.tampon={date:(new Date()).toLocaleDateString('fr-FR'),by:'AEM CONSEIL',ts:Date.now()};if(typeof save==='function')save();fiscalStGen(id);if(typeof toast==='function')toast('✅ Contrat finalisé et tamponné');};
+
+  /* ---------- Demande de remboursement de crédit de TVA ---------- */
+  function rembData(d){d.fiscal=d.fiscal||{};if(!d.fiscal.tvaRemb)d.fiscal.tvaRemb={periode:'',iban:'',bic:'',lignes:[]};return d.fiscal.tvaRemb;}
+  window.fiscalRembSave=function(id,rer){var d=doss(id);if(!d)return;var R=rembData(d),g=function(x){return document.getElementById(x);},q=function(x){return g(x)?g(x).value:'';};
+    if(g('remb-periode'))R.periode=q('remb-periode');if(g('remb-iban'))R.iban=q('remb-iban');if(g('remb-bic'))R.bic=q('remb-bic');
+    var n=0;while(g('remb-f-'+n)){R.lignes[n]={fournisseur:q('remb-f-'+n),facture:q('remb-n-'+n),date:q('remb-d-'+n),ht:pf(q('remb-ht-'+n)),taux:pf(q('remb-t-'+n))||20,tva:pf(q('remb-tva-'+n)),nature:q('remb-nat-'+n)||'Bien'};n++;}
+    R.lignes.forEach(function(l){if(!l.tva||l.tva===0)l.tva=Math.round(pf0(l.ht)*pf0(l.taux)/100*100)/100;});
+    if(typeof save==='function')save();if(rer!==false){window.fiscalTab='remboursement';fiscalRender(id);}};
+  window.fiscalRembAdd=function(id){var d=doss(id);if(!d)return;fiscalRembSave(id,false);var R=rembData(d);R.lignes.push({fournisseur:'',facture:'',date:'',ht:0,taux:20,tva:0,nature:'Bien'});if(typeof save==='function')save();window.fiscalTab='remboursement';fiscalRender(id);};
+  window.fiscalRembDel=function(id,i){var d=doss(id);if(!d)return;fiscalRembSave(id,false);var R=rembData(d);R.lignes.splice(i,1);if(typeof save==='function')save();window.fiscalTab='remboursement';fiscalRender(id);};
+  function m_remboursement(d){var R=rembData(d),i=info(d),p=i._p;
+    var act=(d.fiscal.prev&&d.fiscal.prev.activite)||d.fiscal.secteur||'';var atv=activiteTVA(act);
+    var totHT=0,totTVA=0;R.lignes.forEach(function(l){totHT+=pf0(l.ht);totTVA+=pf0(l.tva)||(pf0(l.ht)*pf0(l.taux)/100);});
+    var natOpt=['Bien','Service','Immobilisation'];
+    var rows=R.lignes.map(function(l,idx){return '<tr>'
+      +'<td><input id="remb-f-'+idx+'" value="'+E(l.fournisseur||'')+'" placeholder="Fournisseur" onchange="fiscalRembSave(\''+d.id+'\')"></td>'
+      +'<td><input id="remb-n-'+idx+'" value="'+E(l.facture||'')+'" placeholder="N° facture" onchange="fiscalRembSave(\''+d.id+'\')"></td>'
+      +'<td><input id="remb-d-'+idx+'" value="'+E(l.date||'')+'" placeholder="jj/mm/aaaa" onchange="fiscalRembSave(\''+d.id+'\')" style="width:100px"></td>'
+      +'<td><input id="remb-ht-'+idx+'" type="number" value="'+(l.ht||0)+'" onchange="fiscalRembSave(\''+d.id+'\')" style="width:100px"></td>'
+      +'<td><input id="remb-t-'+idx+'" type="number" value="'+(l.taux||20)+'" onchange="fiscalRembSave(\''+d.id+'\')" style="width:64px"></td>'
+      +'<td><input id="remb-tva-'+idx+'" type="number" value="'+(l.tva||0)+'" placeholder="auto" onchange="fiscalRembSave(\''+d.id+'\')" style="width:100px"></td>'
+      +'<td><select id="remb-nat-'+idx+'" onchange="fiscalRembSave(\''+d.id+'\')">'+natOpt.map(function(o){return '<option '+(l.nature===o?'selected':'')+'>'+o+'</option>';}).join('')+'</select></td>'
+      +'<td style="text-align:center"><button class="fx-del" onclick="fiscalRembDel(\''+d.id+'\','+idx+')">✕</button></td></tr>';}).join('');
+    var table='<table class="fx-tbl"><thead><tr><th>Fournisseur</th><th>N° facture</th><th>Date</th><th class="r">HT (€)</th><th class="r">Taux %</th><th class="r">TVA déd. (€)</th><th>Nature</th><th></th></tr></thead><tbody>'
+      +(rows||'<tr><td colspan="8" style="text-align:center;color:#8b8e99">Aucune ligne — cliquez « + Ajouter une facture »</td></tr>')
+      +'<tr class="fx-tot"><td colspan="3"><b>Totaux</b></td><td class="r"><b>'+eu2(totHT)+'</b></td><td></td><td class="r"><b>'+eu2(totTVA)+'</b></td><td colspan="2"></td></tr></tbody></table>'
+      +'<div style="margin-top:8px"><button class="fx-btn" onclick="fiscalRembAdd(\''+d.id+'\')">+ Ajouter une facture</button></div>';
+    var rembClass=atv.remboursable==='probable'?'ok':(atv.remboursable==='rare'?'warn':'');
+    var notif='<div class="fx-solbox"><div class="fx-solb-t">💧 TVA déductible & remboursement — '+E(atv.regime)+'</div>'
+      +'<div class="fx-card-b">'+E(atv.note)+'</div>'
+      +'<div class="fx-badge '+(atv.deductible?'ok':'')+'">'+(atv.deductible?'TVA déductible sur les achats ✓':'Droit à déduction limité / exonéré')+'</div> '
+      +'<div class="fx-badge '+rembClass+'">Remboursement : '+({probable:'probable (crédit structurel)',possible:'possible en cas de crédit',rare:'rare'})[atv.remboursable]+'</div></div>';
+    var info2='<div class="fx-form">'
+      +'<label>Période concernée<input id="remb-periode" value="'+E(R.periode)+'" placeholder="Ex : Janvier 2026 / T1 2026 / Exercice 2026" onchange="fiscalRembSave(\''+d.id+'\')"></label>'
+      +'<label>IBAN (remboursement)<input id="remb-iban" value="'+E(R.iban)+'" placeholder="FR76 …" onchange="fiscalRembSave(\''+d.id+'\')"></label>'
+      +'<label>BIC<input id="remb-bic" value="'+E(R.bic)+'" placeholder="BIC/SWIFT" onchange="fiscalRembSave(\''+d.id+'\')"></label></div>';
+    return '<div class="fx-h1">Demande de remboursement de TVA</div>'+approvalBanner(d)
+      +'<div class="fx-note">D’après l’activité et les règles fiscales, LAST identifie la TVA déductible remboursable. Complétez le tableau des factures fournisseurs puis générez le formulaire de demande (imprimable en PDF, 1 page — type CERFA 3519).</div>'
+      +notif
+      +'<div class="fx-h2">Informations de la demande</div>'+info2
+      +'<div class="fx-h2">Factures fournisseurs — TVA déductible à rembourser</div>'+table
+      +'<div class="fx-formact"><button class="fx-btn" onclick="fiscalRembGen(\''+d.id+'\')">📄 Générer la demande de remboursement (PDF 1 page)</button></div>';
+  }
+  function rembTvaDocHTML(d){var R=rembData(d),soc=nomD(d),c=(typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};
+    var totHT=0,totTVA=0;R.lignes.forEach(function(l){totHT+=pf0(l.ht);totTVA+=pf0(l.tva)||(pf0(l.ht)*pf0(l.taux)/100);});
+    var siret=c.siret||c.siren||'',tvaintra=c.tvaIntra||c.tvaintra||'';
+    var rows=R.lignes.map(function(l){return '<tr><td>'+E(l.fournisseur||'')+'</td><td>'+E(l.facture||'')+'</td><td>'+E(l.date||'')+'</td><td class="r">'+eu2(pf0(l.ht))+'</td><td class="r">'+pf0(l.taux)+' %</td><td class="r">'+eu2(pf0(l.tva)||(pf0(l.ht)*pf0(l.taux)/100))+'</td><td>'+E(l.nature||'')+'</td></tr>';}).join('');
+    var tampon=R.tampon?cachetHTML({tampon:R.tampon}):'';
+    return '<div class="doc-gen"><div class="dg-page rb-doc">'
+      +'<div class="rb-hd"><div><b>DEMANDE DE REMBOURSEMENT DE CRÉDIT DE TVA</b><span>Formulaire de demande (type CERFA n° 3519-SD)</span></div><div class="rb-date">Établi le '+E((new Date()).toLocaleDateString('fr-FR'))+'</div></div>'
+      +(R.tampon?('<div class="pv-final">✓ Document finalisé et tamponné le '+E(R.tampon.date)+' — AEM CONSEIL.</div>'):'')
+      +'<table class="rb-id"><tbody>'
+      +'<tr><td>Redevable</td><td><b>'+E(soc)+'</b></td><td>SIRET</td><td>'+E(siret)+'</td></tr>'
+      +'<tr><td>Adresse</td><td>'+E((c.adresse||'')+' '+(c.cp||'')+' '+(c.ville||''))+'</td><td>N° TVA intracom.</td><td>'+E(tvaintra)+'</td></tr>'
+      +'<tr><td>Période</td><td>'+E(R.periode||'……………')+'</td><td>Régime</td><td>Réel — crédit de TVA</td></tr></tbody></table>'
+      +'<h3>Détail de la TVA déductible</h3>'
+      +'<table class="rb-t"><thead><tr><th>Fournisseur</th><th>N° facture</th><th>Date</th><th class="r">Montant HT</th><th class="r">Taux</th><th class="r">TVA déductible</th><th>Nature</th></tr></thead><tbody>'
+      +(rows||'<tr><td colspan="7" style="text-align:center">— à compléter —</td></tr>')
+      +'<tr class="rb-tot"><td colspan="3"><b>TOTAUX</b></td><td class="r"><b>'+eu2(totHT)+'</b></td><td></td><td class="r"><b>'+eu2(totTVA)+'</b></td><td></td></tr></tbody></table>'
+      +'<table class="rb-sum"><tbody><tr><td>Crédit de TVA dont le remboursement est demandé</td><td class="r"><b>'+eu2(totTVA)+'</b></td></tr>'
+      +'<tr><td>Coordonnées bancaires (IBAN)</td><td class="r">'+E(R.iban||'…………………………')+'</td></tr>'
+      +'<tr><td>BIC</td><td class="r">'+E(R.bic||'……………')+'</td></tr></tbody></table>'
+      +'<div class="rb-mention">Je soussigné(e), représentant légal de la société, demande le remboursement du crédit de TVA ci-dessus et certifie l’exactitude des informations. Les factures justificatives sont tenues à la disposition de l’administration.</div>'
+      +'<div class="ct-sign-row"><div class="pv-sign">Fait à ……………, le ……………<br>Signature du représentant légal :<br>………………………</div>'+(tampon||'<div class="pv-sign">Cachet du cabinet :<br><i>— à tamponner —</i></div>')+'</div>'
+      +'</div></div>';
+  }
+  window.fiscalRembGen=function(id){var d=doss(id);if(!d)return;var R=rembData(d);
+    var tb=R.tampon?'<button class="fx-btn fx-btn-2" onclick="fiscalRembTampon(\''+id+'\')">🔏 Re-tamponner</button>':'<button class="fx-btn fx-tampon" onclick="fiscalRembTampon(\''+id+'\')">🔏 Tamponner (cachet AEM CONSEIL)</button>';
+    fiscalShowDoc(id,'💧 Demande de remboursement de TVA — '+nomD(d),rembTvaDocHTML(d),tb);};
+  window.fiscalRembTampon=function(id){var d=doss(id);if(!d)return;var R=rembData(d);R.tampon={date:(new Date()).toLocaleDateString('fr-FR'),by:'AEM CONSEIL',ts:Date.now()};if(typeof save==='function')save();fiscalRembGen(id);if(typeof toast==='function')toast('✅ Demande finalisée et tamponnée');};
+
+  /* Connexion : la Synthèse et le Prévisionnel affichent l'état approuvé + liens croisés */
+  var _m_apercu_base=m_apercu; m_apercu=function(d){return approvalBanner(d)+_m_apercu_base(d)+apercuLinks(d);};
+  var _m_prev_base=m_previsionnel; m_previsionnel=function(d){return approvalBanner(d)+fiscalLinkPanel(d)+_m_prev_base(d);};
+
   var MODULES=[
     {k:'apercu',ic:'▦',l:'Synthèse',f:m_apercu},
     {k:'societe',ic:'▤',l:'Société & associés',f:m_societe},
     {k:'previsionnel',ic:'∿',l:'Bilan prévisionnel',f:m_previsionnel},
     {k:'questionnaire',ic:'✍',l:'Questionnaire dirigeant',f:m_questionnaire},
+    {k:'soustraitance',ic:'📝',l:'Contrat de sous-traitance',f:m_soustraitance},
+    {k:'remboursement',ic:'💧',l:'Remboursement de TVA',f:m_remboursement},
     {k:'infos',ic:'✎',l:'Infos client',f:m_infos},
     {k:'regime',ic:'⚖',l:'Régime fiscal & social',f:m_regime},
     {k:'exon',ic:'★',l:'Exonérations & aides',f:m_exon},
@@ -12712,7 +12947,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     ov.innerHTML='<div class="fx-shell"><header class="fx-top"><div><b>🧮 Module fiscal</b><span>'+E(nomD(d))+'</span></div><button class="fx-x" onclick="fiscalClose()">✕</button></header>'
       +'<div class="fx-body"><aside class="fx-side"><div class="fx-side-t">Mini-modules</div>'+side
       +'<button class="fx-infobtn" onclick="fiscalGo(\'infos\')">✎ Renseigner les infos client</button></aside>'
-      +'<main class="fx-content">'+mod.f(d)+'</main></div></div>';
+      +'<main class="fx-content">'+mod.f(d)+'</main></div></div>'+fiscalActDatalist();
   }
 
   /* Bouton d'ouverture greffé dans la vue d'ensemble du dossier */
@@ -12764,6 +12999,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.pv-garde{text-align:center;padding:6px 0 12px;margin-bottom:8px}body.dark .pv-doc .pv-forme,html .pv-doc .pv-forme{font-size:11px!important;letter-spacing:2px;color:#333!important;margin:4px 0 18px}.pv-box{max-width:420px;margin:0 auto 16px;border:1px solid #333;border-radius:2px;padding:14px 16px;text-align:center}body.dark .pv-doc .pv-box b,html .pv-doc .pv-box b{font-size:14px!important;letter-spacing:.5px}body.dark .pv-doc .pv-garde-t,html .pv-doc .pv-garde-t{font-size:15px!important;font-weight:800;letter-spacing:1px;margin:10px 0 4px}body.dark .pv-doc .pv-garde-sub,html .pv-doc .pv-garde-sub{font-size:10px!important;color:#666!important}'
       +'.pv-cachet{display:flex;justify-content:flex-end;margin:14px 0}.pv-cachet-in{transform:rotate(-7deg);border:2px solid #1c3f8f;border-radius:8px;padding:8px 14px;text-align:center;background:rgba(28,63,143,.04);max-width:260px}body.dark .pv-doc .pv-cachet-in,html .pv-doc .pv-cachet-in{border-color:#1c3f8f!important}body.dark .pv-doc .pv-cachet-firm,html .pv-doc .pv-cachet-firm{font-size:15px!important;font-weight:800;letter-spacing:1px;color:#1c3f8f!important}body.dark .pv-doc .pv-cachet-role,html .pv-doc .pv-cachet-role{font-size:9px!important;letter-spacing:2px;color:#1c3f8f!important}body.dark .pv-doc .pv-cachet-adr,body.dark .pv-doc .pv-cachet-tel,html .pv-doc .pv-cachet-adr,html .pv-doc .pv-cachet-tel{font-size:8.5px!important;color:#1c3f8f!important}body.dark .pv-doc .pv-cachet-dt,html .pv-doc .pv-cachet-dt{font-size:8.5px!important;color:#1c3f8f!important;margin-top:3px;font-style:italic}'
       +'.pv-final{background:#eafaf0;border:1px solid #86d3a3;border-radius:6px;padding:7px 12px;font-size:11px;margin:6px 0 10px;text-align:center}body.dark .pv-doc .pv-final,html .pv-doc .pv-final{color:#1c6b3a!important}.pv-etapes{font-size:10.5px;margin:6px 0}.pv-etapes ul{margin:4px 0 0;padding-left:18px}.pv-sign-row{display:flex;justify-content:space-between;align-items:flex-end;margin-top:22px;gap:20px}.pv-sign-row .pv-sign{margin-top:0;flex:1}'
+      +'.fx-appr{display:flex;align-items:center;gap:12px;justify-content:space-between;border-radius:12px;padding:11px 14px;margin-bottom:14px}.fx-appr b{display:block;font-size:13px}.fx-appr span{font-size:11.5px;color:#a7abbd;display:block;margin-top:2px}.fx-appr.ok{background:linear-gradient(135deg,rgba(46,160,90,.18),rgba(124,108,255,.07));border:1px solid #2f6b45}.fx-appr.ok b{color:#a6e6c2}.fx-appr.warn{background:#20180d;border:1px solid #6b4e20}.fx-appr.warn b{color:#e7b465}.fx-appr button{white-space:nowrap}'
+      +'.fx-linkp{background:#101014;border:1px solid #242428;border-left:3px solid #7c6cff;border-radius:12px;padding:12px 14px;margin-bottom:14px}.fx-linkp-h{font-weight:800;color:#c9c2ff;font-size:12.5px;margin-bottom:8px}.fx-linkp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.fx-linkp-grid>div{background:#151519;border:1px solid #242428;border-radius:9px;padding:7px 10px}.fx-linkp-grid span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:#7f8290}.fx-linkp-grid b{font-size:13px}.fx-linkp-tva{margin-top:9px;font-size:11.5px;color:#a7c8ff;background:rgba(46,107,255,.08);border:1px solid #26304a;border-radius:8px;padding:8px 10px}.fx-linkp-act{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}'
+      +'body.dark .ct-doc,html .ct-doc,body.dark .rb-doc,html .rb-doc{background:#fff!important;color:#1a1a1a!important}body.dark .ct-doc *,html .ct-doc *,body.dark .rb-doc *,html .rb-doc *{color:#1a1a1a!important}'
+      +'.ct-doc{font-size:11px;line-height:1.7;padding:20mm 18mm}.ct-title{text-align:center;font-size:16px;font-weight:800;letter-spacing:1px;margin:0 0 16px;border-bottom:2px solid #333;padding-bottom:8px}.ct-parties p{margin:3px 0}.ct-art{margin:10px 0}.ct-art b{display:block;font-size:11.5px;margin-bottom:2px}.ct-art p{margin:0;text-align:justify}.ct-sign{margin-top:20px}.ct-sign-row{display:flex;justify-content:space-between;gap:24px;margin-top:14px;align-items:flex-end}'
+      +'.rb-doc{font-size:10.5px;line-height:1.6;padding:16mm 15mm}.rb-hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #333;padding-bottom:8px}.rb-hd b{font-size:14px;letter-spacing:.4px}.rb-hd span{display:block;font-size:9.5px;font-style:italic}body.dark .rb-doc .rb-hd span,html .rb-doc .rb-hd span{color:#555!important}.rb-date{font-size:9.5px;text-align:right}.rb-doc h3{font-size:11.5px;margin:14px 0 5px}'
+      +'.rb-id{width:100%;border-collapse:collapse;font-size:10px;margin-top:10px}.rb-id td{border:1px solid #ccc;padding:4px 7px}.rb-id td:nth-child(odd){background:#f4f4f4;font-weight:600;width:110px}.rb-t{width:100%;border-collapse:collapse;font-size:10px}.rb-t th,.rb-t td{border:1px solid #ccc;padding:4px 7px}.rb-t th{background:#f2f2f2;text-align:left}.rb-t .r,.rb-id .r{text-align:right}.rb-t .rb-tot td{background:#f7f7f7;font-weight:700}.rb-sum{width:100%;border-collapse:collapse;font-size:11px;margin-top:10px}.rb-sum td{border:1px solid #ccc;padding:5px 8px}.rb-sum td.r{text-align:right;font-weight:700}.rb-mention{font-size:9.5px;font-style:italic;margin:12px 0;text-align:justify}body.dark .rb-doc .rb-mention,html .rb-doc .rb-mention{color:#555!important}'
+      +'body.dark .ct-doc .pv-cachet-in *,html .ct-doc .pv-cachet-in *,body.dark .rb-doc .pv-cachet-in *,html .rb-doc .pv-cachet-in *{color:#1c3f8f!important}.ct-doc .pv-cachet,.rb-doc .pv-cachet{justify-content:flex-end;margin:6px 0}.ct-doc .pv-final,.rb-doc .pv-final{background:#eafaf0;border:1px solid #86d3a3;border-radius:6px;padding:6px 12px;font-size:10.5px;margin:6px 0}'
       +'@media(max-width:820px){.fx-body{grid-template-columns:1fr}.fx-side{border-right:0;border-bottom:1px solid #202024;flex-direction:row;flex-wrap:wrap;overflow-x:auto}}';
     document.head.appendChild(st);} }catch(e){}
 })();
