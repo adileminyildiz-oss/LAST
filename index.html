@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=287;
+var LAST_VER=288;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14317,7 +14317,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     need(dt.dateActe,"Date de l'acte"); need(dt.villeSignature,'Ville de signature');
     need(dep.banque,'Banque du dépôt de capital'); need(dep.montant,'Montant déposé'); need(dep.date,'Date du dépôt');
     need(co.email,'Email de contact');
-    if(!estUnipersonnel(o.type)){ var A=(o.associes||[]).filter(function(a){ var nm=(''+(a.nom||a.prenom||'')).trim(); var pr=parseInt((''+(a.parts||'')).replace(/[^0-9]/g,''),10)||0; return nm&&pr>0; }); if(!A.length)m.push('Au moins un associé (nom + parts)'); }
+    var A=(o.associes||[]).filter(function(a){ var nm=(''+(a.nom||a.prenom||'')).trim(); var pr=parseInt((''+(a.parts||'')).replace(/[^0-9]/g,''),10)||0; return nm&&pr>0; });
+    if(!estUnipersonnel(o.type) && !A.length) m.push('Au moins un associé (nom + parts)');
+    /* Identité complète de chaque associé (reprise dans les statuts / la liste des souscripteurs) */
+    if(A.length){ var incomplet=A.some(function(a){ return !(''+(a.naissance||'')).trim()||!(''+(a.lieuNaissance||'')).trim()||!(''+(a.pays||'')).trim()||!(''+(a.nationalite||'')).trim()||!(''+(a.adresse||'')).trim(); }); if(incomplet)m.push('Identité complète de chaque associé (date, lieu et pays de naissance, nationalité, adresse)'); }
     return m; };
   window.formUpdateGate=function(){ try{
     var m=window.formManques?window.formManques():[];
@@ -14373,22 +14376,28 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     }).catch(function(){ fin('Recherche indisponible (connexion requise).'); }); }
     catch(e){ fin('Recherche impossible.'); }
   };
-  /* Contrôles de cohérence (Σ apports = capital, nb titres = capital ÷ nominale, Σ parts = total des titres) */
-  window.formCoherence=function(){
-    var o=FD(),s=o.societe||{},tt=o.titres||{},ap=o.apports||{};
-    var cap=num(s.capital),nominal=num(tt.nominal),nbT=num(tt.nbTitres),A=(o.associes||[]);
+  /* Contrôles de cohérence (partagés Formulaire ↔ dossier) : Σ apports = capital,
+     apports numéraire+nature = capital, nb titres = capital ÷ nominale, Σ parts = total des titres */
+  window.coherenceItems=function(src){
+    src=src||{};
+    var cap=num(src.capital),nominal=num(src.nominal),nbT=num(src.nbTitres),A=(src.associes||[]);
     var sumApport=0,anyApport=false; A.forEach(function(a){var v=num(a.apport);if(v!=null){sumApport+=v;anyApport=true;}});
     var sumParts=0,anyParts=false; A.forEach(function(a){var v=num(a.parts);if(v!=null){sumParts+=v;anyParts=true;}});
     function eq(a,b){return Math.abs(a-b)<=Math.max(0.01,Math.abs(b)*0.005);}
     var items=[];
     if(cap!=null&&anyApport)items.push({ok:eq(sumApport,cap),label:'Somme des apports des associés = capital',got:sumApport,exp:cap});
-    var numer=num(ap.numeraire),nat=num(ap.nature);
+    var numer=num(src.numeraire),nat=num(src.nature);
     if(cap!=null&&(numer!=null||nat!=null))items.push({ok:eq((numer||0)+(nat||0),cap),label:'Apports (numéraire + nature) = capital',got:(numer||0)+(nat||0),exp:cap});
     if(cap!=null&&nominal!=null&&nominal>0&&nbT!=null)items.push({ok:eq(nbT,cap/nominal),label:'Nombre de titres = capital ÷ valeur nominale',got:nbT,exp:cap/nominal});
     var totT=(nbT!=null)?nbT:((cap!=null&&nominal!=null&&nominal>0)?(cap/nominal):null);
     if(anyParts&&totT!=null)items.push({ok:eq(sumParts,totT),label:'Somme des parts / actions = nombre total de titres',got:sumParts,exp:totT});
     return items;
   };
+  window.formCoherence=function(){
+    var o=FD(),s=o.societe||{},tt=o.titres||{},ap=o.apports||{};
+    return window.coherenceItems({capital:s.capital,nominal:tt.nominal,nbTitres:tt.nbTitres,associes:o.associes||[],numeraire:ap.numeraire,nature:ap.nature});
+  };
+  window.fmtNombre=function(n){try{return (Math.round(n*100)/100).toLocaleString('fr-FR');}catch(e){return ''+n;}};
   function fmtN(n){try{return (Math.round(n*100)/100).toLocaleString('fr-FR');}catch(e){return ''+n;}}
   window.formCohInner=function(){
     var items=(window.formCoherence?window.formCoherence():[]);
@@ -14609,6 +14618,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var dep=o.depot||{},ap=o.apports||{},cj=o.conjoint||{},cac=o.cac||{},ex=o.extra||{},ben=(o.beneficiaires||[]);
     var intake={type:o.type||'sas',numeroDossier:o.numeroDossier||'',
       societe:{denomination:s.denomination||'',sigle:s.sigle||'',capital:s.capital||'',objet:s.objet||'',regime:s.regime||'',debut:s.debut||'',siren:s.siren||'',siret:s.siret||'',enseigne:s.enseigne||''},
+      titres:{nominal:tt.nominal||'',nbTitres:tt.nbTitres||''},
       depot:{type:dep.type||'Banque',banque:dep.banque||'',montant:dep.montant||'',date:dep.date||'',iban:dep.iban||''},
       apports:{numeraire:ap.numeraire||'',nature:ap.nature||'',natureDesc:ap.natureDesc||'',tva:ap.tva||'',regimeSocial:ap.regimeSocial||'',acre:ap.acre||'',liberation:ap.liberation||''},
       conjoint:{regime:cj.regime||'',statut:cj.statut||'',nom:cj.nom||''},
@@ -14653,11 +14663,18 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(intake.notes)dos.notes=intake.notes;
     /* Génération de tous les documents du dossier */
     try{ dos.docs=dos.docs||{}; (typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).forEach(function(dc){ if(typeof espDocReq==='function'?espDocReq(dos,dc.k):true) dos.docs[dc.k]={genere:true,date:today()}; }); }catch(e){}
+    /* Tests de validité + cohérence de chaque document AVANT ajout au dossier (dossier dirigé vers l'INPI). */
+    var Tnb=0,Ttot=0,Tinpi=false;
+    try{ if(typeof window.docTestsDossier==='function'){ var T=window.docTestsDossier(dos); Ttot=T.total; Tnb=T.nbValide; Tinpi=T.tous&&T.coherenceOk;
+      T.docs.forEach(function(x){ if(dos.docs[x.k]){ dos.docs[x.k].valide=x.valide; dos.docs[x.k].coherent=x.coherent; dos.docs[x.k].teste=today(); } });
+      dos.pretInpi=Tinpi; dos.docsTest={nb:Tnb,total:Ttot,coherenceOk:T.coherenceOk,ts:Date.now()};
+      dos.historique.unshift({d:today(),t:'Documents contrôlés (validité + cohérence) : '+Tnb+'/'+Ttot+' validés'+(Tinpi?' — dossier prêt à être dirigé vers l\'INPI':'')});
+    } }catch(e){}
     DB.dossiers.unshift(dos);
     window.__formData=blank();
     try{ if(DB.parametres)delete DB.parametres.formDraft; }catch(e){}
     if(typeof save==='function')save();
-    if(typeof toast==='function')toast('Dossier '+ref+' créé — documents générés');
+    if(typeof toast==='function')toast('Dossier '+ref+' créé — '+(Ttot?(Tnb+'/'+Ttot+' documents validés'):'documents générés')+(Tinpi?' · prêt pour l\'INPI':''));
     state.page='espace';state.espaceDossier=dos.id;
     if(typeof render==='function')render();window.scrollTo(0,0);
     if(ouvrirDocs){ try{ if(typeof window.espEdOpen==='function'){ window.__edCat='creation'; setTimeout(function(){ window.espEdOpen(dos.id,'statuts'); },60); } }catch(e){} }
@@ -14761,6 +14778,28 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function suivi(d){ d.inpiSuivi=d.inpiSuivi||{statut:'afaire',reference:'',dateDepot:'',ts:0}; return d.inpiSuivi; }
   window.inpiSetStatut=function(id,v){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); if(!d)return; var su=suivi(d); su.statut=v; if(v!=='afaire'&&!su.dateDepot&&typeof today==='function')su.dateDepot=today(); su.ts=Date.now(); d.historique=d.historique||[]; d.historique.unshift({d:(typeof today==='function'?today():''),t:'Guichet unique : '+((STATUTS.filter(function(s){return s[0]===v;})[0]||[])[1]||v)}); if(typeof save==='function')save(); if(typeof render==='function')render(); };
   window.inpiSetRef=function(id,v){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); if(!d)return; suivi(d).reference=v; if(typeof save==='function')save(); };
+  /* Cohérence calculée sur les données STOCKÉES du dossier (mêmes règles que le Formulaire). */
+  window.dossierCoherence=function(d){ var o=(d&&d.intake)||{}; var s=o.societe||{},tt=o.titres||{},ap=o.apports||{};
+    return (typeof window.coherenceItems==='function')?window.coherenceItems({capital:s.capital,nominal:tt.nominal,nbTitres:tt.nbTitres,associes:o.associes||[],numeraire:ap.numeraire,nature:ap.nature}):[]; };
+  /* Tests de validité + cohérence de CHAQUE document généré (live : lit la version courante, docCustom inclus). */
+  window.docTestsDossier=function(d){
+    var L=(typeof espDocsRequis==='function')?espDocsRequis(d):((typeof ESP_DOCS!=='undefined')?ESP_DOCS.filter(function(dc){return (typeof espDocReq==='function')?espDocReq(d,dc.k):true;}):[]);
+    var inc=(window.dossierCoherence?window.dossierCoherence(d):[]).filter(function(x){return !x.ok;});
+    var coherenceOk=inc.length===0;
+    var denom=((d.intake&&d.intake.societe&&d.intake.societe.denomination)||'').trim();
+    function strip(h){try{var t=document.createElement('div');t.innerHTML=h||'';return (t.textContent||t.innerText||'').replace(/\s+/g,' ');}catch(e){return '';}}
+    var docs=L.map(function(dc){
+      var gen=!!(d.docs&&d.docs[dc.k]&&d.docs[dc.k].genere), valide=false,len=0,hasDenom=true,placeholder=false;
+      if(gen){ try{ var html=(typeof espDocRender==='function')?espDocRender(d,dc.k):''; var txt=strip(html); len=txt.length;
+        hasDenom=denom?(txt.toLowerCase().indexOf(denom.toLowerCase())>=0):true;
+        placeholder=/«\s*(…|\.\.\.)\s*»/.test(txt);
+        valide=(len>200)&&hasDenom&&!placeholder&&coherenceOk;
+      }catch(e){ valide=false; } }
+      return {k:dc.k,l:dc.l,genere:gen,valide:valide,coherent:coherenceOk,len:len,denom:hasDenom,placeholder:placeholder};
+    });
+    var nbValide=docs.filter(function(x){return x.valide;}).length;
+    return {docs:docs,total:docs.length,nbValide:nbValide,coherenceOk:coherenceOk,tous:(docs.length>0&&nbValide===docs.length),incoherences:inc};
+  };
   window.espInpiSuiviCard=function(d){
     if(!d)return '';
     var su=suivi(d);
@@ -14771,14 +14810,25 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var rows=pieces.map(function(p){var ok=recu(p);return '<div class="inpi-pc '+(ok?'ok':'')+'"><span class="inpi-pc-ic">'+(ok?'✓':'○')+'</span><span class="inpi-pc-l">'+E(p.label)+'</span><span class="inpi-pc-t">'+(ok?'Prête':'Manquante')+'</span></div>';}).join('');
     var seg=STATUTS.map(function(s){return '<button type="button" class="inpi-seg'+(su.statut===s[0]?' on':'')+'" onclick="inpiSetStatut(\''+d.id+'\',\''+s[0]+'\')">'+E(s[1])+'</button>';}).join('');
     var manque=total-nb;
+    /* Documents générés : validité + cohérence (conditionne l'orientation vers l'INPI) */
+    var T=(typeof window.docTestsDossier==='function')?window.docTestsDossier(d):{docs:[],total:0,nbValide:0,coherenceOk:true,tous:false,incoherences:[]};
+    var docRows=T.docs.map(function(x){return '<div class="inpi-pc '+(x.valide?'ok':'')+'"><span class="inpi-pc-ic">'+(x.valide?'✓':(x.genere?'!':'○'))+'</span><span class="inpi-pc-l">'+E(x.l)+'</span><span class="inpi-pc-t">'+(x.valide?'Validé':(x.genere?'À vérifier':'À générer'))+'</span></div>';}).join('');
+    var docsOk=T.tous&&T.coherenceOk;
+    var cohLine=T.coherenceOk?'<span class="inpi-badge ok">Cohérence ✓</span>':('<span class="inpi-badge ko">'+T.incoherences.length+' incohérence'+(T.incoherences.length>1?'s':'')+'</span>');
+    var depotBtn=docsOk
+      ? '<button class="btn btn-sm btn-pri" onclick="espDepotInpi(\''+d.id+'\')">Diriger le dossier vers l\'INPI</button>'
+      : '<button class="btn btn-sm btn-pri is-disabled" disabled title="Validez d\'abord les documents (validité + cohérence)">Diriger le dossier vers l\'INPI</button>';
     return '<div class="card inpi-card"><div class="card-h"><h2>Dépôt au Guichet unique (INPI)</h2><span class="sub" style="margin-left:auto">'+nb+' / '+total+' pièces prêtes</span></div>'
       +'<div class="card-b">'
       +'<div class="inpi-seg-wrap">'+seg+'</div>'
-      +'<div class="inpi-ref"><label>N° de dossier / référence INPI</label><input value="'+E(su.reference||'')+'" oninput="inpiSetRef(\''+d.id+'\',this.value)" placeholder="ex. dossier INPI, n° de formalité"></div>'
+      +'<div class="inpi-chk-h" style="margin-top:0">Documents du dossier (validité + cohérence) '+cohLine+'</div>'
+      +'<div class="inpi-chk">'+(docRows||'<div class="hint">Aucun document généré. Créez le dossier via le Formulaire.</div>')+'</div>'
+      +'<div class="hint" style="margin-top:8px">'+(docsOk?('<b>'+T.nbValide+'/'+T.total+' documents validés</b> — le dossier peut être dirigé vers l\'INPI (tous portent les mêmes informations, complètes et cohérentes).'):('<b>'+T.nbValide+'/'+T.total+' documents validés</b> — corrigez les documents « à vérifier »'+(T.coherenceOk?'':' et les incohérences')+' avant de diriger le dossier vers l\'INPI.'))+'</div>'
+      +'<div class="inpi-ref" style="margin-top:12px"><label>N° de dossier / référence INPI</label><input value="'+E(su.reference||'')+'" oninput="inpiSetRef(\''+d.id+'\',this.value)" placeholder="ex. dossier INPI, n° de formalité"></div>'
       +(su.dateDepot?('<div class="inpi-date">Déposé le '+E((typeof frDate==='function')?frDate(su.dateDepot):su.dateDepot)+'</div>'):'')
-      +'<div class="inpi-chk-h">Pièces à déposer</div><div class="inpi-chk">'+(rows||'<div class="hint">Aucune pièce listée.</div>')+'</div>'
+      +'<div class="inpi-chk-h">Pièces justificatives à déposer</div><div class="inpi-chk">'+(rows||'<div class="hint">Aucune pièce listée.</div>')+'</div>'
       +(manque>0?('<div class="hint" style="margin-top:8px">'+manque+' pièce'+(manque>1?'s':'')+' à compléter avant le dépôt (voir « Pièces justificatives »).</div>'):'')
-      +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm btn-pri" onclick="espDepotInpi(\''+d.id+'\')">Préparer le dépôt au Guichet unique</button></div>'
+      +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+depotBtn+'</div>'
       +'</div></div>';
   };
   /* Greffe la carte dans le panneau du dossier (dernier enfant de la colonne principale) */
@@ -14790,6 +14840,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.inpi-seg.on{background:#1c1c1e;color:#fff;border-color:#4a4a52;box-shadow:inset 0 0 0 1px #4a4a52}',
     '.inpi-ref{margin-bottom:6px}.inpi-ref label{display:block;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin-bottom:4px}',
     '.inpi-date{font-size:12px;color:#9a9aa0;margin-bottom:10px}',
+    '.inpi-badge{margin-left:8px;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #2a2a2e;vertical-align:middle}',
+    '.inpi-badge.ok{background:rgba(38,86,52,.30);color:#c3e8d1;border-color:rgba(84,150,104,.55)}',
+    '.inpi-badge.ko{background:rgba(120,42,42,.24);color:#f0bcb6;border-color:rgba(170,74,74,.5)}',
+    '.inpi-card .btn.is-disabled,.inpi-card .btn[disabled]{opacity:.4;cursor:not-allowed;filter:grayscale(.4)}',
     '.inpi-chk-h{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin:10px 0 6px}',
     '.inpi-chk{display:flex;flex-direction:column;gap:4px}',
     '.inpi-pc{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid #1c1c1e;border-radius:8px;background:#0a0a0c;font-size:12.5px}',
