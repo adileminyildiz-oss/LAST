@@ -67,7 +67,7 @@ const r = await page.evaluate(() => {
   out.rendu = /Taux d'automatisation/.test(html) && /Chiffre d'affaires estimé/.test(html) && /Répartition par étape/.test(html);
   out.renduCf = /Score de conformité moyen/.test(html);
   out.renduObl = /obligations annuelles/i.test(html) || true; // carte conformité annuelle greffée (si dossiers concernés)
-  out.nav = !!Array.from(document.querySelectorAll('#nav .nav-btn')).find(b => /Pilotage/.test(b.textContent));
+  out.nav = !Array.from(document.querySelectorAll('#nav .nav-btn')).find(b => /Pilotage/.test(b.textContent));
   out.gauge = !!document.querySelector('#view .pil-gauge-fill');
   return out;
 });
@@ -85,7 +85,7 @@ check('score affiché dans le contrôle qualité', r.cqHtml);
 check('score de conformité moyen agrégé (Pilotage)', r.pilCf);
 check('page Pilotage rendue (CA + taux + répartition)', r.rendu);
 check('score de conformité moyen affiché sur le Pilotage', r.renduCf);
-check('entrée « Pilotage » dans la navigation', r.nav);
+check('« Pilotage » retiré du menu de navigation', r.nav);
 check('jauge d’automatisation affichée', r.gauge);
 check('aucun pageerror', perr.length === 0);
 
