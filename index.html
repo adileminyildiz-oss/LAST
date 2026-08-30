@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=285;
+var LAST_VER=286;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14047,7 +14047,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<button class="btn btn-ghost" id="doc-act-mod" onclick="docActModifier()">Modifier</button>'
     +'<button class="btn btn-ghost" onclick="docActPrint()">Imprimer</button>'
     +'<span class="doc-dl-wrap"><button class="btn btn-pri" onclick="docActDlToggle(event)">Télécharger ▾</button>'
-    +'<span class="doc-dl-menu" id="doc-dl-menu"><button class="btn btn-ghost" onclick="docActPDF()">PDF</button><button class="btn btn-ghost" onclick="docActExcel()">Excel</button></span></span>'; };
+    +'<span class="doc-dl-menu" id="doc-dl-menu"><button class="btn btn-ghost" onclick="docActPDF()">PDF</button><button class="btn btn-ghost" onclick="docActWord()">Word (.docx)</button><button class="btn btn-ghost" onclick="docActExcel()">Excel</button></span></span>'; };
 
   window.docActDlToggle=function(ev){ if(ev){ev.stopPropagation();} var m=document.getElementById('doc-dl-menu'); if(m) m.classList.toggle('show'); };
   document.addEventListener('click',function(e){ var m=document.getElementById('doc-dl-menu'); if(m&&m.classList.contains('show')&&!e.target.closest('.doc-dl-wrap')) m.classList.remove('show'); });
@@ -14068,6 +14068,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   window.docActPrint=function(){ if(typeof espDocPrint==='function') espDocPrint(); else window.print(); };
   window.docActPDF=function(){ var m=document.getElementById('doc-dl-menu'); if(m)m.classList.remove('show'); if(typeof toast==='function')toast('Dans la fenêtre d\'impression, choisissez « Enregistrer en PDF ».'); window.docActPrint(); };
+  window.docActWord=function(){ var m=document.getElementById('doc-dl-menu'); if(m)m.classList.remove('show'); var el=docEl(); if(!el){ if(typeof toast==='function')toast('Document introuvable.'); return; }
+    if(typeof window.buildDocxBlob!=='function'){ if(typeof toast==='function')toast('Export Word indisponible.'); return; }
+    var title=(document.getElementById('ov-t')&&document.getElementById('ov-t').textContent)||'document';
+    try{ dl(window.buildDocxBlob(el), safe(title)+'.docx'); if(typeof toast==='function')toast('Document Word (.docx) téléchargé'); }
+    catch(e){ if(typeof toast==='function')toast('Export Word impossible.'); }
+  };
   window.docActExcel=function(){ var m=document.getElementById('doc-dl-menu'); if(m)m.classList.remove('show'); var el=docEl(); if(!el)return;
     var title=(document.getElementById('ov-t')&&document.getElementById('ov-t').textContent)||'document';
     var tables=el.querySelectorAll('table'), inner='';
@@ -14118,6 +14124,85 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     ].join(''); (document.body||document.documentElement).appendChild(st);
   }
   try{ css(); var _rr=window.render; if(typeof _rr==='function'&&!window.__docActCss){ window.__docActCss=1; window.render=function(){ var x=_rr.apply(this,arguments); try{ var s=document.getElementById('doc-actions-css'); if(s&&s.parentNode&&s!==s.parentNode.lastElementChild) s.parentNode.appendChild(s); }catch(e){} return x; }; } }catch(e){}
+})();
+</script>
+<script id="docx-export-mod">
+/* Export Word (.docx) RÉEL — génère un vrai fichier OOXML (ZIP stored + CRC32),
+   ouvrable nativement par Microsoft Word / LibreOffice, sans bibliothèque externe.
+   Le document reste en noir & blanc (aucun style d'application appliqué). */
+(function(){
+  if(window.__docxExportInit)return; window.__docxExportInit=1;
+  var CRC=(function(){var t=[];for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}return t;})();
+  function crc32(u8){var c=0xFFFFFFFF;for(var i=0;i<u8.length;i++)c=CRC[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+  function concat(list){var len=0,i;for(i=0;i<list.length;i++)len+=list[i].length;var out=new Uint8Array(len),p=0;for(i=0;i<list.length;i++){out.set(list[i],p);p+=list[i].length;}return out;}
+  var ENC=new TextEncoder();
+  function u16(n){return new Uint8Array([n&255,(n>>8)&255]);}
+  function u32(n){n>>>=0;return new Uint8Array([n&255,(n>>8)&255,(n>>16)&255,(n>>24)&255]);}
+  /* ZIP « stored » (méthode 0, sans compression) — suffisant et universel pour un .docx */
+  function zipStore(files){
+    var parts=[],central=[],offset=0;
+    files.forEach(function(f){
+      var name=ENC.encode(f.name);
+      var data=(f.data instanceof Uint8Array)?f.data:ENC.encode(f.data);
+      var crc=crc32(data);
+      var lh=concat([u32(0x04034b50),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0),name,data]);
+      parts.push(lh);
+      central.push(concat([u32(0x02014b50),u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(offset),name]));
+      offset+=lh.length;
+    });
+    var cd=concat(central);
+    var eocd=concat([u32(0x06054b50),u16(0),u16(0),u16(files.length),u16(files.length),u32(cd.length),u32(offset),u16(0)]);
+    return concat(parts.concat([cd,eocd]));
+  }
+  /* ---- HTML (DOM) → WordprocessingML ---- */
+  var BLOCK=/^(P|DIV|H1|H2|H3|H4|H5|H6|LI|TR|BLOCKQUOTE|SECTION|ARTICLE|HEADER|FOOTER|TD|TH|PRE|UL|OL|TABLE|TBODY|THEAD)$/;
+  function xmlEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function sizeFor(tag){return {H1:36,H2:32,H3:28,H4:26,H5:24,H6:22}[tag]||0;}
+  function alignOf(el){try{var a=getComputedStyle(el).textAlign;if(a==='center')return 'center';if(a==='right'||a==='end')return 'right';if(a==='justify')return 'both';}catch(e){}return '';}
+  function runXml(t,p){var rpr='';if(p.b)rpr+='<w:b/>';if(p.i)rpr+='<w:i/>';if(p.u)rpr+='<w:u w:val="single"/>';if(p.sz)rpr+='<w:sz w:val="'+p.sz+'"/><w:szCs w:val="'+p.sz+'"/>';return '<w:r>'+(rpr?'<w:rPr>'+rpr+'</w:rPr>':'')+'<w:t xml:space="preserve">'+xmlEsc(t)+'</w:t></w:r>';}
+  function collectRuns(node,ctx,arr){
+    Array.prototype.forEach.call(node.childNodes,function(n){
+      if(n.nodeType===3){var t=n.textContent;if(t)arr.push({t:t,b:ctx.b,i:ctx.i,u:ctx.u,sz:ctx.sz});return;}
+      if(n.nodeType!==1)return;
+      var tag=n.tagName;
+      if(tag==='BR'){arr.push({br:true});return;}
+      var c={b:ctx.b,i:ctx.i,u:ctx.u,sz:ctx.sz};
+      if(tag==='B'||tag==='STRONG')c.b=true;
+      if(tag==='I'||tag==='EM')c.i=true;
+      if(tag==='U')c.u=true;
+      try{var cs=getComputedStyle(n);var fw=cs.fontWeight;if(fw==='bold'||fw==='bolder'||parseInt(fw,10)>=600)c.b=true;if(cs.fontStyle==='italic')c.i=true;if(/underline|line-through/.test(cs.textDecorationLine||cs.textDecoration||''))c.u=(c.u|| /underline/.test(cs.textDecorationLine||cs.textDecoration||''));}catch(e){}
+      collectRuns(n,c,arr);
+    });
+  }
+  function makePara(el){
+    var sz=sizeFor(el.tagName),a=alignOf(el);
+    var runs=[];collectRuns(el,{b:sz>0,i:false,u:false,sz:sz||0},runs);
+    var body='';runs.forEach(function(r){if(r.br){body+='<w:r><w:br/></w:r>';return;}var t=r.t.replace(/[\r\n\t]+/g,' ').replace(/ {2,}/g,' ');if(!t)return;body+=runXml(t,r);});
+    var ppr='';if(a)ppr+='<w:jc w:val="'+a+'"/>';if(sz)ppr+='<w:spacing w:before="120" w:after="60"/>';
+    return '<w:p>'+(ppr?'<w:pPr>'+ppr+'</w:pPr>':'')+body+'</w:p>';
+  }
+  function hasBlockDesc(el){try{return !!el.querySelector('p,div,h1,h2,h3,h4,h5,h6,li,tr,td,th,blockquote,section,article,ul,ol,table,pre');}catch(e){return false;}}
+  function emit(root,paras){
+    Array.prototype.forEach.call(root.childNodes,function(n){
+      if(n.nodeType===3){var t=n.textContent;if(t&&t.trim()){var runs=[];collectRuns({childNodes:[n]},{b:false,i:false,u:false,sz:0},runs);var body='';runs.forEach(function(r){var x=r.t.replace(/\s+/g,' ');if(x.trim())body+=runXml(x,r);});if(body)paras.push('<w:p>'+body+'</w:p>');}return;}
+      if(n.nodeType!==1)return;
+      var tag=n.tagName;
+      if(tag==='HR'){paras.push('<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="000000"/></w:pBdr></w:pPr></w:p>');return;}
+      if(tag==='TABLE'||tag==='UL'||tag==='OL'||tag==='TBODY'||tag==='THEAD'||tag==='TR'){emit(n,paras);return;}
+      if(BLOCK.test(tag)){ if(hasBlockDesc(n))emit(n,paras); else paras.push(makePara(n)); }
+      else { if(hasBlockDesc(n))emit(n,paras); else { var mk=makePara(n); if(/<w:t/.test(mk))paras.push(mk); } }
+    });
+  }
+  function docxFromEl(el){
+    var paras=[];emit(el,paras);
+    if(!paras.length)paras.push('<w:p/>');
+    var body=paras.join('')+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
+    var doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+'</w:body></w:document>';
+    var ct='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
+    var rels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>';
+    return zipStore([{name:'[Content_Types].xml',data:ct},{name:'_rels/.rels',data:rels},{name:'word/document.xml',data:doc}]);
+  }
+  window.buildDocxBlob=function(el){ return new Blob([docxFromEl(el)],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}); };
 })();
 </script>
 <script id="sidebar-polish-mod">
@@ -14234,9 +14319,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     need(co.email,'Email de contact');
     if(!estUnipersonnel(o.type)){ var A=(o.associes||[]).filter(function(a){ var nm=(''+(a.nom||a.prenom||'')).trim(); var pr=parseInt((''+(a.parts||'')).replace(/[^0-9]/g,''),10)||0; return nm&&pr>0; }); if(!A.length)m.push('Au moins un associé (nom + parts)'); }
     return m; };
-  window.formUpdateGate=function(){ try{ var m=window.formManques(); var ok=m.length===0;
-    var g=document.getElementById('fi-gate'); if(g){ g.className='fi-gate '+(ok?'ok':'ko'); g.textContent=ok?'✓ Dossier complet — prêt à enregistrer (jusqu’au dépôt).':('À compléter avant d’enregistrer ('+m.length+') : '+m.join(', ')); }
-    ['fi-save','fi-save-doc'].forEach(function(idb){ var btn=document.getElementById(idb); if(btn){ btn.disabled=!ok; btn.classList.toggle('is-disabled',!ok); btn.title=ok?'':('Complétez : '+m.join(', ')); } });
+  window.formUpdateGate=function(){ try{
+    var m=window.formManques?window.formManques():[];
+    var inc=(window.formCoherence?window.formCoherence():[]).filter(function(x){return !x.ok;});
+    var ok=(m.length===0 && inc.length===0);
+    var txt,why;
+    if(m.length){ txt='À compléter avant de générer ('+m.length+') : '+m.join(', '); why='Complétez : '+m.join(', '); }
+    else if(inc.length){ txt='Incohérences à corriger ('+inc.length+') : '+inc.map(function(x){return x.label;}).join(', '); why='Corrigez les incohérences avant de générer : '+inc.map(function(x){return x.label;}).join(', '); }
+    else { txt='✓ Dossier complet et cohérent — documents prêts à générer.'; why=''; }
+    var g=document.getElementById('fi-gate'); if(g){ g.className='fi-gate '+(ok?'ok':'ko'); g.textContent=txt; }
+    ['fi-save','fi-save-doc'].forEach(function(idb){ var btn=document.getElementById(idb); if(btn){ btn.disabled=!ok; btn.classList.toggle('is-disabled',!ok); btn.title=why; } });
+    try{ var c=document.getElementById('fi-coherence'); if(c&&window.formCohInner){ c.innerHTML=window.formCohInner(); c.classList.toggle('has-bad',inc.length>0); } }catch(_e){}
   }catch(e){} };
   window.formMasqueDate=function(el,path){var d=(el.value||'').replace(/\D/g,'').slice(0,8);var out=d;if(d.length>4)out=d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4);else if(d.length>2)out=d.slice(0,2)+'/'+d.slice(2);el.value=out;window.formSet(path,out);};
 
@@ -14249,6 +14342,61 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function aD(i,key){return '<input inputmode="numeric" value="'+esc((FD().associes[i]||{})[key]||'')+'" oninput="var d=(this.value||\'\').replace(/\\D/g,\'\').slice(0,8);var o=d;if(d.length>4)o=d.slice(0,2)+\'/\'+d.slice(2,4)+\'/\'+d.slice(4);else if(d.length>2)o=d.slice(0,2)+\'/\'+d.slice(2);this.value=o;formAssocSet('+i+',\''+key+'\',o)" placeholder="jj/mm/aaaa">';}
   function bI(i,key,ph){return '<input value="'+esc((FD().beneficiaires[i]||{})[key]||'')+'" oninput="formBenSet('+i+',\''+key+'\',this.value)" placeholder="'+esc(ph||'')+'">';}
   function bSel(i,key,opts,ph){var cur=(FD().beneficiaires[i]||{})[key]||'';return '<select onchange="formBenSet('+i+',\''+key+'\',this.value)">'+opts.map(function(o){var v=(o instanceof Array)?o[0]:o,l=(o instanceof Array)?o[1]:o;return '<option value="'+esc(v)+'"'+((''+cur)===(''+v)?' selected':'')+'>'+esc(l)+'</option>';}).join('')+'</select>';}
+  /* Champ SIREN + bouton d'auto-complétion (API recherche-entreprises, sans clé) */
+  function fSiren(){return '<div class="fi-siren"><input value="'+esc(get('societe.siren'))+'" oninput="formSet(\'societe.siren\',this.value)" placeholder="9 chiffres"><button type="button" class="btn btn-sm btn-ghost fi-siren-btn" onclick="formSirenLookup()">Rechercher</button></div>';}
+  function frTva(siren){var n=parseInt((''+siren).replace(/\D/g,''),10);if(isNaN(n))return '';var key=(12+3*(n%97))%97;return 'FR'+(key<10?'0':'')+key+siren;}
+  var NJ={'5710':'sas','5720':'sasu','5499':'sarl','5485':'sarl','5498':'eurl','6540':'sci','6541':'sci'};
+  window.formSirenLookup=function(){
+    var siren=(''+(get('societe.siren')||'')).replace(/\D/g,'').slice(0,9);
+    if(siren.length!==9){ if(typeof toast==='function')toast('Renseignez un SIREN à 9 chiffres.'); return; }
+    var btn=document.querySelector('.fi-siren-btn'); if(btn){btn.disabled=true;btn.textContent='Recherche…';}
+    function fin(msg){ if(btn){btn.disabled=false;btn.textContent='Rechercher';} if(msg&&typeof toast==='function')toast(msg); }
+    var url='https://recherche-entreprises.api.gouv.fr/search?q='+siren+'&page=1&per_page=1';
+    try{ fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+      var res=j&&j.results&&j.results[0];
+      if(!res){ fin('Aucune entreprise trouvée pour ce SIREN.'); return; }
+      var o=FD(),s=(o.societe=o.societe||{}),si=(o.siege=o.siege||{});
+      s.siren=siren;
+      if(res.nom_raison_sociale||res.nom_complet)s.denomination=res.nom_raison_sociale||res.nom_complet;
+      var sg=res.siege||{};
+      if(sg.siret)s.siret=sg.siret;
+      s.tvaIntra=frTva(siren);
+      if(res.activite_principale)s.codeApe=res.activite_principale;
+      if(res.nature_juridique&&NJ[res.nature_juridique])o.type=NJ[res.nature_juridique];
+      var street=[sg.numero_voie,sg.type_voie,sg.libelle_voie].filter(Boolean).join(' ').trim();
+      if(!street&&sg.adresse){ street=(''+sg.adresse).replace(new RegExp('\\s*'+(sg.code_postal||'')+'.*$'),'').trim(); }
+      if(street)si.rue=street;
+      if(sg.code_postal)si.cp=sg.code_postal;
+      if(sg.libelle_commune)si.ville=sg.libelle_commune;
+      if(typeof render==='function')render();
+      fin('Société pré-remplie depuis le SIREN'+(s.denomination?(' — '+s.denomination):'')+'.');
+    }).catch(function(){ fin('Recherche indisponible (connexion requise).'); }); }
+    catch(e){ fin('Recherche impossible.'); }
+  };
+  /* Contrôles de cohérence (Σ apports = capital, nb titres = capital ÷ nominale, Σ parts = total des titres) */
+  window.formCoherence=function(){
+    var o=FD(),s=o.societe||{},tt=o.titres||{},ap=o.apports||{};
+    var cap=num(s.capital),nominal=num(tt.nominal),nbT=num(tt.nbTitres),A=(o.associes||[]);
+    var sumApport=0,anyApport=false; A.forEach(function(a){var v=num(a.apport);if(v!=null){sumApport+=v;anyApport=true;}});
+    var sumParts=0,anyParts=false; A.forEach(function(a){var v=num(a.parts);if(v!=null){sumParts+=v;anyParts=true;}});
+    function eq(a,b){return Math.abs(a-b)<=Math.max(0.01,Math.abs(b)*0.005);}
+    var items=[];
+    if(cap!=null&&anyApport)items.push({ok:eq(sumApport,cap),label:'Somme des apports des associés = capital',got:sumApport,exp:cap});
+    var numer=num(ap.numeraire),nat=num(ap.nature);
+    if(cap!=null&&(numer!=null||nat!=null))items.push({ok:eq((numer||0)+(nat||0),cap),label:'Apports (numéraire + nature) = capital',got:(numer||0)+(nat||0),exp:cap});
+    if(cap!=null&&nominal!=null&&nominal>0&&nbT!=null)items.push({ok:eq(nbT,cap/nominal),label:'Nombre de titres = capital ÷ valeur nominale',got:nbT,exp:cap/nominal});
+    var totT=(nbT!=null)?nbT:((cap!=null&&nominal!=null&&nominal>0)?(cap/nominal):null);
+    if(anyParts&&totT!=null)items.push({ok:eq(sumParts,totT),label:'Somme des parts / actions = nombre total de titres',got:sumParts,exp:totT});
+    return items;
+  };
+  function fmtN(n){try{return (Math.round(n*100)/100).toLocaleString('fr-FR');}catch(e){return ''+n;}}
+  window.formCohInner=function(){
+    var items=(window.formCoherence?window.formCoherence():[]);
+    if(!items.length)return '<div class="fi-coh-h">Contrôles de cohérence — renseignez capital, apports et titres pour vérifier</div>';
+    var bad=items.filter(function(x){return !x.ok;});
+    var rows=items.map(function(x){return '<div class="fi-coh-row '+(x.ok?'ok':'ko')+'"><span class="fi-coh-ic">'+(x.ok?'✓':'!')+'</span><span class="fi-coh-l">'+esc(x.label)+'</span><span class="fi-coh-v">'+(x.ok?('OK — '+fmtN(x.got)):(fmtN(x.got)+' ≠ '+fmtN(x.exp)))+'</span></div>';}).join('');
+    return '<div class="fi-coh-h">Contrôles de cohérence — '+(bad.length?(bad.length+' incohérence'+(bad.length>1?'s':'')+' à vérifier'):'tout est cohérent')+'</div>'+rows;
+  }
   function r1(l,inp){return '<label>'+esc(l)+'</label>'+inp;}
   function r2(l1,i1,l2,i2){return '<div class="frow"><div><label>'+esc(l1)+'</label>'+i1+'</div><div><label>'+esc(l2)+'</label>'+i2+'</div></div>';}
   function grp(t,inner,note){return '<div class="card fi-card"><div class="card-h"><h2>'+esc(t)+'</h2>'+(note?'<span class="sub" style="margin-left:auto">'+esc(note)+'</span>':'')+'</div><div class="card-b">'+inner+'</div></div>';}
@@ -14279,7 +14427,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +r2('Code postal',fI('siege.cp'),'Ville',fI('siege.ville'))
       +r2('Type de local',fSel('siege.type',[['','—'],['Local commercial','Local commercial'],['Domiciliation','Société de domiciliation'],['Domicile du dirigeant','Domicile du dirigeant']],get('siege.type')),'Date de début d\'activité',fD('societe.debut'))
       +r2('Bailleur (si location)',fI('siege.bailleur'),'Domiciliataire (si domiciliation)',fI('siege.domiciliataire'))
-      +r2('SIREN (si déjà immatriculée)',fI('societe.siren'),'SIRET',fI('societe.siret'))
+      +r2('SIREN (si déjà immatriculée)',fSiren(),'SIRET',fI('societe.siret'))
       +r1('Enseigne (si différente)',fI('societe.enseigne')));
     /* Dirigeant */
     var dir=grp((t==='sas'||t==='sasu'?'Dirigeant (Président)':'Dirigeant (Gérant)'),
@@ -14355,9 +14503,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     /* Contact */
     var contact=grp('Contact',
       r2('Email',fI('contact.email'),'Téléphone',fI('contact.tel')));
+    /* Contrôles de cohérence (live) */
+    var coherence='<div id="fi-coherence" class="fi-coh">'+(window.formCohInner?window.formCohInner():'')+'</div>';
     /* Barre d'action */
-    var mq=window.formManques?window.formManques():[]; var okAll=mq.length===0; var dis=okAll?'':' disabled';
-    var gateTxt=okAll?'✓ Dossier complet — prêt à enregistrer (jusqu’au dépôt).':('À compléter avant d’enregistrer ('+mq.length+') : '+esc(mq.join(', ')));
+    var mq=window.formManques?window.formManques():[];
+    var inc0=(window.formCoherence?window.formCoherence():[]).filter(function(x){return !x.ok;});
+    var okAll=mq.length===0&&inc0.length===0; var dis=okAll?'':' disabled';
+    var gateTxt=mq.length?('À compléter avant de générer ('+mq.length+') : '+esc(mq.join(', '))):(inc0.length?('Incohérences à corriger ('+inc0.length+') : '+esc(inc0.map(function(x){return x.label;}).join(', '))):'✓ Dossier complet et cohérent — documents prêts à générer.');
     var gate='<div id="fi-gate" class="fi-gate '+(okAll?'ok':'ko')+'">'+gateTxt+'</div>';
     var actions='<div class="fi-actions"><div class="fi-actions-col">'+gate+'<div class="fi-actions-in">'
       +'<button class="btn btn-ghost" onclick="formReset()">Réinitialiser</button>'
@@ -14366,16 +14518,41 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<button class="btn'+(okAll?'':' is-disabled')+'" id="fi-save"'+dis+' onclick="formCreerDossier(false)">Enregistrer le dossier</button>'
       +'<button class="btn btn-pri'+(okAll?'':' is-disabled')+'" id="fi-save-doc"'+dis+' onclick="formCreerDossier(true)">Enregistrer &amp; ouvrir les documents</button>'
       +'</div></div></div></div>';
-    return '<div class="fi-wrap" oninput="formUpdateGate()" onchange="formUpdateGate()">'+resume+head+soc+dir+titres+dates+assoc+depot+ben+apports+conj+notes+contact+actions+'</div>';
+    return '<div class="fi-wrap" oninput="formUpdateGate()" onchange="formUpdateGate()">'+resume+head+soc+dir+titres+dates+assoc+depot+ben+apports+conj+notes+contact+coherence+actions+'</div>';
   }
   window.pageFormulaire=pageFormulaire;
 
+  /* Génération des documents = vérification (champs requis) + contrôle de cohérence STRICTS.
+     Les documents ne sont PAS générés si le dossier est mal complété ou incohérent
+     (ils doivent tous porter exactement les mêmes informations, complètes et cohérentes). */
   window.formCreerDossier=function(ouvrirDocs){
+    var o=FD(),s=o.societe||{},dir=o.direction||{};
+    if(!(s.denomination||'').trim() && !((dir.nom||'')+(dir.prenom||'')).trim()){ if(typeof toast==='function')toast('Renseignez au moins la dénomination ou le dirigeant.'); return; }
+    /* 1) Vérification : dossier complet exigé (le Brouillon reste possible via « Brouillon »). */
+    var manques=window.formManques?window.formManques():[];
+    if(manques.length){ if(typeof openModal==='function')window.formControleModal(manques,'manques'); else if(typeof toast==='function')toast('Dossier incomplet — documents non générés ('+manques.length+' champ(s) manquant(s)).'); if(typeof formUpdateGate==='function')formUpdateGate(); return; }
+    /* 2) Contrôle de cohérence : STRICT. Toute incohérence bloque la génération. */
+    var inc=(window.formCoherence?window.formCoherence():[]).filter(function(x){return !x.ok;});
+    if(inc.length){ if(typeof openModal==='function')window.formControleModal(inc,'incoherence'); else if(typeof toast==='function')toast('Contrôle non validé — '+inc.length+' incohérence(s). Documents non générés.'); if(typeof formUpdateGate==='function')formUpdateGate(); return; }
+    if(typeof toast==='function')toast('Contrôles validés — génération des documents');
+    window.formDoCreate(ouvrirDocs);
+  };
+  /* Fenêtre « Contrôle non validé » : liste ce qui empêche la génération (bloquant, sans contournement). */
+  window.formControleModal=function(items,kind){
+    var body,rows;
+    if(kind==='manques'){
+      rows=items.map(function(l){return '<div class="fi-coh-row ko"><span class="fi-coh-ic">!</span><span class="fi-coh-l">'+esc(l)+'</span><span class="fi-coh-v">à renseigner</span></div>';}).join('');
+      body='<div class="hint" style="margin:0 0 10px"><b>Dossier incomplet.</b> '+items.length+' information'+(items.length>1?'s':'')+' obligatoire'+(items.length>1?'s':'')+' manquante'+(items.length>1?'s':'')+'. Les documents ne sont pas générés — ils doivent tous porter les mêmes informations, complètes.</div><div class="fi-coh" style="margin-top:0">'+rows+'</div>';
+    } else {
+      var all=(window.formCoherence?window.formCoherence():[]);
+      rows=all.map(function(x){return '<div class="fi-coh-row '+(x.ok?'ok':'ko')+'"><span class="fi-coh-ic">'+(x.ok?'✓':'!')+'</span><span class="fi-coh-l">'+esc(x.label)+'</span><span class="fi-coh-v">'+(x.ok?'OK':(fmtN(x.got)+' ≠ '+fmtN(x.exp)))+'</span></div>';}).join('');
+      body='<div class="hint" style="margin:0 0 10px"><b>Contrôle non validé.</b> '+items.length+' incohérence'+(items.length>1?'s':'')+' détectée'+(items.length>1?'s':'')+'. Les documents ne sont pas générés tant que les montants ne sont pas cohérents.</div><div class="fi-coh" style="margin-top:0">'+rows+'</div>';
+    }
+    openModal('Contrôle non validé — documents non générés',body,'<button class="btn btn-pri" onclick="closeModal()">Corriger le dossier</button>');
+  };
+  window.formDoCreate=function(ouvrirDocs){
     var o=FD();var s=o.societe||{},dir=o.direction||{},dx=o.dirx||{},tt=o.titres||{},dt=o.dates||{},si=o.siege||{},co=o.contact||{};
     var dep=o.depot||{},ap=o.apports||{},cj=o.conjoint||{},cac=o.cac||{},ex=o.extra||{},ben=(o.beneficiaires||[]);
-    if(!(s.denomination||'').trim() && !((dir.nom||'')+(dir.prenom||'')).trim()){ if(typeof toast==='function')toast('Renseignez au moins la dénomination ou le dirigeant.'); return; }
-    /* Dossier complet exigé pour l'enregistrement (le Brouillon reste possible via « Brouillon »). */
-    var manques=window.formManques?window.formManques():[]; if(manques.length){ if(typeof toast==='function')toast('Dossier incomplet — il manque : '+manques.slice(0,3).join(', ')+(manques.length>3?'…':'')+'. Utilisez « Brouillon » pour enregistrer en l\'état.'); if(typeof formUpdateGate==='function')formUpdateGate(); return; }
     var intake={type:o.type||'sas',numeroDossier:o.numeroDossier||'',
       societe:{denomination:s.denomination||'',sigle:s.sigle||'',capital:s.capital||'',objet:s.objet||'',regime:s.regime||'',debut:s.debut||'',siren:s.siren||'',siret:s.siret||'',enseigne:s.enseigne||''},
       depot:{type:dep.type||'Banque',banque:dep.banque||'',montant:dep.montant||'',date:dep.date||'',iban:dep.iban||''},
@@ -14501,12 +14678,72 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.fi-gate.ok{background:rgba(38,86,52,.30);color:#c3e8d1;border-color:rgba(84,150,104,.55)}',
     '.fi-gate.ko{background:rgba(120,42,42,.24);color:#f0bcb6;border-color:rgba(170,74,74,.5)}',
     '.fi-actions .btn.is-disabled,.fi-actions .btn[disabled]{opacity:.4;cursor:not-allowed;filter:grayscale(.4)}',
+    '.fi-siren{display:flex;gap:8px;align-items:center}.fi-siren input{flex:1}.fi-siren-btn{white-space:nowrap;flex:0 0 auto}',
+    '.fi-coh{margin-top:14px;border:1px solid #232326;border-radius:12px;background:#0a0a0c;padding:12px 14px}',
+    '.fi-coh.has-bad{border-color:rgba(170,74,74,.5)}',
+    '.fi-coh-h{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin-bottom:8px}',
+    '.fi-coh-row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:12.5px;border-top:1px solid #17171a}',
+    '.fi-coh-row:first-of-type{border-top:0}',
+    '.fi-coh-ic{width:18px;height:18px;flex:0 0 auto;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}',
+    '.fi-coh-row.ok .fi-coh-ic{background:rgba(38,86,52,.4);color:#c3e8d1}.fi-coh-row.ko .fi-coh-ic{background:rgba(120,42,42,.4);color:#f0bcb6}',
+    '.fi-coh-l{flex:1;color:#c9c9d2}.fi-coh-v{color:#8f8f98;font-variant-numeric:tabular-nums;text-align:right}',
+    '.fi-coh-row.ko .fi-coh-v{color:#f0bcb6}',
     '@media(max-width:860px){.fi-actions{left:0}}',
     '@media(max-width:640px){.fi-actions-col{padding:8px 13px}.fi-actions-in{flex-wrap:wrap}.fi-actions-r{width:100%;margin-left:0}.fi-actions-r .btn{flex:1}}'
   ].join('');document.head.appendChild(st); }catch(e){}
 
   /* Premier rendu si déjà chargé */
   try{ if(typeof render==='function'&&document.getElementById('nav'))setTimeout(function(){try{var n=document.getElementById('nav');if(n&&!n.querySelector('[data-formbtn]'))injectBtn();}catch(e){}},60); }catch(e){}
+})();
+</script>
+<script id="inpi-suivi-mod">
+/* Checklist de dépôt au Guichet unique (INPI) + suivi de la formalité.
+   Ajoute une carte au dossier : pièces à déposer (depuis piecesRequises),
+   statut de la formalité (à faire / déposé / immatriculé) et n° de dossier INPI. */
+(function(){
+  if(window.__inpiSuiviInit)return; window.__inpiSuiviInit=1;
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  var STATUTS=[['afaire','À faire'],['depose','Déposé au Guichet unique'],['immatricule','Immatriculée']];
+  function suivi(d){ d.inpiSuivi=d.inpiSuivi||{statut:'afaire',reference:'',dateDepot:'',ts:0}; return d.inpiSuivi; }
+  window.inpiSetStatut=function(id,v){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); if(!d)return; var su=suivi(d); su.statut=v; if(v!=='afaire'&&!su.dateDepot&&typeof today==='function')su.dateDepot=today(); su.ts=Date.now(); d.historique=d.historique||[]; d.historique.unshift({d:(typeof today==='function'?today():''),t:'Guichet unique : '+((STATUTS.filter(function(s){return s[0]===v;})[0]||[])[1]||v)}); if(typeof save==='function')save(); if(typeof render==='function')render(); };
+  window.inpiSetRef=function(id,v){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); if(!d)return; suivi(d).reference=v; if(typeof save==='function')save(); };
+  window.espInpiSuiviCard=function(d){
+    if(!d)return '';
+    var su=suivi(d);
+    var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d; dm.docs=dm.docs||{}; dm.piecesRecues=dm.piecesRecues||{};
+    var pieces=(typeof piecesRequises==='function')?piecesRequises(d):[];
+    var recu=function(p){return ((dm.docs[p.k]||[]).length>0)||dm.piecesRecues[p.k]===true;};
+    var nb=pieces.filter(recu).length,total=pieces.length;
+    var rows=pieces.map(function(p){var ok=recu(p);return '<div class="inpi-pc '+(ok?'ok':'')+'"><span class="inpi-pc-ic">'+(ok?'✓':'○')+'</span><span class="inpi-pc-l">'+E(p.label)+'</span><span class="inpi-pc-t">'+(ok?'Prête':'Manquante')+'</span></div>';}).join('');
+    var seg=STATUTS.map(function(s){return '<button type="button" class="inpi-seg'+(su.statut===s[0]?' on':'')+'" onclick="inpiSetStatut(\''+d.id+'\',\''+s[0]+'\')">'+E(s[1])+'</button>';}).join('');
+    var manque=total-nb;
+    return '<div class="card inpi-card"><div class="card-h"><h2>Dépôt au Guichet unique (INPI)</h2><span class="sub" style="margin-left:auto">'+nb+' / '+total+' pièces prêtes</span></div>'
+      +'<div class="card-b">'
+      +'<div class="inpi-seg-wrap">'+seg+'</div>'
+      +'<div class="inpi-ref"><label>N° de dossier / référence INPI</label><input value="'+E(su.reference||'')+'" oninput="inpiSetRef(\''+d.id+'\',this.value)" placeholder="ex. dossier INPI, n° de formalité"></div>'
+      +(su.dateDepot?('<div class="inpi-date">Déposé le '+E((typeof frDate==='function')?frDate(su.dateDepot):su.dateDepot)+'</div>'):'')
+      +'<div class="inpi-chk-h">Pièces à déposer</div><div class="inpi-chk">'+(rows||'<div class="hint">Aucune pièce listée.</div>')+'</div>'
+      +(manque>0?('<div class="hint" style="margin-top:8px">'+manque+' pièce'+(manque>1?'s':'')+' à compléter avant le dépôt (voir « Pièces justificatives »).</div>'):'')
+      +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm btn-pri" onclick="espDepotInpi(\''+d.id+'\')">Préparer le dépôt au Guichet unique</button></div>'
+      +'</div></div>';
+  };
+  /* Greffe la carte dans le panneau du dossier (dernier enfant de la colonne principale) */
+  try{ if(typeof window.espPanel==='function' && !window.espPanel.__inpi){ var _p=window.espPanel; window.espPanel=function(d,list,id){ var h=_p.apply(this,arguments); try{ if(d&&typeof window.espInpiSuiviCard==='function'){ var card=window.espInpiSuiviCard(d); if(card){ var m=h.replace(/(<\/div>\s*<\/div>\s*)$/, card+'$1'); if(m!==h)h=m; else h=h+card; } } }catch(e){} return h; }; window.espPanel.__inpi=1; } }catch(e){}
+  try{ var st=document.createElement('style');st.id='inpi-suivi-css';st.textContent=[
+    '.inpi-seg-wrap{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}',
+    '.inpi-seg{flex:1;min-width:120px;padding:8px 10px;border:1px solid #262629;border-radius:9px;background:#0d0d0f;color:#c9cbce;font:600 12px system-ui,sans-serif;cursor:pointer;transition:.15s ease}',
+    '.inpi-seg:hover{border-color:#3a3a40;color:#eef0f4}',
+    '.inpi-seg.on{background:#1c1c1e;color:#fff;border-color:#4a4a52;box-shadow:inset 0 0 0 1px #4a4a52}',
+    '.inpi-ref{margin-bottom:6px}.inpi-ref label{display:block;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin-bottom:4px}',
+    '.inpi-date{font-size:12px;color:#9a9aa0;margin-bottom:10px}',
+    '.inpi-chk-h{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin:10px 0 6px}',
+    '.inpi-chk{display:flex;flex-direction:column;gap:4px}',
+    '.inpi-pc{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid #1c1c1e;border-radius:8px;background:#0a0a0c;font-size:12.5px}',
+    '.inpi-pc.ok{border-color:#26332b}',
+    '.inpi-pc-ic{width:18px;height:18px;flex:0 0 auto;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:#17171a;color:#8f8f98}',
+    '.inpi-pc.ok .inpi-pc-ic{background:rgba(38,86,52,.4);color:#c3e8d1}',
+    '.inpi-pc-l{flex:1;color:#c9c9d2}.inpi-pc-t{color:#8f8f98;font-size:11px}.inpi-pc.ok .inpi-pc-t{color:#9fd0af}'
+  ].join('');document.head.appendChild(st); }catch(e){}
 })();
 </script>
 </body>
