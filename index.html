@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=296;
+var LAST_VER=297;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10608,6 +10608,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     /* ----- Régime fiscal par défaut ----- */
     var defautFiscal = isSCI?'IR' : (forme==='EURL'?'IR':'IS'); // SAS/SASU/SARL/SA → IS ; EURL/SCI → IR
     var regimeFiscal = choixIS?'IS':(choixIR?'IR':defautFiscal);
+    /* Options fiscales propres à CE dossier (jamais partagées avec un autre dossier) */
+    var _F=(d&&d.fiscal)||{};
+    if(_F.regimeFiscal==='IS')regimeFiscal='IS'; else if(_F.regimeFiscal==='IR')regimeFiscal='IR';
     /* ----- Régime social du dirigeant ----- */
     var regimeSocial, socialDetail;
     if(isSAS){ regimeSocial='Assimilé salarié'; socialDetail='Président de '+forme+' → régime général de la Sécurité sociale (assimilé salarié).'; }
@@ -10619,6 +10622,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     }
     else if(isSCI){ regimeSocial=(regimeFiscal==='IS')?'Variable':'Non affilié (gérance)'; socialDetail='Gérant de SCI : pas d\'affiliation au titre de la gérance (sauf activité relevant du régime social).'; }
     else { regimeSocial='À déterminer'; socialDetail='Forme non reconnue — préciser la forme sociale.'; }
+    if(_F.regimeSocial==='assimile'){ regimeSocial='Assimilé salarié'; socialDetail='Option retenue pour ce dossier : régime général (assimilé salarié).'; }
+    else if(_F.regimeSocial==='tns'){ regimeSocial='TNS'; socialDetail='Option retenue pour ce dossier : travailleur non salarié (SSI).'; }
 
     var an=[];
     /* 1. Régime fiscal */
@@ -10657,14 +10662,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       attention:an.filter(function(a){return a.niveau==='attention';}).length,
       conseil:an.filter(function(a){return a.niveau==='conseil';}).length};
     var synthese=forme+' · '+regimeFiscal+' · '+regimeSocial;
-    return {profil:{forme:forme,regimeFiscal:regimeFiscal,defautFiscal:defautFiscal,regimeSocial:regimeSocial,tva:'Franchise/réel',capital:cap,dirigeantPct:presPct},
+    var _tvaLbl=({'franchise':'Franchise en base','rs':'Réel simplifié','rn':'Réel normal'}[_F.tva])||'Franchise/réel';
+    return {profil:{forme:forme,regimeFiscal:regimeFiscal,defautFiscal:defautFiscal,regimeSocial:regimeSocial,tva:_tvaLbl,acre:(_F.acre==='oui'),capital:cap,dirigeantPct:presPct},
       analyses:an,counts:counts,synthese:synthese};
   };
 
   window.avocatFiscalisteHTML=function(d){
     var r=window.avocatFiscaliste(d);var p=r.profil;
     var chip=function(l,v){return '<span class="af-chip"><span class="af-k">'+E(l)+'</span><b>'+E(v)+'</b></span>';};
-    var head='<div class="af-profil">'+chip('Forme',p.forme||'—')+chip('Régime fiscal',p.regimeFiscal)+chip('Régime social',p.regimeSocial)+(p.dirigeantPct!=null?chip('Part dirigeant',p.dirigeantPct+' %'):'')+(p.capital!=null?chip('Capital',(p.capital+' €')):'')+'</div>';
+    var head='<div class="af-profil">'+chip('Forme',p.forme||'—')+chip('Régime fiscal',p.regimeFiscal)+chip('Régime social',p.regimeSocial)+chip('TVA',p.tva||'—')+(p.acre?chip('ACRE','Oui'):'')+(p.dirigeantPct!=null?chip('Part dirigeant',p.dirigeantPct+' %'):'')+(p.capital!=null?chip('Capital',(p.capital+' €')):'')+'</div>';
     var order=['risque','attention','conseil'];var lbl={risque:'⛔ Points de vigilance',attention:'⚠️ À arbitrer',conseil:'💡 Recommandations'};
     var body=order.map(function(n){var g=r.analyses.filter(function(a){return a.niveau===n;});if(!g.length)return '';
       return '<div class="af-grp af-'+n+'"><div class="af-grp-t">'+lbl[n]+'</div>'+g.map(function(a){
@@ -12533,7 +12539,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     else if(p.isEURL)opt=card('EURL','Régime de l\'EURL','<b>IR</b> par défaut (BIC/BNC) — option IS possible (révocable 5 ans). Gérant associé unique <b>TNS (SSI)</b> : cotisations plus faibles mais dividendes &gt; 10 % du capital cotisés.');
     else if(p.isSARL)opt=card('SARL','Régime de la SARL','<b>IS</b> par défaut (option SARL de famille à l\'IR possible). Gérant <b>majoritaire = TNS</b>, minoritaire/égalitaire = assimilé salarié. Dividendes du gérant majoritaire &gt; 10 % du capital soumis aux cotisations SSI.');
     else if(p.isSCI)opt=card('SCI','Régime de la SCI','<b>IR</b> (transparence) par défaut — option IS <b>irréversible</b> (fait perdre le régime des plus-values des particuliers). Attention aux activités commerciales (location meublée) qui entraînent l\'IS d\'office.');
-    return '<div class="fx-h1">Régime fiscal & social</div><div class="fx-grid">'+opt+groups+'</div>';
+    var editable=(typeof window.dossierFiscalCard==='function')?window.dossierFiscalCard(d):'';
+    return '<div class="fx-h1">Régime fiscal & social</div>'+editable+'<div class="fx-grid">'+opt+groups+'</div>';
   }
 
   function solutionGain(a,d){var i=info(d),p=i._p;var is=(typeof calculISDetail==='function')?calculISDetail({benefice:Math.max(0,i.benefice),ca:i.caPrev,capitalLibere:i.capitalLibere,detentionPP:i.detentionPP}):{isTotal:0};
@@ -15209,6 +15216,95 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.fin-bundle .fin-meta{text-align:center;font-size:12px;color:#333;margin:2px 0}',
     '.fin-bundle .fin-sec{font-weight:700;font-size:13px;margin:26px 0 6px;border-bottom:1px solid #333;padding-bottom:3px}',
     '.fin-bundle .fin-list{margin:0;padding-left:22px;font-size:13px;line-height:1.7}'
+  ].join('');document.head.appendChild(st); }catch(e){}
+})();
+</script>
+<script id="fiscal-options-mod">
+/* ===================================================================
+   OPTIONS FISCALES ÉDITABLES — strictement propres à CHAQUE dossier.
+   Stockées sur d.fiscal (jamais sur le client partagé) → aucune
+   information n'est mélangée ni affiliée à un autre dossier.
+   Régime fiscal (IS/IR) · Régime social du dirigeant · TVA · ACRE.
+   Ces choix priment sur l'analyse automatique (avocatFiscaliste).
+   =================================================================== */
+(function(){
+  function esc2(s){ return (typeof esc==='function')?esc(s):(''+(s==null?'':s)); }
+  function findDos(id){ return (DB.dossiers||[]).find(function(x){return x.id===id;}); }
+
+  function refresh(){ // le module fiscal est un overlay : le rafraîchir s'il est ouvert, sinon rendu normal
+    try{ var ov=document.getElementById('fiscal-ov'); if(ov&&ov.classList.contains('show')&&typeof window.fiscalGo==='function'){ window.fiscalGo(window.fiscalTab||'regime'); return; } }catch(e){}
+    if(typeof render==='function')render();
+  }
+  window.fiscalSet=function(id,field,val){
+    var d=findDos(id); if(!d)return;
+    d.fiscal=d.fiscal||{};
+    if(val)d.fiscal[field]=val; else delete d.fiscal[field];
+    if(!Object.keys(d.fiscal).length)delete d.fiscal;
+    d.historique=d.historique||[]; d.historique.unshift({d:(typeof today==='function'?today():''),t:'Options fiscales du dossier mises à jour ('+field+(val?' = '+val:' réinitialisé')+')'});
+    try{save();}catch(e){} refresh();
+  };
+  window.fiscalReset=function(id){
+    var d=findDos(id); if(!d)return; if(!d.fiscal)return;
+    delete d.fiscal;
+    d.historique=d.historique||[]; d.historique.unshift({d:(typeof today==='function'?today():''),t:'Options fiscales du dossier réinitialisées (automatique)'});
+    try{save();}catch(e){} refresh();
+  };
+
+  function autoProfil(d){ var sv=d.fiscal; d.fiscal=null; var p={}; try{ p=(window.avocatFiscaliste?window.avocatFiscaliste(d).profil:{})||{}; }catch(e){} d.fiscal=sv; return p; }
+
+  window.dossierFiscalCard=function(d){
+    if(!d||typeof window.avocatFiscaliste!=='function')return '';
+    var F=d.fiscal||{};
+    var auto=autoProfil(d);
+    var sel=function(id,field,cur,opts){
+      var body=opts.map(function(o){ return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+esc2(o[1])+'</option>'; }).join('');
+      return '<select class="fisc-sel" onchange="fiscalSet(\''+id+'\',\''+field+'\',this.value)">'+body+'</select>';
+    };
+    var ref=esc2(d.numeroDossier||d.ref||'')+(d.numeroService?(' · '+esc2(d.numeroService)):'');
+    var over=Object.keys(F).length;
+    var rows=''
+      +'<div class="fisc-row"><label>Régime fiscal</label>'
+        +sel(d.id,'regimeFiscal',F.regimeFiscal||'',[['','Automatique ('+(auto.regimeFiscal||'—')+')'],['IS','IS — impôt sur les sociétés'],['IR','IR — impôt sur le revenu']])+'</div>'
+      +'<div class="fisc-row"><label>Régime social du dirigeant</label>'
+        +sel(d.id,'regimeSocial',F.regimeSocial||'',[['','Automatique ('+(auto.regimeSocial||'—')+')'],['assimile','Assimilé salarié (régime général)'],['tns','TNS (SSI)']])+'</div>'
+      +'<div class="fisc-row"><label>Régime de TVA</label>'
+        +sel(d.id,'tva',F.tva||'',[['','Automatique (à arbitrer)'],['franchise','Franchise en base'],['rs','Réel simplifié'],['rn','Réel normal']])+'</div>'
+      +'<div class="fisc-row"><label>ACRE (exonération début d\'activité)</label>'
+        +sel(d.id,'acre',F.acre||'',[['','Non renseigné'],['oui','Oui — demande ACRE'],['non','Non']])+'</div>';
+    return '<div class="card fisc-card">'
+      +'<div class="card-h"><h2>Options fiscales</h2>'
+        +'<span class="sub" style="margin-left:auto">'+(over?'<b class="fisc-tag">'+over+' option'+(over>1?'s':'')+' choisie'+(over>1?'s':'')+'</b>':'Automatique')+'</span></div>'
+      +'<div class="card-b">'
+        +'<div class="fisc-grid">'+rows+'</div>'
+        +'<div class="fisc-note">Ces options ne concernent que <b>ce dossier</b> ('+ref+') et la société qui lui est propre — elles ne sont ni partagées ni affiliées à un autre dossier. « Automatique » retient le régime déduit de la forme et de la répartition du capital.</div>'
+        +(over?'<div class="fisc-act"><button class="btn btn-ghost" onclick="fiscalReset(\''+d.id+'\')">Réinitialiser (automatique)</button></div>':'')
+      +'</div></div>';
+  };
+
+  try{ var st=document.createElement('style'); st.id='fiscal-options-css'; st.textContent=[
+    '.fisc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}',
+    '@media(max-width:640px){.fisc-grid{grid-template-columns:1fr}}',
+    '.fisc-row{display:flex;flex-direction:column;gap:4px}',
+    '.fisc-row label{font-size:11px;color:var(--ink-3);font-weight:700;text-transform:uppercase;letter-spacing:.3px}',
+    '.fisc-sel{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--paper);color:var(--ink);font-size:13px}',
+    '.fisc-note{font-size:11.5px;color:var(--ink-3);margin-top:12px;line-height:1.5}',
+    '.fisc-tag{font-size:11px;font-weight:800}',
+    '.fisc-act{margin-top:12px;display:flex;justify-content:flex-end}',
+    /* Rendu ACCENTUÉ dans le Module fiscal (overlay sombre) — carte mise en avant */
+    '#fiscal-ov .fisc-card{background:linear-gradient(135deg,rgba(124,108,255,.12),#141418 58%);border:1px solid #4a3fd6;border-radius:16px;margin-bottom:18px;overflow:hidden;box-shadow:0 0 0 1px rgba(124,108,255,.22),0 22px 60px -26px rgba(124,108,255,.55)}',
+    '#fiscal-ov .fisc-card .card-h{padding:14px 18px;border-bottom:1px solid #34305e;display:flex;align-items:center;background:linear-gradient(90deg,rgba(124,108,255,.26),rgba(124,108,255,.04));box-shadow:inset 4px 0 0 0 #7c6cff}',
+    '#fiscal-ov .fisc-card .card-h h2{font-size:16px;margin:0;color:#efeaff;letter-spacing:.2px}',
+    '#fiscal-ov .fisc-card .card-h h2::before{content:"🧮 ";font-size:15px}',
+    '#fiscal-ov .fisc-card .card-b{padding:16px 18px}',
+    '#fiscal-ov .fisc-grid{gap:14px 18px}',
+    '#fiscal-ov .fisc-row label{color:#b7b2dd;font-size:11px}',
+    '#fiscal-ov .fisc-sel{background:#0e0e11;border:1px solid #3a3560;color:#f2f0ff;font-weight:600;padding:10px 12px;border-radius:10px}',
+    '#fiscal-ov .fisc-sel:hover{border-color:#6b5cf0}',
+    '#fiscal-ov .fisc-sel:focus{outline:none;border-color:#7c6cff;box-shadow:0 0 0 3px rgba(124,108,255,.28)}',
+    '#fiscal-ov .fisc-note{color:#b3b0c8;border-top:1px solid #26233f;padding-top:11px}',
+    '#fiscal-ov .fisc-tag{color:#0e0e12;background:linear-gradient(135deg,#8f82ff,#6b5cf0);border:1px solid #4a3fd6;border-radius:20px;padding:3px 11px;font-size:11px}',
+    '#fiscal-ov .fisc-act .btn{background:#17171b;border:1px solid #4a3fd6;color:#c9c2ff;border-radius:10px;padding:9px 14px}',
+    '#fiscal-ov .fisc-act .btn:hover{border-color:#7c6cff;color:#efeaff}'
   ].join('');document.head.appendChild(st); }catch(e){}
 })();
 </script>
