@@ -539,7 +539,6 @@ aside .nav-btn:hover{color:#000}
 </div>
 
 <div id="toast"></div>
-<div id="saveind"><span class="dot"></span><span id="saveind-t">Enregistré</span></div>
 
 <script>
 /* =================================================================
@@ -3090,7 +3089,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=280;
+var LAST_VER=281;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3110,7 +3109,7 @@ window.addEventListener('focus',lastCheckUpdate);
 window.addEventListener('online',lastCheckUpdate);
 window.addEventListener('pageshow',function(e){ if(e.persisted) lastCheckUpdate(); });
 /* petit badge de version (bas gauche) */
-window.addEventListener('load',function(){try{var b=document.createElement('div');b.id='last-ver';b.textContent='LAST · v'+LAST_VER;b.style.cssText='position:fixed;right:10px;bottom:8px;z-index:90;font:600 10px/1 system-ui,sans-serif;color:#b7ab8b;background:rgba(60,55,43,.06);border:1px solid rgba(120,110,80,.18);padding:3px 7px;border-radius:20px;pointer-events:none;opacity:.75';document.body.appendChild(b);}catch(e){}});
+/* Indicateur de version (badge « LAST · vN ») retiré à la demande. LAST_VER reste utilisé pour la mise à jour automatique. */
 var _pwaPrompt=null;
 function pwaInstalled(){return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;}
 function pwaHideBanner(){var b=document.getElementById('pwa-install');if(b)b.remove();}
@@ -14149,13 +14148,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var contact=grp('Contact',
       r2('Email',fI('contact.email'),'Téléphone',fI('contact.tel')));
     /* Barre d'action */
-    var actions='<div class="fi-actions">'
+    var actions='<div class="fi-actions"><div class="fi-actions-in">'
       +'<button class="btn btn-ghost" onclick="formReset()">Réinitialiser</button>'
       +'<button class="btn btn-ghost" onclick="formBrouillon()">Brouillon</button>'
       +'<div class="fi-actions-r">'
       +'<button class="btn" onclick="formCreerDossier(false)">Enregistrer le dossier</button>'
       +'<button class="btn btn-pri" onclick="formCreerDossier(true)">Enregistrer &amp; ouvrir les documents</button>'
-      +'</div></div>';
+      +'</div></div></div>';
     return '<div class="fi-wrap">'+resume+head+soc+dir+titres+dates+assoc+depot+ben+apports+conj+notes+contact+actions+'</div>';
   }
   window.pageFormulaire=pageFormulaire;
@@ -14241,6 +14240,20 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   }
   try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){var r=_bn.apply(this,arguments);try{injectBtn();}catch(e){}return r;}; } }catch(e){}
 
+  /* Aligne le bord gauche de la barre fixe sur le bord droit RÉEL de la barre latérale
+     (le grid .app peut être décalé par une gouttière/scrollbar → éviter le chevauchement du contour). */
+  function fiBarAlign(){
+    try{
+      var root=document.documentElement;
+      if(window.innerWidth<=860){ root.style.removeProperty('--fi-bar-left'); return; }
+      var a=document.querySelector('aside');if(!a){root.style.removeProperty('--fi-bar-left');return;}
+      var r=a.getBoundingClientRect();
+      if(r.width>0 && r.right>0 && r.left>=0){ root.style.setProperty('--fi-bar-left', Math.round(r.right)+'px'); }
+      else root.style.removeProperty('--fi-bar-left');
+    }catch(e){}
+  }
+  window.fiBarAlign=fiBarAlign;
+  try{ window.addEventListener('resize',function(){ if(typeof state!=='undefined'&&state.page==='formulaire')fiBarAlign(); }); }catch(e){}
   /* ---- Rendu de la page « Formulaire » ---- */
   try{ var _rd=window.render; if(typeof _rd==='function'){ window.render=function(){
     if(typeof state!=='undefined'&&state.page==='formulaire'){
@@ -14250,6 +14263,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Formulaire';}catch(e){}
       try{document.getElementById('psub').textContent=(p&&p.sub)||'';}catch(e){}
       var V=document.getElementById('view');if(V)V.innerHTML=pageFormulaire();
+      try{requestAnimationFrame(fiBarAlign);}catch(e){fiBarAlign();}
       return;
     }
     return _rd.apply(this,arguments);
@@ -14257,7 +14271,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   /* ---- Style (thème noir) ---- */
   try{ var st=document.createElement('style');st.id='form-intake-css';st.textContent=[
-    '.fi-wrap{max-width:920px;margin:0 auto;padding-bottom:96px}',
+    '.fi-wrap{max-width:920px;margin:0 auto;padding-bottom:116px}',
     '.fi-card{margin-top:14px}',
     '.fi-head{margin-top:0}',
     '.fi-intro{font-size:12.5px;line-height:1.55;color:#a9a9b2;margin-bottom:12px}',
@@ -14266,9 +14280,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.fi-assoc-t{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin-bottom:8px}',
     '.fi-ax{position:absolute;top:8px;right:8px;width:24px;height:24px;border:1px solid #2c2c30;background:#141416;color:#c9c9d2;border-radius:7px;cursor:pointer;line-height:1;font-size:12px;transition:.15s ease}',
     '.fi-ax:hover{background:#1d1d20;color:#fff}',
-    '.fi-actions{position:sticky;bottom:0;display:flex;align-items:center;gap:10px;margin-top:16px;padding:12px 0;background:linear-gradient(0deg,#050506 72%,rgba(5,5,6,0));z-index:5}',
+    '.fi-actions{position:fixed;left:var(--fi-bar-left,192px);right:0;bottom:0;z-index:40;background:#050506;border-top:1px solid #1c1c1e;box-shadow:0 -10px 26px -14px rgba(0,0,0,.75)}',
+    '.fi-actions-in{max-width:920px;width:100%;box-sizing:border-box;margin:0 auto;display:flex;align-items:center;gap:10px;padding:12px 22px}',
     '.fi-actions-r{margin-left:auto;display:flex;gap:10px;flex-wrap:wrap}',
-    '@media(max-width:640px){.fi-actions{flex-wrap:wrap}.fi-actions-r{width:100%;margin-left:0}}'
+    '@media(max-width:860px){.fi-actions{left:0}}',
+    '@media(max-width:640px){.fi-actions-in{flex-wrap:wrap;padding:10px 13px}.fi-actions-r{width:100%;margin-left:0}.fi-actions-r .btn{flex:1}}'
   ].join('');document.head.appendChild(st); }catch(e){}
 
   /* Premier rendu si déjà chargé */
