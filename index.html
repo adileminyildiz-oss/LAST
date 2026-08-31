@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=299;
+var LAST_VER=300;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -5711,7 +5711,7 @@ window.modalDemandeView=function(id){
 
   /* Aperçus paginés */
   window.espDocVoir=function(id,k){
-    var d=espDoss().find(function(x){return x.id===id;});var dc=(typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).find(function(x){return x.k===k;})||{k:k,l:k};
+    var d=espDoss().find(function(x){return x.id===id;});var dc=(typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).find(function(x){return x.k===k;})||(d&&d.modifDocs&&d.modifDocs.filter(function(x){return x.k===k;})[0])||{k:k,l:k};
     openModal(esc(dc.l),'<div class="fv-view-scroll" style="background:#e7e0d1"><div class="doc-gen">'+a4Paginate(espDocHTML(d,dc))+'</div></div>',
       '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="espDocPrint()">Imprimer</button>');
   };
@@ -14816,15 +14816,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function modifResolution(M){
     var mk=M.kind||'siege',N=M.nouveau||{},A=M.ancien||{},D=M.dates||{};
     var eff=D.effet||'';
-    if(mk==='siege') return {objet:'transfert du siège social',res:'L\'assemblée décide de transférer le siège social '+(A.siege?('précédemment situé « '+esc(A.siege)+' » '):'')+'à l\'adresse suivante : <b>'+esc((N.siege||'')+', '+(N.cp||'')+' '+(N.ville||''))+'</b>, à compter du '+esc(eff)+'. Les statuts sont modifiés en conséquence.'};
+    if(mk==='siege') return {objet:'transfert du siège social',res:'L\'assemblée décide de transférer le siège social '+(A.siege?('précédemment situé <b>'+esc(A.siege)+'</b> '):'')+'à l\'adresse suivante : <b>'+esc((N.siege||'')+', '+(N.cp||'')+' '+(N.ville||''))+'</b>, à compter du '+esc(eff)+'. Les statuts sont modifiés en conséquence.'};
     if(mk==='dirigeant') return {objet:'changement de dirigeant',res:'L\'assemblée prend acte de la cessation des fonctions de '+esc(A.dirigeant||'l\'ancien dirigeant')+' et nomme en qualité de '+esc(N.fonction||'dirigeant')+', à compter du '+esc(eff)+', <b>'+esc(((N.civilite||'')+' '+(N.prenom||'')+' '+(N.nom||'')).trim())+'</b>, né(e) le '+esc(N.naissance||'…')+' à '+esc(N.lieuNaissance||'…')+', de nationalité '+esc(N.nationalite||'française')+', demeurant '+esc(N.adresse||'…')+', qui accepte ledit mandat et déclare n\'être frappé(e) d\'aucune interdiction.'};
-    if(mk==='denomination') return {objet:'changement de dénomination sociale',res:'L\'assemblée décide de modifier la dénomination sociale, précédemment « '+esc(A.denomination||'…')+' », qui devient : <b>'+esc(N.denomination||'…')+'</b>, à compter du '+esc(eff)+'. L\'article correspondant des statuts est modifié en conséquence.'};
-    if(mk==='objet') return {objet:'changement d\'objet social',res:'L\'assemblée décide de modifier l\'objet social de la société, qui sera désormais le suivant : <b>'+esc(N.objet||'…')+'</b>, à compter du '+esc(eff)+'. L\'article « Objet » des statuts est modifié en conséquence.'};
-    if(mk==='capital'){ var sens=(N.sens==='reduction')?'réduire':'augmenter'; return {objet:'modification du capital social',res:'L\'assemblée décide de '+sens+' le capital social, qui passe de '+esc(A.capital||'…')+' € à <b>'+esc(N.capital||'…')+' €</b>, à compter du '+esc(eff)+'. L\'article « Capital social » des statuts est modifié en conséquence.'};}
+    if(mk==='denomination') return {objet:'changement de dénomination sociale',res:'L\'assemblée décide de modifier la dénomination sociale, précédemment <b>'+esc(A.denomination||'…')+'</b>, qui devient : <b>'+esc(N.denomination||'…')+'</b>, à compter du '+esc(eff)+'. L\'article correspondant des statuts est modifié en conséquence.'};
+    if(mk==='objet') return {objet:'changement d\'objet social',res:'L\'assemblée décide de modifier l\'objet social de la société, qui sera désormais le suivant : <b>'+esc(N.objet||'…')+'</b>, à compter du '+esc(eff)+'. L\'article "Objet" des statuts est modifié en conséquence.'};
+    if(mk==='capital'){ var sens=(N.sens==='reduction')?'réduire':'augmenter'; return {objet:'modification du capital social',res:'L\'assemblée décide de '+sens+' le capital social, qui passe de '+esc(A.capital||'…')+' € à <b>'+esc(N.capital||'…')+' €</b>, à compter du '+esc(eff)+'. L\'article "Capital social" des statuts est modifié en conséquence.'};}
     if(mk==='transformation'){ var fn=(typeof formeNom==='function')?formeNom(N.formeNouvelle):(N.formeNouvelle||'…'); return {objet:'transformation de la forme sociale',res:'L\'assemblée décide de transformer la société en <b>'+esc(fn)+'</b>, à compter du '+esc(eff)+', sans création d\'une personne morale nouvelle. Les statuts sont refondus pour être mis en conformité avec les règles de la nouvelle forme, et les organes de direction sont désignés en conséquence.'};}
     if(mk==='cession'){ var nt=N.natureTitres||'parts sociales'; return {objet:'cession de '+nt,res:'L\'assemblée agrée et constate la cession de <b>'+esc(N.nbTitres||'…')+'</b> '+esc(nt)+' consentie par '+esc(N.cedant||'…')+' au profit de <b>'+esc(N.cessionnaire||'…')+'</b>, moyennant le prix de <b>'+esc(N.prix||'…')+' €</b>, à compter du '+esc(eff)+'. La répartition du capital est modifiée en conséquence dans les statuts.'};}
     if(mk==='dissolution'){ return {objet:'dissolution anticipée & mise en liquidation',res:'L\'assemblée décide la <b>dissolution anticipée</b> de la société à compter du '+esc(eff)+' et sa mise en liquidation amiable. Elle nomme en qualité de liquidateur <b>'+esc(N.liquidateur||'…')+'</b>'+(N.liquidateurNat?(', de nationalité '+esc(N.liquidateurNat)):'')+(N.liquidateurAdr?(', demeurant '+esc(N.liquidateurAdr)):'')+', qui accepte ces fonctions et déclare n\'être frappé(e) d\'aucune interdiction. Le siège de la liquidation est fixé à <b>'+esc(N.siegeLiquidation||'…')+'</b>. Le liquidateur dispose des pouvoirs les plus étendus pour réaliser l\'actif et apurer le passif.'};}
-    if(mk==='cloture'){ return {objet:'changement de date de clôture de l\'exercice',res:'L\'assemblée décide de modifier la date de clôture de l\'exercice social, précédemment fixée au <b>'+esc(N.ancienneCloture||'…')+'</b>, désormais fixée au <b>'+esc(N.nouvelleCloture||'…')+'</b>, à compter de l\'exercice en cours. L\'article « Exercice social » des statuts est modifié en conséquence.'};}
+    if(mk==='cloture'){ return {objet:'changement de date de clôture de l\'exercice',res:'L\'assemblée décide de modifier la date de clôture de l\'exercice social, précédemment fixée au <b>'+esc(N.ancienneCloture||'…')+'</b>, désormais fixée au <b>'+esc(N.nouvelleCloture||'…')+'</b>, à compter de l\'exercice en cours. L\'article "Exercice social" des statuts est modifié en conséquence.'};}
     return {objet:'modification statutaire',res:'L\'assemblée décide la modification statutaire mentionnée ci-dessus.'};
   }
   function pvModifHTML(dos){
@@ -14859,7 +14859,59 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<p style="margin-top:18px;text-align:right">Pour avis.</p>'
       +'</div></div>';
   }
-  window.pvModifHTML=pvModifHTML; window.annonceModifHTML=annonceModifHTML;
+  /* Statuts mis à jour — extrait de l'article modifié (formalités qui touchent les statuts). */
+  var STATUTS_KINDS={denomination:1,objet:1,capital:1,siege:1,cloture:1,transformation:1,cession:1};
+  function statutsModifHTML(dos){
+    var M=dos.modif||{},S=M.societe||{},N=M.nouveau||{},D=M.dates||{}; var mk=M.kind||''; var forme=S.forme||'sas';
+    var art;
+    if(mk==='denomination') art={t:'Article — Dénomination sociale',x:'La société a pour dénomination : <b>'+esc(N.denomination||'…')+'</b>. Dans tous les actes et documents émanant de la société, cette dénomination doit être précédée ou suivie des mots <b>'+esc(formeNom(forme))+'</b> et de l\'énonciation du capital social.'};
+    else if(mk==='objet') art={t:'Article — Objet social',x:'La société a pour objet, en France et à l\'étranger : <b>'+esc(N.objet||'…')+'</b>, ainsi que toutes opérations industrielles, commerciales, financières, mobilières ou immobilières se rapportant directement ou indirectement à cet objet ou susceptibles d\'en faciliter la réalisation.'};
+    else if(mk==='capital') art={t:'Article — Capital social',x:'Le capital social est fixé à la somme de <b>'+esc(N.capital||'…')+' euros</b>. Il est divisé en '+(forme==='sas'||forme==='sasu'?'actions':'parts sociales')+' de même catégorie, intégralement '+((N.sens==='reduction')?'réparties':'souscrites et libérées')+'.'};
+    else if(mk==='siege') art={t:'Article — Siège social',x:'Le siège social est fixé à : <b>'+esc(((N.siege||'')+', '+(N.cp||'')+' '+(N.ville||'')).trim())+'</b>. Il peut être transféré par décision de la collectivité des associés statuant dans les conditions requises pour la modification des statuts.'};
+    else if(mk==='cloture') art={t:'Article — Exercice social',x:'Chaque exercice social a une durée de douze mois. Par exception, il commence et se termine désormais à la date de clôture fixée au <b>'+esc(N.nouvelleCloture||'…')+'</b> de chaque année.'};
+    else if(mk==='transformation') art={t:'Refonte des statuts',x:'Par l\'effet de la transformation, les statuts sont intégralement refondus pour adopter la forme de <b>'+esc(formeNom(N.formeNouvelle))+'</b> et se conformer aux dispositions légales et réglementaires applicables à cette forme, sans création d\'une personne morale nouvelle. Les organes de direction sont désignés en conséquence.'};
+    else if(mk==='cession') art={t:'Article — Capital social & répartition',x:'À la suite de la cession de <b>'+esc(N.nbTitres||'…')+'</b> '+esc(N.natureTitres||'titres')+' consentie au profit de <b>'+esc(N.cessionnaire||'…')+'</b>, la répartition du capital social entre les associés est mise à jour dans les statuts et annexée au présent acte.'};
+    else return '';
+    var uni=unipersonnelForme(forme);
+    var entete='<b>'+esc(S.denomination||'…')+'</b><br>'+esc(formeNom(forme))+(S.capital?(' au capital de '+esc(S.capital)+' euros'):'')+'<br>Siège social : '+esc(((S.siege||'')+', '+(S.cp||'')+' '+(S.ville||'')).trim())+'<br>'+esc(S.siren?('RCS '+(S.rcsVille||'')+' '+S.siren):(S.rcsVille?('RCS '+S.rcsVille):''));
+    return '<div class="doc-gen"><div class="st-doc" style="font-family:Georgia,\'Times New Roman\',serif;color:#111;line-height:1.7">'
+      +'<div style="text-align:center;font-size:12px;margin-bottom:14px">'+entete+'</div>'
+      +'<h1 style="text-align:center;font-size:16px;letter-spacing:.5px;margin:16px 0;color:#111">STATUTS MIS À JOUR</h1>'
+      +'<p>Les présents statuts sont mis à jour à la suite de la décision '+(uni?'de l\'associé unique':'de la collectivité des associés')+' en date du '+esc(D.acte||'…')+' portant '+esc(modifLabel(mk).toLowerCase())+', à effet du '+esc(D.effet||'…')+'.</p>'
+      +'<p style="font-weight:700;margin-top:14px">'+esc(art.t)+'</p>'
+      +'<p>'+art.x+'</p>'
+      +'<p style="margin-top:16px">Les autres articles et stipulations des statuts, non contraires à ce qui précède, demeurent inchangés et conservent leur plein effet.</p>'
+      +'<p style="margin-top:26px">Statuts certifiés conformes.</p>'
+      +'<p style="margin-top:20px">Fait à '+esc(D.ville||'…')+', le '+esc(D.acte||'…')+'.</p>'
+      +'<div style="margin-top:26px">'+esc((M.signataire&&M.signataire.qualite)||'Le représentant légal')+'<br><b>'+esc((((M.signataire||{}).civilite||'')+' '+((M.signataire||{}).prenom||'')+' '+((M.signataire||{}).nom||'')).trim()||'…')+'</b><br><span style="color:#555">(signature)</span></div>'
+      +'</div></div>';
+  }
+  /* Acte de cession de parts / d'actions (à enregistrer aux impôts). */
+  function cessionActeHTML(dos){
+    var M=dos.modif||{},S=M.societe||{},N=M.nouveau||{},D=M.dates||{}; var forme=S.forme||'sas';
+    var nt=N.natureTitres||'parts sociales'; var actions=/action/i.test(nt);
+    var droits=actions?'0,10 % du prix de cession':'3 % du prix, après abattement de 23 000 € rapporté au pourcentage de titres cédés';
+    var soc='<b>'+esc(S.denomination||'…')+'</b>, '+esc(formeNom(forme))+(S.capital?(' au capital de '+esc(S.capital)+' euros'):'')+', dont le siège social est '+esc(((S.siege||'')+', '+(S.cp||'')+' '+(S.ville||'')).trim())+', immatriculée au RCS de '+esc(S.rcsVille||'…')+' sous le numéro '+esc(S.siren||'…');
+    return '<div class="doc-gen"><div class="st-doc" style="font-family:Georgia,\'Times New Roman\',serif;color:#111;line-height:1.7">'
+      +'<h1 style="text-align:center;font-size:16px;letter-spacing:.5px;margin:6px 0 16px;color:#111">ACTE DE CESSION DE '+(actions?'ACTIONS':'PARTS SOCIALES')+'</h1>'
+      +'<p style="font-weight:700">Entre les soussignés :</p>'
+      +'<p><b>'+esc(N.cedant||'…')+'</b>, ci-après dénommé le Cédant, d\'une part,</p>'
+      +'<p>et <b>'+esc(N.cessionnaire||'…')+'</b>, ci-après dénommé le Cessionnaire, d\'autre part,</p>'
+      +'<p style="margin-top:10px">Il a été convenu et arrêté ce qui suit, portant sur les titres de la société '+soc+'.</p>'
+      +'<p style="font-weight:700;margin-top:14px">Article 1 — Objet de la cession</p>'
+      +'<p>Le Cédant cède, sous les garanties ordinaires de fait et de droit, au Cessionnaire qui accepte, <b>'+esc(N.nbTitres||'…')+'</b> '+esc(nt)+' de la société, avec tous les droits qui y sont attachés.</p>'
+      +'<p style="font-weight:700;margin-top:14px">Article 2 — Prix</p>'
+      +'<p>La présente cession est consentie et acceptée moyennant le prix de <b>'+esc(N.prix||'…')+' euros</b>, que le Cédant reconnaît avoir reçu du Cessionnaire, dont quittance, sous réserve d\'encaissement.</p>'
+      +'<p style="font-weight:700;margin-top:14px">Article 3 — Entrée en jouissance</p>'
+      +'<p>Le Cessionnaire est propriétaire des titres cédés à compter du '+esc(D.effet||'…')+' et en a la jouissance à compter de la même date. Il est subrogé dans tous les droits et obligations attachés aux titres cédés.</p>'
+      +(actions?'':'<p style="font-weight:700;margin-top:14px">Article 4 — Agrément</p><p>La présente cession a été agréée par la collectivité des associés dans les conditions prévues par la loi et les statuts.</p>')
+      +'<p style="font-weight:700;margin-top:14px">Article '+(actions?'4':'5')+' — Enregistrement & droits</p>'
+      +'<p>Le présent acte sera soumis à la formalité de l\'enregistrement auprès du service des impôts dans le délai d\'un mois. Les droits d\'enregistrement ('+droits+') sont à la charge du Cessionnaire, sauf convention contraire.</p>'
+      +'<p style="margin-top:26px">Fait à '+esc(D.ville||'…')+', le '+esc(D.acte||'…')+', en autant d\'originaux que de parties et pour l\'enregistrement.</p>'
+      +'<div style="display:flex;justify-content:space-between;margin-top:34px;gap:24px"><div>Le Cédant<br><b>'+esc(N.cedant||'…')+'</b><br><span style="color:#555">(signature)</span></div><div>Le Cessionnaire<br><b>'+esc(N.cessionnaire||'…')+'</b><br><span style="color:#555">(signature)</span></div></div>'
+      +'</div></div>';
+  }
+  window.pvModifHTML=pvModifHTML; window.annonceModifHTML=annonceModifHTML; window.statutsModifHTML=statutsModifHTML; window.cessionActeHTML=cessionActeHTML;
   window.formDoCreateModif=function(ouvrirDocs){
     var o=FD(),M=o.modif||{},S=M.societe||{},G=M.signataire||{},N=M.nouveau||{};
     var mk=M.kind||'siege'; var label=modifLabel(mk);
@@ -14876,6 +14928,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     dos.modifDocs=[{k:'pvmodif',l:'Procès-verbal de décision'},{k:'avismodif',l:'Avis de modification (annonce légale)'}];
     dos.docCustom=dos.docCustom||{}; dos.docCustom.pvmodif=pvModifHTML(dos); dos.docCustom.avismodif=annonceModifHTML(dos);
     dos.docs={pvmodif:{genere:true,date:today()},avismodif:{genere:true,date:today()}};
+    if(STATUTS_KINDS[mk]){ dos.modifDocs.push({k:'statutsmodif',l:'Statuts mis à jour (article modifié)'}); dos.docCustom.statutsmodif=statutsModifHTML(dos); dos.docs.statutsmodif={genere:true,date:today()}; }
+    if(mk==='cession'){ dos.modifDocs.push({k:'cessionacte',l:'Acte de cession de titres'}); dos.docCustom.cessionacte=cessionActeHTML(dos); dos.docs.cessionacte={genere:true,date:today()}; }
     dos.piecesModif=(PIECES_MODIF_FI[mk]||[]).map(function(p){return {k:p.k,label:p.label};});
     if(o.extra&&o.extra.notes)dos.notes=o.extra.notes;
     /* Tests de validité (cohérence vide pour une modification) */
