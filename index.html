@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=304;
+var LAST_VER=305;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -15115,6 +15115,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   };
   try{ if(typeof window.pageEspace==='function' && !window.pageEspace.__cliimm){ var _pe=window.pageEspace; window.pageEspace=function(){ var h=_pe.apply(this,arguments); try{ var reg=window.clientsImmatriculesCard?window.clientsImmatriculesCard():''; if(reg)h=h+reg; }catch(e){} return h; }; window.pageEspace.__cliimm=1; } }catch(e){}
   window.inpiSetRef=function(id,v){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); if(!d)return; suivi(d).reference=v; if(typeof save==='function')save(); };
+  function inpiDos(id){ return (typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); }
+  window.inpiSetDate=function(id,v){ var d=inpiDos(id); if(!d)return; suivi(d).dateDepot=v; if(typeof save==='function')save(); };
+  window.inpiAccuseUpload=function(id,input){ var d=inpiDos(id); if(!d||!input||!input.files||!input.files[0])return; var f=input.files[0];
+    var rd=new FileReader(); rd.onload=function(){ var su=suivi(d); su.accuse={name:f.name,type:f.type,dataUrl:rd.result,ts:Date.now()};
+      (d.historique=d.historique||[]).unshift({d:(typeof today==='function'?today():''),t:'Accusé de réception du dépôt INPI enregistré'});
+      if(typeof save==='function')save(); if(typeof render==='function')render(); if(typeof toast==='function')toast('Accusé de réception enregistré'); };
+    rd.readAsDataURL(f); };
+  window.inpiAccuseVoir=function(id){ var d=inpiDos(id); var a=d&&suivi(d).accuse; if(!a)return; try{ var w=window.open(); if(w)w.document.write('<iframe src="'+a.dataUrl+'" style="border:0;width:100vw;height:100vh"></iframe>'); }catch(e){} };
+  window.inpiAccuseSuppr=function(id){ var d=inpiDos(id); if(!d)return; delete suivi(d).accuse; if(typeof save==='function')save(); if(typeof render==='function')render(); };
   /* Cohérence calculée sur les données STOCKÉES du dossier (mêmes règles que le Formulaire). */
   window.dossierCoherence=function(d){ var o=(d&&d.intake)||{}; var s=o.societe||{},tt=o.titres||{},ap=o.apports||{};
     return (typeof window.coherenceItems==='function')?window.coherenceItems({capital:s.capital,nominal:tt.nominal,nbTitres:tt.nbTitres,associes:o.associes||[],numeraire:ap.numeraire,nature:ap.nature}):[]; };
@@ -15172,8 +15181,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<div class="inpi-chk-h" style="margin-top:0">Documents du dossier (validité + cohérence) '+cohLine+'</div>'
       +'<div class="inpi-chk">'+(docRows||'<div class="hint">Aucun document généré. Créez le dossier via le Formulaire.</div>')+'</div>'
       +'<div class="hint" style="margin-top:8px">'+(docsOk?('<b>'+T.nbValide+'/'+T.total+' documents validés</b> — le dossier peut être dirigé vers l\'INPI (tous portent les mêmes informations, complètes et cohérentes).'):('<b>'+T.nbValide+'/'+T.total+' documents validés</b> — corrigez les documents « à vérifier »'+(T.coherenceOk?'':' et les incohérences')+' avant de diriger le dossier vers l\'INPI.'))+'</div>'
-      +'<div class="inpi-ref" style="margin-top:12px"><label>N° de dossier / référence INPI</label><input value="'+E(su.reference||'')+'" oninput="inpiSetRef(\''+d.id+'\',this.value)" placeholder="ex. dossier INPI, n° de formalité"></div>'
-      +(su.dateDepot?('<div class="inpi-date">Déposé le '+E((typeof frDate==='function')?frDate(su.dateDepot):su.dateDepot)+'</div>'):'')
+      +'<div class="inpi-dep2"><div class="inpi-ref"><label>N° de formalité INPI</label><input value="'+E(su.reference||'')+'" oninput="inpiSetRef(\''+d.id+'\',this.value)" placeholder="ex. n° de formalité / suivi INPI"></div>'
+        +'<div class="inpi-ref"><label>Date de dépôt</label><input type="date" max="9999-12-31" value="'+E(su.dateDepot||'')+'" onchange="inpiSetDate(\''+d.id+'\',this.value)"></div></div>'
+      +((su.statut&&su.statut!=='afaire')?('<div class="inpi-chk-h">Accusé de réception du dépôt (récépissé INPI)</div>'
+        +(su.accuse?('<div class="cli-kbis-file"><span>📄 '+E(su.accuse.name)+'</span><span class="cli-kbis-a"><button class="btn btn-sm btn-ghost" onclick="inpiAccuseVoir(\''+d.id+'\')">Voir</button><button class="btn btn-sm btn-ghost" onclick="inpiAccuseSuppr(\''+d.id+'\')">Retirer</button></span></div>')
+          :('<label class="btn btn-sm btn-pri cli-kbis-add">Déposer l\'accusé de réception<input type="file" accept="image/*,application/pdf" style="display:none" onchange="inpiAccuseUpload(\''+d.id+'\',this)"></label>'))):'')
       +immatBlock
       +'<div class="inpi-chk-h">Pièces justificatives à déposer</div><div class="inpi-chk">'+(rows||'<div class="hint">Aucune pièce listée.</div>')+'</div>'
       +(manque>0?('<div class="hint" style="margin-top:8px">'+manque+' pièce'+(manque>1?'s':'')+' à compléter avant le dépôt (voir « Pièces justificatives »).</div>'):'')
@@ -15188,6 +15200,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.inpi-seg:hover{border-color:#3a3a40;color:#eef0f4}',
     '.inpi-seg.on{background:#1c1c1e;color:#fff;border-color:#4a4a52;box-shadow:inset 0 0 0 1px #4a4a52}',
     '.inpi-ref{margin-bottom:6px}.inpi-ref label{display:block;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin-bottom:4px}',
+    '.inpi-dep2{display:grid;grid-template-columns:1fr 200px;gap:10px 14px;margin-top:12px}@media(max-width:640px){.inpi-dep2{grid-template-columns:1fr}}',
+    '.inpi-ref input{width:100%;box-sizing:border-box;background:#0e0e11;border:1px solid #2a2a2e;border-radius:9px;padding:9px 11px;color:#eef0f4;font:inherit}.inpi-ref input:focus{outline:none;border-color:#4a4a52}',
     '.inpi-date{font-size:12px;color:#9a9aa0;margin-bottom:10px}',
     '.inpi-badge{margin-left:8px;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #2a2a2e;vertical-align:middle}',
     '.inpi-badge.ok{background:rgba(38,86,52,.30);color:#c3e8d1;border-color:rgba(84,150,104,.55)}',
