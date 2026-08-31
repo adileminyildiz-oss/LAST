@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=301;
+var LAST_VER=302;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -15781,6 +15781,64 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.al-att{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}',
     '.al-file{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:#cbced6;border:1px solid #262629;border-radius:9px;padding:7px 11px;background:#0a0a0c}.al-file-a{display:flex;gap:6px}',
     '.al-note{font-size:11.5px;color:#a7abbd;margin-top:10px;line-height:1.5}'
+  ].join('');document.head.appendChild(st); }catch(e){}
+})();
+</script>
+<script id="traitement-queue-mod">
+/* ===================================================================
+   FILE « À TRAITER » PRIORISÉE — en tête de la page Traitement.
+   Triage du portefeuille : dossiers PRÊTS à déposer, puis dossiers à
+   compléter triés par nombre de points bloquants (les plus proches du
+   dépôt d'abord), avec le premier blocage et l'ouverture en un clic.
+   Agrégats en lecture seule — rien n'est mêlé entre dossiers.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function activeList(){ try{ var l=(typeof espDoss==='function')?espDoss():(DB.dossiers||[]); return l.filter(function(d){return d&&!d.archived;}); }catch(e){ return (DB.dossiers||[]).filter(function(d){return d&&!d.archived;}); } }
+  function nomOf(d){ try{ return (typeof dossierClients==='function')?dossierClients(d):(d.numeroDossier||d.ref||'Dossier'); }catch(e){ return d.numeroDossier||d.ref||'Dossier'; } }
+  window.traitementQueue=function(){
+    var items=activeList().map(function(d){ var P=null; try{ P=window.dossierPreflight?window.dossierPreflight(d):null; }catch(e){} return {d:d,P:P||{ready:false,blockers:[]}}; });
+    var ready=items.filter(function(x){return x.P.ready;});
+    var todo=items.filter(function(x){return !x.P.ready;}).sort(function(a,b){return (a.P.blockers.length)-(b.P.blockers.length);});
+    return {ready:ready,todo:todo,total:items.length};
+  };
+  window.traitementQueueCard=function(){
+    var q=window.traitementQueue(); if(!q.total)return '';
+    var cur=(typeof state!=='undefined')?state.espaceDossier:null;
+    function row(x,ready){ var d=x.d; var on=(d.id===cur); var ref=E(d.numeroDossier||d.ref||'');
+      var right=ready?'<span class="tq-ok">Prêt à déposer</span>':('<span class="tq-blk">'+x.P.blockers.length+' à régler'+(x.P.blockers[0]?(' · '+E(x.P.blockers[0])):'')+'</span>');
+      return '<button class="tq-row'+(on?' on':'')+'" onclick="state.espaceDossier=\''+d.id+'\';render()"><span class="tq-dot '+(ready?'ok':'todo')+'"></span>'
+        +'<span class="tq-main"><b>'+E(nomOf(d))+'</b><span class="tq-ref">'+ref+(d.numeroService?(' · '+E(d.numeroService)):'')+'</span></span>'
+        +right+'<span class="tq-go">Ouvrir →</span></button>';
+    }
+    var body='';
+    if(q.ready.length) body+='<div class="tq-sec">Prêts à déposer ('+q.ready.length+')</div>'+q.ready.map(function(x){return row(x,true);}).join('');
+    if(q.todo.length) body+='<div class="tq-sec">À compléter ('+q.todo.length+')</div>'+q.todo.map(function(x){return row(x,false);}).join('');
+    var sum=q.ready.length+' prêt'+(q.ready.length>1?'s':'')+' · '+q.todo.length+' à compléter';
+    return '<details class="card tq-card"'+(q.ready.length?' open':'')+'><summary class="tq-sum"><span class="tq-sum-t">File à traiter</span><span class="tq-sum-h">'+sum+'</span></summary>'
+      +'<div class="card-b tq-body">'+body+'</div></details>';
+  };
+  try{ if(typeof window.pageEspace==='function' && !window.pageEspace.__queue){ var _pe=window.pageEspace;
+    window.pageEspace=function(){ var h=_pe.apply(this,arguments); try{
+      if(h&&h.indexOf('esp-main')>=0 && typeof window.traitementQueueCard==='function'){ var c=window.traitementQueueCard(); if(c)h=c+h; }
+    }catch(e){} return h; }; window.pageEspace.__queue=1; } }catch(e){}
+  try{ var st=document.createElement('style');st.id='traitement-queue-css';st.textContent=[
+    '.tq-card{margin-bottom:14px}',
+    '.tq-sum{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:13px 16px;font-weight:700;color:#eef0f4}',
+    '.tq-sum::-webkit-details-marker{display:none}',
+    '.tq-sum::before{content:"▸";color:#8f8f98;font-size:12px;transition:transform .15s}',
+    'details[open] .tq-sum::before{transform:rotate(90deg)}',
+    '.tq-sum-t{font-size:14px}.tq-sum-h{margin-left:auto;font-size:11.5px;color:#8f8f98;font-weight:600}',
+    '.tq-body{display:flex;flex-direction:column;gap:6px}',
+    '.tq-sec{font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin:8px 0 2px}',
+    '.tq-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 11px;border:1px solid #1c1c1e;border-radius:9px;background:#0a0a0c;color:#c9c9d2;cursor:pointer;font:inherit}',
+    '.tq-row:hover{border-color:#3a3a40}.tq-row.on{border-color:#4a4a52;background:#111}',
+    '.tq-dot{width:8px;height:8px;border-radius:50%;flex:none}.tq-dot.ok{background:#5fae7a}.tq-dot.todo{background:#c69a54}',
+    '.tq-main{display:flex;flex-direction:column;min-width:0;flex:1}.tq-main b{font-size:13px;color:#eef0f4}.tq-ref{font-size:10.5px;color:#8f8f98}',
+    '.tq-ok{font-size:11px;font-weight:700;color:#bfe6cd;white-space:nowrap}',
+    '.tq-blk{font-size:11px;color:#d6b98a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:44%}',
+    '.tq-go{font-size:11px;color:#8f8f98;white-space:nowrap}',
+    '.tq-row:hover .tq-go{color:#e6e8ee}'
   ].join('');document.head.appendChild(st); }catch(e){}
 })();
 </script>
