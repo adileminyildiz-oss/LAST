@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=300;
+var LAST_VER=301;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -15715,6 +15715,72 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.ts-kpi.ok{border-color:#26332b}.ts-kpi.ok .ts-v{color:#bfe6cd}',
     '.ts-kpi.warn{border-color:#3a2f20}.ts-kpi.warn .ts-v{color:#f0d6b6}',
     '.ts-split{display:inline-flex;align-items:baseline;gap:4px}.ts-split i{font-size:11px;font-style:normal;color:#8a8a92;font-weight:600;margin-right:6px}'
+  ].join('');document.head.appendChild(st); }catch(e){}
+})();
+</script>
+<script id="annonce-legale-mod">
+/* ===================================================================
+   REGISTRE DE L'ANNONCE LÉGALE — suivi de la publication (support/JAL,
+   date de parution, coût) + dépôt de l'attestation de parution. Le dépôt
+   marque automatiquement la pièce « annonce » comme réunie (alimente le
+   contrôle du dossier et le dépôt INPI). Propre au dossier (d.annonceLegale).
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function findDos(id){return (DB.dossiers||[]).find(function(x){return x.id===id;});}
+  function requiresAnnonce(d){ try{ var pcs=(typeof piecesRequises==='function')?(piecesRequises(d)||[]):[]; return pcs.some(function(p){return p.k==='annonce'||/annonce lég/i.test(p.label||'');}); }catch(e){ return false; } }
+  function ent(d){ var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d; dm.piecesRecues=dm.piecesRecues||{}; return dm; }
+  function markPiece(d,on){ var dm=ent(d); if(on)dm.piecesRecues['annonce']=true; else delete dm.piecesRecues['annonce']; }
+
+  window.annonceSet=function(id,field,val){ var d=findDos(id); if(!d)return; d.annonceLegale=d.annonceLegale||{}; d.annonceLegale[field]=val; try{save();}catch(e){} };
+  window.annonceUpload=function(id,input){ var d=findDos(id); if(!d||!input||!input.files||!input.files[0])return; var f=input.files[0];
+    var rd=new FileReader(); rd.onload=function(){ d.annonceLegale=d.annonceLegale||{}; d.annonceLegale.fichier={name:f.name,type:f.type,dataUrl:rd.result,ts:Date.now()}; markPiece(d,true);
+      (d.historique=d.historique||[]).unshift({d:(typeof today==='function'?today():''),t:'Attestation de parution de l\'annonce légale déposée'});
+      try{save();}catch(e){} if(typeof render==='function')render(); if(typeof toast==='function')toast('Attestation de parution enregistrée'); };
+    rd.readAsDataURL(f); };
+  window.annonceVoir=function(id){ var d=findDos(id); var k=d&&d.annonceLegale&&d.annonceLegale.fichier; if(!k)return; try{ var w=window.open(); if(w)w.document.write('<iframe src="'+k.dataUrl+'" style="border:0;width:100vw;height:100vh"></iframe>'); }catch(e){} };
+  window.annonceSuppr=function(id){ var d=findDos(id); if(!d||!d.annonceLegale)return; delete d.annonceLegale.fichier; markPiece(d,false); try{save();}catch(e){} if(typeof render==='function')render(); };
+
+  window.annonceLegaleCard=function(d){
+    if(!d||!requiresAnnonce(d))return '';
+    var a=d.annonceLegale||{}; var f=a.fichier;
+    var etat=f?'<span class="al-badge ok">Publiée · attestation déposée</span>':(a.support||a.date?'<span class="al-badge wait">En cours</span>':'<span class="al-badge">À publier</span>');
+    var gen=(typeof window.annonceModal==='function')?'<button class="btn btn-sm btn-ghost" onclick="annonceModal(\''+d.id+'\')">Générer le texte</button>':'';
+    return '<div class="card al-card"><div class="card-h"><h2>Annonce légale</h2><span class="sub" style="margin-left:auto">'+etat+'</span></div>'
+      +'<div class="card-b">'
+      +'<div class="al-grid">'
+        +'<div class="al-row"><label>Support (journal habilité)</label><input value="'+E(a.support||'')+'" placeholder="ex. Le Progrès, Actu-Juridique…" onchange="annonceSet(\''+d.id+'\',\'support\',this.value)"></div>'
+        +'<div class="al-row"><label>Date de parution</label><input type="date" max="9999-12-31" value="'+E(a.date||'')+'" onchange="annonceSet(\''+d.id+'\',\'date\',this.value)"></div>'
+        +'<div class="al-row"><label>Coût (€)</label><input value="'+E(a.cout||'')+'" placeholder="ex. 150" onchange="annonceSet(\''+d.id+'\',\'cout\',this.value)"></div>'
+      +'</div>'
+      +'<div class="al-att">'
+        +(f?('<div class="al-file"><span>📄 '+E(f.name)+'</span><span class="al-file-a"><button class="btn btn-sm btn-ghost" onclick="annonceVoir(\''+d.id+'\')">Voir</button><button class="btn btn-sm btn-ghost" onclick="annonceSuppr(\''+d.id+'\')">Retirer</button></span></div>')
+          :('<label class="btn btn-sm btn-pri al-add">Déposer l\'attestation de parution<input type="file" accept="image/*,application/pdf" style="display:none" onchange="annonceUpload(\''+d.id+'\',this)"></label>'))
+        +gen
+      +'</div>'
+      +'<div class="al-note">'+(f?'L\'attestation vaut pièce « annonce légale » pour le dépôt INPI.':'Déposez l\'attestation de parution : elle sera comptée dans les pièces du dépôt INPI.')+'</div>'
+      +'</div></div>';
+  };
+  /* Insérée juste avant la carte de dépôt INPI. */
+  try{ if(typeof window.espPanel==='function' && !window.espPanel.__annonce){ var _p=window.espPanel;
+    window.espPanel=function(d,list,id){ var h=_p.apply(this,arguments); try{
+      if(d&&typeof window.annonceLegaleCard==='function'){ var card=window.annonceLegaleCard(d);
+        if(card){ var m=h.replace('<div class="card inpi-card">', card+'<div class="card inpi-card">'); if(m!==h)h=m; }
+      }
+    }catch(e){} return h; }; window.espPanel.__annonce=1; } }catch(e){}
+  try{ var st=document.createElement('style');st.id='annonce-legale-css';st.textContent=[
+    '.al-card{margin-bottom:14px}',
+    '.al-badge{font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid #2a2a2e;color:#9a9aa0}',
+    '.al-badge.wait{background:rgba(120,90,42,.22);color:#f0d6b6;border-color:rgba(170,130,74,.45)}',
+    '.al-badge.ok{background:rgba(38,86,52,.30);color:#c3e8d1;border-color:rgba(84,150,104,.55)}',
+    '.al-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 14px}@media(max-width:640px){.al-grid{grid-template-columns:1fr}}',
+    '.al-row{display:flex;flex-direction:column;gap:4px}',
+    '.al-row label{font-size:11px;color:#8b8e99;font-weight:700;text-transform:uppercase;letter-spacing:.3px}',
+    '.al-row input{background:#0e0e11;border:1px solid #2a2a2e;border-radius:9px;padding:9px 11px;color:#eef0f4;font:inherit}',
+    '.al-row input:focus{outline:none;border-color:#4a4a52}',
+    '.al-att{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}',
+    '.al-file{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:#cbced6;border:1px solid #262629;border-radius:9px;padding:7px 11px;background:#0a0a0c}.al-file-a{display:flex;gap:6px}',
+    '.al-note{font-size:11.5px;color:#a7abbd;margin-top:10px;line-height:1.5}'
   ].join('');document.head.appendChild(st); }catch(e){}
 })();
 </script>
