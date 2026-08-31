@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=302;
+var LAST_VER=303;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14362,6 +14362,25 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     /* Identité complète de chaque associé (reprise dans les statuts / la liste des souscripteurs) */
     if(A.length){ var incomplet=A.some(function(a){ return !(''+(a.naissance||'')).trim()||!(''+(a.lieuNaissance||'')).trim()||!(''+(a.pays||'')).trim()||!(''+(a.nationalite||'')).trim()||!(''+(a.adresse||'')).trim(); }); if(incomplet)m.push('Identité complète de chaque associé (date, lieu et pays de naissance, nationalité, adresse)'); }
     return m; };
+  /* ---- Détection de doublon de dossier (même dénomination ou même SIREN) ---- */
+  function fdNormName(s){ var t=(''+(s||'')); try{ t=t.normalize('NFD').replace(/\p{Diacritic}/gu,''); }catch(e){} return t.toUpperCase().replace(/\b(SAS|SASU|SARL|EURL|SCI|SA)\b/g,'').replace(/[^A-Z0-9]/g,''); }
+  function fdNormSiren(s){ return (''+(s||'')).replace(/\D/g,''); }
+  function fdIdent(d){ var c=(typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{};
+    var den=(d.intake&&d.intake.societe&&d.intake.societe.denomination)||(d.modif&&d.modif.societe&&d.modif.societe.denomination)||c.denomination||'';
+    var sir=(d.intake&&d.intake.societe&&d.intake.societe.siren)||(d.modif&&d.modif.societe&&d.modif.societe.siren)||c.siren||'';
+    return {den:fdNormName(den),sir:fdNormSiren(sir)}; }
+  window.formDoublons=function(){ var o=FD(); var nat=o.nature||'creation';
+    var den=fdNormName(nat==='modification'?((o.modif&&o.modif.societe&&o.modif.societe.denomination)):(o.societe&&o.societe.denomination));
+    var sir=fdNormSiren(nat==='modification'?((o.modif&&o.modif.societe&&o.modif.societe.siren)):(o.societe&&o.societe.siren));
+    if(den.length<3 && sir.length<9) return [];
+    return (DB.dossiers||[]).filter(function(d){ if(d.archived)return false; var id=fdIdent(d);
+      return (sir.length>=9 && id.sir===sir) || (den.length>=3 && id.den===den); }); };
+  window.formDoublonHTML=function(){ var ds=window.formDoublons(); if(!ds.length)return '';
+    var rows=ds.slice(0,4).map(function(d){ var nm=(typeof dossierClients==='function')?dossierClients(d):(d.numeroDossier||d.ref||'');
+      return '<div class="fi-dup-row"><span>'+esc(nm)+' · '+esc(d.numeroDossier||d.ref||'')+(d.serviceSouhaite?(' · '+esc(d.serviceSouhaite)):'')+'</span>'
+        +'<button type="button" class="btn btn-sm btn-ghost" onclick="state.espaceDossier=\''+d.id+'\';go(\'espace\')">Ouvrir</button></div>'; }).join('');
+    return '<div class="fi-dup"><b>⚠ Dossier'+(ds.length>1?'s':'')+' déjà existant'+(ds.length>1?'s':'')+' pour cette société</b>'
+      +'<div class="fi-dup-note">Une dénomination ou un SIREN identique existe déjà — vérifiez avant de créer un doublon.</div>'+rows+'</div>'; };
   window.formUpdateGate=function(){ try{
     var m=window.formManques?window.formManques():[];
     var inc=(window.formCoherence?window.formCoherence():[]).filter(function(x){return !x.ok;});
@@ -14373,6 +14392,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var g=document.getElementById('fi-gate'); if(g){ g.className='fi-gate '+(ok?'ok':'ko'); g.textContent=txt; }
     ['fi-save','fi-save-doc'].forEach(function(idb){ var btn=document.getElementById(idb); if(btn){ btn.disabled=!ok; btn.classList.toggle('is-disabled',!ok); btn.title=why; } });
     try{ var c=document.getElementById('fi-coherence'); if(c&&window.formCohInner){ c.innerHTML=window.formCohInner(); c.classList.toggle('has-bad',inc.length>0); } }catch(_e){}
+    try{ var dp=document.getElementById('fi-doublon'); if(dp&&window.formDoublonHTML){ dp.innerHTML=window.formDoublonHTML(); } }catch(_e){}
   }catch(e){} };
   window.formMasqueDate=function(el,path){var d=(el.value||'').replace(/\D/g,'').slice(0,8);var out=d;if(d.length>4)out=d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4);else if(d.length>2)out=d.slice(0,2)+'/'+d.slice(2);el.value=out;window.formSet(path,out);};
 
@@ -14474,6 +14494,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
         : ('<div class="frow"><div><label>Type de modification</label>'
            +'<select onchange="formModifKind(this.value)">'+MODIF_KINDS.map(function(k){return '<option value="'+k[0]+'"'+(((o.modif&&o.modif.kind)||'siege')===k[0]?' selected':'')+'>'+esc(k[1])+'</option>';}).join('')+'</select></div>'
            +'<div><label>Numéro de dossier</label><input value="'+esc(window.formNextDossierNum?window.formNextDossierNum():'DOS0001')+'" readonly title="Attribué automatiquement à l\'enregistrement"><div class="hint" style="margin-top:4px">Suivi global du dossier · sous-référence <b>'+esc(window.formNextServiceNum?window.formNextServiceNum(nature):'')+'</b> ('+(nature==='modification'?'modification':'création')+') — attribués automatiquement.</div></div></div>'))
+      +'<div id="fi-doublon">'+(window.formDoublonHTML?window.formDoublonHTML():'')+'</div>'
       +'</div></div>';
     /* ---- Branche MODIFICATION : société existante + décision + champs du type ---- */
     if(nature==='modification'){
@@ -15028,6 +15049,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.fi-nat{flex:1;min-width:180px;padding:9px 12px;border:1px solid #262629;border-radius:10px;background:#0d0d0f;color:#c9cbce;font:600 12.5px system-ui,sans-serif;cursor:pointer;transition:.15s ease}',
     '.fi-nat:hover{border-color:#3a3a40;color:#eef0f4}',
     '.fi-nat.on{background:#1c1c1e;color:#fff;border-color:#4a4a52;box-shadow:inset 0 0 0 1px #4a4a52}',
+    '.fi-dup{margin-top:12px;border:1px solid rgba(170,130,74,.55);border-radius:10px;background:rgba(120,90,42,.14);padding:11px 13px}',
+    '.fi-dup>b{display:block;font-size:12.5px;color:#f0d6b6}',
+    '.fi-dup-note{font-size:11.5px;color:#cbb89a;margin:3px 0 8px;line-height:1.45}',
+    '.fi-dup-row{display:flex;align-items:center;gap:10px;justify-content:space-between;font-size:12px;color:#e6d9c4;padding:6px 0;border-top:1px solid rgba(170,130,74,.25)}',
+    '.fi-dup-row>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
     '.fi-coh{margin-top:14px;border:1px solid #232326;border-radius:12px;background:#0a0a0c;padding:12px 14px}',
     '.fi-coh.has-bad{border-color:rgba(170,74,74,.5)}',
     '.fi-coh-h{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin-bottom:8px}',
