@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=305;
+var LAST_VER=306;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14533,7 +14533,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
           +r1('Nature de l\'opération',fSel('modif.nouveau.sens',[['augmentation','Augmentation de capital'],['reduction','Réduction de capital']],get('modif.nouveau.sens')||'augmentation'))); }
       else if(mk==='transformation'){ specM=grp('Transformation de la forme sociale',
           r2('Forme actuelle',fSel('modif.societe.forme',FORMES,get('modif.societe.forme')||'sas'),'Nouvelle forme sociale',fSel('modif.nouveau.formeNouvelle',FORMES,get('modif.nouveau.formeNouvelle')||'sas'))
-          +'<div class="hint" style="margin-top:6px">La transformation n\'entraîne pas la création d\'une personne morale nouvelle. Un commissaire à la transformation peut être requis (ex. passage à la SAS).</div>'); }
+          +r2('Commissaire à la transformation',fI('modif.nouveau.commissaire','Nom du commissaire (si requis)'),'Capitaux propres / actif net (€)',fI('modif.nouveau.capitauxPropres'))
+          +'<div class="hint" style="margin-top:6px">La transformation n\'entraîne pas la création d\'une personne morale nouvelle. Un commissaire à la transformation est requis dans certains cas (ex. passage à la SAS) — son rapport atteste que l\'actif net est au moins égal au capital.</div>'); }
       else if(mk==='cession'){ specM=grp('Cession de parts / d\'actions',
           r2('Cédant (nom et prénom)',fI('modif.nouveau.cedant'),'Cessionnaire (nom et prénom)',fI('modif.nouveau.cessionnaire'))
           +r2('Nombre de titres cédés',fI('modif.nouveau.nbTitres'),'Prix de cession (€)',fI('modif.nouveau.prix'))
@@ -14940,7 +14941,28 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<div style="display:flex;justify-content:space-between;margin-top:34px;gap:24px"><div>Le Cédant<br><b>'+esc(N.cedant||'…')+'</b><br><span style="color:#555">(signature)</span></div><div>Le Cessionnaire<br><b>'+esc(N.cessionnaire||'…')+'</b><br><span style="color:#555">(signature)</span></div></div>'
       +'</div></div>';
   }
-  window.pvModifHTML=pvModifHTML; window.annonceModifHTML=annonceModifHTML; window.statutsModifHTML=statutsModifHTML; window.cessionActeHTML=cessionActeHTML;
+  /* Rapport du commissaire à la transformation (actif net >= capital). */
+  function rapportTransfoHTML(dos){
+    var M=dos.modif||{},S=M.societe||{},N=M.nouveau||{},D=M.dates||{}; var forme=S.forme||'sas';
+    var cap=S.capital||'…'; var cp=N.capitauxPropres||''; var com=N.commissaire||'';
+    var concl = cp
+      ? 'le montant des capitaux propres (actif net) de la société s\'élève à <b>'+esc(cp)+' euros</b>, montant au moins égal au capital social de <b>'+esc(cap)+' euros</b>.'
+      : 'le montant des capitaux propres (actif net) de la société est au moins égal au capital social de <b>'+esc(cap)+' euros</b>.';
+    var entete='<b>'+esc(S.denomination||'…')+'</b><br>'+esc(formeNom(forme))+(S.capital?(' au capital de '+esc(S.capital)+' euros'):'')+'<br>Siège social : '+esc(((S.siege||'')+', '+(S.cp||'')+' '+(S.ville||'')).trim())+'<br>'+esc(S.siren?('RCS '+(S.rcsVille||'')+' '+S.siren):(S.rcsVille?('RCS '+S.rcsVille):''));
+    return '<div class="doc-gen"><div class="st-doc" style="font-family:Georgia,\'Times New Roman\',serif;color:#111;line-height:1.7">'
+      +'<div style="text-align:center;font-size:12px;margin-bottom:14px">'+entete+'</div>'
+      +'<h1 style="text-align:center;font-size:16px;letter-spacing:.5px;margin:16px 0;color:#111">RAPPORT DU COMMISSAIRE À LA TRANSFORMATION</h1>'
+      +'<p style="font-weight:700">1. Mission</p>'
+      +'<p>En exécution de la mission qui '+(com?'m\'a':'nous a')+' été confiée, et en application des dispositions de l\'article L. 224-3 du code de commerce, '+(com?'j\'ai':'nous avons')+' établi le présent rapport à l\'occasion du projet de transformation de la société <b>'+esc(S.denomination||'…')+'</b> en <b>'+esc(formeNom(N.formeNouvelle))+'</b>.</p>'
+      +'<p style="font-weight:700;margin-top:12px">2. Diligences</p>'
+      +'<p>'+(com?'J\'ai':'Nous avons')+' procédé à l\'examen des comptes de la société, apprécié la valeur des biens composant l\'actif social et vérifié l\'absence d\'avantages particuliers. Ces diligences ont été effectuées conformément à la doctrine professionnelle applicable.</p>'
+      +'<p style="font-weight:700;margin-top:12px">3. Conclusion</p>'
+      +'<p>Sur la base de '+(com?'mes':'nos')+' travaux, '+(com?'j\'atteste':'nous attestons')+' que '+concl+' Il n\'existe pas, à '+(com?'ma':'notre')+' connaissance, d\'avantages particuliers stipulés au profit d\'associés ou de tiers.</p>'
+      +'<p style="margin-top:26px">Fait à '+esc(D.ville||'…')+', le '+esc(D.acte||'…')+'.</p>'
+      +'<div style="margin-top:24px">Le commissaire à la transformation'+'<br><b>'+(com?esc(com):'……………………………………')+'</b><br><span style="color:#555">(signature)</span></div>'
+      +'</div></div>';
+  }
+  window.pvModifHTML=pvModifHTML; window.annonceModifHTML=annonceModifHTML; window.statutsModifHTML=statutsModifHTML; window.cessionActeHTML=cessionActeHTML; window.rapportTransfoHTML=rapportTransfoHTML;
   window.formDoCreateModif=function(ouvrirDocs){
     var o=FD(),M=o.modif||{},S=M.societe||{},G=M.signataire||{},N=M.nouveau||{};
     var mk=M.kind||'siege'; var label=modifLabel(mk);
@@ -14959,6 +14981,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     dos.docs={pvmodif:{genere:true,date:today()},avismodif:{genere:true,date:today()}};
     if(STATUTS_KINDS[mk]){ dos.modifDocs.push({k:'statutsmodif',l:'Statuts mis à jour (article modifié)'}); dos.docCustom.statutsmodif=statutsModifHTML(dos); dos.docs.statutsmodif={genere:true,date:today()}; }
     if(mk==='cession'){ dos.modifDocs.push({k:'cessionacte',l:'Acte de cession de titres'}); dos.docCustom.cessionacte=cessionActeHTML(dos); dos.docs.cessionacte={genere:true,date:today()}; }
+    if(mk==='transformation'){ dos.modifDocs.push({k:'rapporttransfo',l:'Rapport du commissaire à la transformation'}); dos.docCustom.rapporttransfo=rapportTransfoHTML(dos); dos.docs.rapporttransfo={genere:true,date:today()}; }
     dos.piecesModif=(PIECES_MODIF_FI[mk]||[]).map(function(p){return {k:p.k,label:p.label};});
     if(o.extra&&o.extra.notes)dos.notes=o.extra.notes;
     /* Tests de validité (cohérence vide pour une modification) */
