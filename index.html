@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=306;
+var LAST_VER=307;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -15911,6 +15911,62 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.tq-blk{font-size:11px;color:#d6b98a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:44%}',
     '.tq-go{font-size:11px;color:#8f8f98;white-space:nowrap}',
     '.tq-row:hover .tq-go{color:#e6e8ee}'
+  ].join('');document.head.appendChild(st); }catch(e){}
+})();
+</script>
+<script id="rappels-mod">
+/* ===================================================================
+   RAPPELS & ÉCHÉANCES — carte en tête de la page Traitement.
+   Surface les suites à donner sur le portefeuille (lecture seule) :
+   dossiers prêts à déposer, dépôts INPI à relancer (déposés depuis
+   longtemps sans immatriculation), dissolutions dont la clôture de
+   liquidation / radiation reste à engager.
+   =================================================================== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function activeList(){ try{ var l=(typeof espDoss==='function')?espDoss():(DB.dossiers||[]); return l.filter(function(d){return d&&!d.archived;}); }catch(e){ return (DB.dossiers||[]).filter(function(d){return d&&!d.archived;}); } }
+  function nomOf(d){ try{ return (typeof dossierClients==='function')?dossierClients(d):(d.numeroDossier||d.ref||'Dossier'); }catch(e){ return d.numeroDossier||d.ref||'Dossier'; } }
+  function normDen(s){ var t=(''+(s||'')); try{ t=t.normalize('NFD').replace(/\p{Diacritic}/gu,''); }catch(e){} return t.toUpperCase().replace(/\b(SAS|SASU|SARL|EURL|SCI|SA)\b/g,'').replace(/[^A-Z0-9]/g,''); }
+  function socOf(d){ var c=(typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{}; return { den:normDen((d.intake&&d.intake.societe&&d.intake.societe.denomination)||(d.modif&&d.modif.societe&&d.modif.societe.denomination)||c.denomination||''), sir:(''+((d.intake&&d.intake.societe&&d.intake.societe.siren)||(d.modif&&d.modif.societe&&d.modif.societe.siren)||c.siren||'')).replace(/\D/g,'') }; }
+  function sameSoc(a,b){ var x=socOf(a),y=socOf(b); return (x.sir&&x.sir.length>=9&&x.sir===y.sir)||(x.den&&x.den.length>=3&&x.den===y.den); }
+  function daysSince(s){ if(!s)return null; var t=(''+s).slice(0,10); var mo=t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); if(mo)t=mo[3]+'-'+mo[2]+'-'+mo[1]; var d=new Date(t+'T00:00:00'); if(isNaN(d))return null; return Math.floor((Date.now()-d)/86400000); }
+  window.rappelsDossiers=function(){
+    var list=activeList(); var out=[];
+    list.forEach(function(d){
+      var su=d.inpiSuivi||{}; var P=null; try{ P=window.dossierPreflight?window.dossierPreflight(d):null; }catch(e){}
+      if(su.statut==='depose'){ var j=daysSince(su.dateDepot); if(j!=null&&j>=15) out.push({d:d,urg:2,t:'Relancer l\'INPI — déposé depuis '+j+' j sans immatriculation'}); }
+      if(P&&P.ready&&(!su.statut||su.statut==='afaire')) out.push({d:d,urg:1,t:'Prêt à déposer au Guichet unique'});
+      if(d.formaliteNature==='modification'&&d.modifKind==='dissolution'){ var hasRad=list.some(function(x){return x.modifKind==='radiation'&&sameSoc(x,d);}); if(!hasRad) out.push({d:d,urg:1,t:'Clôture de liquidation & radiation à engager (suite de la dissolution)'}); }
+    });
+    return out.sort(function(a,b){return b.urg-a.urg;});
+  };
+  window.rappelsCard=function(){
+    var R=window.rappelsDossiers(); if(!R.length)return '';
+    var urgent=R.filter(function(x){return x.urg>=2;}).length;
+    var rows=R.map(function(x){ return '<button class="rp-row'+(x.urg>=2?' hot':'')+'" onclick="state.espaceDossier=\''+x.d.id+'\';render()">'
+      +'<span class="rp-dot '+(x.urg>=2?'hot':'')+'"></span>'
+      +'<span class="rp-main"><b>'+E(nomOf(x.d))+'</b><span class="rp-t">'+E(x.t)+'</span></span>'
+      +'<span class="rp-go">Ouvrir →</span></button>'; }).join('');
+    return '<details class="card rp-card"'+(urgent?' open':'')+'><summary class="rp-sum"><span class="rp-sum-t">Rappels &amp; échéances</span><span class="rp-sum-h">'+R.length+' à suivre'+(urgent?(' · '+urgent+' urgent'+(urgent>1?'s':'')):'')+'</span></summary>'
+      +'<div class="card-b rp-body">'+rows+'</div></details>';
+  };
+  try{ if(typeof window.pageEspace==='function' && !window.pageEspace.__rappels){ var _pe=window.pageEspace;
+    window.pageEspace=function(){ var h=_pe.apply(this,arguments); try{
+      if(h&&h.indexOf('esp-main')>=0 && typeof window.rappelsCard==='function'){ var c=window.rappelsCard(); if(c)h=c+h; }
+    }catch(e){} return h; }; window.pageEspace.__rappels=1; } }catch(e){}
+  try{ var st=document.createElement('style');st.id='rappels-css';st.textContent=[
+    '.rp-card{margin-bottom:14px}',
+    '.rp-sum{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:13px 16px;font-weight:700;color:#eef0f4}',
+    '.rp-sum::-webkit-details-marker{display:none}',
+    '.rp-sum::before{content:"▸";color:#8f8f98;font-size:12px;transition:transform .15s}',
+    'details[open] .rp-sum::before{transform:rotate(90deg)}',
+    '.rp-sum-t{font-size:14px}.rp-sum-h{margin-left:auto;font-size:11.5px;color:#8f8f98;font-weight:600}',
+    '.rp-body{display:flex;flex-direction:column;gap:6px}',
+    '.rp-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 11px;border:1px solid #1c1c1e;border-radius:9px;background:#0a0a0c;color:#c9c9d2;cursor:pointer;font:inherit}',
+    '.rp-row:hover{border-color:#3a3a40}.rp-row.hot{border-color:#3a2f20}',
+    '.rp-dot{width:8px;height:8px;border-radius:50%;flex:none;background:#c69a54}.rp-dot.hot{background:#d0774e}',
+    '.rp-main{display:flex;flex-direction:column;min-width:0;flex:1}.rp-main b{font-size:13px;color:#eef0f4}.rp-t{font-size:11.5px;color:#c9b48f}',
+    '.rp-go{font-size:11px;color:#8f8f98;white-space:nowrap}.rp-row:hover .rp-go{color:#e6e8ee}'
   ].join('');document.head.appendChild(st); }catch(e){}
 })();
 </script>
