@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=313;
+var LAST_VER=314;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -7919,7 +7919,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var nom=(u&&u.nom)||'—';
     var slaSel=(typeof demSetSla==='function')?('<span class="poste-sla">Délai cible <select onchange="demSetSla(this.value)">'+[1,2,3,5,7].map(function(n){return '<option value="'+n+'"'+(sla===n?' selected':'')+'>'+n+' j</option>';}).join('')+'</select></span>'):'';
     var stat=function(v,l,cls){return '<div class="poste-s'+(cls?' '+cls:'')+'"><b>'+v+'</b><span>'+l+'</span></div>';};
-    return '<div class="poste-banner"><div class="poste-hd"><span class="poste-hi">Mon poste — '+E(nom)+'</span>'
+    return '<div class="poste-banner"><div class="poste-hd"><span class="poste-hi">'+((nom&&nom!=='—')?('Mon poste — '+E(nom)):'Mon poste')+'</span>'
       +'<span class="poste-sub">'+(u&&u.role==='admin'?'Vue superviseur (toutes les demandes)':'Vos demandes assignées et à traiter')+'</span>'
       +slaSel+'</div>'
       +'<div class="poste-stats">'
@@ -16224,6 +16224,26 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     }catch(e){}
   }
   function sweep(){try{var bs=document.querySelectorAll('button, .btn, [role="button"]');for(var i=0;i<bs.length;i++)cleanBtn(bs[i]);}catch(e){}}
+  /* Conformité de présentation — uniformise en-têtes, pastilles, rythme et champs sur tous les onglets */
+  try{ if(!document.getElementById('conformity-css')){var cs=document.createElement('style');cs.id='conformity-css';
+    cs.textContent=[
+      /* En-têtes de carte uniformes */
+      'html body.dark .esp-main .card-h{padding:12px 15px!important;min-height:44px}',
+      'html body.dark .esp-main .card-h h2,html body.dark .esp-main .card-h .tr-name{font-size:13.5px!important;font-weight:700!important;letter-spacing:-.01em!important}',
+      /* Méta à droite : pastille sobre uniforme (texte de comptage ou statut) */
+      'html body.dark .esp-main .card-h>.sub{margin-left:auto!important;font-size:11px!important;font-weight:600!important;color:#9a9aa2!important;background:#161619!important;border:1px solid #26262b!important;border-radius:999px!important;padding:2px 10px!important;white-space:nowrap}',
+      /* Corps de carte : rythme vertical uniforme */
+      'html body.dark .esp-main .card-b{padding:15px!important}',
+      /* Pastilles de statut homogènes (taille/forme), couleurs sémantiques conservées */
+      'html body.dark .esp-main .tag,html body.dark .esp-main .pill-stat,html body.dark .esp-main .pf-verdict,html body.dark .esp-main .st-tag{font-size:11px!important;font-weight:700!important;border-radius:999px!important;padding:3px 10px!important;letter-spacing:.01em!important}',
+      /* Champs de saisie homogènes dans l’espace de travail */
+      'html body.dark .esp-main input:not([type=checkbox]):not([type=radio]):not([type=file]),html body.dark .esp-main select,html body.dark .esp-main textarea{background:#0a0a0c!important;border:1px solid #26262b!important;border-radius:9px!important;padding:9px 11px!important;font-size:13px!important;color:#e9e9ee!important}',
+      'html body.dark .esp-main input:focus,html body.dark .esp-main select:focus,html body.dark .esp-main textarea:focus{border-color:#4a4a52!important;outline:none!important;box-shadow:none!important}',
+      /* Lignes (documents / contrôle) : rayon & fond cohérents */
+      'html body.dark .esp-main .dpret-row,html body.dark .esp-main .pf-gate,html body.dark .esp-main .al-row{border-radius:9px!important}',
+      /* Hint discret cohérent */
+      'html body.dark .esp-main .hint{font-size:11.5px!important;color:#8a8a90!important}'
+    ].join('');document.head.appendChild(cs);} }catch(e){}
   var t=null;function schedule(){if(t)return;t=setTimeout(function(){t=null;sweep();},70);}
   try{ var _r=window.render; if(typeof _r==='function'&&!window.__btnCleanRender){window.__btnCleanRender=1;window.render=function(){var x=_r.apply(this,arguments);schedule();return x;};} }catch(e){}
   try{ var mo=new MutationObserver(function(m){for(var i=0;i<m.length;i++){if(m[i].addedNodes&&m[i].addedNodes.length){schedule();break;}}});mo.observe(document.body,{childList:true,subtree:true}); }catch(e){}
