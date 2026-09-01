@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=312;
+var LAST_VER=313;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -16185,6 +16185,50 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '.esp-tabpanel{display:flex;flex-direction:column;gap:16px}',
       '.esp-main[data-tabbed="1"]{display:flex!important;flex-direction:column;gap:14px}'
     ].join('');document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+<script id="btn-clean-mod">(function(){
+  /* Boutons : contenu centré, rangées de boutons centrées, et suppression des caractères
+     non fluides (glyphes décoratifs) — les boutons icône-seule reçoivent un libellé propre. */
+  try{ if(!document.getElementById('btn-center-css')){var st=document.createElement('style');st.id='btn-center-css';
+    st.textContent=[
+      'html body .btn,html body button.tr-act,html body .tr-b,html body .dfd-a,html body .dfd-b,html body .esp-tab,html body .emf-chip,html body .gu-all,html body .gu-c,html body #ov-f .btn,html body .edl-choices .btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;gap:6px}',
+      'html body .tr-actions{justify-content:center!important}',
+      'html body .esp-tabs{justify-content:center!important}',
+      'html body .emf-chips{justify-content:center!important}',
+      'html body #ov-f{justify-content:center!important}',
+      'html body .edl-choices{justify-content:center!important}'
+    ].join('');document.head.appendChild(st);} }catch(e){}
+  var STRIP='↺↻⟲⟳↩↪⤓⤒⧉▸▾▴▿➔➜➤➕➖✚✎✏✕✖✗✘✓✔◻◼▢▣‹›→←↑↓⇐⇒⬅➡';
+  var STRIP_RE=new RegExp('['+STRIP.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+']','g');
+  var MAP={'✕':'Fermer','✖':'Fermer','✗':'Fermer','✘':'Fermer','⤓':'Télécharger','↩':'Restaurer','↺':'Réinitialiser','↻':'Réinitialiser','⟲':'Réinitialiser','⟳':'Réinitialiser','⧉':'Détacher','➕':'Ajouter','✚':'Ajouter'};
+  function stripNodes(btn){
+    var w=document.createTreeWalker(btn,NodeFilter.SHOW_TEXT,{acceptNode:function(n){return (n.parentNode&&n.parentNode.closest&&n.parentNode.closest('svg'))?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT;}});
+    var nodes=[],x;while((x=w.nextNode()))nodes.push(x);
+    nodes.forEach(function(n){n.nodeValue=n.nodeValue.replace(STRIP_RE,'').replace(/\s{2,}/g,' ');});
+    if(nodes.length){nodes[0].nodeValue=nodes[0].nodeValue.replace(/^\s+/,'');nodes[nodes.length-1].nodeValue=nodes[nodes.length-1].nodeValue.replace(/\s+$/,'');}
+  }
+  function cleanBtn(btn){
+    try{
+      var before=btn.textContent;STRIP_RE.lastIndex=0;
+      if(!STRIP_RE.test(before)){STRIP_RE.lastIndex=0;return;}STRIP_RE.lastIndex=0;
+      var svg=btn.querySelector('svg,img');
+      var full=before.replace(STRIP_RE,'').replace(/\s+/g,' ').trim();
+      if(full===''){
+        if(svg){stripNodes(btn);return;}
+        var g=(before.match(STRIP_RE)||[])[0];STRIP_RE.lastIndex=0;
+        if(g&&MAP[g])btn.textContent=MAP[g]; /* icône-seule → libellé propre ; sinon (flèche isolée) inchangé */
+        return;
+      }
+      stripNodes(btn);
+    }catch(e){}
+  }
+  function sweep(){try{var bs=document.querySelectorAll('button, .btn, [role="button"]');for(var i=0;i<bs.length;i++)cleanBtn(bs[i]);}catch(e){}}
+  var t=null;function schedule(){if(t)return;t=setTimeout(function(){t=null;sweep();},70);}
+  try{ var _r=window.render; if(typeof _r==='function'&&!window.__btnCleanRender){window.__btnCleanRender=1;window.render=function(){var x=_r.apply(this,arguments);schedule();return x;};} }catch(e){}
+  try{ var mo=new MutationObserver(function(m){for(var i=0;i<m.length;i++){if(m[i].addedNodes&&m[i].addedNodes.length){schedule();break;}}});mo.observe(document.body,{childList:true,subtree:true}); }catch(e){}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sweep);else sweep();
+  setTimeout(sweep,300);setTimeout(sweep,1000);
 })();
 </script>
 </body>
