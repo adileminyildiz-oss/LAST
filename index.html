@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=310;
+var LAST_VER=311;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -16058,6 +16058,72 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '.emf-clear{font:inherit;font-size:11px;color:var(--ink-3,#8494aa);background:transparent;border:0;cursor:pointer;white-space:nowrap;text-decoration:underline}',
       '.emf-clear:hover{color:var(--ink,#f5f9fe)}',
       '.emf-empty{font-size:11.5px;color:var(--ink-3,#8494aa);padding:6px 2px}'
+    ].join('');document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+<script id="guichet-copy-mod">(function(){
+  /* Transmission — champs prêts à recopier dans le Guichet unique (INPI), issus UNIQUEMENT du dossier courant */
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function cli(d){try{return (typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{};}catch(e){return {};}}
+  window.guichetFields=function(d){
+    var c=cli(d);
+    var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
+    var rows=[
+      ['Dénomination', c.denomination||''],
+      ['Sigle', c.sigle||''],
+      ['Forme juridique', c.forme||d.forme||''],
+      ['Capital social', c.capital?(c.capital+' €'):''],
+      ['Objet social', ((c.activites||[]).join(', '))||c.objet||c.objetSocial||''],
+      ['Adresse du siège', [c.siege,c.cp,c.ville].filter(Boolean).join(' ')],
+      ['Dirigeant', c.president||''],
+      ['SIREN', c.siren||''],
+      ['E-mail de contact', c.email||d.clientEmail||'']
+    ];
+    assoc.forEach(function(a,i){
+      var pn=(''+(a.prenom||'')).trim(),nn=(''+(a.nom||'')).trim();
+      var nom=(pn&&nn.toLowerCase().indexOf(pn.toLowerCase())===0)?nn:((pn?pn+' ':'')+nn);nom=nom.trim();
+      var det=[a.naissance?('né(e) le '+a.naissance):'',a.lieuNaissance?('à '+a.lieuNaissance):'',a.nationalite||'',a.adresse||''].filter(Boolean).join(', ');
+      var v=nom+(a.parts?(' — '+a.parts+' parts'):'')+(a.apport?(' — apport '+a.apport+' €'):'')+(det?(' — '+det):'');
+      rows.push(['Associé '+(i+1), v.trim()]);
+    });
+    return rows.filter(function(r){return (''+r[1]).trim();});
+  };
+  window.guCopyRow=function(btn){try{var v=btn.closest('.gu-row').getAttribute('data-v')||'';
+    var done=function(){var old=btn.textContent;btn.textContent='Copié ✓';btn.classList.add('ok');setTimeout(function(){btn.textContent=old;btn.classList.remove('ok');},1300);};
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(v).then(done,done);else done();
+  }catch(e){}};
+  window.guCopyAll=function(id){try{var d=(DB.dossiers||[]).find(function(x){return x.id===id;});if(!d)return;
+    var txt=window.guichetFields(d).map(function(r){return r[0]+' : '+r[1];}).join('\n');
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt);
+    if(typeof toast==='function')toast('Tous les champs copiés ✓');
+  }catch(e){}};
+  window.guichetCopyPanel=function(id){
+    var d=(DB.dossiers||[]).find(function(x){return x.id===id;});if(!d)return '';
+    var rows=window.guichetFields(d);if(!rows.length)return '';
+    var body=rows.map(function(r){return '<div class="gu-row" data-v="'+E(r[1])+'"><span class="gu-k">'+E(r[0])+'</span><span class="gu-v">'+E(r[1])+'</span><button class="gu-c" onclick="guCopyRow(this)">Copier</button></div>';}).join('');
+    return '<div class="gu-panel"><div class="gu-h"><span>Champs pour le Guichet unique</span><button class="gu-all" onclick="guCopyAll(\''+id+'\')">Tout copier</button></div>'
+      +'<div class="gu-hint">Recopiez chaque champ dans le formulaire INPI. Données issues uniquement de ce dossier.</div>'+body+'</div>';
+  };
+  if(typeof window.espDepotInpi==='function'){
+    var _edi=window.espDepotInpi;
+    window.espDepotInpi=function(id){
+      _edi(id);
+      try{var b=document.getElementById('ov-b');if(b){var p=window.guichetCopyPanel(id);if(p&&b.querySelector('.gu-panel')===null)b.insertAdjacentHTML('beforeend',p);}}catch(e){}
+    };
+  }
+  try{ if(!document.getElementById('gu-css')){var st=document.createElement('style');st.id='gu-css';
+    st.textContent=[
+      '.gu-panel{margin-top:14px;border-top:1px solid var(--line,#232d3d);padding-top:12px}',
+      '.gu-h{display:flex;align-items:center;gap:10px;font-weight:700;font-size:13px;color:var(--ink,#f5f9fe);margin-bottom:4px}',
+      '.gu-all{margin-left:auto;font:inherit;font-size:11px;font-weight:700;padding:4px 10px;border:1px solid var(--ink,#f5f9fe);border-radius:7px;background:var(--ink,#f5f9fe);color:#0a0a0c;cursor:pointer}',
+      '.gu-all:hover{opacity:.85}',
+      '.gu-hint{font-size:11.5px;color:var(--ink-3,#8494aa);margin-bottom:8px}',
+      '.gu-row{display:flex;align-items:center;gap:10px;padding:6px 2px;border-bottom:1px solid var(--line-soft,#1b2432)}',
+      '.gu-k{flex:0 0 150px;font-size:11.5px;font-weight:600;color:var(--ink-3,#8494aa)}',
+      '.gu-v{flex:1;min-width:0;font-size:12.5px;color:var(--ink,#f5f9fe);word-break:break-word}',
+      '.gu-c{flex:none;font:inherit;font-size:11px;padding:4px 9px;border:1px solid var(--line,#232d3d);border-radius:7px;background:transparent;color:var(--ink-2,#b6c3d6);cursor:pointer}',
+      '.gu-c:hover{border-color:var(--ink-3,#8494aa);color:var(--ink,#f5f9fe)}',
+      '.gu-c.ok{border-color:#2f7d4f;color:#7fdca6}'
     ].join('');document.head.appendChild(st);} }catch(e){}
 })();
 </script>
