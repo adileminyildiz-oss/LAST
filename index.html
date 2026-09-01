@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=309;
+var LAST_VER=310;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -16007,6 +16007,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     }catch(e){return 'demarrer';}
   }
   function montant(x){try{return (typeof dossierMontant==='function')?(dossierMontant(x)||0):0;}catch(e){return 0;}}
+  window.espLifecycle=grp;
+  /* Harmonise la pastille de chaque dossier avec l'état du cycle de vie (déposé / clôturé / prêt) */
+  var PILL={demarrer:['À démarrer','warm'],cours:['En cours','blue'],pret:['Prêt à produire','ok'],depose:['Déposé','blue'],clos:['Clôturé','ok']};
+  if(typeof window.espMiniItem==='function'){
+    var _emi=window.espMiniItem;
+    window.espMiniItem=function(x,id){
+      var out=_emi(x,id);
+      try{var p=PILL[grp(x)];if(p)out=out.replace(/<span class="emi-pill [^"]*">[^<]*<\/span>/,'<span class="emi-pill '+p[1]+'">'+p[0]+'</span>');}catch(e){}
+      return out;
+    };
+  }
   var GROUPS=[['tous','Tous'],['demarrer','À démarrer'],['cours','En cours'],['pret','Prêts'],['depose','Déposés'],['clos','Clôturés']];
   window.espMiniFilter=function(g){try{state.espFilter=(state.espFilter===g&&g!=='tous')?'tous':g;render();}catch(e){}};
   window.espMiniSort=function(v){try{state.espSort=v;render();}catch(e){}};
