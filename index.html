@@ -3091,7 +3091,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=334;
+var LAST_VER=335;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -16534,9 +16534,23 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     finally{ DB.clients=DB.clients.filter(function(x){return x.id!==cid;}); }
     return '<div class="edoc edoc-gen">'+html+'</div>';
   }
+  function edFormeLong(f){var M={'SAS':'Société par actions simplifiée','SASU':'Société par actions simplifiée unipersonnelle','SARL':'Société à responsabilité limitée','EURL':'Entreprise unipersonnelle à responsabilité limitée','SCI':'Société civile immobilière','SC':'Société civile','SNC':'Société en nom collectif','SA':'Société anonyme'};return M[f]||f||'Société';}
+  function edStatutsCover(D){
+    D=D||{};var loc=(D.cp||D.ville)?(' — '+edV(D,'cp','CP')+' '+edV(D,'ville','VILLE')):'';
+    return '<div class="ed-cover">'
+      +'<div class="edc-forme">'+edE(edFormeLong(D.forme||'SAS'))+'</div>'
+      +'<div class="edc-denom">'+edV(D,'denomination','DÉNOMINATION SOCIALE')+'</div>'
+      +'<div class="edc-line">au capital de '+edV(D,'capital','CAPITAL')+' €</div>'
+      +'<div class="edc-line">Siège social : '+edV(D,'siege','ADRESSE DU SIÈGE')+loc+'</div>'
+      +'<div class="edc-line">RCS '+edV(D,'rcsVille','VILLE RCS')+'</div>'
+      +'<div class="edc-title">STATUTS</div>'
+      +'<div class="edc-line edc-date">Fait à '+edV(D,'villeSignature','VILLE')+', le '+edV(D,'dateActe','DATE')+'</div>'
+      +'</div>';
+  }
   function edLibTemplate(k,D){
     D=D||{};
-    if(k==='statuts'||k==='souscripteurs'||k==='pouvoir'||k==='dnc')return edSyntheticFill(k,D);
+    if(k==='statuts')return edStatutsCover(D)+edSyntheticFill(k,D);
+    if(k==='souscripteurs'||k==='pouvoir'||k==='dnc')return edSyntheticFill(k,D);
     var M={cdi:edTplCDI,cdd:edTplCDD,certif:edTplCertif,renouv:edTplRenouv,courrenouv:edTplCourRenouv,convoc:edTplConvoc,soustrait:edTplSoustrait,etatlieux:edTplEtatLieux,pv:edTplPV,decharge:edTplDecharge,cesactions:edTplCesActions,cesparts:edTplCesParts,cesparts_u:edTplCesPartsU,attca:edTplAttCA};
     if(M[k])return M[k](D);
     return edDocWrap('<h1>'+edE((EDLIB_TYPES.filter(function(t){return t.k===k;})[0]||{}).l||'Document')+'</h1><p>'+EDP+'</p>');
@@ -16581,7 +16595,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.edoc h1{font-size:16px;text-align:center;text-transform:uppercase;letter-spacing:.02em;margin:0 0 20px}'
       +'.edoc p{margin:10px 0}.edp{color:#333}.edsig{display:flex;justify-content:space-between;gap:40px;margin-top:44px}.edsig>div{flex:1;text-align:center;font-size:12px}'
       +'.edlh{font-size:11.5px;margin-bottom:16px;color:#333}.eddest{margin:16px 0}.edfoot{font-size:10.5px;color:#555;margin-top:26px;border-top:1px solid #ccc;padding-top:8px}'
-      +'.st-doc,.st-page{color:#111}.st-tbl{width:100%;border-collapse:collapse;font-size:11px}.st-tbl th,.st-tbl td{border:1px solid #999;padding:5px;vertical-align:top}.st-titre{text-align:center;font-weight:700;margin:14px 0}.st-sign{display:flex;gap:40px;margin-top:24px}';
+      +'.st-doc,.st-page{color:#111}.st-tbl{width:100%;border-collapse:collapse;font-size:11px}.st-tbl th,.st-tbl td{border:1px solid #999;padding:5px;vertical-align:top}.st-titre{text-align:center;font-weight:700;margin:14px 0}.st-sign{display:flex;gap:40px;margin-top:24px}'
+      +'.ed-cover{text-align:center;page-break-after:always;padding:120px 0}.edc-forme{font-size:15px;font-weight:700;text-transform:uppercase}.edc-denom{font-size:28px;font-weight:800;margin:8px 0}.edc-line{font-size:13.5px;margin:4px 0}.edc-title{font-size:44px;font-weight:800;letter-spacing:.2em;margin:44px auto;border-top:2px solid #111;border-bottom:2px solid #111;padding:14px 40px;display:inline-block}';
     return '<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>'+edE(d.titre)+'</title><style>@page{size:A4;margin:18mm}'+css+'</style></head><body>'+edLibTemplate(d.k,d.data)+'</body></html>';
   }
   function edDl(name,type,content){try{var blob=new Blob([content],{type:type});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},500);}catch(e){if(typeof toast==='function')toast('Export impossible.');}}
@@ -16593,11 +16608,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     edDl(edSafeName(d)+'.xls','application/vnd.ms-excel',html);};
   /* ---- Pagination A4 réelle (pages distinctes) + zoom ---- */
   function edBlockRoot(tmp){
+    var cover=tmp.querySelector('.ed-cover');
     var st=tmp.querySelector('.st-page');
-    if(st)return {w:'st',blocks:[].slice.call(st.children)};
+    if(st)return {w:'st',blocks:[].slice.call(st.children),cover:cover};
     var ed=tmp.querySelector('.edoc');
-    if(ed)return {w:'edoc',blocks:[].slice.call(ed.children)};
-    return {w:'plain',blocks:[].slice.call(tmp.children)};
+    if(ed){var kids=[].slice.call(ed.children).filter(function(x){return !(x.classList&&x.classList.contains('ed-cover'));});return {w:'edoc',blocks:kids,cover:cover};}
+    return {w:'plain',blocks:[].slice.call(tmp.children),cover:cover};
   }
   function edMakePage(host,w){
     var page=document.createElement('div');page.className='ed2-page';
@@ -16610,6 +16626,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(!host)return;host.innerHTML='';host.style.setProperty('transform','scale('+(zoom||1)+')','important');
     var tmp=document.createElement('div');tmp.innerHTML=html;
     var info=edBlockRoot(tmp);
+    if(info.cover){var cp=edMakePage(host,'edoc');cp.appendChild(info.cover);}
     var content=edMakePage(host,info.w);var LIMIT=995;
     info.blocks.forEach(function(b){
       content.appendChild(b);
@@ -16771,6 +16788,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '.ed2-page-in .edlh{font-size:11.5px;margin-bottom:16px;color:#333}.ed2-page-in .eddest{margin:16px 0}.ed2-page-in .edfoot{font-size:10.5px;color:#555;margin-top:26px;border-top:1px solid #ccc;padding-top:8px}',
       '.ed2-page-in .st-doc,.ed2-page-in .st-page{background:transparent!important;box-shadow:none!important;border:0!important;margin:0!important;padding:0!important;min-height:0!important;width:auto!important}',
       '.ed2-page-in .st-doc,.ed2-page-in .st-page,.ed2-page-in .st-page *,.ed2-page-in .dg-page,.ed2-page-in .dg-page *{color:#111}',
+      '.ed2-page-in .ed-cover{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;color:#111}',
+      '.ed2-page-in .edc-forme{font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}',
+      '.ed2-page-in .edc-denom{font-size:28px;font-weight:800;margin:4px 0}',
+      '.ed2-page-in .edc-line{font-size:13.5px}',
+      '.ed2-page-in .edc-title{font-size:44px;font-weight:800;letter-spacing:.22em;margin:44px 0;border-top:2px solid #111;border-bottom:2px solid #111;padding:14px 40px}',
+      '.ed2-page-in .edc-date{margin-top:30px}',
       '.ed2-page-in .st-tbl{width:100%;border-collapse:collapse;font-size:11px}.ed2-page-in .st-tbl th,.ed2-page-in .st-tbl td{border:1px solid #999;padding:5px;vertical-align:top}',
       '.ed2-page-in .st-titre{text-align:center;font-weight:700;margin:12px 0}.ed2-page-in .st-hdr{text-align:center;margin-bottom:10px}.ed2-page-in .st-fin{margin-top:20px}.ed2-page-in .st-sign{display:flex;gap:40px;margin-top:18px}.ed2-page-in .st-sign .sg{flex:1;text-align:center}',
       '@media(max-width:960px){.ed2-edit-body{grid-template-columns:1fr}.ed2-form{position:static;max-height:none}}'
