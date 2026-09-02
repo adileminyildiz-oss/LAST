@@ -219,11 +219,11 @@ input[type=checkbox],input[type=radio]{width:auto;accent-color:#7a6e58;cursor:po
 .section-t{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin:10px 0 5px}
 
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(20px);z-index:90;opacity:0;
-  background:var(--espresso);color:#f7f2e6;padding:9px 16px;border-radius:9px;font-size:12px;font-weight:600;
-  box-shadow:0 16px 40px -14px rgba(60,48,25,.5);transition:.3s;pointer-events:none}
+  background:#22e06b;color:#04210f;padding:10px 18px;border-radius:10px;font-size:12.5px;font-weight:800;letter-spacing:.01em;
+  box-shadow:0 0 0 1px rgba(34,224,107,.6),0 0 22px rgba(34,224,107,.55),0 16px 40px -14px rgba(0,0,0,.6);transition:.3s;pointer-events:none}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.toast-undo{pointer-events:auto;cursor:pointer;margin-left:8px;padding:2px 9px;border-radius:7px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.14);color:#fff;font:700 11px/1 inherit}
-.toast-undo:hover{background:rgba(255,255,255,.28)}
+.toast-undo{pointer-events:auto;cursor:pointer;margin-left:8px;padding:2px 9px;border-radius:7px;border:1px solid rgba(4,33,15,.45);background:rgba(4,33,15,.14);color:#04210f;font:800 11px/1 inherit}
+.toast-undo:hover{background:rgba(4,33,15,.24)}
 #saveind{position:fixed;bottom:11px;left:11px;z-index:40;font-size:10px;color:var(--ink-3);display:flex;align-items:center;gap:5px;opacity:.75}
 #saveind .dot{width:6px;height:6px;background:var(--sage)}
 
@@ -3091,7 +3091,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=322;
+var LAST_VER=323;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -16261,7 +16261,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     }catch(e){}
   }
   function sweep(){try{var bs=document.querySelectorAll('button, .btn, [role="button"]');for(var i=0;i<bs.length;i++)cleanBtn(bs[i]);}catch(e){}}
-  /* ===== Module Éditions : espace de documentation — documents vierges, sans aucune affiliation ===== */
+  /* ===== Module Éditions : espace de documentation — saisie guidée, aperçu en direct, export Word/PDF/Excel ===== */
   var EDLIB_TYPES=[
     {k:'statuts',l:'Statuts',g:'Constitution'},
     {k:'souscripteurs',l:"Liste des souscripteurs d'actions",g:'Constitution'},
@@ -16282,301 +16282,393 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     {k:'attca',l:"Attestation de chiffre d'affaires",g:'Attestations'}
   ];
   function edE(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
-  function edBlank(){return {id:'__edlib',ref:'',clientIds:[],docState:{},verif:{extract:{}},societe:{},type:'sas',statut:''};}
-  function edDocWrap(inner){return '<div class="edoc">'+inner+'</div>';}
+  function edV(D,key,ph){var v=(D&&D[key]!=null)?(''+D[key]).trim():'';return v?edE(v):'<span class="edp">«'+edE(ph)+'»</span>';}
   var EDP='<span class="edp">«…»</span>';
-  function edPh(t){return '<span class="edp">«'+t+'»</span>';}
-  function edTplCDI(){return edDocWrap(
+  function edDocWrap(inner){return '<div class="edoc">'+inner+'</div>';}
+  /* ---- Schémas de saisie (les champs qui apparaissent sur le document) ---- */
+  var FORMES=['SAS','SASU','SARL','EURL','SCI','SC','SNC','SA'];
+  var CONSTIT_SCHEMA=[
+    {g:'Société',f:[['denomination','Dénomination sociale'],['forme','Forme juridique','sel'],['capital','Capital (€)'],['siege','Adresse du siège'],['cp','Code postal'],['ville','Ville'],['rcsVille','Ville du RCS']]},
+    {g:'Dirigeant / Président',f:[['president','Nom & prénom'],['civilite','Civilité (M./Mme)'],['naissance','Date de naissance','date'],['lieuNaissance','Lieu de naissance'],['pays','Pays de naissance'],['nationalite','Nationalité'],['adresse','Adresse personnelle'],['pereNom','Nom du père'],['mereNom','Nom de la mère']]},
+    {g:'Associé 1',f:[['a1_nom','Nom & prénom'],['a1_civ','Civilité'],['a1_parts','Nombre de titres'],['a1_adr','Adresse'],['a1_naiss','Date de naissance','date'],['a1_lieu','Lieu de naissance'],['a1_nat','Nationalité']]},
+    {g:'Associé 2 (optionnel)',f:[['a2_nom','Nom & prénom'],['a2_civ','Civilité'],['a2_parts','Nombre de titres'],['a2_adr','Adresse'],['a2_naiss','Date de naissance','date'],['a2_lieu','Lieu de naissance'],['a2_nat','Nationalité']]},
+    {g:'Acte',f:[['nominal','Valeur nominale du titre (€)'],['dateActe','Date de l\'acte','date'],['villeSignature','Ville de signature']]}
+  ];
+  var EMPLOYEUR=[['denomination','Dénomination'],['forme','Forme juridique','sel'],['capital','Capital (€)'],['adresse','Adresse'],['cp','Code postal'],['ville','Ville'],['rcsVille','Ville du RCS'],['siret','SIRET'],['ape','Code APE/NAF'],['urssaf','URSSAF (région)'],['numurssaf','N° URSSAF'],['representant','Représentant légal'],['qualite','Qualité (Gérant, Président…)']];
+  var SALARIE=[['salciv','Civilité'],['salnom','Nom & prénom'],['saladr','Adresse'],['salcp','Code postal'],['salville','Ville'],['salnat','Nationalité'],['salss','N° de Sécurité sociale']];
+  var ED_SCHEMA={
+    statuts:CONSTIT_SCHEMA,souscripteurs:CONSTIT_SCHEMA,pouvoir:CONSTIT_SCHEMA,dnc:CONSTIT_SCHEMA,
+    cdi:[{g:'Employeur',f:EMPLOYEUR},{g:'Salarié',f:SALARIE},{g:'Contrat',f:[['poste','Poste'],['statut','Statut (Cadre/Non cadre)'],['datedebut','Date de début','date'],['fonctions','Fonctions'],['convention','Convention collective'],['essai','Durée période d\'essai'],['lieu','Lieu de travail'],['dureehebdo','Durée hebdomadaire (h)'],['horaires','Horaires'],['salaire','Salaire mensuel brut (€)'],['jourpaie','Jour de paie'],['nonconcur','Clause de non-concurrence','ta'],['ville','Ville de signature'],['date','Date de signature','date']]}],
+    cdd:[{g:'Employeur',f:EMPLOYEUR},{g:'Salarié',f:SALARIE.concat([['salnaiss','Date de naissance','date'],['sallieu','Lieu de naissance']])},{g:'Contrat',f:[['poste','Poste'],['statut','Statut'],['datedebut','Date de début','date'],['datefin','Date de fin','date'],['motif','Motif du recours au CDD','ta'],['fonctions','Fonctions'],['convention','Convention collective'],['essai','Durée période d\'essai (jours)'],['lieu','Lieu de travail'],['salaire','Salaire mensuel brut (€)'],['ville','Ville de signature'],['date','Date de signature','date']]}],
+    certif:[{g:'Employeur',f:[['denomination','Dénomination'],['adresse','Adresse'],['cp','Code postal'],['ville','Ville'],['ape','Code APE/NAF'],['siret','SIRET']]},{g:'Salarié',f:[['salciv','Civilité'],['salnom','Nom & prénom'],['saladr','Adresse'],['salcp','Code postal'],['salville','Ville']]},{g:'Emploi',f:[['entree','Date d\'entrée','date'],['sortie','Date de sortie','date'],['emploi','Emploi occupé'],['statut','Statut'],['signataire','Signataire'],['qualite','Qualité du signataire'],['villesig','Ville de signature'],['datesig','Date','date']]}],
+    renouv:[{g:'Société',f:[['denomination','Dénomination'],['representant','Représentant']]},{g:'Salarié & contrat',f:[['salciv','Civilité'],['salnom','Nom & prénom'],['poste','Poste'],['datecontrat','Date du contrat','date'],['convention','Convention collective']]},{g:'Renouvellement',f:[['dureeinit','Durée période d\'essai initiale'],['finit','Date de fin initiale','date'],['dureerenouv','Durée du renouvellement'],['finrenouv','Nouvelle date de fin','date'],['ville','Ville'],['date','Date','date']]}],
+    courrenouv:[{g:'Expéditeur',f:[['denomination','Dénomination'],['adresse','Adresse'],['cp','Code postal'],['ville','Ville']]},{g:'Destinataire',f:[['salciv','Civilité'],['salnom','Nom & prénom'],['saladr','Adresse'],['salcp','Code postal'],['salville','Ville']]},{g:'Renouvellement',f:[['poste','Poste'],['datedebut','Date de début','date'],['duree','Durée du renouvellement'],['finrenouv','Nouvelle date de fin','date'],['villesig','Ville'],['date','Date','date']]}],
+    convoc:[{g:'Expéditeur',f:[['denomination','Dénomination'],['adresse','Adresse'],['cp','Code postal'],['ville','Ville']]},{g:'Destinataire',f:[['salciv','Civilité'],['salnom','Nom & prénom'],['saladr','Adresse'],['salcp','Code postal'],['salville','Ville']]},{g:'Entretien',f:[['motif','Motif de la procédure'],['dateent','Date de l\'entretien','date'],['heure','Heure'],['lieu','Lieu de l\'entretien'],['interloc','Interlocuteur'],['villesig','Ville'],['date','Date de la lettre','date']]}],
+    soustrait:[{g:'Entreprise principale',f:[['ep_denom','Dénomination'],['ep_forme','Forme','sel'],['ep_capital','Capital (€)'],['ep_adresse','Adresse'],['ep_cp','Code postal'],['ep_ville','Ville'],['ep_rcs','Ville RCS'],['ep_siren','SIREN'],['ep_rep','Représentant']]},{g:'Sous-traitant',f:[['st_denom','Dénomination'],['st_forme','Forme','sel'],['st_adresse','Adresse'],['st_cp','Code postal'],['st_ville','Ville'],['st_rcs','Ville RCS'],['st_siren','SIREN'],['st_rep','Représentant']]},{g:'Marché',f:[['travaux','Désignation des travaux','ta'],['lieu','Lieu d\'exécution'],['delai','Durée / délai'],['montant','Montant (€)'],['httc','HT ou TTC'],['modalites','Modalités de paiement','ta'],['ville','Ville de signature'],['date','Date','date']]}],
+    etatlieux:[{g:'Société',f:[['denomination','Dénomination'],['forme','Forme','sel'],['capital','Capital (€)'],['siege','Adresse du siège'],['rcsVille','Ville du RCS']]},{g:'Signataire',f:[['civilite','Civilité'],['nom','Nom & prénom'],['qualite','Qualité']]},{g:'Transfert',f:[['ancienadr','Ancienne adresse (CP, ville)'],['datedebut','Date de création','date'],['nouveladr','Nouvelle adresse (CP, ville)'],['datetransfert','Date de transfert','date'],['ville','Ville de signature'],['date','Date','date']]}],
+    pv:[{g:'Société',f:[['denomination','Dénomination'],['forme','Forme','sel'],['capital','Capital (€)'],['siege','Adresse du siège'],['rcsVille','Ville RCS'],['siren','SIREN']]},{g:'Assemblée',f:[['nature','Nature (Ordinaire/Extraordinaire)'],['datetxt','Date en toutes lettres'],['annee','Année'],['date','Date','date'],['lieu','Lieu'],['convoc','Auteur de la convocation'],['quorum','Quorum']]},{g:'Résolutions',f:[['ordre','Ordre du jour','ta'],['res1','Première résolution','ta'],['maj1','Majorité résolution 1'],['res2','Deuxième résolution','ta'],['maj2','Majorité résolution 2']]}],
+    decharge:[{g:'Société',f:[['denomination','Dénomination'],['forme','Forme','sel'],['capital','Capital (€)'],['siege','Adresse du siège'],['rcsVille','Ville RCS'],['siren','SIREN']]},{g:'Gérants',f:[['nouveau','Nouveau gérant (nom & prénom)'],['nouveauadr','Adresse du nouveau gérant'],['ancien','Ancien gérant (nom & prénom)'],['ville','Ville de signature'],['date','Date','date']]}],
+    cesactions:[{g:'Société',f:[['denomination','Dénomination'],['forme','Forme','sel'],['capital','Capital (€)'],['siege','Adresse du siège'],['rcsVille','Ville RCS'],['siren','SIREN'],['nbtotal','Nombre total d\'actions'],['nominal','Valeur nominale (€)']]},{g:'Cession',f:[['cedant','Cédant (nom & prénom)'],['cedantadr','Adresse du cédant'],['cessionnaire','Cessionnaire (nom & prénom)'],['cessadr','Adresse du cessionnaire'],['nombre','Nombre d\'actions cédées'],['prix','Prix de cession (€)'],['partie','Frais à la charge de'],['ville','Ville'],['date','Date','date']]}],
+    cesparts:[{g:'Société',f:[['denomination','Dénomination'],['capital','Capital (€)'],['siege','Adresse du siège'],['rcsVille','Ville RCS'],['siren','SIREN'],['nbtotal','Nombre total de parts'],['nominal','Valeur nominale (€)']]},{g:'Cession',f:[['cedant','Cédant (nom & prénom)'],['cedantadr','Adresse du cédant'],['cessionnaire','Cessionnaire (nom & prénom)'],['cessadr','Adresse du cessionnaire'],['nombre','Nombre de parts cédées'],['prix','Prix de cession (€)'],['partie','Frais à la charge de'],['ville','Ville'],['date','Date','date']]}],
+    attca:[{g:'Société',f:[['denomination','Dénomination'],['forme','Forme','sel'],['adresse','Adresse'],['cp','Code postal'],['ville','Ville'],['siret','SIRET']]},{g:'Attestation',f:[['signataire','Signataire (nom & prénom)'],['qualite','Qualité'],['annee','Année'],['montant','Montant du CA (€)'],['villesig','Ville de signature'],['date','Date','date']]}]
+  };
+  function edSchema(k){return ED_SCHEMA[k]||[];}
+  function edFieldLabel(k,key){var g=edSchema(k);for(var i=0;i<g.length;i++)for(var j=0;j<g[i].f.length;j++)if(g[i].f[j][0]===key)return g[i].f[j][1];return key;}
+  /* ---- Modèles à jetons (13 documents rédigés) ---- */
+  function edTplCDI(D){return edDocWrap(
     '<h1>CONTRAT DE TRAVAIL À DURÉE INDÉTERMINÉE</h1>'
     +'<p><b>Entre les soussignés :</b></p>'
-    +'<p>La société '+edPh('DÉNOMINATION')+', '+edPh('FORME')+' au capital de '+edPh('CAPITAL')+' €,<br>dont le siège social est à '+edPh('ADRESSE — CP — VILLE')+',<br>immatriculée au RCS de '+edPh('VILLE RCS')+', SIRET '+edPh('SIRET')+', code APE '+edPh('APE')+',<br>cotisant à l\'URSSAF '+edPh('URSSAF')+' sous le numéro '+edPh('N° URSSAF')+',<br>représentée par '+edPh('REPRÉSENTANT LÉGAL')+', agissant en qualité de '+edPh('QUALITÉ')+'.<br><i>L\'employeur, d\'une part,</i></p>'
-    +'<p><b>Et</b><br>'+edPh('CIVILITÉ NOM PRÉNOM')+', demeurant à '+edPh('ADRESSE — CP — VILLE')+',<br>de nationalité '+edPh('NATIONALITÉ')+', immatriculé(e) à la Sécurité sociale sous le numéro '+edPh('N° SÉCU')+'.<br><i>Le salarié, d\'autre part.</i></p>'
+    +'<p>La société '+edV(D,'denomination','DÉNOMINATION')+', '+edV(D,'forme','FORME')+' au capital de '+edV(D,'capital','CAPITAL')+' €,<br>dont le siège social est à '+edV(D,'adresse','ADRESSE')+' — '+edV(D,'cp','CP')+' '+edV(D,'ville','VILLE')+',<br>immatriculée au RCS de '+edV(D,'rcsVille','VILLE RCS')+', SIRET '+edV(D,'siret','SIRET')+', code APE '+edV(D,'ape','APE')+',<br>cotisant à l\'URSSAF '+edV(D,'urssaf','URSSAF')+' sous le numéro '+edV(D,'numurssaf','N° URSSAF')+',<br>représentée par '+edV(D,'representant','REPRÉSENTANT LÉGAL')+', agissant en qualité de '+edV(D,'qualite','QUALITÉ')+'.<br><i>L\'employeur, d\'une part,</i></p>'
+    +'<p><b>Et</b><br>'+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM PRÉNOM')+', demeurant à '+edV(D,'saladr','ADRESSE')+' — '+edV(D,'salcp','CP')+' '+edV(D,'salville','VILLE')+',<br>de nationalité '+edV(D,'salnat','NATIONALITÉ')+', immatriculé(e) à la Sécurité sociale sous le numéro '+edV(D,'salss','N° SÉCU')+'.<br><i>Le salarié, d\'autre part.</i></p>'
     +'<p><b>Il a été convenu ce qui suit :</b></p>'
-    +'<p><b>Article 1 — Engagement.</b> La société engage '+edPh('SALARIÉ')+' en qualité de '+edPh('POSTE')+' — '+edPh('STATUT')+' — à compter du '+edPh('DATE')+' pour une durée indéterminée, sous réserve des résultats de la visite médicale d\'embauche.</p>'
-    +'<p><b>Article 2 — Objet du contrat.</b> Le salarié exercera les fonctions suivantes : '+edPh('FONCTIONS')+'. Ce contrat est soumis à la convention collective '+edPh('CONVENTION')+'.</p>'
-    +'<p><b>Article 3 — Période d\'essai.</b> L\'engagement deviendra définitif à l\'issue d\'une période d\'essai de '+edPh('DURÉE')+', renouvelable dans les conditions légales.</p>'
+    +'<p><b>Article 1 — Engagement.</b> La société engage '+edV(D,'salnom','LE SALARIÉ')+' en qualité de '+edV(D,'poste','POSTE')+' — '+edV(D,'statut','STATUT')+' — à compter du '+edV(D,'datedebut','DATE')+' pour une durée indéterminée, sous réserve des résultats de la visite médicale d\'embauche.</p>'
+    +'<p><b>Article 2 — Objet du contrat.</b> Le salarié exercera les fonctions suivantes : '+edV(D,'fonctions','FONCTIONS')+'. Ce contrat est soumis à la convention collective '+edV(D,'convention','CONVENTION')+'.</p>'
+    +'<p><b>Article 3 — Période d\'essai.</b> L\'engagement deviendra définitif à l\'issue d\'une période d\'essai de '+edV(D,'essai','DURÉE')+', renouvelable dans les conditions légales.</p>'
     +'<p><b>Article 4 — Obligations professionnelles.</b> Le salarié s\'engage à travailler exclusivement pour le compte de l\'employeur et à observer une discrétion professionnelle absolue.</p>'
-    +'<p><b>Article 5 — Lieu de travail.</b> Le lieu de travail est fixé à '+edPh('LIEU DE TRAVAIL')+'.</p>'
-    +'<p><b>Article 6 — Durée du travail.</b> La durée hebdomadaire est fixée à '+edPh('DURÉE HEBDO')+' heures, selon l\'horaire '+edPh('HORAIRES')+'.</p>'
-    +'<p><b>Article 7 — Rémunération.</b> En contrepartie de son travail, le salarié percevra une rémunération mensuelle brute de '+edPh('SALAIRE')+' €, payable le '+edPh('JOUR')+' de chaque mois.</p>'
+    +'<p><b>Article 5 — Lieu de travail.</b> Le lieu de travail est fixé à '+edV(D,'lieu','LIEU DE TRAVAIL')+'.</p>'
+    +'<p><b>Article 6 — Durée du travail.</b> La durée hebdomadaire est fixée à '+edV(D,'dureehebdo','DURÉE HEBDO')+' heures, selon l\'horaire '+edV(D,'horaires','HORAIRES')+'.</p>'
+    +'<p><b>Article 7 — Rémunération.</b> En contrepartie de son travail, le salarié percevra une rémunération mensuelle brute de '+edV(D,'salaire','SALAIRE')+' €, payable le '+edV(D,'jourpaie','JOUR')+' de chaque mois.</p>'
     +'<p><b>Article 8 — Congés payés.</b> Le salarié bénéficiera des congés payés conformément à la convention collective et à la législation en vigueur.</p>'
-    +'<p><b>Article 9 — Clause de non-concurrence.</b> '+EDP+'</p>'
-    +'<p style="margin-top:26px">Fait à '+edPh('VILLE')+', le '+edPh('DATE')+', en double exemplaire.</p>'
+    +'<p><b>Article 9 — Clause de non-concurrence.</b> '+edV(D,'nonconcur','…')+'</p>'
+    +'<p style="margin-top:26px">Fait à '+edV(D,'ville','VILLE')+', le '+edV(D,'date','DATE')+', en double exemplaire.</p>'
     +'<div class="edsig"><div>L\'employeur<br>'+EDP+'</div><div>Le salarié<br>'+EDP+'</div></div>'
   );}
-  function edTplCDD(){return edDocWrap(
+  function edTplCDD(D){return edDocWrap(
     '<h1>CONTRAT DE TRAVAIL À DURÉE DÉTERMINÉE <sup>(1)</sup></h1>'
     +'<p><b>Entre les soussignés :</b></p>'
-    +'<p>La société '+edPh('DÉNOMINATION')+', dont le siège social est à '+edPh('ADRESSE — CP — VILLE')+',<br>immatriculée au RCS de '+edPh('VILLE RCS')+', SIRET '+edPh('SIRET')+', code APE '+edPh('APE')+',<br>cotisant à l\'URSSAF '+edPh('URSSAF')+' sous le numéro '+edPh('N° URSSAF')+',<br>représentée par '+edPh('REPRÉSENTANT LÉGAL')+' — '+edPh('QUALITÉ')+'.<br><i>L\'employeur, d\'une part,</i></p>'
-    +'<p><b>Et</b><br>'+edPh('CIVILITÉ NOM PRÉNOM')+', demeurant à '+edPh('ADRESSE — CP — VILLE')+',<br>né(e) le '+edPh('DATE DE NAISSANCE')+' à '+edPh('LIEU')+', de nationalité '+edPh('NATIONALITÉ')+',<br>immatriculé(e) à la Sécurité sociale sous le numéro '+edPh('N° SÉCU')+'.<br><i>Le salarié, d\'autre part.</i></p>'
-    +'<p><b>Article 1 — Engagement.</b> La société engage '+edPh('SALARIÉ')+' en qualité de '+edPh('POSTE')+' — '+edPh('STATUT')+' — à compter du '+edPh('DATE DE DÉBUT')+' pour une durée déterminée jusqu\'au '+edPh('DATE DE FIN')+'.</p>'
-    +'<p><b>Article 2 — Objet du contrat.</b> Fonctions : '+edPh('FONCTIONS')+'. Convention collective : '+edPh('CONVENTION')+'.</p>'
-    +'<p><b>Article 3 — Période d\'essai.</b> Période d\'essai fixée à '+edPh('DURÉE (jours)')+'.</p>'
-    +'<p><b>Article 4 — Obligations professionnelles.</b> '+EDP+'</p>'
-    +'<p><b>Article 5 — Lieu de travail.</b> '+edPh('LIEU DE TRAVAIL')+'.</p>'
-    +'<p><b>Article 6 — Rémunération.</b> Rémunération mensuelle brute de '+edPh('SALAIRE')+' €.</p>'
-    +'<p style="margin-top:26px">Fait à '+edPh('VILLE')+', le '+edPh('DATE')+', en double exemplaire.</p>'
+    +'<p>La société '+edV(D,'denomination','DÉNOMINATION')+', dont le siège social est à '+edV(D,'adresse','ADRESSE')+' — '+edV(D,'cp','CP')+' '+edV(D,'ville','VILLE')+',<br>immatriculée au RCS de '+edV(D,'rcsVille','VILLE RCS')+', SIRET '+edV(D,'siret','SIRET')+', code APE '+edV(D,'ape','APE')+',<br>cotisant à l\'URSSAF '+edV(D,'urssaf','URSSAF')+' sous le numéro '+edV(D,'numurssaf','N° URSSAF')+',<br>représentée par '+edV(D,'representant','REPRÉSENTANT LÉGAL')+' — '+edV(D,'qualite','QUALITÉ')+'.<br><i>L\'employeur, d\'une part,</i></p>'
+    +'<p><b>Et</b><br>'+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM PRÉNOM')+', demeurant à '+edV(D,'saladr','ADRESSE')+' — '+edV(D,'salcp','CP')+' '+edV(D,'salville','VILLE')+',<br>né(e) le '+edV(D,'salnaiss','DATE DE NAISSANCE')+' à '+edV(D,'sallieu','LIEU')+', de nationalité '+edV(D,'salnat','NATIONALITÉ')+',<br>immatriculé(e) à la Sécurité sociale sous le numéro '+edV(D,'salss','N° SÉCU')+'.<br><i>Le salarié, d\'autre part.</i></p>'
+    +'<p><b>Article 1 — Engagement.</b> La société engage '+edV(D,'salnom','LE SALARIÉ')+' en qualité de '+edV(D,'poste','POSTE')+' — '+edV(D,'statut','STATUT')+' — à compter du '+edV(D,'datedebut','DATE DE DÉBUT')+' pour une durée déterminée jusqu\'au '+edV(D,'datefin','DATE DE FIN')+'.</p>'
+    +'<p><b>Article 2 — Objet du contrat.</b> Fonctions : '+edV(D,'fonctions','FONCTIONS')+'. Convention collective : '+edV(D,'convention','CONVENTION')+'.</p>'
+    +'<p><b>Article 3 — Période d\'essai.</b> Période d\'essai fixée à '+edV(D,'essai','DURÉE (jours)')+'.</p>'
+    +'<p><b>Article 4 — Obligations professionnelles.</b> Le salarié s\'engage à travailler exclusivement pour le compte de l\'employeur et à observer une discrétion professionnelle absolue.</p>'
+    +'<p><b>Article 5 — Lieu de travail.</b> '+edV(D,'lieu','LIEU DE TRAVAIL')+'.</p>'
+    +'<p><b>Article 6 — Rémunération.</b> Rémunération mensuelle brute de '+edV(D,'salaire','SALAIRE')+' €.</p>'
+    +'<p style="margin-top:26px">Fait à '+edV(D,'ville','VILLE')+', le '+edV(D,'date','DATE')+', en double exemplaire.</p>'
     +'<div class="edsig"><div>L\'employeur<br>'+EDP+'</div><div>Le salarié<br>'+EDP+'</div></div>'
-    +'<p class="edfoot"><sup>(1)</sup> Motif du recours au contrat à durée déterminée : '+edPh('MOTIF')+'.</p>'
+    +'<p class="edfoot"><sup>(1)</sup> Motif du recours au contrat à durée déterminée : '+edV(D,'motif','MOTIF')+'.</p>'
   );}
-  function edTplCertif(){return edDocWrap(
-    '<div class="edlh">'+edPh('DÉNOMINATION')+'<br>'+edPh('ADRESSE — CP — VILLE')+'<br>NAF : '+edPh('APE')+' · SIRET : '+edPh('SIRET')+'</div>'
+  function edTplCertif(D){return edDocWrap(
+    '<div class="edlh">'+edV(D,'denomination','DÉNOMINATION')+'<br>'+edV(D,'adresse','ADRESSE')+' — '+edV(D,'cp','CP')+' '+edV(D,'ville','VILLE')+'<br>NAF : '+edV(D,'ape','APE')+' · SIRET : '+edV(D,'siret','SIRET')+'</div>'
     +'<h1>CERTIFICAT DE TRAVAIL</h1>'
-    +'<p>Nous certifions que '+edPh('CIVILITÉ NOM PRÉNOM')+', demeurant '+edPh('ADRESSE — CP — VILLE')+',<br>a été employé(e) par nos soins du '+edPh('DATE D\'ENTRÉE')+' au '+edPh('DATE DE SORTIE')+',<br>en qualité de '+edPh('EMPLOI')+' — '+edPh('STATUT')+'.</p>'
+    +'<p>Nous certifions que '+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM PRÉNOM')+', demeurant '+edV(D,'saladr','ADRESSE')+' — '+edV(D,'salcp','CP')+' '+edV(D,'salville','VILLE')+',<br>a été employé(e) par nos soins du '+edV(D,'entree','DATE D\'ENTRÉE')+' au '+edV(D,'sortie','DATE DE SORTIE')+',<br>en qualité de '+edV(D,'emploi','EMPLOI')+' — '+edV(D,'statut','STATUT')+'.</p>'
     +'<p>En application de l\'article L.911-8 du Code de la sécurité sociale, l\'intéressé(e) bénéficie, le cas échéant, de la portabilité de la prévoyance.</p>'
     +'<p>Le salarié est libre de tout engagement à la date d\'établissement du présent certificat.</p>'
-    +'<p style="margin-top:26px">Fait à '+edPh('VILLE')+', le '+edPh('DATE')+'.</p>'
-    +'<div class="edsig" style="justify-content:flex-end"><div>Nom, qualité et signature de l\'employeur<br>'+edPh('SIGNATAIRE')+' — '+edPh('QUALITÉ')+'</div></div>'
+    +'<p style="margin-top:26px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'
+    +'<div class="edsig" style="justify-content:flex-end"><div>Nom, qualité et signature de l\'employeur<br>'+edV(D,'signataire','SIGNATAIRE')+' — '+edV(D,'qualite','QUALITÉ')+'</div></div>'
   );}
-  function edTplRenouv(){return edDocWrap(
+  function edTplRenouv(D){return edDocWrap(
     '<h1>RENOUVELLEMENT DE LA PÉRIODE D\'ESSAI</h1>'
-    +'<p>Entre la société '+edPh('DÉNOMINATION')+', représentée par '+edPh('REPRÉSENTANT')+',<br>et '+edPh('CIVILITÉ NOM PRÉNOM')+', engagé(e) en qualité de '+edPh('POSTE')+' par contrat du '+edPh('DATE DU CONTRAT')+'.</p>'
-    +'<p>La période d\'essai initiale, d\'une durée de '+edPh('DURÉE INITIALE')+', prend fin le '+edPh('DATE DE FIN INITIALE')+'.</p>'
-    +'<p>Conformément aux dispositions de la convention collective '+edPh('CONVENTION')+', les parties conviennent de renouveler la période d\'essai pour une durée de '+edPh('DURÉE DU RENOUVELLEMENT')+', soit jusqu\'au '+edPh('NOUVELLE DATE DE FIN')+'.</p>'
+    +'<p>Entre la société '+edV(D,'denomination','DÉNOMINATION')+', représentée par '+edV(D,'representant','REPRÉSENTANT')+',<br>et '+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM PRÉNOM')+', engagé(e) en qualité de '+edV(D,'poste','POSTE')+' par contrat du '+edV(D,'datecontrat','DATE DU CONTRAT')+'.</p>'
+    +'<p>La période d\'essai initiale, d\'une durée de '+edV(D,'dureeinit','DURÉE INITIALE')+', prend fin le '+edV(D,'finit','DATE DE FIN INITIALE')+'.</p>'
+    +'<p>Conformément aux dispositions de la convention collective '+edV(D,'convention','CONVENTION')+', les parties conviennent de renouveler la période d\'essai pour une durée de '+edV(D,'dureerenouv','DURÉE DU RENOUVELLEMENT')+', soit jusqu\'au '+edV(D,'finrenouv','NOUVELLE DATE DE FIN')+'.</p>'
     +'<p>Le salarié reconnaît avoir été informé de ce renouvellement avant le terme de la période d\'essai initiale et l\'accepter expressément.</p>'
-    +'<p style="margin-top:26px">Fait à '+edPh('VILLE')+', le '+edPh('DATE')+', en double exemplaire.</p>'
+    +'<p style="margin-top:26px">Fait à '+edV(D,'ville','VILLE')+', le '+edV(D,'date','DATE')+', en double exemplaire.</p>'
     +'<div class="edsig"><div>L\'employeur<br>'+EDP+'</div><div>Le salarié (lu et approuvé)<br>'+EDP+'</div></div>'
   );}
-  function edTplCourRenouv(){return edDocWrap(
-    '<div class="edlh">'+edPh('DÉNOMINATION')+'<br>'+edPh('ADRESSE — CP — VILLE')+'</div>'
-    +'<div class="eddest">'+edPh('CIVILITÉ NOM PRÉNOM')+'<br>'+edPh('ADRESSE — CP — VILLE')+'</div>'
-    +'<p style="text-align:right">À '+edPh('VILLE')+', le '+edPh('DATE')+'</p>'
+  function edTplCourRenouv(D){return edDocWrap(
+    '<div class="edlh">'+edV(D,'denomination','DÉNOMINATION')+'<br>'+edV(D,'adresse','ADRESSE')+' — '+edV(D,'cp','CP')+' '+edV(D,'ville','VILLE')+'</div>'
+    +'<div class="eddest">'+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM PRÉNOM')+'<br>'+edV(D,'saladr','ADRESSE')+' — '+edV(D,'salcp','CP')+' '+edV(D,'salville','VILLE')+'</div>'
+    +'<p style="text-align:right">À '+edV(D,'villesig','VILLE')+', le '+edV(D,'date','DATE')+'</p>'
     +'<p><i>Lettre remise en main propre contre décharge — ou recommandée avec avis de réception.</i></p>'
     +'<p><b>Objet : renouvellement de votre période d\'essai</b></p>'
-    +'<p>'+edPh('CIVILITÉ NOM')+',</p>'
-    +'<p>Vous avez été engagé(e) au sein de notre société en qualité de '+edPh('POSTE')+' à compter du '+edPh('DATE DE DÉBUT')+', assorti d\'une période d\'essai.</p>'
-    +'<p>Par la présente, et conformément à votre contrat de travail ainsi qu\'à la convention collective applicable, nous vous informons de notre décision de renouveler votre période d\'essai pour une durée de '+edPh('DURÉE')+', soit jusqu\'au '+edPh('NOUVELLE DATE DE FIN')+'.</p>'
+    +'<p>'+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM')+',</p>'
+    +'<p>Vous avez été engagé(e) au sein de notre société en qualité de '+edV(D,'poste','POSTE')+' à compter du '+edV(D,'datedebut','DATE DE DÉBUT')+', assorti d\'une période d\'essai.</p>'
+    +'<p>Par la présente, et conformément à votre contrat de travail ainsi qu\'à la convention collective applicable, nous vous informons de notre décision de renouveler votre période d\'essai pour une durée de '+edV(D,'duree','DURÉE')+', soit jusqu\'au '+edV(D,'finrenouv','NOUVELLE DATE DE FIN')+'.</p>'
     +'<p>Nous vous remercions de bien vouloir nous retourner le double de ce courrier revêtu de votre signature précédée de la mention « bon pour accord ».</p>'
-    +'<p>Veuillez agréer, '+edPh('CIVILITÉ NOM')+', l\'expression de nos salutations distinguées.</p>'
+    +'<p>Veuillez agréer, '+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM')+', l\'expression de nos salutations distinguées.</p>'
     +'<div class="edsig" style="justify-content:flex-end"><div>Signature de l\'employeur<br>'+EDP+'</div></div>'
   );}
-  function edTplConvoc(){return edDocWrap(
-    '<div class="edlh">'+edPh('DÉNOMINATION')+'<br>'+edPh('ADRESSE — CP — VILLE')+'</div>'
-    +'<div class="eddest">'+edPh('CIVILITÉ NOM PRÉNOM')+'<br>'+edPh('ADRESSE — CP — VILLE')+'</div>'
-    +'<p style="text-align:right">À '+edPh('VILLE')+', le '+edPh('DATE')+'</p>'
+  function edTplConvoc(D){return edDocWrap(
+    '<div class="edlh">'+edV(D,'denomination','DÉNOMINATION')+'<br>'+edV(D,'adresse','ADRESSE')+' — '+edV(D,'cp','CP')+' '+edV(D,'ville','VILLE')+'</div>'
+    +'<div class="eddest">'+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM PRÉNOM')+'<br>'+edV(D,'saladr','ADRESSE')+' — '+edV(D,'salcp','CP')+' '+edV(D,'salville','VILLE')+'</div>'
+    +'<p style="text-align:right">À '+edV(D,'villesig','VILLE')+', le '+edV(D,'date','DATE')+'</p>'
     +'<p><i>Lettre recommandée avec avis de réception.</i></p>'
     +'<p><b>Objet : convocation à un entretien préalable</b></p>'
-    +'<p>'+edPh('CIVILITÉ NOM')+',</p>'
-    +'<p>Par la présente, nous vous informons que nous envisageons d\'engager à votre égard une procédure de '+edPh('MOTIF')+'.</p>'
-    +'<p>Conformément aux dispositions légales applicables, nous vous prions de bien vouloir vous présenter le '+edPh('DATE')+' à '+edPh('HEURE')+', à '+edPh('LIEU')+', afin d\'avoir un entretien avec '+edPh('INTERLOCUTEUR')+', qui vous indiquera les motifs précis de la décision envisagée.</p>'
+    +'<p>'+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM')+',</p>'
+    +'<p>Par la présente, nous vous informons que nous envisageons d\'engager à votre égard une procédure de '+edV(D,'motif','MOTIF')+'.</p>'
+    +'<p>Conformément aux dispositions légales applicables, nous vous prions de bien vouloir vous présenter le '+edV(D,'dateent','DATE')+' à '+edV(D,'heure','HEURE')+', à '+edV(D,'lieu','LIEU')+', afin d\'avoir un entretien avec '+edV(D,'interloc','INTERLOCUTEUR')+', qui vous indiquera les motifs précis de la décision envisagée.</p>'
     +'<p>Nous vous rappelons que vous avez la possibilité de vous faire assister lors de cet entretien par une personne de votre choix appartenant au personnel de l\'entreprise, ou par un conseiller extérieur inscrit sur la liste établie à cet effet.</p>'
-    +'<p>Veuillez recevoir, '+edPh('CIVILITÉ NOM')+', nos salutations distinguées.</p>'
+    +'<p>Veuillez recevoir, '+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM')+', nos salutations distinguées.</p>'
     +'<div class="edsig" style="justify-content:flex-end"><div>Signature de l\'employeur<br>'+EDP+'</div></div>'
   );}
-  function edTplSoustrait(){return edDocWrap(
+  function edTplSoustrait(D){return edDocWrap(
     '<h1>CONTRAT DE SOUS-TRAITANCE</h1>'
     +'<p><b>Entre les soussignés :</b></p>'
-    +'<p>La société '+edPh('ENTREPRISE PRINCIPALE')+', '+edPh('FORME')+' au capital de '+edPh('CAPITAL')+' €,<br>siège social '+edPh('ADRESSE — CP — VILLE')+', RCS '+edPh('VILLE RCS')+' '+edPh('SIREN')+', représentée par '+edPh('REPRÉSENTANT')+'.<br><i>Ci-après « l\'entreprise principale », d\'une part,</i></p>'
-    +'<p><b>Et</b><br>La société '+edPh('SOUS-TRAITANT')+', '+edPh('FORME')+', siège social '+edPh('ADRESSE — CP — VILLE')+', RCS '+edPh('VILLE RCS')+' '+edPh('SIREN')+', représentée par '+edPh('REPRÉSENTANT')+'.<br><i>Ci-après « le sous-traitant », d\'autre part.</i></p>'
-    +'<p><b>Article 1 — Objet.</b> Le présent contrat a pour objet la réalisation par le sous-traitant des travaux/prestations suivants : '+edPh('DÉSIGNATION DES TRAVAUX')+'.</p>'
-    +'<p><b>Article 2 — Lieu d\'exécution.</b> '+edPh('LIEU')+'.</p>'
-    +'<p><b>Article 3 — Durée / délai.</b> '+edPh('DÉLAI')+'.</p>'
-    +'<p><b>Article 4 — Prix et modalités de paiement.</b> Le prix est fixé à '+edPh('MONTANT')+' € '+edPh('HT/TTC')+'. Modalités : '+edPh('MODALITÉS')+'.</p>'
-    +'<p><b>Article 5 — Obligations du sous-traitant.</b> '+EDP+'</p>'
-    +'<p><b>Article 6 — Assurances et garanties.</b> '+EDP+'</p>'
-    +'<p><b>Article 7 — Résiliation.</b> '+EDP+'</p>'
-    +'<p style="margin-top:26px">Fait à '+edPh('VILLE')+', le '+edPh('DATE')+', en double exemplaire.</p>'
+    +'<p>La société '+edV(D,'ep_denom','ENTREPRISE PRINCIPALE')+', '+edV(D,'ep_forme','FORME')+' au capital de '+edV(D,'ep_capital','CAPITAL')+' €,<br>siège social '+edV(D,'ep_adresse','ADRESSE')+' — '+edV(D,'ep_cp','CP')+' '+edV(D,'ep_ville','VILLE')+', RCS '+edV(D,'ep_rcs','VILLE RCS')+' '+edV(D,'ep_siren','SIREN')+', représentée par '+edV(D,'ep_rep','REPRÉSENTANT')+'.<br><i>Ci-après « l\'entreprise principale », d\'une part,</i></p>'
+    +'<p><b>Et</b><br>La société '+edV(D,'st_denom','SOUS-TRAITANT')+', '+edV(D,'st_forme','FORME')+', siège social '+edV(D,'st_adresse','ADRESSE')+' — '+edV(D,'st_cp','CP')+' '+edV(D,'st_ville','VILLE')+', RCS '+edV(D,'st_rcs','VILLE RCS')+' '+edV(D,'st_siren','SIREN')+', représentée par '+edV(D,'st_rep','REPRÉSENTANT')+'.<br><i>Ci-après « le sous-traitant », d\'autre part.</i></p>'
+    +'<p><b>Article 1 — Objet.</b> Le présent contrat a pour objet la réalisation par le sous-traitant des travaux/prestations suivants : '+edV(D,'travaux','DÉSIGNATION DES TRAVAUX')+'.</p>'
+    +'<p><b>Article 2 — Lieu d\'exécution.</b> '+edV(D,'lieu','LIEU')+'.</p>'
+    +'<p><b>Article 3 — Durée / délai.</b> '+edV(D,'delai','DÉLAI')+'.</p>'
+    +'<p><b>Article 4 — Prix et modalités de paiement.</b> Le prix est fixé à '+edV(D,'montant','MONTANT')+' € '+edV(D,'httc','HT/TTC')+'. Modalités : '+edV(D,'modalites','MODALITÉS')+'.</p>'
+    +'<p><b>Article 5 — Obligations du sous-traitant.</b> Le sous-traitant s\'engage à exécuter les travaux dans les règles de l\'art et à respecter les délais convenus.</p>'
+    +'<p><b>Article 6 — Assurances et garanties.</b> Le sous-traitant justifie des assurances requises pour l\'exécution des travaux.</p>'
+    +'<p><b>Article 7 — Résiliation.</b> En cas de manquement, le présent contrat pourra être résilié de plein droit après mise en demeure restée infructueuse.</p>'
+    +'<p style="margin-top:26px">Fait à '+edV(D,'ville','VILLE')+', le '+edV(D,'date','DATE')+', en double exemplaire.</p>'
     +'<div class="edsig"><div>L\'entreprise principale<br>'+EDP+'</div><div>Le sous-traitant<br>'+EDP+'</div></div>'
   );}
-  function edTplEtatLieux(){return edDocWrap(
-    '<div class="edlh" style="text-align:center">'+edPh('DÉNOMINATION SOCIALE')+'<br>'+edPh('FORME')+' au capital de '+edPh('CAPITAL')+' €<br>Siège social : '+edPh('ADRESSE DU SIÈGE')+'<br>RCS '+edPh('VILLE RCS')+'</div>'
+  function edTplEtatLieux(D){return edDocWrap(
+    '<div class="edlh" style="text-align:center">'+edV(D,'denomination','DÉNOMINATION SOCIALE')+'<br>'+edV(D,'forme','FORME')+' au capital de '+edV(D,'capital','CAPITAL')+' €<br>Siège social : '+edV(D,'siege','ADRESSE DU SIÈGE')+'<br>RCS '+edV(D,'rcsVille','VILLE RCS')+'</div>'
     +'<h1>ÉTAT DES LIEUX ANTÉRIEURS</h1>'
-    +'<p>Je soussigné(e) '+edPh('CIVILITÉ NOM PRÉNOM')+', en qualité de '+edPh('QUALITÉ')+' de la société '+edPh('RAISON SOCIALE')+',</p>'
-    +'<p>Certifie que la société a été créée au '+edPh('ADRESSE — CP — VILLE DE L\'ANCIEN SIÈGE')+' en date du '+edPh('DATE DE DÉBUT')+',<br>et a été transférée au '+edPh('NOUVELLE ADRESSE — CP — VILLE')+' en date du '+edPh('DATE DE TRANSFERT')+'.</p>'
-    +'<p style="margin-top:26px">Fait à '+edPh('VILLE')+', le '+edPh('DATE')+'.</p>'
-    +'<div class="edsig" style="justify-content:flex-end"><div>'+edPh('SIGNATAIRE')+' — '+edPh('QUALITÉ')+'<br>'+EDP+'</div></div>'
+    +'<p>Je soussigné(e) '+edV(D,'civilite','CIVILITÉ')+' '+edV(D,'nom','NOM PRÉNOM')+', en qualité de '+edV(D,'qualite','QUALITÉ')+' de la société '+edV(D,'denomination','RAISON SOCIALE')+',</p>'
+    +'<p>Certifie que la société a été créée au '+edV(D,'ancienadr','ADRESSE — CP — VILLE DE L\'ANCIEN SIÈGE')+' en date du '+edV(D,'datedebut','DATE DE DÉBUT')+',<br>et a été transférée au '+edV(D,'nouveladr','NOUVELLE ADRESSE — CP — VILLE')+' en date du '+edV(D,'datetransfert','DATE DE TRANSFERT')+'.</p>'
+    +'<p style="margin-top:26px">Fait à '+edV(D,'ville','VILLE')+', le '+edV(D,'date','DATE')+'.</p>'
+    +'<div class="edsig" style="justify-content:flex-end"><div>'+edV(D,'nom','SIGNATAIRE')+' — '+edV(D,'qualite','QUALITÉ')+'<br>'+EDP+'</div></div>'
   );}
-  function edTplPV(){return edDocWrap(
-    '<h1>PROCÈS-VERBAL DE L\'ASSEMBLÉE GÉNÉRALE '+edPh('ORDINAIRE / EXTRAORDINAIRE')+'</h1>'
-    +'<p style="text-align:center">Du '+edPh('DATE EN TOUTES LETTRES')+'</p>'
-    +'<div class="edlh" style="text-align:center;margin-top:10px">'+edPh('DÉNOMINATION SOCIALE')+'<br>'+edPh('FORME')+' au capital de '+edPh('CAPITAL')+' €<br>Siège social : '+edPh('ADRESSE DU SIÈGE')+'<br>RCS '+edPh('VILLE RCS')+' '+edPh('SIREN')+'</div>'
-    +'<p>L\'an '+edPh('ANNÉE')+', le '+edPh('DATE')+', les associés de la société se sont réunis en assemblée générale '+edPh('ORDINAIRE / EXTRAORDINAIRE')+' à '+edPh('LIEU')+', sur convocation de '+edPh('AUTEUR DE LA CONVOCATION')+'.</p>'
-    +'<p>Il a été établi une feuille de présence. L\'assemblée réunit '+edPh('QUORUM')+' des parts/actions et peut valablement délibérer.</p>'
-    +'<p><b>Ordre du jour :</b></p><p>'+edPh('ORDRE DU JOUR')+'</p>'
-    +'<p><b>Première résolution.</b> '+EDP+'</p>'
-    +'<p>Cette résolution est adoptée à '+edPh('MAJORITÉ')+'.</p>'
-    +'<p><b>Deuxième résolution.</b> '+EDP+'</p>'
-    +'<p>Cette résolution est adoptée à '+edPh('MAJORITÉ')+'.</p>'
+  function edTplPV(D){return edDocWrap(
+    '<h1>PROCÈS-VERBAL DE L\'ASSEMBLÉE GÉNÉRALE '+edV(D,'nature','ORDINAIRE / EXTRAORDINAIRE')+'</h1>'
+    +'<p style="text-align:center">Du '+edV(D,'datetxt','DATE EN TOUTES LETTRES')+'</p>'
+    +'<div class="edlh" style="text-align:center;margin-top:10px">'+edV(D,'denomination','DÉNOMINATION SOCIALE')+'<br>'+edV(D,'forme','FORME')+' au capital de '+edV(D,'capital','CAPITAL')+' €<br>Siège social : '+edV(D,'siege','ADRESSE DU SIÈGE')+'<br>RCS '+edV(D,'rcsVille','VILLE RCS')+' '+edV(D,'siren','SIREN')+'</div>'
+    +'<p>L\'an '+edV(D,'annee','ANNÉE')+', le '+edV(D,'date','DATE')+', les associés de la société se sont réunis en assemblée générale '+edV(D,'nature','ORDINAIRE / EXTRAORDINAIRE')+' à '+edV(D,'lieu','LIEU')+', sur convocation de '+edV(D,'convoc','AUTEUR DE LA CONVOCATION')+'.</p>'
+    +'<p>Il a été établi une feuille de présence. L\'assemblée réunit '+edV(D,'quorum','QUORUM')+' des parts/actions et peut valablement délibérer.</p>'
+    +'<p><b>Ordre du jour :</b></p><p>'+edV(D,'ordre','ORDRE DU JOUR')+'</p>'
+    +'<p><b>Première résolution.</b> '+edV(D,'res1','…')+'</p>'
+    +'<p>Cette résolution est adoptée à '+edV(D,'maj1','MAJORITÉ')+'.</p>'
+    +'<p><b>Deuxième résolution.</b> '+edV(D,'res2','…')+'</p>'
+    +'<p>Cette résolution est adoptée à '+edV(D,'maj2','MAJORITÉ')+'.</p>'
     +'<p>L\'ordre du jour étant épuisé et personne ne demandant plus la parole, la séance est levée. De tout ce que dessus, il a été dressé le présent procès-verbal signé par les associés.</p>'
     +'<div class="edsig"><div>Le président de séance<br>'+EDP+'</div><div>Le secrétaire<br>'+EDP+'</div></div>'
   );}
-  function edTplDecharge(){return edDocWrap(
-    '<div class="edlh" style="text-align:center">'+edPh('DÉNOMINATION SOCIALE')+'<br>'+edPh('FORME')+' au capital de '+edPh('CAPITAL')+' €<br>Siège social : '+edPh('ADRESSE DU SIÈGE')+'<br>RCS '+edPh('VILLE RCS')+' n° '+edPh('SIREN')+'</div>'
+  function edTplDecharge(D){return edDocWrap(
+    '<div class="edlh" style="text-align:center">'+edV(D,'denomination','DÉNOMINATION SOCIALE')+'<br>'+edV(D,'forme','FORME')+' au capital de '+edV(D,'capital','CAPITAL')+' €<br>Siège social : '+edV(D,'siege','ADRESSE DU SIÈGE')+'<br>RCS '+edV(D,'rcsVille','VILLE RCS')+' n° '+edV(D,'siren','SIREN')+'</div>'
     +'<h1>DÉCHARGE</h1>'
-    +'<p>Je soussigné(e) '+edPh('CIVILITÉ NOM PRÉNOM')+', demeurant au '+edPh('ADRESSE — CP — VILLE')+', nouveau gérant de la société '+edPh('RAISON SOCIALE')+',</p>'
-    +'<p>Certifie avoir reçu de '+edPh('CIVILITÉ NOM PRÉNOM ANCIEN GÉRANT')+', ancien gérant de cette société, tous les livres de comptes et documents comptables relatifs à l\'entreprise, et déclare avoir connaissance parfaite et totale de la situation active et passive de la société.</p>'
+    +'<p>Je soussigné(e) '+edV(D,'nouveau','CIVILITÉ NOM PRÉNOM')+', demeurant au '+edV(D,'nouveauadr','ADRESSE — CP — VILLE')+', nouveau gérant de la société '+edV(D,'denomination','RAISON SOCIALE')+',</p>'
+    +'<p>Certifie avoir reçu de '+edV(D,'ancien','CIVILITÉ NOM PRÉNOM ANCIEN GÉRANT')+', ancien gérant de cette société, tous les livres de comptes et documents comptables relatifs à l\'entreprise, et déclare avoir connaissance parfaite et totale de la situation active et passive de la société.</p>'
     +'<p>La présente décharge est remise pour valoir ce que de droit.</p>'
-    +'<p style="margin-top:26px">Fait à '+edPh('VILLE')+', le '+edPh('DATE')+'.</p>'
+    +'<p style="margin-top:26px">Fait à '+edV(D,'ville','VILLE')+', le '+edV(D,'date','DATE')+'.</p>'
     +'<div class="edsig" style="justify-content:flex-end"><div>Le nouveau gérant<br>'+EDP+'</div></div>'
   );}
-  function edTplCesActions(){return edDocWrap(
+  function edTplCesActions(D){return edDocWrap(
     '<h1>CESSION D\'ACTIONS</h1>'
-    +'<div class="edlh" style="text-align:center">'+edPh('DÉNOMINATION SOCIALE')+'<br>'+edPh('FORME')+' au capital de '+edPh('CAPITAL')+' €<br>Siège social : '+edPh('ADRESSE DU SIÈGE')+'<br>RCS '+edPh('VILLE RCS')+' '+edPh('SIREN')+'</div>'
-    +'<p style="text-align:center">Nombre total d\'actions : '+edPh('NOMBRE')+' actions de '+edPh('NOMINAL')+' € chacune.</p>'
+    +'<div class="edlh" style="text-align:center">'+edV(D,'denomination','DÉNOMINATION SOCIALE')+'<br>'+edV(D,'forme','FORME')+' au capital de '+edV(D,'capital','CAPITAL')+' €<br>Siège social : '+edV(D,'siege','ADRESSE DU SIÈGE')+'<br>RCS '+edV(D,'rcsVille','VILLE RCS')+' '+edV(D,'siren','SIREN')+'</div>'
+    +'<p style="text-align:center">Nombre total d\'actions : '+edV(D,'nbtotal','NOMBRE')+' actions de '+edV(D,'nominal','NOMINAL')+' € chacune.</p>'
     +'<p><b>Entre les soussignés :</b></p>'
-    +'<p>'+edPh('CÉDANT — CIVILITÉ NOM PRÉNOM')+', demeurant '+edPh('ADRESSE')+',<br><i>ci-après « le cédant », d\'une part,</i></p>'
-    +'<p><b>Et</b><br>'+edPh('CESSIONNAIRE — CIVILITÉ NOM PRÉNOM')+', demeurant '+edPh('ADRESSE')+',<br><i>ci-après « le cessionnaire », d\'autre part.</i></p>'
-    +'<p>Le cédant cède et transporte, sous les garanties ordinaires de droit, les '+edPh('NOMBRE')+' actions qu\'il possède dans ladite société à '+edPh('CESSIONNAIRE')+', qui accepte.</p>'
+    +'<p>'+edV(D,'cedant','CÉDANT — CIVILITÉ NOM PRÉNOM')+', demeurant '+edV(D,'cedantadr','ADRESSE')+',<br><i>ci-après « le cédant », d\'une part,</i></p>'
+    +'<p><b>Et</b><br>'+edV(D,'cessionnaire','CESSIONNAIRE — CIVILITÉ NOM PRÉNOM')+', demeurant '+edV(D,'cessadr','ADRESSE')+',<br><i>ci-après « le cessionnaire », d\'autre part.</i></p>'
+    +'<p>Le cédant cède et transporte, sous les garanties ordinaires de droit, les '+edV(D,'nombre','NOMBRE')+' actions qu\'il possède dans ladite société à '+edV(D,'cessionnaire','LE CESSIONNAIRE')+', qui accepte.</p>'
     +'<p>Par la présente cession, le cessionnaire devient propriétaire des actions cédées à compter de ce jour, avec tous les droits et obligations qui y sont attachés.</p>'
-    +'<p>La présente cession est consentie et acceptée moyennant le prix de '+edPh('PRIX')+' €, que le cédant reconnaît avoir reçu.</p>'
-    +'<p>Les frais, droits et honoraires des présentes et de leurs suites seront supportés par '+edPh('PARTIE')+'.</p>'
-    +'<p style="margin-top:26px">Fait à '+edPh('VILLE')+', le '+edPh('DATE')+', en '+edPh('NOMBRE')+' exemplaires originaux.</p>'
+    +'<p>La présente cession est consentie et acceptée moyennant le prix de '+edV(D,'prix','PRIX')+' €, que le cédant reconnaît avoir reçu.</p>'
+    +'<p>Les frais, droits et honoraires des présentes et de leurs suites seront supportés par '+edV(D,'partie','LA PARTIE')+'.</p>'
+    +'<p style="margin-top:26px">Fait à '+edV(D,'ville','VILLE')+', le '+edV(D,'date','DATE')+', en '+edV(D,'nombre','NOMBRE')+' exemplaires originaux.</p>'
     +'<div class="edsig"><div>Le cédant<br>'+EDP+'</div><div>Le cessionnaire<br>'+EDP+'</div></div>'
   );}
-  function edTplCesParts(){return edDocWrap(
+  function edTplCesParts(D){return edDocWrap(
     '<h1>CESSION DE PARTS SOCIALES</h1>'
-    +'<div class="edlh" style="text-align:center">'+edPh('DÉNOMINATION SOCIALE')+'<br>Société à responsabilité limitée au capital de '+edPh('CAPITAL')+' €<br>Siège social : '+edPh('ADRESSE DU SIÈGE')+'<br>RCS '+edPh('VILLE RCS')+' '+edPh('SIREN')+'</div>'
-    +'<p style="text-align:center">Capital divisé en '+edPh('NOMBRE')+' parts de '+edPh('NOMINAL')+' € chacune.</p>'
+    +'<div class="edlh" style="text-align:center">'+edV(D,'denomination','DÉNOMINATION SOCIALE')+'<br>Société à responsabilité limitée au capital de '+edV(D,'capital','CAPITAL')+' €<br>Siège social : '+edV(D,'siege','ADRESSE DU SIÈGE')+'<br>RCS '+edV(D,'rcsVille','VILLE RCS')+' '+edV(D,'siren','SIREN')+'</div>'
+    +'<p style="text-align:center">Capital divisé en '+edV(D,'nbtotal','NOMBRE')+' parts de '+edV(D,'nominal','NOMINAL')+' € chacune.</p>'
     +'<p><b>Entre les soussignés :</b></p>'
-    +'<p>'+edPh('CÉDANT — CIVILITÉ NOM PRÉNOM')+', demeurant '+edPh('ADRESSE')+',<br><i>ci-après « le cédant », d\'une part,</i></p>'
-    +'<p><b>Et</b><br>'+edPh('CESSIONNAIRE — CIVILITÉ NOM PRÉNOM')+', demeurant '+edPh('ADRESSE')+',<br><i>ci-après « le cessionnaire », d\'autre part.</i></p>'
-    +'<p>Le cédant cède et transporte, sous les garanties ordinaires de droit, '+edPh('NOMBRE')+' parts sociales qu\'il possède dans ladite société à '+edPh('CESSIONNAIRE')+', qui accepte.</p>'
-    +'<p>La présente cession est consentie moyennant le prix de '+edPh('PRIX')+' €.</p>'
+    +'<p>'+edV(D,'cedant','CÉDANT — CIVILITÉ NOM PRÉNOM')+', demeurant '+edV(D,'cedantadr','ADRESSE')+',<br><i>ci-après « le cédant », d\'une part,</i></p>'
+    +'<p><b>Et</b><br>'+edV(D,'cessionnaire','CESSIONNAIRE — CIVILITÉ NOM PRÉNOM')+', demeurant '+edV(D,'cessadr','ADRESSE')+',<br><i>ci-après « le cessionnaire », d\'autre part.</i></p>'
+    +'<p>Le cédant cède et transporte, sous les garanties ordinaires de droit, '+edV(D,'nombre','NOMBRE')+' parts sociales qu\'il possède dans ladite société à '+edV(D,'cessionnaire','LE CESSIONNAIRE')+', qui accepte.</p>'
+    +'<p>La présente cession est consentie moyennant le prix de '+edV(D,'prix','PRIX')+' €.</p>'
     +'<p>La cession est agréée conformément aux statuts et à l\'article L.223-14 du Code de commerce. Elle sera signifiée à la société et publiée conformément à la loi.</p>'
-    +'<p>Les frais, droits et honoraires seront supportés par '+edPh('PARTIE')+'.</p>'
-    +'<p style="margin-top:26px">Fait à '+edPh('VILLE')+', le '+edPh('DATE')+', en '+edPh('NOMBRE')+' exemplaires originaux.</p>'
+    +'<p>Les frais, droits et honoraires seront supportés par '+edV(D,'partie','LA PARTIE')+'.</p>'
+    +'<p style="margin-top:26px">Fait à '+edV(D,'ville','VILLE')+', le '+edV(D,'date','DATE')+', en '+edV(D,'nombre','NOMBRE')+' exemplaires originaux.</p>'
     +'<div class="edsig"><div>Le cédant<br>'+EDP+'</div><div>Le cessionnaire<br>'+EDP+'</div></div>'
   );}
-  function edTplAttCA(){return edDocWrap(
-    '<div class="edlh">'+edPh('DÉNOMINATION SOCIALE')+' — '+edPh('FORME')+'<br>Siège social : '+edPh('ADRESSE — CP — VILLE')+'<br>SIRET : '+edPh('SIRET')+'</div>'
+  function edTplAttCA(D){return edDocWrap(
+    '<div class="edlh">'+edV(D,'denomination','DÉNOMINATION SOCIALE')+' — '+edV(D,'forme','FORME')+'<br>Siège social : '+edV(D,'adresse','ADRESSE')+' — '+edV(D,'cp','CP')+' '+edV(D,'ville','VILLE')+'<br>SIRET : '+edV(D,'siret','SIRET')+'</div>'
     +'<h1>ATTESTATION DE CHIFFRE D\'AFFAIRES</h1>'
-    +'<p>Je soussigné(e) '+edPh('CIVILITÉ NOM PRÉNOM')+', en qualité de '+edPh('QUALITÉ')+' de la société '+edPh('DÉNOMINATION')+',</p>'
-    +'<p>Atteste par la présente que le chiffre d\'affaires de la société pour l\'année '+edPh('ANNÉE')+' s\'élève à '+edPh('MONTANT')+' €.</p>'
+    +'<p>Je soussigné(e) '+edV(D,'signataire','CIVILITÉ NOM PRÉNOM')+', en qualité de '+edV(D,'qualite','QUALITÉ')+' de la société '+edV(D,'denomination','DÉNOMINATION')+',</p>'
+    +'<p>Atteste par la présente que le chiffre d\'affaires de la société pour l\'année '+edV(D,'annee','ANNÉE')+' s\'élève à '+edV(D,'montant','MONTANT')+' €.</p>'
     +'<p>La présente attestation est établie pour servir et valoir ce que de droit.</p>'
-    +'<p style="margin-top:26px">Fait à '+edPh('VILLE')+', le '+edPh('DATE')+'.</p>'
-    +'<div class="edsig" style="justify-content:flex-end"><div>'+edPh('SIGNATAIRE')+'<br>'+edPh('QUALITÉ')+'</div></div>'
+    +'<p style="margin-top:26px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'date','DATE')+'.</p>'
+    +'<div class="edsig" style="justify-content:flex-end"><div>'+edV(D,'signataire','SIGNATAIRE')+'<br>'+edV(D,'qualite','QUALITÉ')+'</div></div>'
   );}
-  function edLibTemplate(k){
-    if(k==='statuts'||k==='souscripteurs'||k==='pouvoir'||k==='dnc'){
-      try{ if(typeof window.espDocRender==='function'){ var h=window.espDocRender(edBlank(),k); if(h) return '<div class="edoc edoc-gen">'+h+'</div>'; } }catch(e){}
-    }
+  /* Documents de constitution : les données saisies alimentent les générateurs existants (dossier de synthèse, jamais enregistré) */
+  function edSyntheticFill(k,D){
+    var assoc=[];[1,2].forEach(function(i){var nm=(D['a'+i+'_nom']||'').trim();if(nm)assoc.push({nom:nm,civilite:D['a'+i+'_civ']||'',parts:D['a'+i+'_parts']||'',adresse:D['a'+i+'_adr']||'',naissance:D['a'+i+'_naiss']||'',lieuNaissance:D['a'+i+'_lieu']||'',nationalite:D['a'+i+'_nat']||''});});
+    var pres=(D.president||'').trim();
+    if(pres&&!assoc.some(function(a){return a.nom.trim()===pres;}))assoc.unshift({nom:pres,civilite:D.civilite||'',naissance:D.naissance||'',lieuNaissance:D.lieuNaissance||'',pays:D.pays||'',nationalite:D.nationalite||'',adresse:D.adresse||'',parts:''});
+    var cid='__edtmp'+Math.random().toString(36).slice(2,7);
+    var client={id:cid,denomination:D.denomination||'',forme:D.forme||'SAS',capital:D.capital||'',siege:D.siege||'',cp:D.cp||'',ville:D.ville||'',president:pres,associes:assoc,
+      docVars:{nominal:D.nominal||'',dateActe:D.dateActe||'',villeSignature:D.villeSignature||'',rcsVille:D.rcsVille||'',pereNom:D.pereNom||'',mereNom:D.mereNom||''}};
+    DB.clients=DB.clients||[];DB.clients.push(client);
+    var d={id:'__edtmpd',clientIds:[cid],forme:D.forme||'SAS',verif:{extract:{}}};
+    var html='';try{ if(typeof window.espDocRender==='function')html=window.espDocRender(d,k); }catch(e){ html='<div class="edoc"><p>'+EDP+'</p></div>'; }
+    finally{ DB.clients=DB.clients.filter(function(x){return x.id!==cid;}); }
+    return '<div class="edoc edoc-gen">'+html+'</div>';
+  }
+  function edLibTemplate(k,D){
+    D=D||{};
+    if(k==='statuts'||k==='souscripteurs'||k==='pouvoir'||k==='dnc')return edSyntheticFill(k,D);
     var M={cdi:edTplCDI,cdd:edTplCDD,certif:edTplCertif,renouv:edTplRenouv,courrenouv:edTplCourRenouv,convoc:edTplConvoc,soustrait:edTplSoustrait,etatlieux:edTplEtatLieux,pv:edTplPV,decharge:edTplDecharge,cesactions:edTplCesActions,cesparts:edTplCesParts,attca:edTplAttCA};
-    if(M[k])return M[k]();
+    if(M[k])return M[k](D);
     return edDocWrap('<h1>'+edE((EDLIB_TYPES.filter(function(t){return t.k===k;})[0]||{}).l||'Document')+'</h1><p>'+EDP+'</p>');
   }
   window.edLibNew=function(k){
     DB.editionsLibres=DB.editionsLibres||[];
     var t=EDLIB_TYPES.filter(function(x){return x.k===k;})[0]||{l:'Document',k:k};
-    var doc={id:'edl_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),k:k,titre:t.l,html:edLibTemplate(k),ts:Date.now(),updated:Date.now()};
+    var data={};if(edSchema(k).some(function(g){return g.f.some(function(f){return f[0]==='forme';});}))data.forme='SAS';
+    var doc={id:'edl_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),k:k,titre:t.l,data:data,ts:Date.now(),updated:Date.now()};
     DB.editionsLibres.unshift(doc);save();state.edLibId=doc.id;render();
   };
   window.edLibOpen=function(id){state.edLibId=id;render();};
-  window.edLibDel=function(id){ if(typeof confirm==='function'&&!confirm('Supprimer ce document ?'))return; DB.editionsLibres=(DB.editionsLibres||[]).filter(function(x){return x.id!==id;}); if(state.edLibId===id)state.edLibId=(DB.editionsLibres[0]||{}).id||''; save();render(); };
+  window.edLibClose=function(){state.edLibId='';render();};
+  window.edLibDel=function(id){ if(typeof confirm==='function'&&!confirm('Supprimer ce document ?'))return; DB.editionsLibres=(DB.editionsLibres||[]).filter(function(x){return x.id!==id;}); if(state.edLibId===id)state.edLibId=''; save();render(); };
   window.edLibRename=function(id,v){var d=(DB.editionsLibres||[]).filter(function(x){return x.id===id;})[0];if(d){d.titre=v;d.updated=Date.now();save();}};
-  var _edSaveT=null;
-  window.edLibSave=function(id){ var el=document.getElementById('edlib-doc'); if(!el)return; if(_edSaveT)clearTimeout(_edSaveT); _edSaveT=setTimeout(function(){ var d=(DB.editionsLibres||[]).filter(function(x){return x.id===id;})[0]; if(d){d.html=el.innerHTML;d.updated=Date.now();save(); var s=document.getElementById('edlib-saved'); if(s)s.textContent='Enregistré'; } },500); var s=document.getElementById('edlib-saved'); if(s)s.textContent='Modification en cours…'; };
-  window.edLibCmd=function(cmd,val){try{document.execCommand(cmd,false,val||null);}catch(e){} var el=document.getElementById('edlib-doc'); if(el)el.focus();};
-  window.edLibColor=function(c){try{document.execCommand('foreColor',false,c);}catch(e){} var el=document.getElementById('edlib-doc'); if(el)el.focus();};
-  window.edLibSize=function(v){try{document.execCommand('fontSize',false,v);}catch(e){}};
-  window.edLibPrint=function(id){ var d=(DB.editionsLibres||[]).filter(function(x){return x.id===id;})[0]; if(!d)return; var w=window.open('','_blank'); if(!w)return; w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+edE(d.titre)+'</title><style>@page{size:A4;margin:18mm}body{font-family:Georgia,\'Times New Roman\',serif;color:#111;font-size:12.5px;line-height:1.55}.edoc h1{font-size:16px;text-align:center;text-transform:uppercase;letter-spacing:.02em;margin:0 0 18px}.edp{color:#111}.edsig{display:flex;justify-content:space-between;gap:40px;margin-top:40px}.edsig>div{flex:1;text-align:center}.edlh{font-size:11px;margin-bottom:14px}.eddest{margin:14px 0}.edfoot{font-size:10.5px;color:#555;margin-top:24px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #999;padding:5px}</style></head><body>'+d.html+'</body></html>'); w.document.close(); setTimeout(function(){try{w.focus();w.print();}catch(e){}},250); };
+  function edDoc(id){return (DB.editionsLibres||[]).filter(function(x){return x.id===id;})[0];}
+  var _edT=null;
+  window.edLibField=function(id,key,val){
+    var d=edDoc(id);if(!d)return;d.data=d.data||{};d.data[key]=val;d.updated=Date.now();
+    edRepaint(id);
+    var s=document.getElementById('edlib-saved');if(s)s.textContent='Enregistrement…';
+    if(_edT)clearTimeout(_edT);_edT=setTimeout(function(){save();var s2=document.getElementById('edlib-saved');if(s2)s2.textContent='Enregistré';},500);
+  };
+  function edDocHTMLFull(d){
+    var css='body{font-family:Georgia,"Times New Roman",serif;color:#111;font-size:12.5px;line-height:1.6;margin:0}'
+      +'.edoc h1{font-size:16px;text-align:center;text-transform:uppercase;letter-spacing:.02em;margin:0 0 20px}'
+      +'.edoc p{margin:10px 0}.edp{color:#333}.edsig{display:flex;justify-content:space-between;gap:40px;margin-top:44px}.edsig>div{flex:1;text-align:center;font-size:12px}'
+      +'.edlh{font-size:11.5px;margin-bottom:16px;color:#333}.eddest{margin:16px 0}.edfoot{font-size:10.5px;color:#555;margin-top:26px;border-top:1px solid #ccc;padding-top:8px}'
+      +'.st-doc,.st-page{color:#111}.st-tbl{width:100%;border-collapse:collapse;font-size:11px}.st-tbl th,.st-tbl td{border:1px solid #999;padding:5px;vertical-align:top}.st-titre{text-align:center;font-weight:700;margin:14px 0}.st-sign{display:flex;gap:40px;margin-top:24px}';
+    return '<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>'+edE(d.titre)+'</title><style>@page{size:A4;margin:18mm}'+css+'</style></head><body>'+edLibTemplate(d.k,d.data)+'</body></html>';
+  }
+  function edDl(name,type,content){try{var blob=new Blob([content],{type:type});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},500);}catch(e){if(typeof toast==='function')toast('Export impossible.');}}
+  function edSafeName(d){return (''+(d.titre||'document')).replace(/[^\w\-À-ÿ ]+/g,'').trim().replace(/\s+/g,'_')||'document';}
+  window.edLibWord=function(id){var d=edDoc(id);if(!d)return;edDl(edSafeName(d)+'.doc','application/msword',edDocHTMLFull(d));};
+  window.edLibPdf=function(id){var d=edDoc(id);if(!d)return;var w=window.open('','_blank');if(!w){if(typeof toast==='function')toast('Autorisez les fenêtres pop-up pour l\'export PDF.');return;}w.document.write(edDocHTMLFull(d));w.document.close();setTimeout(function(){try{w.focus();w.print();}catch(e){}},300);};
+  window.edLibExcel=function(id){var d=edDoc(id);if(!d)return;var rows='';edSchema(d.k).forEach(function(g){rows+='<tr><td colspan="2" style="background:#eee;font-weight:bold">'+edE(g.g)+'</td></tr>';g.f.forEach(function(f){var v=(d.data&&d.data[f[0]]!=null)?(''+d.data[f[0]]):'';rows+='<tr><td>'+edE(f[1])+'</td><td>'+edE(v)+'</td></tr>';});});
+    var html='<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body><table border="1"><tr><td colspan="2" style="font-weight:bold;font-size:14px">'+edE(d.titre)+'</td></tr>'+rows+'</table></body></html>';
+    edDl(edSafeName(d)+'.xls','application/vnd.ms-excel',html);};
+  /* ---- Pagination A4 réelle (pages distinctes) + zoom ---- */
+  function edBlockRoot(tmp){
+    var st=tmp.querySelector('.st-page');
+    if(st)return {w:'st',blocks:[].slice.call(st.children)};
+    var ed=tmp.querySelector('.edoc');
+    if(ed)return {w:'edoc',blocks:[].slice.call(ed.children)};
+    return {w:'plain',blocks:[].slice.call(tmp.children)};
+  }
+  function edMakePage(host,w){
+    var page=document.createElement('div');page.className='ed2-page';
+    var pin=document.createElement('div');pin.className='ed2-page-in';var content;
+    if(w==='st'){var dd=document.createElement('div');dd.className='st-doc';var pp=document.createElement('div');pp.className='st-page';dd.appendChild(pp);pin.appendChild(dd);content=pp;}
+    else{var e=document.createElement('div');e.className='edoc';pin.appendChild(e);content=e;}
+    page.appendChild(pin);host.appendChild(page);return content;
+  }
+  function edRenderPaged(host,html,zoom){
+    if(!host)return;host.innerHTML='';host.style.setProperty('transform','scale('+(zoom||1)+')','important');
+    var tmp=document.createElement('div');tmp.innerHTML=html;
+    var info=edBlockRoot(tmp);
+    var content=edMakePage(host,info.w);var LIMIT=995;
+    info.blocks.forEach(function(b){
+      content.appendChild(b);
+      if(content.scrollHeight>LIMIT && content.children.length>1){
+        content.removeChild(b);content=edMakePage(host,info.w);content.appendChild(b);
+      }
+    });
+    var n=host.querySelectorAll('.ed2-page').length;host.querySelectorAll('.ed2-page').forEach(function(p,i){p.setAttribute('data-pg',(i+1)+' / '+n);});
+  }
+  window.edRepaint=function(id){
+    var d=edDoc(id);var host=document.getElementById('edlib-pages');if(!d||!host)return;
+    edRenderPaged(host,edLibTemplate(d.k,d.data),state.edLibZoom||1);
+    var l=document.getElementById('edlib-zlbl');if(l)l.textContent=Math.round((state.edLibZoom||1)*100)+'%';
+  };
+  window.edLibZoom=function(delta){
+    var z=(state.edLibZoom||1)+delta;z=Math.max(.5,Math.min(1.8,Math.round(z*100)/100));state.edLibZoom=z;
+    var h=document.getElementById('edlib-pages');if(h)h.style.setProperty('transform','scale('+z+')','important');
+    var l=document.getElementById('edlib-zlbl');if(l)l.textContent=Math.round(z*100)+'%';
+  };
   window.pageEditions=function(){
     var docs=(DB.editionsLibres||[]);
     var cur=docs.filter(function(x){return x.id===state.edLibId;})[0]||null;
-    /* barre latérale : création + documents ouverts */
-    var groups={};EDLIB_TYPES.forEach(function(t){(groups[t.g]=groups[t.g]||[]).push(t);});
-    var create=Object.keys(groups).map(function(g){
-      return '<div class="ed2-grp"><div class="ed2-grp-h">'+edE(g)+'</div>'
-        +groups[g].map(function(t){return '<button class="ed2-new" onclick="edLibNew(\''+t.k+'\')" title="Créer un document vierge : '+edE(t.l)+'">'+edE(t.l)+'</button>';}).join('')
+    if(!cur){
+      var groups={};EDLIB_TYPES.forEach(function(t){(groups[t.g]=groups[t.g]||[]).push(t);});
+      var create=Object.keys(groups).map(function(g){
+        return '<div class="ed2-grp"><div class="ed2-grp-h">'+edE(g)+'</div><div class="ed2-grp-b">'
+          +groups[g].map(function(t){return '<button class="ed2-new" onclick="edLibNew(\''+t.k+'\')">'+edE(t.l)+'</button>';}).join('')
+          +'</div></div>';
+      }).join('');
+      var openl=docs.length?('<div class="ed2-openwrap"><div class="ed2-grp-h">Documents ouverts <span class="ed2-cnt">'+docs.length+'</span></div><div class="ed2-openlist">'
+        +docs.map(function(x){return '<div class="ed2-open"><button class="ed2-open-b" onclick="edLibOpen(\''+x.id+'\')"><b>'+edE(x.titre)+'</b><span>'+edE((EDLIB_TYPES.filter(function(t){return t.k===x.k;})[0]||{}).g||'')+'</span></button><button class="ed2-x" title="Supprimer" onclick="edLibDel(\''+x.id+'\')">×</button></div>';}).join('')
+        +'</div></div>'):'';
+      return '<div class="ed2-home"><div class="ed2-home-head"><h2>Créer un document</h2><p>Choisissez un modèle, renseignez les informations dans le volet de saisie, puis exportez en Word, PDF ou Excel.</p></div><div class="ed2-create">'+create+'</div>'+openl+'</div>';
+    }
+    /* --- éditeur : volet de saisie + aperçu en direct --- */
+    var D=cur.data||{};
+    var form=edSchema(cur.k).map(function(g){
+      return '<div class="ed2-fg"><div class="ed2-fg-h">'+edE(g.g)+'</div>'
+        +g.f.map(function(f){
+          var key=f[0],lab=f[1],ty=f[2]||'text';
+          var val=(D[key]!=null)?edE(D[key]):'';
+          var ctl;
+          if(ty==='sel'){ctl='<select class="ed2-in" onchange="edLibField(\''+cur.id+'\',\''+key+'\',this.value)">'+FORMES.map(function(o){return '<option'+((D[key]||'')===o?' selected':'')+'>'+o+'</option>';}).join('')+'</select>';}
+          else if(ty==='ta'){ctl='<textarea class="ed2-in ed2-ta" rows="2" oninput="edLibField(\''+cur.id+'\',\''+key+'\',this.value)">'+val+'</textarea>';}
+          else{var it=(ty==='date'||ty==='num')?'text':ty;ctl='<input class="ed2-in" type="'+it+'" value="'+val+'"'+(ty==='date'?' placeholder="jj/mm/aaaa"':'')+' oninput="edLibField(\''+cur.id+'\',\''+key+'\',this.value)">';}
+          return '<label class="ed2-field"><span class="ed2-lab">'+edE(lab)+'</span>'+ctl+'</label>';
+        }).join('')
         +'</div>';
     }).join('');
-    var open=docs.length?docs.map(function(x){
-      return '<div class="ed2-open '+(cur&&cur.id===x.id?'on':'')+'"><button class="ed2-open-b" onclick="edLibOpen(\''+x.id+'\')"><b>'+edE(x.titre)+'</b><span>'+edE((EDLIB_TYPES.filter(function(t){return t.k===x.k;})[0]||{}).g||'')+'</span></button><button class="ed2-x" title="Supprimer" onclick="edLibDel(\''+x.id+'\')">'+(typeof svg==='function'&&typeof IC!=='undefined'?svg(IC.trash||IC.x||''):'×')+'</button></div>';
-    }).join(''):'<div class="ed2-empty-side">Aucun document ouvert.<br>Choisissez un type ci-dessus pour créer un document vierge.</div>';
-    var side='<aside class="ed2-side">'
-      +'<div class="ed2-side-t">Nouveau document</div>'+create
-      +'<div class="ed2-side-t" style="margin-top:14px">Documents ouverts <span class="ed2-cnt">'+docs.length+'</span></div>'
-      +'<div class="ed2-openlist">'+open+'</div></aside>';
-    var main;
-    if(!cur){
-      main='<section class="ed2-main"><div class="ed2-blank">'
-        +(typeof svg==='function'&&typeof IC!=='undefined'?svg(IC.doc||''):'')
-        +'<h2>Espace de documentation</h2>'
-        +'<p>Créez et modifiez librement vos documents à partir de modèles vierges — sans dossier, sans données, sans affiliation.</p>'
-        +'<p class="ed2-blank-sub">Sélectionnez un type de document dans la colonne de gauche.</p>'
-        +'</div></section>';
-    } else {
-      var pal=['#111111','#c0392b','#2563eb','#16a34a','#b45309','#7c3aed','#0f766e','#be185d'];
-      var swatches=pal.map(function(c){return '<button class="ed2-sw" style="background:'+c+'" title="'+c+'" onclick="edLibColor(\''+c+'\')"></button>';}).join('');
-      main='<section class="ed2-main">'
-        +'<div class="ed2-bar">'
-          +'<input class="ed2-title" value="'+edE(cur.titre)+'" oninput="edLibRename(\''+cur.id+'\',this.value)" aria-label="Titre du document">'
-          +'<span class="ed2-saved" id="edlib-saved">Enregistré</span>'
-          +'<span class="ed2-sp"></span>'
-          +'<div class="ed2-tools">'
-            +'<button class="ed2-tb" title="Gras" onclick="edLibCmd(\'bold\')"><b>B</b></button>'
-            +'<button class="ed2-tb" title="Italique" onclick="edLibCmd(\'italic\')"><i>I</i></button>'
-            +'<button class="ed2-tb" title="Souligné" onclick="edLibCmd(\'underline\')"><u>U</u></button>'
-            +'<span class="ed2-div"></span>'
-            +'<select class="ed2-size" title="Taille" onchange="edLibSize(this.value)"><option value="">Taille</option><option value="2">Petit</option><option value="3">Normal</option><option value="5">Grand</option><option value="6">Titre</option></select>'
-            +'<span class="ed2-div"></span>'
-            +'<span class="ed2-pal">'+swatches
-              +'<label class="ed2-sw ed2-sw-more" title="Autre couleur"><input type="color" oninput="edLibColor(this.value)"></label>'
-            +'</span>'
-            +'<span class="ed2-div"></span>'
-            +'<button class="ed2-tb" title="Aligner à gauche" onclick="edLibCmd(\'justifyLeft\')">≡</button>'
-            +'<button class="ed2-tb" title="Centrer" onclick="edLibCmd(\'justifyCenter\')">≣</button>'
-            +'<span class="ed2-sp2"></span>'
-            +'<button class="btn btn-sm btn-ghost" onclick="edLibPrint(\''+cur.id+'\')">Imprimer / PDF</button>'
-            +'<button class="btn btn-sm btn-ghost" onclick="edLibDel(\''+cur.id+'\')">Supprimer</button>'
-          +'</div>'
-        +'</div>'
-        +'<div class="ed2-scroll"><div class="ed2-doc" id="edlib-doc" contenteditable="true" oninput="edLibSave(\''+cur.id+'\')">'+cur.html+'</div></div>'
-      +'</section>';
-    }
-    return '<div class="ed2-shell">'+side+main+'</div>';
+    var switcher=docs.length>1?('<div class="ed2-switch">'+docs.map(function(x){return '<button class="ed2-chip '+(x.id===cur.id?'on':'')+'" onclick="edLibOpen(\''+x.id+'\')">'+edE(x.titre)+'</button>';}).join('')+'</div>'):'';
+    var top='<div class="ed2-topbar">'
+      +'<button class="btn btn-sm btn-ghost ed2-back" onclick="edLibClose()" title="Revenir à la liste des documents">← Retour</button>'
+      +'<input class="ed2-title" value="'+edE(cur.titre)+'" oninput="edLibRename(\''+cur.id+'\',this.value)" aria-label="Titre">'
+      +'<span class="ed2-saved" id="edlib-saved">Enregistré</span>'
+      +'<span class="ed2-sp"></span>'
+      +'<span class="ed2-zoom"><button class="ed2-zb" title="Dézoomer" onclick="edLibZoom(-0.1)">−</button><span class="ed2-zlbl" id="edlib-zlbl">'+Math.round((state.edLibZoom||1)*100)+'%</span><button class="ed2-zb" title="Zoomer" onclick="edLibZoom(0.1)">+</button></span>'
+      +'<button class="btn btn-sm" onclick="edLibWord(\''+cur.id+'\')">Word</button>'
+      +'<button class="btn btn-sm" onclick="edLibPdf(\''+cur.id+'\')">PDF</button>'
+      +'<button class="btn btn-sm" onclick="edLibExcel(\''+cur.id+'\')">Excel</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="edLibDel(\''+cur.id+'\')">Supprimer</button>'
+      +'</div>';
+    var body='<div class="ed2-edit-body">'
+      +'<aside class="ed2-form"><div class="ed2-form-t">Saisie des informations</div>'+switcher+form+'</aside>'
+      +'<div class="ed2-preview" id="edlib-preview"><div class="ed2-pages" id="edlib-pages"></div></div>'
+      +'</div>';
+    try{requestAnimationFrame(function(){edRepaint(cur.id);});}catch(e){setTimeout(function(){edRepaint(cur.id);},0);}
+    return '<div class="ed2-edit">'+top+body+'</div>';
   };
   try{ if(!document.getElementById('editions-css')){var es=document.createElement('style');es.id='editions-css';
     es.textContent=[
-      '.ed2-shell{display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start;padding:2px 0 30px;min-height:calc(100vh - 120px)}',
-      '.ed2-side{background:#111114;border:1px solid #26262b;border-radius:14px;padding:14px;position:sticky;top:12px;max-height:calc(100vh - 96px);overflow:auto}',
-      '.ed2-side-t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#8a8a92;margin:0 0 8px;display:flex;align-items:center;gap:6px}',
-      '.ed2-cnt{margin-left:auto;background:#1c1c22;border:1px solid #2c2c33;border-radius:999px;padding:1px 8px;font-size:10px;color:#b9b9c2}',
-      '.ed2-grp{margin-bottom:10px}',
-      '.ed2-grp-h{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6a6a72;margin:8px 2px 4px}',
-      '.ed2-new{display:block;width:100%;text-align:left;background:#161619;border:1px solid #262630;border-radius:9px;color:#e2e2e8;font-size:12.5px;padding:8px 10px;margin-bottom:4px;cursor:pointer;transition:.12s}',
-      '.ed2-new:hover{background:#1e1e26;border-color:#3a3a48;transform:translateX(2px)}',
-      '.ed2-openlist{display:flex;flex-direction:column;gap:4px}',
-      '.ed2-open{display:flex;align-items:stretch;gap:4px;border:1px solid #232329;border-radius:9px;overflow:hidden;background:#131317}',
-      '.ed2-open.on{border-color:#4a4a5a;background:#1a1a22}',
-      '.ed2-open-b{flex:1;min-width:0;text-align:left;background:none;border:0;color:#e2e2e8;padding:8px 10px;cursor:pointer;display:flex;flex-direction:column;gap:1px}',
-      '.ed2-open-b b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-      '.ed2-open-b span{font-size:10px;color:#7c7c86}',
-      '.ed2-x{flex:none;background:none;border:0;border-left:1px solid #232329;color:#8a8a92;padding:0 10px;cursor:pointer;font-size:15px}',
-      '.ed2-x:hover{color:#e07a7a;background:#1c1416}',
-      '.ed2-empty-side{font-size:11.5px;color:#7c7c86;line-height:1.6;padding:8px 4px}',
-      '.ed2-main{min-width:0}',
-      '.ed2-blank{max-width:520px;margin:60px auto;text-align:center;color:#8a8a92}',
-      '.ed2-blank h2{font-size:18px;color:#e7e7ec;margin:14px 0 8px}',
-      '.ed2-blank p{font-size:13px;line-height:1.6;margin:6px 0}',
-      '.ed2-blank-sub{color:#6a6a72;font-size:12px}',
-      '.ed2-blank svg{width:38px;height:38px;opacity:.5}',
-      '.ed2-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#111114;border:1px solid #26262b;border-radius:12px;padding:8px 12px;position:sticky;top:12px;z-index:5}',
-      '.ed2-title{flex:none;width:230px;background:#161619;border:1px solid #262630;border-radius:8px;color:#e7e7ec;font-size:13px;font-weight:700;padding:6px 10px}',
-      '.ed2-saved{font-size:11px;color:#7c7c86}',
-      '.ed2-sp{flex:1}.ed2-sp2{flex:1}',
-      '.ed2-tools{display:flex;align-items:center;gap:5px;flex-wrap:wrap}',
-      '.ed2-tb{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;background:#161619;border:1px solid #262630;border-radius:8px;color:#e2e2e8;font-size:14px;cursor:pointer}',
-      '.ed2-tb:hover{background:#1e1e26;border-color:#3a3a48}',
-      '.ed2-div{width:1px;height:20px;background:#2a2a32;margin:0 2px}',
-      '.ed2-size{background:#161619;border:1px solid #262630;border-radius:8px;color:#e2e2e8;font-size:12px;padding:5px 6px;cursor:pointer}',
-      '.ed2-pal{display:inline-flex;align-items:center;gap:5px}',
-      '.ed2-sw{width:20px;height:20px;border-radius:50%;border:2px solid #2c2c33;cursor:pointer;padding:0;transition:.1s}',
-      '.ed2-sw:hover{transform:scale(1.18);border-color:#fff}',
-      '.ed2-sw-more{position:relative;overflow:hidden;background:conic-gradient(#c0392b,#b45309,#16a34a,#2563eb,#7c3aed,#c0392b)}',
-      '.ed2-sw-more input{position:absolute;inset:-4px;opacity:0;cursor:pointer}',
-      '.ed2-scroll{margin-top:14px;max-height:calc(100vh - 150px);overflow:auto;padding:0 4px 30px;display:flex;justify-content:center}',
-      '.ed2-doc{background:#fff;color:#111;width:210mm;max-width:100%;min-height:297mm;box-sizing:border-box;padding:24mm 22mm;font-family:Georgia,"Times New Roman",serif;font-size:12.5px;line-height:1.6;box-shadow:0 8px 40px rgba(0,0,0,.5);border-radius:2px}',
-      '.ed2-doc:focus{outline:none}',
-      '.ed2-doc .edoc h1{font-size:16px;text-align:center;text-transform:uppercase;letter-spacing:.02em;margin:0 0 20px;color:#111}',
-      '.ed2-doc .edoc p{margin:10px 0}',
-      '.ed2-doc .edp{background:#fff3cd;border-bottom:1px dotted #b8860b;color:#7a5c00;padding:0 2px;border-radius:2px}',
-      '.ed2-doc .edsig{display:flex;justify-content:space-between;gap:40px;margin-top:44px}',
-      '.ed2-doc .edsig>div{flex:1;text-align:center;font-size:12px}',
-      '.ed2-doc .edlh{font-size:11.5px;margin-bottom:16px;color:#333}',
-      '.ed2-doc .eddest{margin:16px 0}',
-      '.ed2-doc .edfoot{font-size:10.5px;color:#555;margin-top:26px;border-top:1px solid #ccc;padding-top:8px}',
-      '.ed2-doc .edoc-gen{color:#111}',
-      '@media(max-width:900px){.ed2-shell{grid-template-columns:1fr}.ed2-side{position:static;max-height:none}}'
+      '.ed2-home{max-width:1000px;margin:0 auto;padding:4px 0 40px}',
+      '.ed2-home-head h2{font-size:17px;color:#e7e7ec;margin:0 0 4px}',
+      '.ed2-home-head p{font-size:12.5px;color:#8a8a92;margin:0 0 18px;line-height:1.6}',
+      '.ed2-create{display:flex;flex-direction:column;gap:14px}',
+      '.ed2-grp-h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#7a7a82;margin:0 0 8px;display:flex;align-items:center;gap:6px}',
+      '.ed2-grp-b{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}',
+      '.ed2-new{text-align:left;background:#161619;border:1px solid #262630;border-radius:10px;color:#e2e2e8;font-size:13px;padding:11px 13px;cursor:pointer;transition:.12s}',
+      '.ed2-new:hover{background:#1e1e26;border-color:#3a3a48;transform:translateY(-1px)}',
+      '.ed2-openwrap{margin-top:26px}',
+      '.ed2-cnt{background:#1c1c22;border:1px solid #2c2c33;border-radius:999px;padding:1px 8px;font-size:10px;color:#b9b9c2}',
+      '.ed2-openlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}',
+      '.ed2-open{display:flex;border:1px solid #232329;border-radius:10px;overflow:hidden;background:#131317}',
+      '.ed2-open-b{flex:1;min-width:0;text-align:left;background:none;border:0;color:#e2e2e8;padding:9px 12px;cursor:pointer;display:flex;flex-direction:column;gap:1px}',
+      '.ed2-open-b b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ed2-open-b span{font-size:10px;color:#7c7c86}',
+      '.ed2-x{background:none;border:0;border-left:1px solid #232329;color:#8a8a92;padding:0 11px;cursor:pointer;font-size:15px}.ed2-x:hover{color:#e07a7a;background:#1c1416}',
+      '.ed2-edit{display:flex;flex-direction:column;min-height:calc(100vh - 120px)}',
+      '.ed2-topbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#111114;border:1px solid #26262b;border-radius:12px;padding:8px 12px;position:sticky;top:10px;z-index:6}',
+      '.ed2-title{flex:none;width:260px;background:#161619;border:1px solid #262630;border-radius:8px;color:#e7e7ec;font-size:13px;font-weight:700;padding:6px 10px}',
+      '.ed2-saved{font-size:11px;font-weight:800;color:#22e06b;text-shadow:0 0 10px rgba(34,224,107,.45)}.ed2-sp{flex:1}',
+      '.ed2-zoom{display:inline-flex;align-items:center;gap:4px;margin-right:4px}',
+      '.ed2-zb{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;background:#161619;border:1px solid #262630;border-radius:7px;color:#e2e2e8;font-size:15px;cursor:pointer}.ed2-zb:hover{background:#1e1e26;border-color:#3a3a48}',
+      '.ed2-zlbl{font-size:11px;color:#b9b9c2;min-width:38px;text-align:center}',
+      '.ed2-edit-body{display:grid;grid-template-columns:360px 1fr;gap:16px;align-items:start;margin-top:14px}',
+      '.ed2-form{background:#111114;border:1px solid #26262b;border-radius:14px;padding:14px;position:sticky;top:66px;max-height:calc(100vh - 96px);overflow:auto}',
+      '.ed2-form-t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#8a8a92;margin:0 0 10px}',
+      '.ed2-switch{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}',
+      '.ed2-chip{background:#161619;border:1px solid #262630;border-radius:999px;color:#b9b9c2;font-size:11px;padding:3px 10px;cursor:pointer}.ed2-chip.on{background:#22303f;border-color:#2f6fed;color:#dbeafe}',
+      '.ed2-fg{margin-bottom:14px}',
+      '.ed2-fg-h{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6a6a72;margin:0 0 6px;padding-bottom:5px;border-bottom:1px solid #232329}',
+      '.ed2-field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}',
+      '.ed2-lab{font-size:11px;color:#9a9aa2}',
+      '.ed2-in{background:#161619;border:1px solid #262630;border-radius:8px;color:#e7e7ec;font-size:12.5px;padding:7px 9px;width:100%;box-sizing:border-box;font-family:inherit}',
+      '.ed2-in:focus{outline:none;border-color:#2f6fed;background:#14181f}',
+      '.ed2-ta{resize:vertical;min-height:44px;line-height:1.4}',
+      '.ed2-preview{max-height:calc(100vh - 96px);overflow:auto;background:transparent;border:0;border-radius:0;padding:8px 0 48px}',
+      '.ed2-pages{display:flex;flex-direction:column;align-items:center;gap:26px;transform-origin:top center;transition:transform .12s}',
+      '.ed2-page{position:relative;background:#fff;color:#111;width:794px;height:1123px;box-sizing:border-box;box-shadow:none;border:0;flex:none;overflow:hidden}',
+      '.ed2-page-in{padding:64px 60px;height:100%;box-sizing:border-box;font-family:Georgia,"Times New Roman",serif;font-size:13.5px;line-height:1.6;color:#111}',
+      '.ed2-page-in,.ed2-page-in *:not(.edp){color:#111!important;-webkit-text-fill-color:#111}',
+      '.ed2-page-in .edp,.ed2-page-in .edp *{-webkit-text-fill-color:#7a5c00}',
+      '.ed2-page-in .edoc h1{font-size:16px;text-align:center;text-transform:uppercase;letter-spacing:.02em;margin:0 0 20px;color:#111}',
+      '.ed2-page-in .edoc p{margin:10px 0}',
+      '.ed2-page-in .edp{background:#fff3cd;border-bottom:1px dotted #b8860b;color:#7a5c00;padding:0 2px;border-radius:2px}',
+      '.ed2-page-in .edsig{display:flex;justify-content:space-between;gap:40px;margin-top:40px}.ed2-page-in .edsig>div{flex:1;text-align:center;font-size:12px}',
+      '.ed2-page-in .edlh{font-size:11.5px;margin-bottom:16px;color:#333}.ed2-page-in .eddest{margin:16px 0}.ed2-page-in .edfoot{font-size:10.5px;color:#555;margin-top:26px;border-top:1px solid #ccc;padding-top:8px}',
+      '.ed2-page-in .st-doc,.ed2-page-in .st-page{background:transparent!important;box-shadow:none!important;border:0!important;margin:0!important;padding:0!important;min-height:0!important;width:auto!important}',
+      '.ed2-page-in .st-doc,.ed2-page-in .st-page,.ed2-page-in .st-page *,.ed2-page-in .dg-page,.ed2-page-in .dg-page *{color:#111}',
+      '.ed2-page-in .st-tbl{width:100%;border-collapse:collapse;font-size:11px}.ed2-page-in .st-tbl th,.ed2-page-in .st-tbl td{border:1px solid #999;padding:5px;vertical-align:top}',
+      '.ed2-page-in .st-titre{text-align:center;font-weight:700;margin:12px 0}.ed2-page-in .st-hdr{text-align:center;margin-bottom:10px}.ed2-page-in .st-fin{margin-top:20px}.ed2-page-in .st-sign{display:flex;gap:40px;margin-top:18px}.ed2-page-in .st-sign .sg{flex:1;text-align:center}',
+      '@media(max-width:960px){.ed2-edit-body{grid-template-columns:1fr}.ed2-form{position:static;max-height:none}}'
     ].join('');document.head.appendChild(es);} }catch(e){}
   /* Conformité de présentation — uniformise en-têtes, pastilles, rythme et champs sur tous les onglets */
   try{ if(!document.getElementById('conformity-css')){var cs=document.createElement('style');cs.id='conformity-css';
