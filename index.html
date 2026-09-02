@@ -3091,7 +3091,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=324;
+var LAST_VER=325;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -16508,7 +16508,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var client={id:cid,denomination:D.denomination||'',forme:D.forme||'SAS',capital:D.capital||'',siege:D.siege||'',cp:D.cp||'',ville:D.ville||'',president:pres,associes:assoc,
       docVars:{nominal:D.nominal||'',dateActe:D.dateActe||'',villeSignature:D.villeSignature||'',rcsVille:D.rcsVille||'',pereNom:D.pereNom||'',mereNom:D.mereNom||''}};
     DB.clients=DB.clients||[];DB.clients.push(client);
-    var d={id:'__edtmpd',clientIds:[cid],forme:D.forme||'SAS',verif:{extract:{}}};
+    var d={id:'__edtmpd',clientIds:[cid],forme:D.forme||'SAS',verif:{extract:{}},docModel:{}};
+    d.docModel[k]=edFormeModel(D.forme||'SAS');
     var html='';try{ if(typeof window.espDocRender==='function')html=window.espDocRender(d,k); }catch(e){ html='<div class="edoc"><p>'+EDP+'</p></div>'; }
     finally{ DB.clients=DB.clients.filter(function(x){return x.id!==cid;}); }
     return '<div class="edoc edoc-gen">'+html+'</div>';
@@ -16520,12 +16521,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(M[k])return M[k](D);
     return edDocWrap('<h1>'+edE((EDLIB_TYPES.filter(function(t){return t.k===k;})[0]||{}).l||'Document')+'</h1><p>'+EDP+'</p>');
   }
-  window.edLibNew=function(k){
+  /* Documents adaptés à la forme de société : liste pliable SAS/SASU/SARL/EURL(/SCI) */
+  var EDFORMS={statuts:['SAS','SASU','SARL','EURL','SCI'],souscripteurs:['SAS','SASU','SARL','EURL'],pouvoir:['SAS','SASU','SARL','EURL'],dnc:['SAS','SASU','SARL','EURL']};
+  function edFormeModel(f){return {SAS:'sas',SASU:'sasu',SARL:'sarl',EURL:'sarl',SCI:'sci'}[f]||'sas';}
+  window.edLibToggleType=function(k){state.edOpenType=(state.edOpenType===k?'':k);render();};
+  window.edLibNew=function(k,forme){
     DB.editionsLibres=DB.editionsLibres||[];
     var t=EDLIB_TYPES.filter(function(x){return x.k===k;})[0]||{l:'Document',k:k};
-    var data={};if(edSchema(k).some(function(g){return g.f.some(function(f){return f[0]==='forme';});}))data.forme='SAS';
-    var doc={id:'edl_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),k:k,titre:t.l,data:data,ts:Date.now(),updated:Date.now()};
-    DB.editionsLibres.unshift(doc);save();state.edLibId=doc.id;render();
+    var data={};if(edSchema(k).some(function(g){return g.f.some(function(f){return f[0]==='forme';});}))data.forme=forme||'SAS';
+    var titre=t.l+((forme&&EDFORMS[k])?(' — '+forme):'');
+    var doc={id:'edl_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),k:k,titre:titre,data:data,ts:Date.now(),updated:Date.now()};
+    DB.editionsLibres.unshift(doc);save();state.edLibId=doc.id;state.edOpenType='';render();
   };
   window.edLibOpen=function(id){state.edLibId=id;render();};
   window.edLibClose=function(){state.edLibId='';render();};
@@ -16599,12 +16605,22 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       var groups={};EDLIB_TYPES.forEach(function(t){(groups[t.g]=groups[t.g]||[]).push(t);});
       var create=Object.keys(groups).map(function(g){
         return '<div class="ed2-grp"><div class="ed2-grp-h">'+edE(g)+'</div><div class="ed2-grp-b">'
-          +groups[g].map(function(t){return '<button class="ed2-new" onclick="edLibNew(\''+t.k+'\')">'+edE(t.l)+'</button>';}).join('')
+          +groups[g].map(function(t){
+            if(EDFORMS[t.k]){
+              var op=state.edOpenType===t.k;
+              return '<div class="ed2-new-wrap">'
+                +'<button class="ed2-new ed2-new-fold'+(op?' open':'')+'" onclick="edLibToggleType(\''+t.k+'\')"><span>'+edE(t.l)+'</span><span class="ed2-caret">▸</span></button>'
+                +(op?('<div class="ed2-forms">'+EDFORMS[t.k].map(function(f){return '<button class="ed2-form-b" onclick="edLibNew(\''+t.k+'\',\''+f+'\')">'+f+'</button>';}).join('')+'</div>'):'')
+                +'</div>';
+            }
+            return '<button class="ed2-new" onclick="edLibNew(\''+t.k+'\')">'+edE(t.l)+'</button>';
+          }).join('')
           +'</div></div>';
       }).join('');
-      var openl=docs.length?('<div class="ed2-openwrap"><div class="ed2-grp-h">Documents ouverts <span class="ed2-cnt">'+docs.length+'</span></div><div class="ed2-openlist">'
-        +docs.map(function(x){return '<div class="ed2-open"><button class="ed2-open-b" onclick="edLibOpen(\''+x.id+'\')"><b>'+edE(x.titre)+'</b><span>'+edE((EDLIB_TYPES.filter(function(t){return t.k===x.k;})[0]||{}).g||'')+'</span></button><button class="ed2-x" title="Supprimer" onclick="edLibDel(\''+x.id+'\')">×</button></div>';}).join('')
-        +'</div></div>'):'';
+      var recents=docs.slice(0,4);
+      var openl=docs.length?('<div class="ed2-openwrap"><div class="ed2-grp-h">Documents ouverts <span class="ed2-cnt">'+recents.length+(docs.length>4?(' / '+docs.length):'')+'</span></div><div class="ed2-openlist">'
+        +recents.map(function(x){return '<div class="ed2-open"><button class="ed2-open-b" onclick="edLibOpen(\''+x.id+'\')"><b>'+edE(x.titre)+'</b><span>'+edE((EDLIB_TYPES.filter(function(t){return t.k===x.k;})[0]||{}).g||'')+'</span></button><button class="ed2-x" title="Supprimer" onclick="edLibDel(\''+x.id+'\')">×</button></div>';}).join('')
+        +'</div>'+(docs.length>4?'<div class="ed2-open-more">Les 4 documents les plus récents sont affichés.</div>':'')+'</div>'):'';
       return '<div class="ed2-home"><div class="ed2-home-head"><h2>Créer un document</h2><p>Choisissez un modèle, renseignez les informations dans le volet de saisie, puis exportez en Word, PDF ou Excel.</p></div><div class="ed2-create">'+create+'</div>'+openl+'</div>';
     }
     /* --- éditeur : volet de saisie + aperçu en direct --- */
@@ -16651,6 +16667,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '.ed2-grp-b{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}',
       '.ed2-new{text-align:left;background:#161619;border:1px solid #262630;border-radius:10px;color:#e2e2e8;font-size:13px;padding:11px 13px;cursor:pointer;transition:.12s}',
       '.ed2-new:hover{background:#1e1e26;border-color:#3a3a48;transform:translateY(-1px)}',
+      '.ed2-new-wrap{display:flex;flex-direction:column;gap:4px}',
+      '.ed2-new-fold{display:flex;align-items:center;justify-content:space-between;gap:8px}',
+      '.ed2-caret{transition:.15s;color:#8a8a92;font-size:11px}',
+      '.ed2-new-fold.open{background:#1e1e26;border-color:#3a4a6a}.ed2-new-fold.open .ed2-caret{transform:rotate(90deg);color:#5ab0ff}',
+      '.ed2-forms{display:flex;flex-wrap:wrap;gap:6px;padding:8px 6px 6px 12px;margin:-2px 0 2px;border-left:2px solid #2f6fed33}',
+      '.ed2-form-b{background:#14181f;border:1px solid #2a3550;border-radius:8px;color:#cfe0ff;font-size:12px;font-weight:700;letter-spacing:.02em;padding:6px 12px;cursor:pointer;transition:.12s}',
+      '.ed2-form-b:hover{background:#22303f;border-color:#2f6fed;color:#fff;transform:translateY(-1px)}',
+      '.ed2-open-more{font-size:10.5px;color:#7c7c86;margin-top:8px;text-align:center}',
       '.ed2-openwrap{margin-top:26px}',
       '.ed2-cnt{background:#1c1c22;border:1px solid #2c2c33;border-radius:999px;padding:1px 8px;font-size:10px;color:#b9b9c2}',
       '.ed2-openlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}',
