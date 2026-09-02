@@ -9334,6 +9334,910 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     EXTRACT_FIELDS.push({k:'numeroPiece',l:'N° de la pièce'});
     EXTRACT_FIELDS.push({k:'dateExpiration',l:"Date d'expiration de la pièce"});
   }
+  function norm(s){return (''+(s==null?'':s)).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();}
+  function parseDate(s){s=(''+(s||'')).trim();var m=s.match(/(\d{4})-(\d{2})-(\d{2})/);if(m)return new Date(+m[1],+m[2]-1,+m[3]);m=s.match(/(\d{1,2})[\/.\s](\d{1,2})[\/.\s](\d{2,4})/);if(m){var y=+m[3];if(y<100)y+=2000;return new Date(y,+m[2]-1,+m[1]);}return null;}
+  function tokSim(a,b){var A=norm(a).split(' ').filter(function(w){return w.length>2;}),B=norm(b).split(' ').filter(function(w){return w.length>2;});if(!A.length||!B.length)return 0;var setB={};B.forEach(function(w){setB[w]=1;});var inter=A.filter(function(w){return setB[w];}).length;return inter/Math.max(A.length,B.length);}
+  function dirAdresse(c){c=c||{};var pres=(c.associes||[]).filter(function(a){return (''+(a.nom||'')).trim()===(''+(c.president||'')).trim();})[0]||(c.associes||[])[0]||{};return (pres.adresse||c.adresse||'').trim();}
+  function pieceData(d,k){var st=(d&&d.pieces&&d.pieces[k])||{};return st;}
+
+  window.pieceControles=function(d){
+    if(!d)return [];
+    var v=d.verif||{}; var ex=v.extract||{}; var c=(typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};
+    var out=[];
+    // 1) pièces manquantes
+    var reqs=(typeof DIRIGEANT_PIECES!=='undefined')?DIRIGEANT_PIECES:[];
+    var manq=reqs.filter(function(pc){return !pieceData(d,pc.k).data;});
+    out.push({k:'manquantes',label:'Pièces requises déposées',statut:manq.length?'ko':'ok',detail:manq.length?('Manquante(s) : '+manq.map(function(p){return p.l;}).join(' · ')):'Toutes les pièces requises sont déposées.'});
+    // 2) expiration
+    var exp=(''+(ex.dateExpiration||'')).trim(); var de=parseDate(exp);
+    if(exp&&de){ var today0=new Date(new Date().toDateString()); var expired=de<today0; out.push({k:'expiration',label:"Validité de la pièce d'identité",statut:expired?'ko':'ok',detail:expired?('⚠ Pièce EXPIRÉE (le '+exp+')'):('Valide jusqu\'au '+exp)}); }
+    else out.push({k:'expiration',label:"Validité de la pièce d'identité",statut:'warn',detail:"Date d'expiration non renseignée — à vérifier sur la pièce."});
+    // 3) cohérence d'adresse (pièce vs dossier)
+    var aEx=ex.adresse||'', aFi=dirAdresse(c);
+    if(norm(aEx)&&norm(aFi)){ var sim=tokSim(aEx,aFi); out.push({k:'adresse',label:"Cohérence de l'adresse",statut:sim>=0.5?'ok':'warn',detail:sim>=0.5?'Adresse cohérente avec le dossier.':('Adresse extraite (« '+aEx+' ») différente de celle du dossier (« '+aFi+' ») — à vérifier.')}); }
+    else out.push({k:'adresse',label:"Cohérence de l'adresse",statut:'warn',detail:'Adresse non renseignée — à vérifier.'});
+    // 4) lisibilité
+    var idp=pieceData(d,'identite');
+    if(idp.data){ var n=['nom','prenom','dateNaissance','nationalite'].filter(function(f){return (''+(ex[f]||'')).trim();}).length; out.push({k:'lisible',label:"Lisibilité de la pièce d'identité",statut:n>=2?'ok':'warn',detail:n>=2?'Champs extraits correctement.':'Peu de champs extraits — document peut-être illisible, saisir manuellement.'}); }
+    return out;
+  };
+  window.pieceAnomalies=function(d){return window.pieceControles(d).filter(function(x){return x.statut!=='ok';});};
+
+  /* ---- Extraction OCR/IA (best-effort, réseau) ---- */
+  function parseIdentity(v,text){
+    text=(''+(text||'')); if(text.length<8)return 0;
+    var got=0;
+    function set(k,val){if(val&&!(''+(v[k]||'')).trim()){v[k]=(''+val).trim();got++;}}
+    var mNom=text.match(/nom\s*[:\/]?\s*([A-ZÀ-Ÿ][A-ZÀ-Ÿ' -]{1,40})/i); if(mNom)set('nom',mNom[1].replace(/\s+/g,' ').trim());
+    var mPre=text.match(/pr[ée]noms?\s*[:\/]?\s*([A-ZÀ-Ÿ][A-Za-zÀ-ÿ' -]{1,40})/i); if(mPre)set('prenom',mPre[1].replace(/\s+/g,' ').trim());
+    var mNat=text.match(/nationalit[ée]\s*[:\/]?\s*([A-Za-zÀ-ÿ]+)/i); if(mNat)set('nationalite',mNat[1]);
+    var mNe=text.match(/n[ée]\(?e?\)?\s*(?:le)?\s*[:\/]?\s*(\d{1,2}[\/.\s]\d{1,2}[\/.\s]\d{2,4})/i); if(mNe)set('dateNaissance',mNe[1]);
+    var mExp=text.match(/(?:valab\w*\s*jusqu\S*|expir\w*|date of expiry|expiry)\D{0,12}(\d{1,2}[\/.\s]\d{1,2}[\/.\s]\d{2,4})/i); if(mExp)set('dateExpiration',mExp[1]);
+    var mNum=text.match(/(?:carte|n[°o]|number|passeport)\D{0,6}([0-9A-Z]{6,15})/i); if(mNum)set('numeroPiece',mNum[1]);
+    return got;
+  }
+  function extractFromPiece(d,cb){
+    try{
+      var st=pieceData(d,'identite'); if(!st||!st.data){cb(0);return;}
+      var v=d.verif=d.verif||{}; v.extract=v.extract||{};
+      var url=''+st.data;
+      if(/^data:image\//.test(url)&&typeof ocrImage==='function'&&navigator.onLine){
+        ocrImage(url,function(text){var g=parseIdentity(v.extract,text); v.lisibleText=(text||'').length; cb(g);});
+      } else { cb(0); }
+    }catch(e){cb(0);}
+  }
+  function notify(id){
+    try{ var d=espDoss().find(function(x){return x.id===id;}); if(!d)return; var an=window.pieceAnomalies(d); d.verif=d.verif||{}; d.verif.anomalies=an.length;
+      var ko=an.filter(function(x){return x.statut==='ko';}); if(typeof toast==='function'){ if(ko.length)toast('⚠ '+ko.length+' anomalie(s) bloquante(s) sur les pièces'); else if(an.length)toast('⚠ '+an.length+' point(s) à vérifier sur les pièces'); }
+    }catch(e){}
+  }
+
+  /* ---- Panneau de contrôles injecté dans la Vérification ---- */
+  function controlsPanel(d){
+    var ctr=window.pieceControles(d); if(!ctr.length)return '';
+    var ko=ctr.filter(function(x){return x.statut==='ko';}).length, wa=ctr.filter(function(x){return x.statut==='warn';}).length;
+    var head=ko?('<span class="pc-badge ko">'+ko+' anomalie'+(ko>1?'s':'')+'</span>'):(wa?('<span class="pc-badge warn">'+wa+' à vérifier</span>'):'<span class="pc-badge ok">✓ Contrôles OK</span>');
+    var rows=ctr.map(function(x){var ic=x.statut==='ok'?'✓':(x.statut==='ko'?'✕':'⚠');return '<div class="pc-row pc-'+x.statut+'"><span class="pc-ic">'+ic+'</span><div class="pc-txt"><b>'+esc(x.label)+'</b><span>'+esc(x.detail)+'</span></div></div>';}).join('');
+    return '<div class="pc-panel"><div class="pc-h">🔎 Contrôles automatiques des pièces '+head+'</div>'+rows+'</div>';
+  }
+  function injectControls(id){
+    var d=espDoss().find(function(x){return x.id===id;}); if(!d)return;
+    var host=document.querySelector('#esp-verif .ev-infos'); if(!host)return;
+    var old=document.getElementById('pc-panel-host'); if(old)old.parentNode.removeChild(old);
+    var wrap=document.createElement('div'); wrap.id='pc-panel-host'; wrap.innerHTML=controlsPanel(d); host.insertAdjacentElement('afterend',wrap);
+  }
+
+  /* ---- Greffes ---- */
+  if(typeof espVerifRender==='function'){ var _r=espVerifRender; espVerifRender=window.espVerifRender=function(id){ _r(id); try{ injectControls(id); }catch(e){} }; }
+  if(typeof espVerifAnalyser==='function'){ var _a=espVerifAnalyser; espVerifAnalyser=window.espVerifAnalyser=function(id){ var d=espDoss().find(function(x){return x.id===id;}); extractFromPiece(d,function(){ _a(id); notify(id); }); }; }
+  if(typeof espVerifUpload==='function'){ var _u=espVerifUpload; espVerifUpload=window.espVerifUpload=function(id,k,inp){ _u(id,k,inp); if(k==='identite'){ setTimeout(function(){ try{ var d=espDoss().find(function(x){return x.id===id;}); extractFromPiece(d,function(){ if(typeof espVerifRender==='function')espVerifRender(id); notify(id); }); }catch(e){} },300); } else setTimeout(function(){notify(id);},200); }; }
+
+  var st=document.createElement('style'); st.textContent='.pc-panel{margin:10px 14px;border:1px solid var(--line,#e7ddc9);border-radius:12px;background:#fffdf8;overflow:hidden}.pc-h{padding:9px 12px;font-size:12.5px;font-weight:700;color:#5b5040;background:#f6f0e2;display:flex;align-items:center;gap:10px}.pc-badge{margin-left:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}.pc-badge.ok{background:#e7f2e3;color:#3d6b3d}.pc-badge.warn{background:#fbf1dd;color:#96650f}.pc-badge.ko{background:#fbe6e0;color:#b0442f}.pc-row{display:flex;gap:10px;padding:8px 12px;border-top:1px solid #f0e9d8;align-items:flex-start}.pc-ic{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;color:#fff}.pc-ok .pc-ic{background:#5c8a52}.pc-warn .pc-ic{background:#c69a3a}.pc-ko .pc-ic{background:#c0553a}.pc-txt{font-size:12.5px}.pc-txt b{display:block}.pc-txt span{color:#8a7d69}'; document.head.appendChild(st);
+})();
+</script>
+
+<script id="agents-ia-mod">
+/* Phase 5 — 3 agents IA de contrôle qualité du dossier (Juridique / Formalités / Fiscal).
+   Cœur de règles déterministes + synthèse IA optionnelle. 100% additif. */
+(function(){
+  function C(cli){ return (typeof clientById==='function'&&clientById((cli.clientIds||[])[0]))||{}; }
+  function num(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.]/g,''));return isNaN(n)?null:n;}
+  function assocList(c){return (c.associes||[]).filter(function(a){return (''+(a.nom||'')).trim();});}
+  function chk(label,statut,detail){return {label:label,statut:statut,detail:detail||''};}
+
+  window.agentJuridique=function(d){
+    var c=C(d),forme=(c.forme||d.forme||'').toUpperCase(),A=assocList(c),cap=num(c.capital),out=[];
+    out.push(chk('Dénomination sociale', c.denomination?'ok':'ko', c.denomination?('« '+c.denomination+' »'):'Dénomination manquante.'));
+    out.push(chk('Objet social', (c.activites&&c.activites[0])?'ok':'ko', (c.activites&&c.activites[0])?'Objet renseigné.':'Objet social manquant.'));
+    out.push(chk('Siège social', c.siege?'ok':'ko', c.siege?([c.siege,c.cp,c.ville].filter(Boolean).join(' ')):'Adresse du siège manquante.'));
+    out.push(chk('Capital social', (cap!=null&&cap>0)?'ok':'ko', (cap!=null&&cap>0)?(cap+' €'):'Capital non renseigné ou nul.'));
+    // nombre d'associés selon la forme
+    var n=A.length;
+    if(/SASU|EURL/.test(forme)) out.push(chk('Nombre d\'associés', n===1?'ok':(n===0?'warn':'ko'), n===1?'1 associé unique (conforme).':(n===0?'Aucun associé saisi.':(forme+' = 1 seul associé (n='+n+').'))));
+    else if(/SAS|SARL|SCI/.test(forme)) out.push(chk('Nombre d\'associés', n>=2?(/SARL/.test(forme)&&n>100?'ko':'ok'):'warn', n>=2?((/SARL/.test(forme)&&n>100)?'SARL limitée à 100 associés (n='+n+').':(n+' associés.')):('≥ 2 associés attendus (n='+n+').')));
+    else out.push(chk('Associés', n>=1?'ok':'warn', n+' associé(s).'));
+    // répartition du capital
+    var withA=A.filter(function(a){return num(a.apport)!=null;});
+    if(cap!=null&&cap>0&&withA.length===A.length&&A.length){ var s=A.reduce(function(t,a){return t+(num(a.apport)||0);},0); out.push(chk('Répartition du capital', Math.abs(s-cap)<0.01?'ok':'warn', Math.abs(s-cap)<0.01?('Σ apports = capital ('+s+' €).'):('Σ apports ('+s+' €) ≠ capital ('+cap+' €).'))); }
+    else out.push(chk('Répartition du capital','warn','Apports par associé non renseignés — à compléter.'));
+    out.push(chk('Dirigeant désigné', c.president?'ok':'ko', c.president?('« '+c.president+' »'):'Aucun dirigeant désigné.'));
+    // identité du dirigeant (pour les statuts/DNC)
+    var pres=A.filter(function(a){return (''+(a.nom||'')).trim()===(''+(c.president||'')).trim();})[0]||A[0]||{};
+    var idOk=['naissance','nationalite','adresse'].filter(function(f){return (''+(pres[f]||'')).trim();}).length;
+    out.push(chk('Identité complète du dirigeant', idOk>=2?'ok':'warn', idOk>=2?'Naissance / nationalité / adresse renseignées.':'Informations d\'état civil incomplètes (naissance, nationalité, adresse).'));
+    return out;
+  };
+
+  window.agentFormalites=function(d){
+    var out=[], c=C(d);
+    // pièces (réutilise Phase 3)
+    if(typeof pieceControles==='function'){ pieceControles(d).forEach(function(x){ if(x.k==='manquantes'||x.k==='expiration')out.push(chk(x.label,x.statut,x.detail)); }); }
+    // documents juridiques générables
+    var docsOk=!!(c.denomination&&c.capital&&assocList(c).length);
+    out.push(chk('Documents juridiques', docsOk?'ok':'warn', docsOk?'Statuts, liste des souscripteurs, pouvoir et DNC prêts à générer.':'Fiche incomplète — certains actes ne pourront pas être générés.'));
+    // attestation de domiciliation si siège au domicile
+    if(/domicil/i.test(c.siegeType||'')) out.push(chk('Attestation de domiciliation', c.siege?'warn':'ko', 'Siège au domicile du dirigeant → attestation de domiciliation à joindre.'));
+    else if(/bail|local/i.test(c.siegeType||'')) out.push(chk('Justificatif du local', c.bailleur?'ok':'warn', c.bailleur?('Bailleur : '+c.bailleur):'Bail / mise à disposition à joindre.'));
+    // signatures (Phase 6)
+    out.push(chk('Signatures', 'warn', 'Signatures électroniques à recueillir avant dépôt (statuts, pouvoir, DNC).'));
+    return out;
+  };
+
+  window.agentFiscal=function(d){
+    var out=[], c=C(d),forme=(c.forme||d.forme||'').toUpperCase(),reg=(c.regime||'');
+    out.push(chk('Régime fiscal', reg?'ok':'warn', reg?('Choisi : '+reg):'Régime fiscal (IS / IR) non précisé.'));
+    // cohérence forme ↔ régime (indicatif)
+    if(reg){
+      var isIS=/IS|soci[ée]t[ée]s/i.test(reg), isIR=/IR|revenu/i.test(reg);
+      var defautIR=/EURL|SCI/.test(forme);
+      var atypique = (defautIR&&isIS) || (!defautIR&&isIR);
+      out.push(chk('Cohérence forme ↔ régime', atypique?'warn':'ok', atypique?(forme+' avec option '+(isIS?'IS':'IR')+' — vérifier l\'éligibilité et la durée de l\'option.'):(forme+' au '+(isIS?'IS':'IR')+' (régime usuel).')));
+    }
+    out.push(chk('TVA', 'warn', 'Régime de TVA à définir : franchise en base / réel simplifié / réel normal.'));
+    out.push(chk('Début d\'activité', c.dateDebut?'ok':'warn', c.dateDebut?('Le '+c.dateDebut):'Date de début d\'activité à préciser.'));
+    return out;
+  };
+
+  window.controleQualite=function(d){
+    var j=window.agentJuridique(d),f=window.agentFormalites(d),fi=window.agentFiscal(d);
+    var all=j.concat(f,fi);
+    var ko=all.filter(function(x){return x.statut==='ko';}).length, warn=all.filter(function(x){return x.statut==='warn';}).length, ok=all.filter(function(x){return x.statut==='ok';}).length;
+    var verdict=ko?'À corriger':(warn?'À vérifier':'Conforme');
+    var score=all.length?Math.round((ok+0.5*warn)/all.length*100):0;
+    return {juridique:j,formalites:f,fiscal:fi,ko:ko,warn:warn,ok:ok,total:all.length,verdict:verdict,score:score};
+  };
+
+  function agentCard(titre,emo,list){
+    var ko=list.filter(function(x){return x.statut==='ko';}).length, wa=list.filter(function(x){return x.statut==='warn';}).length;
+    var b=ko?('<span class="pc-badge ko">'+ko+' ✕</span>'):(wa?('<span class="pc-badge warn">'+wa+' ⚠</span>'):'<span class="pc-badge ok">✓</span>');
+    var rows=list.map(function(x){var ic=x.statut==='ok'?'✓':(x.statut==='ko'?'✕':'⚠');return '<div class="pc-row pc-'+x.statut+'"><span class="pc-ic">'+ic+'</span><div class="pc-txt"><b>'+esc(x.label)+'</b><span>'+esc(x.detail)+'</span></div></div>';}).join('');
+    return '<div class="ag-col"><div class="ag-h">'+emo+' '+esc(titre)+b+'</div>'+rows+'</div>';
+  }
+  window.controleQualiteHTML=function(d){
+    var r=window.controleQualite(d);
+    var vc=r.ko?'ko':(r.warn?'warn':'ok');
+    return '<div class="ag-verdict ag-'+vc+'"><span class="ag-scorepill ag-'+vc+'">Score de conformité : '+r.score+' / 100</span>Verdict global : <b>'+esc(r.verdict)+'</b> — '+r.ok+' conforme(s), '+r.warn+' à vérifier, '+r.ko+' à corriger</div>'
+      +'<div class="ag-grid">'+agentCard('Agent Juridique','⚖️',r.juridique)+agentCard('Agent Formalités','🗂️',r.formalites)+agentCard('Agent Fiscal','📊',r.fiscal)+'</div>';
+  };
+  window.ouvrirControleQualite=function(id){
+    var d=espDoss().find(function(x){return x.id===id;}); if(!d)return;
+    if(typeof openModal!=='function')return;
+    openModal('🤖 Contrôle qualité — '+esc((typeof dossierClients==='function')?dossierClients(d):''),
+      '<div class="ag-wrap">'+window.controleQualiteHTML(d)+'</div>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+  };
+
+  // bouton dans la fenêtre de Vérification (barre du haut)
+  if(typeof espVerifRender==='function'){ var _r=espVerifRender; espVerifRender=window.espVerifRender=function(id){ _r(id); try{ var head=document.querySelector('#esp-verif .ev-head .ev-transmit'); if(head&&!document.getElementById('ag-qc-btn')){ var b=document.createElement('button'); b.id='ag-qc-btn'; b.className='btn btn-sm btn-ghost'; b.textContent='🤖 Contrôle qualité'; b.setAttribute('onclick','ouvrirControleQualite(\''+id+'\')'); head.parentNode.insertBefore(b,head); } }catch(e){} }; }
+
+  var st=document.createElement('style'); st.textContent='.ag-wrap{max-height:70vh;overflow:auto}.ag-verdict{padding:10px 12px;border-radius:10px;margin-bottom:12px;font-size:13px}.ag-verdict.ok{background:#e7f2e3;color:#2f6b3a}.ag-verdict.warn{background:#fbf1dd;color:#8a5e0d}.ag-verdict.ko{background:#fbe6e0;color:#a63a22}.ag-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}@media(max-width:820px){.ag-grid{grid-template-columns:1fr}}.ag-col{border:1px solid var(--line,#e7ddc9);border-radius:12px;overflow:hidden;background:#fffdf8}.ag-h{padding:9px 12px;font-weight:700;font-size:13px;background:#f6f0e2;color:#5b5040;display:flex;align-items:center;gap:8px}.ag-h .pc-badge{margin-left:auto}'; document.head.appendChild(st);
+})();
+</script>
+
+<script id="signature-mod">
+/* Phase 6 — signature électronique : suivi par acte (Envoyé → Ouvert → Signé → Relancé).
+   S'appuie sur Yousign quand configuré, sinon workflow interne. 100% additif. */
+(function(){
+  var SIGN_DOCS=[{k:'statuts',l:'Statuts'},{k:'pouvoir',l:'Pouvoir (formalités RCS)'},{k:'dnc',l:'Déclaration de non-condamnation'},{k:'souscripteurs',l:'Liste des souscripteurs'}];
+  window.sigDocsList=function(){return SIGN_DOCS.slice();};
+  function cli(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
+  window.sigSigner=function(d){var c=cli(d);return {nom:(c.president||((c.prenom||'')+' '+(c.nom||''))).trim()||'Signataire',email:(c.email||'')};}
+  window.sigState=function(d,k){ d.signDossier=d.signDossier||{}; if(!d.signDossier[k])d.signDossier[k]={statut:'a_envoyer',relances:0}; return d.signDossier[k]; };
+  window.sigStatutAffiche=function(s){ if(!s)return 'À envoyer'; if(s.statut==='signe')return 'Signé'; if((s.relances||0)>0&&(s.statut==='envoye'||s.statut==='ouvert'))return 'Relancé'; return {a_envoyer:'À envoyer',envoye:'Envoyé',ouvert:'Ouvert'}[s.statut]||s.statut; };
+  function now(){return Date.now();}
+  window.sigEnvoyer=function(id,k){ var d=espDoss().find(function(x){return x.id===id;}); if(!d)return; var s=window.sigState(d,k); var sg=window.sigSigner(d);
+    s.statut='envoye'; s.sentAt=now(); s.relances=0; s.signer=sg.nom; s.email=sg.email; s.canal=(typeof ysActif==='function'&&ysActif())?'yousign':'interne';
+    if(typeof save==='function')save();
+    if(typeof toast==='function')toast('« '+(SIGN_DOCS.filter(function(x){return x.k===k;})[0]||{l:k}).l+' » envoyé pour signature'+(s.canal==='yousign'?' (Yousign)':'')+(sg.email?(' à '+sg.email):''));
+    sigRefresh(id); };
+  window.sigEnvoyerTous=function(id){ var d=espDoss().find(function(x){return x.id===id;}); if(!d)return; var n=0; SIGN_DOCS.forEach(function(dc){ var s=window.sigState(d,dc.k); if(s.statut!=='signe'){ s.statut='envoye'; s.sentAt=now(); s.relances=0; var sg=window.sigSigner(d); s.signer=sg.nom; s.email=sg.email; n++; } }); if(typeof save==='function')save(); if(typeof toast==='function')toast(n+' document(s) envoyé(s) pour signature'); sigRefresh(id); };
+  window.sigAvancer=function(id,k){ var d=espDoss().find(function(x){return x.id===id;}); if(!d)return; var s=window.sigState(d,k); var order=['a_envoyer','envoye','ouvert','signe']; var i=order.indexOf(s.statut); if(i<0)i=0; if(i<order.length-1){ s.statut=order[i+1]; if(s.statut==='ouvert')s.openedAt=now(); if(s.statut==='signe')s.signedAt=now(); if(typeof save==='function')save(); } sigRefresh(id); };
+  window.sigSigne=function(id,k){ var d=espDoss().find(function(x){return x.id===id;}); if(!d)return; var s=window.sigState(d,k); s.statut='signe'; s.signedAt=now(); if(typeof save==='function')save(); sigRefresh(id); };
+  window.sigRelancer=function(id,k){ var d=espDoss().find(function(x){return x.id===id;}); if(!d)return; var s=window.sigState(d,k); if(s.statut==='signe'){ if(typeof toast==='function')toast('Déjà signé.'); return; } if(s.statut==='a_envoyer'){ return window.sigEnvoyer(id,k); } s.relances=(s.relances||0)+1; s.lastRelance=now(); if(typeof save==='function')save(); if(typeof toast==='function')toast('Relance envoyée'+(s.email?(' à '+s.email):'')+' ('+s.relances+')'); sigRefresh(id); };
+  window.sigProgress=function(d){ var t=SIGN_DOCS.length,sg=0; SIGN_DOCS.forEach(function(dc){ if(((d.signDossier||{})[dc.k]||{}).statut==='signe')sg++; }); return {signes:sg,total:t,tous:sg===t}; };
+
+  function frDT(ts){ if(!ts)return ''; try{var d=new Date(ts);return d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}catch(e){return '';} }
+  function badge(s){ var lbl=window.sigStatutAffiche(s); var cls={'Signé':'ok','Envoyé':'warn','Ouvert':'warn','Relancé':'ko','À envoyer':'mut'}[lbl]||'mut'; return '<span class="sg-b sg-'+cls+'">'+esc(lbl)+'</span>'; }
+  window.signaturesHTML=function(d){
+    var p=window.sigProgress(d), sg=window.sigSigner(d);
+    var head='<div class="sg-head"><div>Signataire : <b>'+esc(sg.nom)+'</b>'+(sg.email?(' · '+esc(sg.email)):' · <span style="color:#b0442f">e-mail manquant</span>')+'</div>'
+      +'<div class="sg-prog">'+p.signes+' / '+p.total+' signés'+(p.tous?' ✓':'')+'</div></div>';
+    var rows=SIGN_DOCS.map(function(dc){ var s=window.sigState(d,dc.k); var det=[]; if(s.sentAt)det.push('Envoyé '+frDT(s.sentAt)); if(s.openedAt)det.push('Ouvert '+frDT(s.openedAt)); if(s.signedAt)det.push('Signé '+frDT(s.signedAt)); if(s.relances)det.push(s.relances+' relance(s)');
+      var act=''; if(s.statut==='a_envoyer')act='<button class="btn btn-sm btn-pri" onclick="sigEnvoyer(\''+d.id+'\',\''+dc.k+'\')">Envoyer</button>';
+        else if(s.statut!=='signe')act='<button class="btn btn-sm btn-ghost" onclick="sigRelancer(\''+d.id+'\',\''+dc.k+'\')">Relancer</button><button class="btn btn-sm btn-ghost" onclick="sigAvancer(\''+d.id+'\',\''+dc.k+'\')">Étape ›</button><button class="btn btn-sm" onclick="sigSigne(\''+d.id+'\',\''+dc.k+'\')">✓ Signé</button>';
+        else act='<span class="sg-done">✓ Acte signé</span>';
+      return '<div class="sg-row"><div class="sg-doc"><b>'+esc(dc.l)+'</b><span>'+esc(det.join(' · '))+'</span></div><div class="sg-act">'+badge(s)+act+'</div></div>';
+    }).join('');
+    return '<div class="sg-wrap">'+head+'<div class="sg-actions"><button class="btn btn-sm btn-pri" onclick="sigEnvoyerTous(\''+d.id+'\')">📤 Tout envoyer à la signature</button></div>'+rows+'</div>';
+  };
+  function sigRefresh(id){ var ov=document.getElementById('sg-modal'); if(ov){ var d=espDoss().find(function(x){return x.id===id;}); var b=document.getElementById('sg-body'); if(d&&b)b.innerHTML=window.signaturesHTML(d); } }
+  window.ouvrirSignatures=function(id){ var d=espDoss().find(function(x){return x.id===id;}); if(!d||typeof openModal!=='function')return; openModal('✍️ Signature électronique — '+esc((typeof dossierClients==='function')?dossierClients(d):''), '<div id="sg-body">'+window.signaturesHTML(d)+'</div>', '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'); var ov=document.getElementById('ov'); if(ov)ov.setAttribute('data-sg','1'); var box=document.getElementById('ov-b'); if(box&&!document.getElementById('sg-modal')){var m=document.createElement('span');m.id='sg-modal';m.style.display='none';box.appendChild(m);} };
+
+  // bouton dans la Vérification
+  if(typeof espVerifRender==='function'){ var _r=espVerifRender; espVerifRender=window.espVerifRender=function(id){ _r(id); try{ var head=document.querySelector('#esp-verif .ev-head .ev-transmit'); if(head&&!document.getElementById('sg-qc-btn')){ var b=document.createElement('button'); b.id='sg-qc-btn'; b.className='btn btn-sm btn-ghost'; b.textContent='✍️ Signatures'; b.setAttribute('onclick','ouvrirSignatures(\''+id+'\')'); head.parentNode.insertBefore(b,head); } }catch(e){} }; }
+
+  var st=document.createElement('style'); st.textContent='.sg-wrap{max-height:70vh;overflow:auto}.sg-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;padding:10px 12px;background:#f6f0e2;border-radius:10px;margin-bottom:10px}.sg-prog{font-weight:700;color:#5b5040}.sg-actions{margin-bottom:10px}.sg-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line,#e7ddc9);border-radius:10px;margin-bottom:8px;flex-wrap:wrap}.sg-doc b{display:block;font-size:13px}.sg-doc span{font-size:11.5px;color:#8a7d69}.sg-act{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.sg-b{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}.sg-ok{background:#e7f2e3;color:#3d6b3d}.sg-warn{background:#fbf1dd;color:#96650f}.sg-ko{background:#fbe6e0;color:#b0442f}.sg-mut{background:#eee7d7;color:#8a7d69}.sg-done{font-size:12px;color:#3d6b3d;font-weight:700}'; document.head.appendChild(st);
+})();
+</script>
+
+<script id="depot-mod">
+/* Phase 7 — assemblage « Prêt au dépôt » + RBE + transmission au Guichet unique (INPI).
+   Réutilise le dépôt INPI existant. 100% additif. */
+(function(){
+  function cli(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
+  function num(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.]/g,''));return isNaN(n)?null:n;}
+  var E=(typeof esc==='function')?esc:function(s){return ''+(s==null?'':s);};
+
+  window.rbeBeneficiaires=function(d){
+    var c=cli(d),A=(c.associes||[]).filter(function(a){return (''+(a.nom||'')).trim();}),cap=num(c.capital)||0;
+    var totP=A.reduce(function(t,a){return t+(num(a.parts)||0);},0);
+    return A.map(function(a){
+      var pP=totP>0?(num(a.parts)||0)/totP:null, pA=cap>0?(num(a.apport)||0)/cap:null;
+      var pct=(pP!=null&&pP>0)?pP:(pA!=null?pA:null);
+      var dir=(''+(a.nom||'')).trim()===(''+(c.president||'')).trim();
+      return {nom:a.nom,pct:pct!=null?Math.round(pct*100):null,dirigeant:dir,beneficiaire:(pct!=null&&pct>0.25)||dir};
+    }).filter(function(x){return x.beneficiaire;});
+  };
+  window.rbeHTML=function(d){
+    var c=cli(d),denom=(c.denomination||'«dénomination»'),B=window.rbeBeneficiaires(d);
+    var rows=B.length?B.map(function(b){return '<tr><td style="padding:6px;border:1px solid #ddd">'+E(b.nom)+'</td><td style="padding:6px;border:1px solid #ddd;text-align:center">'+(b.pct!=null?(b.pct+' %'):'—')+'</td><td style="padding:6px;border:1px solid #ddd">'+(b.dirigeant?'Représentant légal + détention':'Détention du capital')+'</td></tr>';}).join(''):'<tr><td colspan="3" style="text-align:center;color:#8a7d69;padding:6px">Aucun bénéficiaire effectif identifié (à compléter).</td></tr>';
+    return '<div class="doc-gen"><div style="font-family:Georgia,serif;padding:20px 8px;color:#111"><h2 style="text-align:center;font-size:15px">REGISTRE DES BÉNÉFICIAIRES EFFECTIFS</h2>'
+      +'<p style="text-align:center">Société <b>'+E(denom)+'</b></p>'
+      +'<p style="font-size:12.5px">Est bénéficiaire effectif toute personne physique qui détient, directement ou indirectement, plus de 25 % du capital ou des droits de vote, ou qui exerce un pouvoir de contrôle sur la société (art. L561-2-2 du Code monétaire et financier).</p>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px"><thead><tr style="background:#f0ead9"><th style="text-align:left;padding:6px;border:1px solid #ddd">Nom et prénom</th><th style="padding:6px;border:1px solid #ddd">% détention</th><th style="text-align:left;padding:6px;border:1px solid #ddd">Nature du contrôle</th></tr></thead><tbody>'+rows+'</tbody></table>'
+      +'<p style="margin-top:26px;font-size:12.5px">Fait pour servir et valoir ce que de droit.</p></div></div>';
+  };
+
+  window.depotReadiness=function(d){
+    var blockers=[];
+    var qc=(typeof controleQualite==='function')?controleQualite(d):{ko:0};
+    if(qc.ko>0)blockers.push('Contrôle qualité : '+qc.ko+' point(s) à corriger (voir « 🤖 Contrôle qualité »).');
+    var sp=(typeof sigProgress==='function')?sigProgress(d):{tous:true,signes:0,total:0};
+    if(!sp.tous)blockers.push('Signatures : '+sp.signes+'/'+sp.total+' actes signés (voir « ✍️ Signatures »).');
+    return {ready:blockers.length===0,blockers:blockers,qualite:qc,signatures:sp};
+  };
+  window.depotPackage=function(d){
+    var out=[];
+    [['statuts','Statuts signés'],['pouvoir','Pouvoir signé'],['dnc','Déclaration de non-condamnation'],['souscripteurs','Liste des souscripteurs']].forEach(function(a){
+      var s=((d.signDossier||{})[a[0]]||{}); out.push({k:a[0],label:a[1],present:s.statut==='signe',cat:'Acte'});
+    });
+    out.push({k:'rbe',label:'Registre des bénéficiaires effectifs',present:window.rbeBeneficiaires(d).length>0,cat:'Acte'});
+    var reqs=(typeof DIRIGEANT_PIECES!=='undefined')?DIRIGEANT_PIECES:[];
+    reqs.forEach(function(pc){ var st=(d.pieces&&d.pieces[pc.k])||{}; out.push({k:pc.k,label:pc.l,present:!!st.data,cat:'Pièce'}); });
+    return out;
+  };
+
+  window.depotTransmettre=function(id){
+    var d=espDoss().find(function(x){return x.id===id;}); if(!d)return;
+    var r=window.depotReadiness(d);
+    if(!r.ready){ if(typeof toast==='function')toast('⚠ Dossier non prêt : '+r.blockers[0]); return; }
+    d.statut='Prêt au dépôt'; (d.historique=d.historique||[]).push({d:(typeof today==='function'?today():''),t:'Dossier marqué prêt au dépôt'});
+    if(typeof save==='function')save();
+    if(typeof espDepotInpi==='function'){ if(typeof closeModal==='function')closeModal(); espDepotInpi(id); }
+    else if(typeof toast==='function')toast('✅ Dossier prêt au dépôt.');
+  };
+
+  function bdg(ok){return ok?'<span class="dp-b ok">✓</span>':'<span class="dp-b ko">✕</span>';}
+  window.depotHTML=function(d){
+    var r=window.depotReadiness(d), pkg=window.depotPackage(d);
+    var vh=r.ready?'<div class="dp-verdict ok">✅ Dossier <b>Prêt au dépôt</b> — toutes les conditions sont réunies.</div>'
+      :'<div class="dp-verdict ko"><b>Dossier non prêt.</b><ul style="margin:6px 0 0;padding-left:18px">'+r.blockers.map(function(b){return '<li>'+E(b)+'</li>';}).join('')+'</ul></div>';
+    function grp(cat){ var it=pkg.filter(function(x){return x.cat===cat;}); return '<div class="dp-grp">'+E(cat==='Acte'?'Actes juridiques':'Pièces justificatives')+'</div>'+it.map(function(x){return '<div class="dp-row">'+bdg(x.present)+'<span>'+E(x.label)+'</span>'+(x.k==='rbe'?' <button class="btn btn-sm btn-ghost" onclick="depotVoirRBE(\''+d.id+'\')">Voir</button>':'')+'</div>';}).join(''); }
+    return '<div class="dp-wrap">'+vh+'<div class="dp-pkg">'+grp('Acte')+grp('Pièce')+'</div>'
+      +'<div class="dp-actions"><button class="btn '+(r.ready?'btn-pri':'')+'" '+(r.ready?'':'disabled')+' onclick="depotTransmettre(\''+d.id+'\')">📤 Transmettre au Guichet unique (INPI)</button></div></div>';
+  };
+  window.depotVoirRBE=function(id){ var d=espDoss().find(function(x){return x.id===id;}); if(d&&typeof openModal==='function')openModal('Registre des bénéficiaires effectifs',window.rbeHTML(d),'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'); };
+  window.ouvrirDepot=function(id){ var d=espDoss().find(function(x){return x.id===id;}); if(d&&typeof openModal==='function')openModal('📤 Dépôt — '+E((typeof dossierClients==='function')?dossierClients(d):''),window.depotHTML(d),'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'); };
+
+  if(typeof espVerifRender==='function'){ var _r=espVerifRender; espVerifRender=window.espVerifRender=function(id){ _r(id); try{ var head=document.querySelector('#esp-verif .ev-head .ev-transmit'); if(head&&!document.getElementById('dp-qc-btn')){ var b=document.createElement('button'); b.id='dp-qc-btn'; b.className='btn btn-sm btn-ghost'; b.textContent='📤 Prêt au dépôt'; b.setAttribute('onclick','ouvrirDepot(\''+id+'\')'); head.parentNode.insertBefore(b,head); } }catch(e){} }; }
+
+  var st=document.createElement('style'); st.textContent='.dp-wrap{max-height:70vh;overflow:auto}.dp-verdict{padding:10px 12px;border-radius:10px;margin-bottom:12px;font-size:13px}.dp-verdict.ok{background:#e7f2e3;color:#2f6b3a}.dp-verdict.ko{background:#fbe6e0;color:#a63a22}.dp-grp{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#8a7d69;font-weight:700;margin:10px 0 4px}.dp-row{display:flex;align-items:center;gap:9px;padding:6px 2px;font-size:13px}.dp-b{width:18px;height:18px;border-radius:50%;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}.dp-b.ok{background:#5c8a52}.dp-b.ko{background:#c0553a}.dp-actions{margin-top:14px;text-align:center}'; document.head.appendChild(st);
+})();
+</script>
+
+<script id="archive-mod">
+/* Phase 8 — archivage intelligent : arborescence DOS-AAAA-xxx. 100% additif. */
+(function(){
+  function cli(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
+  var E=(typeof esc==='function')?esc:function(s){return ''+(s==null?'':s);};
+  window.archiveNumero=function(d){ return d.numeroDossier||d.ref||('DOS-'+new Date().getFullYear()+'-'+String((d.id||'').replace(/\D/g,'')||Math.floor(Math.random()*900000+100000)).slice(0,6).padStart(6,'0')); };
+  window.archiveAnnee=function(d){ var m=(''+window.archiveNumero(d)).match(/(20\d{2})/); return m?m[1]:(''+new Date().getFullYear()); };
+
+  window.archiveArbo=function(d){
+    var c=cli(d); var sig=d.signDossier||{}; var pieces=d.pieces||{};
+    function it(label,present,meta){return {label:label,present:!!present,meta:meta||''};}
+    var A=(c.associes||[]).filter(function(a){return (''+(a.nom||'')).trim();});
+    var pres=A.filter(function(a){return (''+(a.nom||'')).trim()===(''+(c.president||'')).trim();})[0]||A[0]||{};
+    var sigDocs=[['statuts','Statuts'],['pouvoir','Pouvoir'],['dnc','DNC'],['souscripteurs','Liste des souscripteurs']];
+    var frd=(typeof frDate==='function')?frDate:function(x){return x;};
+    return [
+      {folder:'Client',emo:'👤',items:[ it('Fiche client — '+(c.denomination||c.nom||'—'), !!(c.denomination||c.nom)), it('Contact : '+((c.email)||'—'), !!c.email), it('Forme : '+(c.forme||'—'), !!c.forme) ]},
+      {folder:'Identité',emo:'🪪',items:[ it('Dirigeant : '+((c.president)||'—'), !!c.president, [pres.naissance,pres.nationalite].filter(Boolean).join(' · ')), it("Pièce d'identité", !!(pieces.identite&&pieces.identite.data)), it('Justificatif de domicile', !!(pieces.edf&&pieces.edf.data)), it("Avis d'impôt", !!(pieces.impot&&pieces.impot.data)) ]},
+      {folder:'Statuts',emo:'📜',items:[ it('Projet de statuts', !!(c.denomination&&c.capital), (sig.statuts&&sig.statuts.statut==='signe')?'signé':'') ]},
+      {folder:'Signatures',emo:'✍️',items:sigDocs.map(function(s){var st=sig[s[0]]||{};return it(s[1], st.statut==='signe', (typeof sigStatutAffiche==='function')?sigStatutAffiche(st):(st.statut||''));}) },
+      {folder:'Facturation',emo:'💶',items:[ it('Lettre de mission', !!(d.docs&&(d.docs.lettremission||d.docs.lettreMission))), it('Convention de prestation', !!(d.docs&&d.docs.convention)) ]},
+      {folder:'Formalités',emo:'🗂️',items:[ it('Pouvoir (RCS)', true, (sig.pouvoir&&sig.pouvoir.statut==='signe')?'signé':''), it('Déclaration de non-condamnation', true), it('Registre des bénéficiaires effectifs', (typeof rbeBeneficiaires==='function')?rbeBeneficiaires(d).length>0:false), it('Dépôt Guichet unique', !!(d.inpi&&(d.inpi.reference||d.inpi.status)), d.inpi?('réf. '+(d.inpi.reference||d.inpi.status)):(d.statut==='Prêt au dépôt'?'prêt':'')) ]},
+      {folder:'Archive',emo:'🗄️',items:[ it('Dossier complet assemblé', (typeof depotPackage==='function')?depotPackage(d).filter(function(x){return x.present;}).length>0:false, (typeof depotPackage==='function')?(depotPackage(d).filter(function(x){return x.present;}).length+' pièce(s)'):''), it('Clôturé le '+((d.clotureLe)||'—'), !!d.clotureLe) ]}
+    ];
+  };
+
+  window.archiveHTML=function(d){
+    var no=window.archiveNumero(d), an=window.archiveAnnee(d), arbo=window.archiveArbo(d);
+    var tree='<div class="ar-tree"><div class="ar-root">🗂 LAST</div><div class="ar-year">└ '+E(an)+'</div><div class="ar-dos">&nbsp;&nbsp;&nbsp;└ <b>'+E(no)+'</b></div></div>';
+    var folders=arbo.map(function(f){
+      var n=f.items.filter(function(x){return x.present;}).length;
+      var rows=f.items.map(function(x){return '<div class="ar-item '+(x.present?'ok':'mut')+'"><span class="ar-ic">'+(x.present?'✓':'○')+'</span><span>'+E(x.label)+'</span>'+(x.meta?('<span class="ar-meta">'+E(x.meta)+'</span>'):'')+'</div>';}).join('');
+      return '<details class="ar-folder"'+(n?' open':'')+'><summary>'+f.emo+' '+E(f.folder)+' <span class="ar-count">'+n+'/'+f.items.length+'</span></summary>'+rows+'</details>';
+    }).join('');
+    return '<div class="ar-wrap">'+tree+'<div class="ar-folders">'+folders+'</div></div>';
+  };
+  window.ouvrirArchive=function(id){ var d=espDoss().find(function(x){return x.id===id;}); if(d&&typeof openModal==='function')openModal('🗄️ Archive — '+E(window.archiveNumero(d)),window.archiveHTML(d),'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'); };
+
+  // classement automatique : numéro d'archive garanti + clôture après dépôt
+  window.archiveClasser=function(d){ if(!d)return; if(!d.numeroDossier)d.numeroDossier=window.archiveNumero(d); if((d.inpi||d.statut==='Prêt au dépôt'||d.statut==='Transmis greffe')&&!d.clotureLe)d.clotureLe=(typeof today==='function'?today():''); };
+
+  if(typeof espVerifRender==='function'){ var _r=espVerifRender; espVerifRender=window.espVerifRender=function(id){ _r(id); try{ var head=document.querySelector('#esp-verif .ev-head .ev-transmit'); if(head&&!document.getElementById('ar-qc-btn')){ var b=document.createElement('button'); b.id='ar-qc-btn'; b.className='btn btn-sm btn-ghost'; b.textContent='🗄️ Archives'; b.setAttribute('onclick','ouvrirArchive(\''+id+'\')'); head.parentNode.insertBefore(b,head); } }catch(e){} }; }
+
+  var st=document.createElement('style'); st.textContent='.ar-wrap{max-height:72vh;overflow:auto}.ar-tree{font-family:ui-monospace,Consolas,monospace;font-size:13px;background:#f6f0e2;border-radius:10px;padding:10px 12px;margin-bottom:12px;line-height:1.7}.ar-dos b{color:#5b5040}.ar-folder{border:1px solid var(--line,#e7ddc9);border-radius:10px;margin-bottom:8px;background:#fffdf8;overflow:hidden}.ar-folder>summary{cursor:pointer;padding:9px 12px;font-weight:700;font-size:13px;color:#5b5040;list-style:none;display:flex;align-items:center;gap:8px}.ar-folder>summary::-webkit-details-marker{display:none}.ar-count{margin-left:auto;font-size:11px;font-weight:700;background:#eee7d7;color:#8a7d69;padding:2px 8px;border-radius:20px}.ar-item{display:flex;align-items:center;gap:9px;padding:6px 14px;font-size:12.5px;border-top:1px solid #f0e9d8}.ar-item.mut{color:#a99f8b}.ar-ic{width:16px;text-align:center}.ar-item.ok .ar-ic{color:#5c8a52;font-weight:700}.ar-meta{margin-left:auto;font-size:11px;color:#8a7d69}'; document.head.appendChild(st);
+})();
+</script>
+
+<script id="depot-portail-mod">
+/* Phase 2 — portail de dépôt sécurisé des pièces (page depot.html).
+   Lien sécurisé par dossier + ingestion des dépôts reçus par e-mail. 100% additif. */
+(function(){
+  function hash(s){s=''+(s||'');var h=5381;for(var i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36);}
+  window.depotToken=function(numero){ var s='AEM-DEPOT-'+(numero||''); return (hash(s)+hash(s+'/2')).slice(0,8); };
+  function baseUrl(){ try{ var h=location.href.split('#')[0].split('?')[0]; return h.replace(/[^\/]*$/,''); }catch(e){ return ''; } }
+  window.depotLien=function(d){ var no=(d&&(d.numeroDossier||(d.intake&&d.intake.numeroDossier)))||(d&&d.ref)||''; if(!no)return ''; return baseUrl()+'depot.html?d='+encodeURIComponent(no)+'&k='+window.depotToken(no); };
+
+  window.depotDetectEmail=function(mail){
+    var txt=((mail&&mail.subject)||'')+' \n '+((mail&&mail.body)||'')+' '+((mail&&mail.rawBody)||'');
+    if(txt.indexOf('LASTDEP1:')<0 && !/D[ÉE]P[ÔO]T PI[ÈE]CES/i.test(txt))return null;
+    var i=txt.indexOf('LASTDEP1:');
+    if(i>=0){ var seg=txt.slice(i+9).match(/^[A-Za-z0-9+/=\s]+/); if(seg){ var chars=seg[0].replace(/[\s=]/g,''); for(var len=chars.length;len>=8;len--){ var b=chars.slice(0,len);while(b.length%4)b+='='; try{var j=decodeURIComponent(escape(atob(b)));if(j&&j.charAt(0)==='{'){var end=j.lastIndexOf('}');if(end>0){var o=JSON.parse(j.slice(0,end+1));if(o&&o.version==='LASTDEP1')return o;}}}catch(e){} } } }
+    // repli : sujet « DÉPÔT PIÈCES — DOS-... »
+    var m=txt.match(/D[ÉE]P[ÔO]T PI[ÈE]CES\s*[—-]\s*(DOS-\d{4}-\d+)/i); if(m)return {version:'LASTDEP1',dossier:m[1],pieces:{}};
+    return null;
+  };
+
+  function trouverEntite(numero){
+    numero=''+(numero||'');
+    var d=(DB.demandes||[]).find(function(x){return (x.numeroDossier===numero)||((x.intake||{}).numeroDossier===numero);});
+    if(d)return d;
+    var dos=(DB.dossiers||[]).find(function(x){return x.numeroDossier===numero||x.ref===numero;});
+    if(dos){ var dm=(DB.demandes||[]).find(function(x){return x.dossierId===dos.id;}); return dm||dos; }
+    return null;
+  }
+  window.depotAttacherAuDossier=function(numero,info,mail){
+    var e=trouverEntite(numero); if(!e)return {ok:false,raison:'dossier introuvable'};
+    e.piecesRecues=e.piecesRecues||{}; e.docs=e.docs||{};
+    var keys=Object.keys((info&&info.pieces)||{}).filter(function(k){return (info.pieces[k]||[]).length;});
+    if(!keys.length && info && info.pieces && Object.keys(info.pieces).length===0){ keys=['identite','domiciliation']; } // repli sujet seul
+    keys.forEach(function(k){
+      e.piecesRecues[k]=true; e.docs[k]=e.docs[k]||[];
+      ((info.pieces&&info.pieces[k])||[]).forEach(function(nm){ if(!e.docs[k].some(function(x){return x.name===nm;}))e.docs[k].push({name:nm,portail:true,ts:Date.now()}); });
+      if(!(info.pieces&&info.pieces[k]||[]).length && !e.docs[k].length)e.docs[k].push({name:'pièce déposée',portail:true,ts:Date.now()});
+    });
+    e.depotPortail={statut:'reçu',ts:Date.now(),keys:keys,nb:keys.length};
+    if(typeof save==='function')save();
+    if(typeof toast==='function')toast('📥 Pièces reçues via le portail — dossier '+numero+' ('+keys.length+')');
+    return {ok:true,entite:e.id,keys:keys};
+  };
+  window.depotTraiterMail=function(mail){ var info=window.depotDetectEmail(mail); if(!info||!info.dossier)return null; return window.depotAttacherAuDossier(info.dossier,info,mail); };
+
+  // ingestion : à chaque synchro, relier les e-mails de dépôt
+  if(typeof demIngest==='function'){ var _di=demIngest; demIngest=window.demIngest=function(mails){ var r=_di(mails); try{ (mails||[]).forEach(function(m){ var info=window.depotDetectEmail(m); if(info&&info.dossier)window.depotAttacherAuDossier(info.dossier,info,m); }); }catch(e){} return r; }; }
+
+  // lien de dépôt ajouté au mail « Demander les documents »
+  if(typeof demDemanderDocs==='function'){ var _dd=demDemanderDocs; demDemanderDocs=window.demDemanderDocs=function(id){
+    try{ var d=(DB.demandes||[]).find(function(x){return x.id===id;}); var lien=d?window.depotLien(d):''; if(lien){ var box=null; setTimeout(function(){ var ta=document.getElementById('ml-corps'); if(ta&&ta.value&&ta.value.indexOf('depot.html')<0){ ta.value=ta.value.replace(/\n*Bien cordialement,?/i,'\n\nPour plus de simplicité, vous pouvez aussi déposer vos pièces en ligne, en toute sécurité, via votre espace dédié :\n'+lien+'\n\nBien cordialement,'); } },120); } }catch(e){}
+    return _dd(id);
+  }; }
+})();
+</script>
+
+<script id="doc-models-plus-mod">
+/* ===== Plusieurs modèles de documents CHOISISSABLES : variantes d'actes + nouveaux documents ===== */
+(function(){
+  var DM=window.DOC_MODELS; if(!DM) return;
+  function X(d){return stDossData(d);}
+  function isPart(f){return f==='SARL'||f==='EURL'||f==='SCI';}
+  function qualiteMin(f){return isPart(f)?'gérant':'président';}
+
+  /* ---- POUVOIR : variante « pouvoir spécial de formalités (Guichet unique / INPI) » ---- */
+  window.pouvoirFormalitesHTML=function(d){
+    var x=X(d);var s=x.s;var q=stQualite(x.forme);
+    var repFirm=((s.representant||s.dirigeant||s.raison||'AEM CONSEIL')+'').trim();
+    var adrFirm=((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«adresse du mandataire»';
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">POUVOIR SPÉCIAL</div>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(Formalités de constitution — Guichet unique électronique des formalités d\'entreprises)</p>'
+      +'<p>Je soussigné <b>'+esc(x.president)+'</b>, agissant en qualité de '+q+' de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros, dont le siège social est situé '+esc(x.siegeComplet)+', en cours d\'immatriculation,</p>'
+      +'<p style="margin-top:8px"><b>donne pouvoir à</b> '+esc(repFirm)+', domicilié '+esc(adrFirm)+', avec faculté de subdélégation, à l\'effet de :</p>'
+      +'<p style="margin-left:14px">• déposer et signer, en mon nom, la formalité de création de la société sur le guichet unique des formalités d\'entreprises (INPI) ;</p>'
+      +'<p style="margin-left:14px">• transmettre l\'ensemble des pièces et actes constitutifs au registre national des entreprises (RNE) et au greffe du tribunal de commerce compétent ;</p>'
+      +'<p style="margin-left:14px">• répondre à toute demande de régularisation, signer toute pièce rectificative et acquitter les frais et émoluments correspondants ;</p>'
+      +'<p style="margin-left:14px">• et, plus généralement, accomplir toutes les démarches nécessaires à l\'immatriculation de la société.</p>'
+      +'<div class="st-fin" style="margin-top:30px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+esc(x.president)+'</b>Le Mandant — Le '+q+'</div><div class="sg"><b>'+esc(repFirm)+'</b>Le Mandataire — « Bon pour acceptation de pouvoir »</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---- DNC : variante « attestation simplifiée » (courte) ---- */
+  window.dncSimpleHTML=function(d){
+    var x=X(d);var dcl=x.assoc.filter(function(a){return (''+(a.nom||'')).trim()===(''+x.president).trim();})[0]||x.assoc[0]||{};
+    var nom=esc((dcl.nom||x.president||'').trim())||'«nom prénom»';
+    var naiss=dcl.naissance?esc(dcl.naissance):'«…»';var lieu=dcl.lieuNaissance?esc(dcl.lieuNaissance):'«lieu»';
+    var nat=dcl.nationalite?esc(dcl.nationalite):'«…»';var adr=dcl.adresse?esc(dcl.adresse):'«adresse»';
+    var q=stQualite(x.forme);
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre" style="font-size:14px">ATTESTATION SUR L\'HONNEUR DE NON-CONDAMNATION ET DE FILIATION</div>'
+      +'<p style="margin-top:18px">Je soussigné <b>'+nom+'</b>, né le '+naiss+' à '+lieu+', de nationalité '+nat+', demeurant '+adr+',</p>'
+      +'<p style="margin-top:10px">agissant en qualité de '+q+' de la société <b>'+esc(x.denom)+'</b>,</p>'
+      +'<p style="margin-top:10px"><b>atteste sur l\'honneur</b> n\'avoir fait l\'objet d\'aucune condamnation pénale ni sanction civile ou administrative de nature à m\'interdire d\'exercer une activité commerciale ou de gérer, administrer ou diriger une personne morale.</p>'
+      +'<p style="margin-top:8px">Je déclare être le fils / la fille de '+(x.pere?esc(x.pere):'«nom et prénom du père»')+' et de '+(x.mere?esc(x.mere):'«nom et prénom de la mère»')+'.</p>'
+      +'<div class="st-fin" style="margin-top:34px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+nom+'</b>Signature (précédée de « Lu et approuvé »)</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---- SOUSCRIPTEURS : variante « liste simplifiée » ---- */
+  window.souscripteursListeHTML=function(d){
+    var x=X(d);var act=(x.forme==='SAS'||x.forme==='SASU');var UNS=act?'actions':'parts sociales';
+    var rows=x.assoc.map(function(a,i){var p=Number(a.parts)||0;var m=(x.nominal&&p)?stNum(Math.round(x.nominal*p))+' €':'«…»';
+      var pct=(x.totalParts>0&&p)?(Math.round(p/x.totalParts*1000)/10+' %'):'«…»';
+      return '<tr><td>'+(i+1)+'</td><td class="al">'+stCivil(a)+'</td><td>'+(p||'«…»')+'</td><td>'+m+'</td><td>'+pct+'</td></tr>';}).join('');
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-hdr"><b>'+esc(x.denom)+'</b><div class="sub">'+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div><div class="sub">Siège social : '+esc(x.siegeComplet)+'</div></div>'
+      +'<div class="st-titre">LISTE DES SOUSCRIPTEURS</div>'
+      +'<table class="st-tbl"><thead><tr><th>N°</th><th class="al">Souscripteur</th><th>Nombre de '+UNS+'</th><th>Apport (€)</th><th>Quote-part</th></tr></thead><tbody>'
+      +rows+'<tr class="tot"><td></td><td class="al">TOTAL</td><td>'+(x.nbActions||'«…»')+'</td><td>'+(x.cap?stNum(x.cap)+' €':'«…»')+'</td><td>100 %</td></tr></tbody></table>'
+      +'<p style="margin-top:12px">La présente liste des souscripteurs est certifiée exacte et sincère par le '+stQualite(x.forme)+'.</p>'
+      +'<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
+      +'<div class="st-sign"><div class="sg"><b>'+esc(x.president)+'</b>Le '+stQualite(x.forme)+' — Signature</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---- DOMICILIATION : variante « attestation par un tiers hébergeant » ---- */
+  window.attestationHebergementHTML=function(d){
+    var x=X(d);var q=qualiteMin(x.forme);
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">ATTESTATION DE DOMICILIATION</div>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(Mise à disposition du local par un tiers)</p>'
+      +'<p style="margin-top:10px">Je soussigné(e) «nom et prénom de l\'hébergeant», demeurant «adresse complète de l\'hébergeant»,</p>'
+      +'<p style="margin-top:8px"><b>atteste</b> mettre à la disposition de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+', représentée par '+esc(x.president)+', son '+q+', un local situé '+esc(x.siegeComplet)+' pour y fixer le siège social de ladite société.</p>'
+      +'<p style="margin-top:8px">Cette mise à disposition prend effet à compter du «date d\'effet» et est consentie «à titre gratuit / moyennant une indemnité de «…» euros par mois».</p>'
+      +'<p style="margin-top:8px">La présente attestation est établie pour servir et valoir ce que de droit, en vue de l\'immatriculation de la société au registre du commerce et des sociétés.</p>'
+      +'<div class="st-fin" style="margin-top:30px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>«L\'hébergeant»</b>Signature (précédée de « Lu et approuvé »)</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---- CESSION : variante « modèle simplifié » (numéraire, quittance) ---- */
+  window.cessionSimpleHTML=function(d){
+    var x=X(d);var des=isPart(x.forme)?'parts sociales':'actions';
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">CESSION DE '+(isPart(x.forme)?'PARTS SOCIALES':'ACTIONS')+'</div>'
+      +'<div style="text-align:center;font-size:11px;margin:-4px 0 14px">'+esc(x.denom)+' — '+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
+      +'<p><b>Le cédant :</b> «Nom Prénom du cédant», demeurant «adresse».</p>'
+      +'<p><b>Le cessionnaire :</b> «Nom Prénom du cessionnaire», demeurant «adresse».</p>'
+      +'<p style="margin-top:8px">Le cédant cède au cessionnaire, qui accepte, «nombre» '+des+' de la société '+esc(x.denom)+', moyennant le prix de «montant» euros, dont quittance.</p>'
+      +'<p>Le cessionnaire est propriétaire des '+des+' cédées à compter de ce jour et subrogé dans tous les droits et obligations y attachés.</p>'
+      +'<div class="st-fin" style="margin-top:26px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+', en deux exemplaires.</p>'
+      +'<div class="st-sign"><div class="sg"><b>Le Cédant</b>« Bon pour cession »</div><div class="sg"><b>Le Cessionnaire</b>« Bon pour acquisition »</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---- NOUVEAU DOCUMENT : Lettre d'acceptation des fonctions (2 modèles) ---- */
+  function acceptationDoc(d,fonction){
+    var x=X(d);
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">ACCEPTATION DES FONCTIONS</div>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">('+fonction+' de '+esc(x.denom)+')</p>'
+      +'<p style="margin-top:10px">Je soussigné(e) <b>'+esc(x.president)+'</b>, demeurant '+esc(x.siegeComplet)+',</p>'
+      +'<p style="margin-top:10px"><b>déclare accepter</b> les fonctions de '+fonction+' de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros, dont le siège social est situé '+esc(x.siegeComplet)+', qui m\'ont été confiées aux termes '+(isPart(x.forme)?'des statuts':'des statuts / de la décision des associés')+' en date du '+x.dateActe+'.</p>'
+      +'<p style="margin-top:8px">Je déclare en outre satisfaire à toutes les conditions requises par la loi et les règlements pour l\'exercice de ces fonctions et n\'être frappé(e) d\'aucune incompatibilité ni interdiction de nature à m\'empêcher de les exercer.</p>'
+      +'<div class="st-fin" style="margin-top:32px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+esc(x.president)+'</b>« Bon pour acceptation des fonctions »</div></div></div>'
+      +'</div></div>';
+  }
+  window.acceptationDirigeantHTML=function(d){var x=X(d);return acceptationDoc(d,isPart(x.forme)?'Gérant':'Président');};
+  window.acceptationDGHTML=function(d){return acceptationDoc(d,'Directeur Général');};
+
+  /* ---- Enregistrement : append en conservant les modèles existants (choix) ---- */
+  function push(k,m){DM[k]=DM[k]||[];if(!DM[k].some(function(e){return e.id===m.id;}))DM[k].push(m);}
+  push('pouvoir',{id:'formalites',label:'Pouvoir spécial — formalités Guichet unique (INPI)',fn:function(d){return pouvoirFormalitesHTML(d);}});
+  push('dnc',{id:'simplifie',label:'Non-condamnation — attestation simplifiée',fn:function(d){return dncSimpleHTML(d);}});
+  push('souscripteurs',{id:'liste',label:'Souscripteurs — liste simplifiée',fn:function(d){return souscripteursListeHTML(d);}});
+  push('decladomicile',{id:'tiers',label:'Domiciliation — attestation par un tiers hébergeant',fn:function(d){return attestationHebergementHTML(d);}});
+  push('cession',{id:'simple',label:'Cession — modèle simplifié (quittance)',fn:function(d){return cessionSimpleHTML(d);}});
+  DM.acceptation=[
+    {id:'dirigeant',label:'Acceptation des fonctions — Président / Gérant',fn:function(d){return acceptationDirigeantHTML(d);}},
+    {id:'dg',label:'Acceptation des fonctions — Directeur Général',fn:function(d){return acceptationDGHTML(d);}}
+  ];
+  try{ if(typeof ESP_DOCS!=='undefined' && !ESP_DOCS.some(function(x){return x.k==='acceptation';})) ESP_DOCS.push({k:'acceptation',l:'Lettre d\'acceptation des fonctions',prix:0,optional:true}); }catch(e){}
+
+  /* ---- Sélecteur de modèle DANS l'aperçu de vérification (choisissable en direct) ---- */
+  if(typeof espVerifRender==='function'){
+    var _evr=espVerifRender;
+    espVerifRender=window.espVerifRender=function(id){_evr(id);
+      try{
+        var ov=document.getElementById('esp-verif');if(!ov||!ov.classList.contains('show'))return;
+        var d=(typeof espDoss==='function'?espDoss():[]).find(function(x){return x.id===id;});if(!d)return;
+        var v=d.verif||{};var k=v.docSel||'statuts';
+        var sel=(typeof espDocModelSelect==='function')?espDocModelSelect(d,k):'';
+        var host=ov.querySelector('.ev-docsel');
+        if(host&&sel&&!ov.querySelector('.ev-modelsel')){var wrap=document.createElement('div');wrap.className='ev-modelsel';wrap.innerHTML='<span class="ev-modell">Modèle&nbsp;:</span>'+sel;host.parentNode.insertBefore(wrap,host.nextSibling);}
+      }catch(e){}
+    };
+  }
+
+  /* ---- Style léger du sélecteur de modèle ---- */
+  try{
+    if(!document.getElementById('doc-models-plus-css')){
+      var st=document.createElement('style');st.id='doc-models-plus-css';
+      st.textContent='.esp-model-sel{margin-left:8px;max-width:100%;font:inherit;padding:3px 6px;border:1px solid var(--line2,#d9ccb2);border-radius:7px;background:#fffdf8;color:var(--ink,#2a2117)}'
+        +'.esp-model-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 10px}'
+        +'.esp-model-lbl,.ev-modell{font-size:12px;color:var(--ink3,#8a7d69);font-weight:700}'
+        +'.ev-modelsel{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 4px}'
+        +'.ev-modelsel .esp-model-sel{margin-left:0}';
+      document.head.appendChild(st);
+    }
+  }catch(e){}
+})();
+</script>
+
+<script id="doc-etape5-mod">
+/* ===== Étape 5 — documents manquants : Lettre de mission, Convention de prestation, Attestation de filiation, RBE ===== */
+(function(){
+  var DM=window.DOC_MODELS; if(!DM) return;
+  function X(d){return stDossData(d);}
+  function isPart(f){return f==='SARL'||f==='EURL'||f==='SCI';}
+  function cabInfo(x){var s=x.s||{};
+    return {nom:((s.raison||'AEM CONSEIL')+'').trim(),
+      adr:((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«adresse du cabinet»',
+      rep:((s.representant||s.dirigeant||'')+'').trim()||'«représentant du cabinet»',
+      siren:((s.siren||'')+'').trim()};}
+  function euros(n){return (typeof stNum==='function')?stNum(n):(''+n);}
+
+  /* ---------- LETTRE DE MISSION (création / modification) ---------- */
+  function lettreMissionDoc(d,type){
+    var x=X(d);var cab=cabInfo(x);
+    var client=x.president;
+    var honos=(typeof espDocsTotal==='function')?espDocsTotal(d):0;
+    var hTxt=honos>0?(euros(honos)+' € HT'):'«montant» € HT';
+    var objet=(type==='modification')
+      ? 'la modification statutaire de la société <b>'+esc(x.denom)+'</b> (« nature de la modification : transfert de siège / changement de dirigeant / cession de titres / modification de l\'objet »)'
+      : 'la constitution et l\'immatriculation de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?euros(x.cap):'«…»')+' euros';
+    var missions=(type==='modification')
+      ? ['rédaction du procès-verbal d\'assemblée et des actes modificatifs,','mise à jour des statuts,','rédaction et publication de l\'avis de modification au support d\'annonces légales,','dépôt de la formalité au guichet unique des formalités d\'entreprises (INPI) et suivi jusqu\'à l\'inscription modificative.']
+      : ['recueil des informations et pièces nécessaires à la constitution,','rédaction des statuts et des actes annexes (pouvoir, déclaration de non-condamnation, liste des souscripteurs, déclaration des bénéficiaires effectifs),','rédaction et publication de l\'avis de constitution au support d\'annonces légales,','dépôt de la formalité de création au guichet unique des formalités d\'entreprises (INPI) et suivi jusqu\'à l\'immatriculation au registre national des entreprises.'];
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-hdr"><b>'+esc(cab.nom)+'</b><div class="sub">'+esc(cab.adr)+'</div>'+(cab.siren?('<div class="sub">SIREN '+esc(cab.siren)+'</div>'):'')+'</div>'
+      +'<div class="st-titre">LETTRE DE MISSION</div>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">('+(type==='modification'?'Modification':'Constitution')+' de société)</p>'
+      +'<p><b>Entre :</b> le cabinet '+esc(cab.nom)+', représenté par '+esc(cab.rep)+', ci-après « le Cabinet »,</p>'
+      +'<p><b>Et :</b> '+esc(client)+', agissant '+(type==='modification'?'en qualité de '+stQualite(x.forme)+' de la société '+esc(x.denom):'en qualité de fondateur de la société '+esc(x.denom)+' en cours de constitution')+', ci-après « le Client ».</p>'
+      +'<p style="margin-top:8px"><b>Article 1 — Objet de la mission.</b> Le Client confie au Cabinet, qui accepte, '+objet+'.</p>'
+      +'<p><b>Article 2 — Diligences.</b> Le Cabinet réalisera les diligences suivantes :</p>'
+      +missions.map(function(m){return '<p style="margin-left:14px">• '+m+'</p>';}).join('')
+      +'<p><b>Article 3 — Obligations du Client.</b> Le Client s\'engage à transmettre l\'ensemble des pièces et informations exactes nécessaires à la mission, dans les meilleurs délais, et à signer les actes établis.</p>'
+      +'<p><b>Article 4 — Honoraires.</b> Les honoraires du Cabinet sont fixés à '+hTxt+', hors frais et débours (annonce légale, frais de greffe, INPI) refacturés au réel.</p>'
+      +'<p><b>Article 5 — Durée.</b> La présente mission prend effet à sa signature et s\'achève à l\'accomplissement de la formalité, sauf résiliation anticipée par l\'une des parties.</p>'
+      +'<p><b>Article 6 — Confidentialité & données personnelles.</b> Le Cabinet traite les données transmises dans le seul cadre de la mission, conformément au RGPD, et les conserve pendant la durée légale.</p>'
+      +'<div class="st-fin" style="margin-top:24px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+', en deux exemplaires.</p>'
+      +'<div class="st-sign"><div class="sg"><b>'+esc(cab.rep)+'</b>Pour le Cabinet — « Lu et approuvé »</div><div class="sg"><b>'+esc(client)+'</b>Le Client — « Lu et approuvé »</div></div></div>'
+      +'</div></div>';
+  }
+  window.lettreMissionHTML=function(d){return lettreMissionDoc(d,'creation');};
+  window.lettreMissionModifHTML=function(d){return lettreMissionDoc(d,'modification');};
+
+  /* ---------- CONVENTION DE PRESTATION DE SERVICES ---------- */
+  window.conventionPrestationHTML=function(d){
+    var x=X(d);var cab=cabInfo(x);var client=x.president;
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-hdr"><b>'+esc(cab.nom)+'</b><div class="sub">'+esc(cab.adr)+'</div></div>'
+      +'<div class="st-titre">CONVENTION DE PRESTATION DE SERVICES</div>'
+      +'<p><b>Entre les soussignés :</b></p>'
+      +'<p><b>Le Prestataire :</b> '+esc(cab.nom)+', dont le siège est situé '+esc(cab.adr)+', représenté par '+esc(cab.rep)+' ;</p>'
+      +'<p><b>Le Client :</b> la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?euros(x.cap):'«…»')+' euros, dont le siège social est situé '+esc(x.siegeComplet)+', représentée par '+esc(client)+', son '+stQualite(x.forme)+' ;</p>'
+      +'<p style="margin-top:8px"><b>Article 1 — Objet.</b> Le Prestataire s\'engage à réaliser, au profit du Client, les prestations d\'assistance administrative, juridique et de secrétariat des formalités décrites en annexe (« nature des prestations »).</p>'
+      +'<p><b>Article 2 — Modalités d\'exécution.</b> Les prestations sont exécutées selon les règles de l\'art, dans le respect des délais convenus. Le Prestataire est tenu d\'une obligation de moyens.</p>'
+      +'<p><b>Article 3 — Prix et règlement.</b> En contrepartie, le Client verse une rémunération de « montant » euros HT, payable « à réception de facture / mensuellement ». Tout retard de paiement entraîne l\'application des pénalités légales et d\'une indemnité forfaitaire de recouvrement de 40 euros.</p>'
+      +'<p><b>Article 4 — Durée.</b> La présente convention est conclue pour une durée de « … », renouvelable par tacite reconduction, sauf dénonciation par l\'une des parties avec un préavis de « … ».</p>'
+      +'<p><b>Article 5 — Confidentialité & RGPD.</b> Chaque partie s\'engage à la confidentialité des informations échangées. Les données personnelles sont traitées conformément au règlement (UE) 2016/679.</p>'
+      +'<p><b>Article 6 — Résiliation.</b> En cas de manquement grave non réparé dans un délai de quinze jours après mise en demeure, la convention pourra être résiliée de plein droit.</p>'
+      +'<p><b>Article 7 — Litiges.</b> À défaut d\'accord amiable, tout litige relève des tribunaux compétents du siège du Prestataire.</p>'
+      +'<div class="st-fin" style="margin-top:22px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+', en deux exemplaires originaux.</p>'
+      +'<div class="st-sign"><div class="sg"><b>'+esc(cab.rep)+'</b>Le Prestataire</div><div class="sg"><b>'+esc(client)+'</b>Le Client</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---------- ATTESTATION DE FILIATION ---------- */
+  window.attestationFiliationHTML=function(d){
+    var x=X(d);var dcl=x.assoc.filter(function(a){return (''+(a.nom||'')).trim()===(''+x.president).trim();})[0]||x.assoc[0]||{};
+    var nom=esc((dcl.nom||x.president||'').trim())||'«nom prénom»';
+    var naiss=dcl.naissance?esc(dcl.naissance):'«date de naissance»';
+    var lieu=dcl.lieuNaissance?esc(dcl.lieuNaissance):'«lieu de naissance»';
+    var nat=dcl.nationalite?esc(dcl.nationalite):'«nationalité»';
+    var pere=x.pere?esc(x.pere):'«nom et prénom du père»';
+    var mere=x.mere?esc(x.mere):'«nom et prénom de la mère»';
+    var q=stQualite(x.forme);
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">ATTESTATION DE FILIATION</div>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(Établie en vue de l\'immatriculation au Registre du commerce et des sociétés)</p>'
+      +'<p style="margin-top:14px">Je soussigné(e) <b>'+nom+'</b>, né(e) le '+naiss+' à '+lieu+', de nationalité '+nat+',</p>'
+      +'<p style="margin-top:10px">agissant en qualité de '+q+' de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+' dont le siège social est situé '+esc(x.siegeComplet)+',</p>'
+      +'<p style="margin-top:10px"><b>atteste sur l\'honneur</b> être :</p>'
+      +'<p style="margin-left:14px">• le fils / la fille de '+pere+', mon père ;</p>'
+      +'<p style="margin-left:14px">• et de '+mere+', ma mère.</p>'
+      +'<p style="margin-top:10px">La présente attestation est établie pour servir et valoir ce que de droit.</p>'
+      +'<div class="st-fin" style="margin-top:32px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+nom+'</b>Signature (précédée de « Lu et approuvé »)</div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ---------- Enregistrement des modèles + documents ---------- */
+  DM.lettremission=[
+    {id:'creation',label:'Lettre de mission — création de société',fn:function(d){return lettreMissionHTML(d);}},
+    {id:'modification',label:'Lettre de mission — modification',fn:function(d){return lettreMissionModifHTML(d);}}
+  ];
+  DM.convention=[{id:'standard',label:'Convention de prestation de services',fn:function(d){return conventionPrestationHTML(d);}}];
+  DM.filiation=[{id:'standard',label:'Attestation de filiation',fn:function(d){return attestationFiliationHTML(d);}}];
+  if(typeof rbeHTML==='function'){ DM.rbe=[{id:'standard',label:'Déclaration des bénéficiaires effectifs (RBE)',fn:function(d){return rbeHTML(d);}}]; }
+
+  try{ if(typeof ESP_DOCS!=='undefined'){
+    var add=[
+      {k:'lettremission',l:'Lettre de mission',prix:0,optional:true},
+      {k:'convention',l:'Convention de prestation de services',prix:0,optional:true},
+      {k:'filiation',l:'Attestation de filiation',prix:0,optional:true}
+    ];
+    if(DM.rbe) add.push({k:'rbe',l:'Déclaration des bénéficiaires effectifs (RBE)',prix:0,optional:true});
+    add.forEach(function(e){ if(!ESP_DOCS.some(function(x){return x.k===e.k;})) ESP_DOCS.push(e); });
+  } }catch(e){}
+})();
+</script>
+
+<script id="dashboard-mod">
+/* ===== Étape 8 — Tableau de bord temps réel (Pilotage) ===== */
+(function(){
+  function doss(){return (DB.dossiers||[]).filter(function(d){return !d.archived;});}
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function num(n){return (typeof eur==='function')?eur(n):(''+n);}
+
+  /* Classification robuste d'un dossier par étape atteinte (indépendante du libellé) */
+  function piecesOk(d){try{
+    var P=(typeof DIRIGEANT_PIECES!=='undefined')?DIRIGEANT_PIECES:[{k:'identite'},{k:'domiciliation'}];
+    var pc=d.pieces||{};return P.every(function(p){var v=pc[p.k]||{};return !!(v.data||v.recu);});
+  }catch(e){return false;}}
+  function signAll(d){try{var s=d.signDossier||{};var ks=['statuts','pouvoir','dnc','souscripteurs'];
+    return ks.every(function(k){return (s[k]||{}).statut==='signe';});}catch(e){return false;}}
+  function signAny(d){try{var s=d.signDossier||{};return Object.keys(s).some(function(k){return (s[k]||{}).statut&&(s[k]||{}).statut!=='brouillon';});}catch(e){return false;}}
+  function depose(d){return !!(d.inpi&&(d.inpi.reference||d.inpi.status));}
+  function clot(d){return !!(d.clotureLe)|| (d.statut==='Clôturé');}
+  function pret(d){try{return (typeof depotReadiness==='function')?depotReadiness(d).ready:false;}catch(e){return false;}}
+
+  /* Étape « la plus avancée » atteinte : 0 pièces → 6 clôturé */
+  function etape(d){
+    if(clot(d))return 6;
+    if(depose(d))return 5;
+    if(pret(d)||signAll(d))return 4;
+    if(signAny(d))return 3;
+    if(piecesOk(d))return 2;
+    return 1;
+  }
+
+  /* Taux d'automatisation : moyenne des jalons automatisés franchis par dossier */
+  window.tauxAutomatisation=function(){
+    var L=doss();if(!L.length)return 0;
+    var tot=0;
+    L.forEach(function(d){
+      var jalons=[
+        !!d.intake,                                   /* dossier auto-créé depuis le questionnaire */
+        piecesOk(d),                                  /* pièces collectées */
+        !!(d.verif&&d.verif.extract&&(''+(d.verif.extract.nom||'')).trim()), /* infos extraites (OCR) */
+        !!(d.docs&&d.docs.statuts),                   /* actes générés */
+        signAny(d),                                   /* signatures lancées */
+        pret(d)||depose(d)                            /* prêt au dépôt / déposé */
+      ];
+      tot += jalons.filter(Boolean).length/jalons.length;
+    });
+    return Math.round(tot/L.length*100);
+  };
+
+  window.pilotageStats=function(){
+    var L=doss();var s={total:L.length,attente:0,encours:0,signes:0,deposes:0,clotures:0,complets:0,ca:0};
+    L.forEach(function(d){
+      var e=etape(d);
+      if(e<=1)s.attente++;              /* en attente de pièces */
+      else if(e===2||e===3)s.encours++; /* en cours (pièces ok → signatures lancées) */
+      if(signAll(d))s.signes++;
+      if(depose(d))s.deposes++;
+      if(clot(d))s.clotures++;
+      if(e>=4)s.complets++;             /* dossier complet (prêt/signé/déposé/clôturé) */
+      try{s.ca += (typeof espDocsTotal==='function')?(espDocsTotal(d)||0):0;}catch(_){}
+    });
+    var dem=(DB.demandes||[]).filter(function(x){return !x.archived;});
+    s.aTraiter=dem.filter(function(x){return !x.dossierId&&x.statut!=='Clôturé';}).length;
+    s.retard=(typeof demRetardCount==='function')?demRetardCount():0;
+    s.taux=window.tauxAutomatisation();
+    /* Étape 6 — score de conformité moyen (dossiers en cours de traitement) */
+    if(typeof controleQualite==='function'){
+      var scored=L.filter(function(d){return etape(d)>=2;});
+      if(scored.length){var sum=0;scored.forEach(function(d){try{sum+=(controleQualite(d).score||0);}catch(_){}});s.conformite=Math.round(sum/scored.length);s.conformiteNb=scored.length;}
+      else{s.conformite=0;s.conformiteNb=0;}
+    } else {s.conformite=0;s.conformiteNb=0;}
+    s.aRelancer=(typeof relanceCount==='function')?relanceCount():0;
+    s.actions=(typeof tachesCount==='function')?tachesCount():0;
+    return s;
+  };
+
+  window.pagePilotage=function(){
+    var s=window.pilotageStats();
+    var K=(typeof kpi==='function')?kpi:function(ic,v,l,c){return '<div class="kpi"><div class="val '+(c||'')+'">'+v+'</div><div class="lbl">'+l+'</div></div>';};
+    var kpis='<div class="grid kpis pil-kpis">'
+      +K('folder',s.total,'Dossiers actifs')
+      +K('bolt',s.actions,'Actions en attente',(s.actions?'warn':''))
+      +K('clock',s.attente,'En attente de pièces','warn')
+      +K('gear',s.encours,'En cours de traitement')
+      +K('check',s.complets,'Dossiers complets','ok')
+      +K('idcard',s.signes,'Signés','ok')
+      +K('mail',s.aRelancer,'À relancer',(s.aRelancer?'warn':''))
+      +K('trend',s.deposes,'Déposés (Guichet unique)')
+      +'</div>';
+    var caCard='<div class="card pil-half"><div class="card-h"><h2>💶 Chiffre d\'affaires estimé</h2></div><div class="card-b">'
+      +'<div class="pil-big">'+num(s.ca)+'</div><div class="pil-sub">Honoraires prévisionnels sur les '+s.total+' dossier(s) actif(s) — hors débours (annonce légale, greffe, INPI).</div>'
+      +'<div class="pil-line"><span>Demandes à traiter</span><b>'+s.aTraiter+(s.retard?(' <span class="pil-warn">· '+s.retard+' en retard</span>'):'')+'</b></div>'
+      +'<div class="pil-line"><span>Dossiers clôturés</span><b>'+s.clotures+'</b></div>'
+      +'</div></div>';
+    var pct=s.taux;
+    var cf=s.conformite||0;var cfc=cf>=80?'ok':(cf>=50?'':'warn');
+    var autoCard='<div class="card pil-half"><div class="card-h"><h2>⚡ Taux d\'automatisation</h2></div><div class="card-b">'
+      +'<div class="pil-gauge"><div class="pil-gauge-fill" style="width:'+pct+'%"></div><span class="pil-gauge-txt">'+pct+' %</span></div>'
+      +'<div class="pil-sub">Moyenne des jalons automatisés franchis (création depuis le questionnaire, collecte des pièces, extraction OCR, génération des actes, signatures, dépôt).</div>'
+      +'<div class="pil-obj '+(pct>=90?'ok':'')+'">Objectif spec : ≥ 90 %'+(pct>=90?' — atteint ✓':'')+'</div>'
+      +'<div class="pil-line" style="border-top:1px solid var(--line,#e7ddc9);margin-top:10px"><span>Score de conformité moyen (contrôle IA)</span><b class="pil-cf '+cfc+'">'+cf+' / 100</b></div>'
+      +'<div class="pil-sub" style="margin:4px 0 0">Moyenne des scores des 3 agents (Juridique · Formalités · Fiscal) sur '+(s.conformiteNb||0)+' dossier(s) en traitement.</div>'
+      +'</div></div>';
+    var flow='<div class="card"><div class="card-h"><h2>🔄 Répartition par étape</h2></div><div class="card-b"><div class="pil-flow">'
+      +[['En attente pièces',s.attente],['En cours',s.encours],['Complets',s.complets],['Signés',s.signes],['Déposés',s.deposes],['Clôturés',s.clotures]]
+        .map(function(x){var w=s.total?Math.round(x[1]/s.total*100):0;return '<div class="pil-frow"><span class="pil-fl">'+x[0]+'</span><span class="pil-fbar"><span style="width:'+w+'%"></span></span><b>'+x[1]+'</b></div>';}).join('')
+      +'</div></div></div>';
+    return kpis+'<div class="pil-2col">'+caCard+autoCard+'</div>'+flow;
+  };
+
+  try{ if(!document.getElementById('dashboard-css')){var st=document.createElement('style');st.id='dashboard-css';
+    st.textContent='.pil-2col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}@media(max-width:820px){.pil-2col{grid-template-columns:1fr}}'
+      +'.pil-half{margin:0}.pil-big{font:800 30px/1 Georgia,serif;color:var(--accent,#3f372b);margin:2px 0 4px}'
+      +'.pil-sub{font-size:12px;color:var(--ink3,#8a7d69);margin-bottom:10px}'
+      +'.pil-line{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--line,#e7ddc9);font-size:13px}'
+      +'.pil-warn{color:#b0442f;font-weight:700}'
+      +'.pil-gauge{position:relative;height:26px;border-radius:14px;background:#efe7d5;overflow:hidden;margin:6px 0 4px}'
+      +'.pil-gauge-fill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#c9a13c,#7a6a49);border-radius:14px;transition:width .4s}'
+      +'.pil-gauge-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 13px/1 inherit;color:#2a2117}'
+      +'.pil-obj{margin-top:8px;font-size:12px;color:var(--ink3,#8a7d69);font-weight:700}.pil-obj.ok{color:#3d6b3d}'
+      +'.pil-flow{display:flex;flex-direction:column;gap:8px}.pil-frow{display:flex;align-items:center;gap:10px;font-size:13px}'
+      +'.pil-fl{flex:0 0 130px;color:var(--ink2,#5b5040)}.pil-fbar{flex:1;height:10px;background:#efe7d5;border-radius:6px;overflow:hidden}'
+      +'.pil-fbar>span{display:block;height:100%;background:linear-gradient(90deg,#7a6a49,#c9a13c);border-radius:6px}.pil-frow b{flex:0 0 30px;text-align:right}'
+      +'.pil-cf{font-variant-numeric:tabular-nums}.pil-cf.ok{color:#3d6b3d}.pil-cf.warn{color:#b0442f}'
+      +'.ag-scorepill{display:inline-block;margin-right:10px;padding:2px 9px;border-radius:20px;font-weight:800;font-size:12px;background:rgba(0,0,0,.06)}.ag-scorepill.ok{background:#d6ecc9;color:#2f6b3a}.ag-scorepill.warn{background:#f6e4c2;color:#8a5e0d}.ag-scorepill.ko{background:#f5d5cb;color:#a63a22}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="agent-relance-mod">
+/* ===== Étape 3 / Agents — Agent Relance : relances automatiques des pièces manquantes ===== */
+(function(){
+  function cfg(){var p=(DB.parametres=DB.parametres||{});p.relance=p.relance||{};
+    return {delai1:(p.relance.delai1||3),delaiSuiv:(p.relance.delaiSuiv||4),max:(p.relance.max||3)};}
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function jours(ts){if(!ts)return null;return Math.floor((Date.now()-ts)/86400000);}
+  function ents(){return (DB.demandes||[]).filter(function(d){return !d.archived&&d.statut!=='Clôturé'&&d.statut!=='Refusé';});}
+
+  window.relancePiecesManquantes=function(d){
+    var pieces=(typeof piecesRequises==='function')?piecesRequises(d):[];
+    d.docs=d.docs||{};d.piecesRecues=d.piecesRecues||{};
+    return pieces.filter(function(p){return !(((d.docs[p.k]||[]).length>0)||d.piecesRecues[p.k]===true);});
+  };
+  /* État de relance d'une demande : niveau déjà envoyé, dernière action, prochaine due */
+  window.relanceEtat=function(d){
+    var c=cfg();var manque=window.relancePiecesManquantes(d);
+    var rl=(d.relances||[]);var niveau=rl.length;
+    var demandeLe=d.docsMailSent||0;
+    if(!demandeLe){return {applicable:false,manque:manque,niveau:niveau,due:false};} /* pièces jamais demandées */
+    var lastTs=rl.length?rl[rl.length-1].ts:demandeLe;
+    var jSince=jours(lastTs);
+    var seuil=(niveau===0)?c.delai1:c.delaiSuiv;
+    var due=(manque.length>0)&&(niveau<c.max)&&(jSince!=null&&jSince>=seuil);
+    return {applicable:manque.length>0&&niveau<c.max,manque:manque,niveau:niveau,jSince:jSince,seuil:seuil,due:due,demandeLe:demandeLe};
+  };
+  window.relanceCandidats=function(){
+    return ents().map(function(d){return {d:d,e:window.relanceEtat(d)};})
+      .filter(function(x){return x.e.due;})
+      .sort(function(a,b){return (b.e.jSince||0)-(a.e.jSince||0);});
+  };
+  window.relanceCount=function(){return window.relanceCandidats().length;};
+
+  window.relanceEmail=function(d,niveau){
+    var nom=(typeof demBestName==='function'?demBestName(d):'')||'';
+    var prenom=(nom.split(/\s+/)[0]||'').trim();
+    var manque=window.relancePiecesManquantes(d);
+    var liste=manque.map(function(p){return '  • '+(p.label||p.k);}).join('\n')||'  • (pièces demandées)';
+    var lien='';try{if(typeof depotLien==='function')lien=depotLien(d);}catch(e){}
+    var ser=(typeof serie==='function')?serie(d):(d.numeroDossier||'');
+    var ouv='Bonjour'+(prenom?(' '+prenom):'')+',\n\n';
+    var pied=(lien?('\nPour plus de simplicité, vous pouvez aussi déposer vos pièces en ligne, en toute sécurité :\n'+lien+'\n'):'')
+      +'\nDès réception, nous poursuivons les démarches de création de votre société.\n\nBien cordialement,';
+    if(niveau<=1){
+      return {sujet:'Rappel — documents attendus pour votre création — AEM CONSEIL',
+        corps:ouv+'Sauf erreur de notre part, nous n\'avons pas encore reçu les documents nécessaires au démarrage de votre dossier. Merci de nous transmettre :\n\n'+liste+'\n'+pied};
+    }
+    if(niveau===2){
+      return {sujet:'2ᵉ rappel — votre dossier est en attente — AEM CONSEIL',
+        corps:ouv+'Votre dossier de création reste en attente des pièces suivantes, sans lesquelles nous ne pouvons pas avancer :\n\n'+liste+'\n\nNous vous remercions de nous les faire parvenir dans les meilleurs délais.\n'+pied};
+    }
+    return {sujet:'Dernier rappel — dossier en attente — AEM CONSEIL',
+      corps:ouv+'Malgré nos précédents messages, les pièces suivantes nous manquent toujours :\n\n'+liste+'\n\nSans retour de votre part sous quelques jours, votre dossier sera mis en veille. N\'hésitez pas à nous contacter pour toute difficulté.\n'+pied};
+  };
+
+  /* Envoi d'une relance : silencieux si passerelle configurée, sinon ouvre la messagerie pré-remplie */
+  window.relanceEnvoyer=function(id,silent){
+    var d=(DB.demandes||[]).find(function(x){return x.id===id;});if(!d)return;
+    var st=window.relanceEtat(d);var niveau=st.niveau+1;
+    var m=window.relanceEmail(d,niveau);
+    var to=(typeof demReplyTo==='function')?demReplyTo(d):(d.clientEmail||'');
+    var envoye=false;
+    if(to&&typeof demEnvoiSilencieux==='function'){envoye=demEnvoiSilencieux(to,m.sujet,m.corps);}
+    if(!envoye&&!silent&&typeof demOuvrirMessagerie==='function'){demOuvrirMessagerie(to,m.sujet,m.corps);}
+    d.relances=d.relances||[];d.relances.push({ts:Date.now(),niveau:niveau,auto:!!silent,envoye:envoye});
+    (d.historique=d.historique||[]).push({d:(typeof today==='function'?today():''),t:'Relance n°'+niveau+' — pièces manquantes'+(envoye?' (envoyée)':'')});
+    if(typeof save==='function')save();if(typeof render==='function')render();
+    if(typeof toast==='function')toast(envoye?('Relance n°'+niveau+' envoyée'):('Relance n°'+niveau+' préparée'));
+    return {niveau:niveau,envoye:envoye};
+  };
+  /* Relance groupée de tous les dossiers dus */
+  window.relanceTout=function(){
+    var list=window.relanceCandidats();if(!list.length){if(typeof toast==='function')toast('Aucune relance à envoyer.');return 0;}
+    var n=0;list.forEach(function(x){window.relanceEnvoyer(x.d.id,true);n++;});
+    if(typeof toast==='function')toast(n+' relance(s) traitée(s).');return n;};
+
+  /* Carte tableau de bord */
+  window.relanceCard=function(){
+    var list=window.relanceCandidats();
+    var nom=(typeof demBestName==='function')?demBestName:function(d){return d.clientNom||d.numeroDossier||'—';};
+    var head='<div class="card-h"><h2>🔔 Agent Relance — pièces manquantes</h2>'
+      +'<span class="sub" style="margin-left:auto">'+list.length+' client(s) à relancer</span></div>';
+    if(!list.length){return '<div class="card" style="margin-top:16px">'+head+'<div class="card-b"><div class="rl-empty">Aucune relance en attente — tous les clients ayant reçu une demande de pièces sont à jour.</div></div></div>';}
+    var rows=list.map(function(x){var d=x.d,e=x.e;var pcs=e.manque.map(function(p){return E(p.label||p.k);}).join(', ');
+      return '<div class="rl-row"><div class="rl-main"><b>'+E(nom(d))+'</b><span class="rl-meta">n°'+(e.niveau+1)+' · demandé il y a '+ (e.jSince==null?'—':e.jSince+' j') +'</span>'
+        +'<div class="rl-pcs">Manque : '+pcs+'</div></div>'
+        +'<button class="btn btn-sm btn-pri" onclick="relanceEnvoyer(\''+d.id+'\')">✉ Relancer (n°'+(e.niveau+1)+')</button></div>';}).join('');
+    return '<div class="card" style="margin-top:16px">'+head+'<div class="card-b">'
+      +'<div class="rl-top"><button class="btn btn-sm" onclick="relanceTout()">⚡ Tout relancer</button>'
+      +'<span class="rl-note">Relance auto : 1ᵉ après '+cfg().delai1+' j, puis tous les '+cfg().delaiSuiv+' j, max '+cfg().max+'.</span></div>'
+      +rows+'</div></div>';
+  };
+
+  /* Greffe sur le Pilotage + KPI */
+  function hook(){ if(typeof window.pagePilotage!=='function'){ setTimeout(hook,200); return; } if(window.pagePilotage.__rl)return;
+    var _pp=window.pagePilotage; var w=function(){ var h=_pp.apply(this,arguments); try{ h+=window.relanceCard(); }catch(e){} return h; }; w.__rl=true;
+    if(_pp.__cf)w.__cf=true; window.pagePilotage=w; }
+  hook();
+
+  try{ if(!document.getElementById('relance-css')){var st=document.createElement('style');st.id='relance-css';
+    st.textContent='.rl-empty{color:var(--ink3,#8a7d69);font-size:13px}'
+      +'.rl-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}.rl-note{font-size:11px;color:var(--ink3,#8a7d69)}'
+      +'.rl-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line,#e7ddc9)}'
+      +'.rl-main{flex:1;min-width:0}.rl-meta{font-size:11px;color:var(--ink3,#8a7d69);margin-left:8px}'
+      +'.rl-pcs{font-size:12px;color:var(--ink2,#5b5040);margin-top:3px}';
+    document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+
+<script id="ged-search-mod">
+/* ===== GED intelligente — extraction des métadonnées + recherche plein texte ===== */
+(function(){
   function norm(s){return (''+(s==null?'':s)).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
   function cli(d){try{return (typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{};}catch(e){return {};}}
   function labelDoc(k){try{return (typeof espDocLabel==='function')?espDocLabel(k):k;}catch(e){return k;}}
@@ -15891,57 +16795,47 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
    Étape 2a : Civilité → M./Mme ; Date → masque auto jj/mm/aaaa. Non destructif, idempotent. */
 (function(){
   'use strict';
-  function norm(s){return (''+(s==null?'':s)).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+  function feNorm(s){return (''+(s==null?'':s)).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
   function feLabel(el){
-    try{
-      if(el.id){var l=document.querySelector('label[for="'+CSS.escape(el.id)+'"]');if(l)return norm(l.textContent);}
-    }catch(e){}
+    try{ if(el.id){var l=document.querySelector('label[for="'+(window.CSS&&CSS.escape?CSS.escape(el.id):el.id)+'"]');if(l)return feNorm(l.textContent);} }catch(e){}
     var lab=el.closest&&el.closest('label');
-    if(lab){var sp=lab.querySelector('.ed2-lab,span,small');return norm(sp?sp.textContent:lab.textContent);}
-    var p=el.previousElementSibling;var g=0;
-    while(p&&g<3){if(/^(LABEL|SPAN|SMALL|DIV|B)$/.test(p.tagName)&&p.textContent&&p.textContent.trim())return norm(p.textContent);p=p.previousElementSibling;g++;}
-    return norm((el.getAttribute('placeholder')||'')+' '+(el.id||'')+' '+(el.name||''));
+    if(lab){var sp=lab.querySelector('.ed2-lab,span,small');return feNorm(sp?sp.textContent:lab.textContent);}
+    var p=el.previousElementSibling,g=0;
+    while(p&&g<3){if(/^(LABEL|SPAN|SMALL|DIV|B)$/.test(p.tagName)&&p.textContent&&p.textContent.trim())return feNorm(p.textContent);p=p.previousElementSibling;g++;}
+    return feNorm((el.getAttribute('placeholder')||'')+' '+(el.id||'')+' '+(el.name||''));
   }
   function isCivil(lab){return /civilit/.test(lab);}
   function isDate(el,lab){
-    var ph=norm(el.getAttribute('placeholder')||'');
+    var ph=feNorm(el.getAttribute('placeholder')||'');
     if(/jj\/mm\/aaaa|jj\/mm|dd\/mm\/yyyy/.test(ph))return true;
     return /date de naissance|\bne+\s*le\b|date d effet|date de l assemble|date de debut|date de signature|date de l acte|date du contrat|date de fin|date de creation|date de transfert|date de naiss|^date$|^date /.test(lab);
   }
-  /* --- Masque date jj/mm/aaaa (délégué, s'exécute avant le handler inline) --- */
   function maskDate(el){
-    var digits=el.value.replace(/[^0-9]/g,'').slice(0,8);
-    var out=digits;
-    if(digits.length>4)out=digits.slice(0,2)+'/'+digits.slice(2,4)+'/'+digits.slice(4);
-    else if(digits.length>2)out=digits.slice(0,2)+'/'+digits.slice(2);
+    var d=el.value.replace(/[^0-9]/g,'').slice(0,8),out=d;
+    if(d.length>4)out=d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4);
+    else if(d.length>2)out=d.slice(0,2)+'/'+d.slice(2);
     if(out!==el.value)el.value=out;
   }
-  document.addEventListener('input',function(e){
-    var el=e.target;
-    if(el&&el.tagName==='INPUT'&&el.getAttribute('data-fe-date')==='1')maskDate(el);
-  },true);
-  /* --- Conversion Civilité <input> → <select> M./Mme --- */
+  document.addEventListener('input',function(e){var el=e.target;if(el&&el.tagName==='INPUT'&&el.getAttribute('data-fe-date')==='1')maskDate(el);},true);
   function toCivilSelect(el){
     var sel=document.createElement('select');
     ['class','id','name','style','aria-label'].forEach(function(a){if(el.hasAttribute(a))sel.setAttribute(a,el.getAttribute(a));});
     sel.setAttribute('data-fe','civ');
-    var h=el.getAttribute('oninput')||el.getAttribute('onchange')||'';
-    if(h)sel.setAttribute('onchange',h);
+    var h=el.getAttribute('oninput')||el.getAttribute('onchange')||'';if(h)sel.setAttribute('onchange',h);
     var cur=(el.value||'').trim();
     if(/^(m|monsieur|mr)\.?$/i.test(cur))cur='M.';else if(/^(mme|madame)\.?$/i.test(cur))cur='Mme';
     [['',''],['M.','M.'],['Mme','Mme']].forEach(function(o){var op=document.createElement('option');op.value=o[0];op.textContent=o[1];if(o[0]===cur)op.selected=true;sel.appendChild(op);});
-    el.parentNode.replaceChild(sel,el);
-    return sel;
+    el.parentNode.replaceChild(sel,el);return sel;
   }
   function feScan(root){
     root=root||document.body;var ins;
     try{ins=root.querySelectorAll('input:not([data-fe])');}catch(e){return;}
     [].forEach.call(ins,function(el){
       var t=(el.getAttribute('type')||'text').toLowerCase();
-      if(t==='hidden'||t==='checkbox'||t==='radio'||t==='file'||t==='number'){el.setAttribute('data-fe','1');return;}
+      if(t==='hidden'||t==='checkbox'||t==='radio'||t==='file'||t==='number'||t==='email'||t==='password'){el.setAttribute('data-fe','1');return;}
       var lab=feLabel(el);
-      if(isCivil(lab)&&t==='text'){ el.setAttribute('data-fe','civ'); try{toCivilSelect(el);}catch(e){} return; }
-      if(isDate(el,lab)){ el.setAttribute('data-fe','date'); el.setAttribute('data-fe-date','1'); if(!el.getAttribute('placeholder'))el.setAttribute('placeholder','jj/mm/aaaa'); if(el.getAttribute('type')==='date')el.setAttribute('type','text'); return; }
+      if(isCivil(lab)&&t==='text'){el.setAttribute('data-fe','civ');try{toCivilSelect(el);}catch(e){}return;}
+      if(isDate(el,lab)){el.setAttribute('data-fe','date');el.setAttribute('data-fe-date','1');if(!el.getAttribute('placeholder'))el.setAttribute('placeholder','jj/mm/aaaa');if(el.getAttribute('type')==='date')el.setAttribute('type','text');return;}
       el.setAttribute('data-fe','1');
     });
   }
