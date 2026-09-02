@@ -3091,7 +3091,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=320;
+var LAST_VER=321;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -13708,7 +13708,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   });
   function docEl(){ return document.querySelector('#de-preview .doc-gen'); }
   var saveT=null;
-  function saveSoon(){ if(saveT)return; saveT=setTimeout(function(){ saveT=null; var el=docEl(),id=curId(),k=curK(); if(!el||!id)return; var d=doss(id); if(!d)return; d.docCustom=d.docCustom||{}; d.docCustom[k]=el.innerHTML; try{if(typeof save==='function')save();}catch(e){} var b=document.getElementById('word-saved'); if(b){b.textContent='Enregistré';b.className='word-saved on';clearTimeout(window.__wsT);window.__wsT=setTimeout(function(){if(b)b.className='word-saved';},1600);} },400); }
+  function saveSoon(){ if(saveT)return; saveT=setTimeout(function(){ saveT=null; var el=docEl(),id=curId(),k=curK(); if(!el||!id)return; var d=doss(id); if(!d)return; d.docCustom=d.docCustom||{}; d.docCustom[k]=el.innerHTML;
+    /* Une modification manuelle rend le document potentiellement incohérent avec les données : on le dé-valide et on le signale. */
+    d.docState=d.docState||{}; d.docState[k]=d.docState[k]||{}; d.docState[k].modifie=true; if(d.docState[k].done){d.docState[k].done=false;}
+    try{if(typeof save==='function')save();}catch(e){} wordIncoherence(true); },400); }
+  /* Indicateur d'incohérence : « ⚠ Modifié — à revérifier » tant que le document a été édité manuellement */
+  window.wordIncoherence=function(modifie){ var b=document.getElementById('word-saved'); if(!b)return;
+    if(modifie){ b.textContent='Modifié — à revérifier (peut différer des données)'; b.className='word-saved warn'; clearTimeout(window.__wsT); }
+    else { b.textContent='Éditable'; b.className='word-saved'; } };
   function focusDoc(){ var el=docEl(); if(el) el.focus(); }
   window.wordCmd=function(cmd,val){ try{ document.execCommand('styleWithCSS',false,true); }catch(e){} focusDoc(); try{ document.execCommand(cmd,false,val==null?null:val); }catch(e){} saveSoon(); };
   /* ---- Listes de choix + états actifs (barre d'outils moderne) ---- */
@@ -13854,7 +13861,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     }catch(e){ if(typeof toast==='function')toast('Import d\'image indisponible.'); } };
   window.wordLink=function(){ var u=window.prompt('Adresse du lien :','https://'); if(u) window.wordCmd('createLink',u); };
   window.wordTable=function(){ var r=parseInt(window.prompt('Nombre de lignes :','3'),10); if(!r||r<1)return; var c=parseInt(window.prompt('Nombre de colonnes :','3'),10); if(!c||c<1)return; var h='<table style="border-collapse:collapse;width:100%;margin:8px 0">'; for(var i=0;i<r;i++){ h+='<tr>'; for(var j=0;j<c;j++) h+='<td style="border:1px solid #333;padding:5px 7px;min-width:40px">&nbsp;</td>'; h+='</tr>'; } h+='</table><p><br></p>'; focusDoc(); document.execCommand('insertHTML',false,h); saveSoon(); };
-  window.wordRegen=function(){ var id=curId(),k=curK(); var d=doss(id); if(d&&d.docCustom){ delete d.docCustom[k]; try{if(typeof save==='function')save();}catch(e){} } if(typeof espEdRefresh==='function') espEdRefresh(id); var b=document.getElementById('word-saved'); if(b){b.textContent='Régénéré depuis les champs';b.className='word-saved on';} };
+  window.wordRegen=function(){ var id=curId(),k=curK(); var d=doss(id); if(d&&d.docCustom){ delete d.docCustom[k]; try{if(d.docState&&d.docState[k]){d.docState[k].modifie=false;}}catch(e){} try{if(typeof save==='function')save();}catch(e){} } if(typeof espEdRefresh==='function') espEdRefresh(id); var b=document.getElementById('word-saved'); if(b){b.textContent='Régénéré depuis les champs';b.className='word-saved on';} };
 
   var NF='onmousedown="return false"'; /* préserve la sélection du document */
   function toolbarHTML(){ return '<div id="word-toolbar" class="word-tb">'
@@ -13884,6 +13891,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&document.getElementById('word-menu')) wordCloseMenu();
         if((e.ctrlKey||e.metaKey)&&e.shiftKey&&(e.key==='v'||e.key==='V')){ var el=docEl(); var a=document.activeElement; if(el&&a&&(a===el||el.contains(a))){ e.preventDefault(); if(typeof wordPastePlain==='function')wordPastePlain(); } } });
     }
+    /* Au chargement : signaler l'incohérence si le document a déjà été modifié manuellement */
+    try{ var _id=curId(),_k=curK(),_d=doss(_id); if(_d&&_d.docCustom&&_d.docCustom[_k]!=null&&typeof wordIncoherence==='function') wordIncoherence(true); }catch(e){}
   }
   var mt=null; function schedule(){ if(mt)return; mt=setTimeout(function(){mt=null;setup();},60); }
   function css(){ if(document.getElementById('word-editor-css')){(document.body||document.documentElement).appendChild(document.getElementById('word-editor-css'));return;} var st=document.createElement('style'); st.id='word-editor-css';
@@ -13941,6 +13950,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '.word-cl input[type=color]::-moz-color-swatch{border:1px solid rgba(255,255,255,.35);border-radius:50%}',
       '.word-saved{font:600 11.5px/1 system-ui,sans-serif;color:#8a8a90;padding:0 6px;white-space:nowrap}',
       '.word-saved.on{color:#f4f6fa}',
+      '.word-saved.warn{color:#e0a94e;font-weight:800}',
       '.word-editable{outline:none}',
       '.word-editable:focus{outline:none}',
       'body[data-page] .word-editable table{border-collapse:collapse}',
@@ -16264,7 +16274,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
         var s=st[dc.k]||{};var gen=!!(s.ts);
         var complet=gen&&((typeof espDocManques==='function')?(espDocManques(d,dc.k).length===0):true);
         if(gen)nGen++;
-        var tag=gen?(complet?'<span class="tag ok">Prêt</span>':'<span class="tag warm">À compléter</span>'):'<span class="tag mut">À générer</span>';
+        var tag=gen?(s.modifie?'<span class="tag warm">Modifié — à vérifier</span>':(complet?'<span class="tag ok">Prêt</span>':'<span class="tag warm">À compléter</span>')):'<span class="tag mut">À générer</span>';
         return '<div class="ed-row"><span class="ed-doc">'+E(dc.l)+'</span>'+tag
           +'<span class="ed-acts"><button class="btn btn-sm" onclick="espEdOpen(\''+d.id+'\',\''+dc.k+'\')">Éditer</button>'
           +(gen?('<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+dc.k+'\')">Voir</button>'):'')
