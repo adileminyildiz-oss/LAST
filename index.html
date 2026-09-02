@@ -3091,7 +3091,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=332;
+var LAST_VER=333;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -16291,8 +16291,6 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   var CONSTIT_SCHEMA=[
     {g:'Société',f:[['denomination','Dénomination sociale'],['forme','Forme juridique','sel'],['capital','Capital (€)'],['siege','Adresse du siège'],['cp','Code postal'],['ville','Ville'],['rcsVille','Ville du RCS']]},
     {g:'Dirigeant / Président',f:[['president','Nom & prénom'],['civilite','Civilité (M./Mme)'],['naissance','Date de naissance','date'],['lieuNaissance','Lieu de naissance'],['pays','Pays de naissance'],['nationalite','Nationalité'],['adresse','Adresse personnelle'],['pereNom','Nom du père'],['mereNom','Nom de la mère']]},
-    {g:'Associé 1',f:[['a1_nom','Nom & prénom'],['a1_civ','Civilité'],['a1_parts','Nombre de titres'],['a1_adr','Adresse'],['a1_naiss','Date de naissance','date'],['a1_lieu','Lieu de naissance'],['a1_nat','Nationalité']]},
-    {g:'Associé 2 (optionnel)',f:[['a2_nom','Nom & prénom'],['a2_civ','Civilité'],['a2_parts','Nombre de titres'],['a2_adr','Adresse'],['a2_naiss','Date de naissance','date'],['a2_lieu','Lieu de naissance'],['a2_nat','Nationalité']]},
     {g:'Acte',f:[['nominal','Valeur nominale du titre (€)'],['dateActe','Date de l\'acte','date'],['villeSignature','Ville de signature']]}
   ];
   var EMPLOYEUR=[['denomination','Dénomination'],['forme','Forme juridique','sel'],['capital','Capital (€)'],['adresse','Adresse'],['cp','Code postal'],['ville','Ville'],['rcsVille','Ville du RCS'],['siret','SIRET'],['ape','Code APE/NAF'],['urssaf','URSSAF (région)'],['numurssaf','N° URSSAF'],['representant','Représentant légal'],['qualite','Qualité (Gérant, Président…)']];
@@ -16523,7 +16521,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   );}
   /* Documents de constitution : les données saisies alimentent les générateurs existants (dossier de synthèse, jamais enregistré) */
   function edSyntheticFill(k,D){
-    var assoc=[];[1,2].forEach(function(i){var nm=(D['a'+i+'_nom']||'').trim();if(nm)assoc.push({nom:nm,civilite:D['a'+i+'_civ']||'',parts:D['a'+i+'_parts']||'',adresse:D['a'+i+'_adr']||'',naissance:D['a'+i+'_naiss']||'',lieuNaissance:D['a'+i+'_lieu']||'',nationalite:D['a'+i+'_nat']||''});});
+    var assoc=[];var _solo=/SASU|EURL/i.test(D.forme||'SAS');var _max=_solo?1:8;for(var _i=1;_i<=_max;_i++){var nm=(D['a'+_i+'_nom']||'').trim();if(nm)assoc.push({nom:nm,civilite:D['a'+_i+'_civ']||'',parts:D['a'+_i+'_parts']||'',adresse:D['a'+_i+'_adr']||'',naissance:D['a'+_i+'_naiss']||'',lieuNaissance:D['a'+_i+'_lieu']||'',nationalite:D['a'+_i+'_nat']||''});}
     var pres=(D.president||'').trim();
     if(pres&&!assoc.some(function(a){return a.nom.trim()===pres;}))assoc.unshift({nom:pres,civilite:D.civilite||'',naissance:D.naissance||'',lieuNaissance:D.lieuNaissance||'',pays:D.pays||'',nationalite:D.nationalite||'',adresse:D.adresse||'',parts:''});
     var cid='__edtmp'+Math.random().toString(36).slice(2,7);
@@ -16548,6 +16546,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   var EDHIDE={cdi:1,cdd:1};
   function edFormeModel(f){return {SAS:'sas',SASU:'sasu',SARL:'sarl',EURL:'sarl',SCI:'sci'}[f]||'sas';}
   window.edLibToggleType=function(k){state.edOpenType=(state.edOpenType===k?'':k);render();};
+  function edAssocFields(i){return [['a'+i+'_nom','Nom & prénom'],['a'+i+'_civ','Civilité'],['a'+i+'_parts','Nombre de titres'],['a'+i+'_adr','Adresse'],['a'+i+'_naiss','Date de naissance','date'],['a'+i+'_lieu','Lieu de naissance'],['a'+i+'_nat','Nationalité']];}
+  function edAssocCount(D){var forme=(D&&D.forme)||'SAS';if(/SASU|EURL/i.test(forme))return 1;return Math.max(1,Math.min(8,parseInt(D&&D._assocCount,10)||1));}
+  function edAssocGroups(k,D){if(k!=='statuts'&&k!=='souscripteurs')return [];var solo=/SASU|EURL/i.test((D&&D.forme)||'SAS');var n=edAssocCount(D);var out=[];for(var i=1;i<=n;i++){out.push({g:(solo?'Associé unique':('Associé '+i)),f:edAssocFields(i)});}return out;}
+  window.edLibAssoc=function(id,delta){var d=edDoc(id);if(!d)return;d.data=d.data||{};var forme=d.data.forme||'SAS';if(/SASU|EURL/i.test(forme)){d.data._assocCount=1;}else{var n=Math.max(1,Math.min(8,(parseInt(d.data._assocCount,10)||1)+delta));d.data._assocCount=n;}d.updated=Date.now();save();render();};
   window.edLibNew=function(k,forme){
     DB.editionsLibres=DB.editionsLibres||[];
     var realK=(k==='cesparts'&&forme==='EURL')?'cesparts_u':k;
@@ -16657,7 +16659,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     }
     /* --- éditeur : volet de saisie + aperçu en direct --- */
     var D=cur.data||{};
-    var form=edSchema(cur.k).map(function(g){
+    function renderGroup(g){
       if(g.when && !D[g.when]) return '';
       return '<div class="ed2-fg'+(g.when?' ed2-fg-sub':'')+'"><div class="ed2-fg-h">'+edE(g.g)+'</div>'
         +g.f.map(function(f){
@@ -16672,7 +16674,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
           return '<label class="ed2-field"><span class="ed2-lab">'+edE(lab)+'</span>'+ctl+'</label>';
         }).join('')
         +'</div>';
-    }).filter(Boolean).join('');
+    }
+    var _groups=edSchema(cur.k).concat(edAssocGroups(cur.k,D));
+    var form=_groups.map(renderGroup).filter(Boolean).join('');
+    if(cur.k==='statuts'||cur.k==='souscripteurs'){
+      var _forme=D.forme||'SAS';
+      if(/SASU|EURL/i.test(_forme)){ form+='<div class="ed2-assoc-note">Forme unipersonnelle : un seul associé (l\'associé unique).</div>'; }
+      else { var _n=edAssocCount(D); form+='<div class="ed2-assoc-ctrls"><button class="btn btn-sm" onclick="edLibAssoc(\''+cur.id+'\',1)">+ Ajouter un associé</button>'+(_n>1?'<button class="btn btn-sm btn-ghost" onclick="edLibAssoc(\''+cur.id+'\',-1)">− Retirer</button>':'')+'</div>'; }
+    }
     var switcher='';
     var top='<div class="ed2-topbar">'
       +'<button class="btn btn-sm btn-ghost ed2-back" onclick="edLibClose()" title="Revenir à la liste des documents">← Retour</button>'
@@ -16739,6 +16748,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '.ed2-check input{width:16px;height:16px;accent-color:#22e06b;cursor:pointer}',
       '.ed2-filein{padding:5px;font-size:11px}',
       '.ed2-file-n{display:block;margin-top:4px;font-size:11px;color:#22e06b;font-weight:700}',
+      '.ed2-assoc-ctrls{display:flex;gap:8px;margin:2px 0 14px}',
+      '.ed2-assoc-note{font-size:11.5px;color:#8fb3ff;background:#0e1626;border:1px solid #23314e;border-radius:8px;padding:8px 10px;margin:2px 0 14px}',
       '.ed2-page-in .pv-tbl{width:100%;border-collapse:collapse;margin:8px 0;font-size:12px}.ed2-page-in .pv-tbl th,.ed2-page-in .pv-tbl td{border:1px solid #bbb;padding:5px 8px}',
       '.ed2-page-in .pv-odj{margin:6px 0 6px 22px}.ed2-page-in .pv-odj li{margin:3px 0}',
       '.ed2-field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}',
