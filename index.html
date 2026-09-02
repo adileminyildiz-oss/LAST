@@ -3091,7 +3091,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=331;
+var LAST_VER=332;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -16839,6 +16839,22 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     FE_NAT.forEach(function(o){var op=document.createElement('option');op.value=o[1];op.textContent=o[0]+' '+o[1];if(o[1].toLowerCase()===cur.toLowerCase())op.selected=true;sel.appendChild(op);});
     el.parentNode.replaceChild(sel,el);return sel;
   }
+  /* ---- 2c : autocomplétion Villes / Codes postaux / Adresses (Base Adresse Nationale) ---- */
+  var FE_BAN='https://api-adresse.data.gouv.fr/search/';
+  var feBox=null,feActive=null;
+  function feBoxEl(){if(!feBox){feBox=document.createElement('div');feBox.id='fe-combo';feBox.style.cssText='position:fixed;z-index:99999;display:none;max-height:240px;overflow-y:auto;background:#101014;border:1px solid #2a2a33;border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.6);font-size:12.5px';document.body.appendChild(feBox);}return feBox;}
+  function feBoxPos(el){var b=feBoxEl(),r=el.getBoundingClientRect();b.style.left=r.left+'px';b.style.top=(r.bottom+4)+'px';b.style.width=Math.max(180,r.width)+'px';}
+  function feBoxClose(){if(feBox){feBox.style.display='none';feBox.innerHTML='';}feActive=null;}
+  function feBoxShow(el,items,onPick){var b=feBoxEl();if(!items||!items.length){feBoxClose();return;}feBoxPos(el);b.innerHTML='';items.forEach(function(it){var d=document.createElement('div');d.className='fe-ci';d.style.cssText='padding:8px 11px;cursor:pointer;color:#e2e2e8;border-bottom:1px solid #1e1e24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';d.textContent=it.label;d.onmouseenter=function(){d.style.background='#1c1c24';};d.onmouseleave=function(){d.style.background='';};d.onmousedown=function(ev){ev.preventDefault();onPick(it);feBoxClose();};b.appendChild(d);});b.style.display='block';feActive=el;}
+  function feFetch(kind,q,cb){var url=FE_BAN+'?autocomplete=1&limit=8&q='+encodeURIComponent(q)+(kind!=='addr'?'&type=municipality':'');try{fetch(url).then(function(r){return r.json();}).then(function(j){var items=((j&&j.features)||[]).map(function(f){var pr=f.properties||{};if(kind==='cp')return {label:((pr.postcode||'')+' '+(pr.city||pr.name||'')).trim(),value:pr.postcode||''};if(kind==='ville')return {label:(pr.city||pr.name||''),value:(pr.city||pr.name||'')};return {label:pr.label||'',value:pr.label||''};}).filter(function(x){return x.label.trim();});cb(items);}).catch(function(){cb([]);});}catch(e){cb([]);}}
+  document.addEventListener('input',function(e){var el=e.target;if(!el||el.tagName!=='INPUT')return;var kind=el.getAttribute('data-fe');if(kind!=='ville'&&kind!=='cp'&&kind!=='addr')return;if(el._fePick){el._fePick=false;return;}var q=(el.value||'').trim();if(el._feT)clearTimeout(el._feT);if(q.length<1){feBoxClose();return;}el._feT=setTimeout(function(){feFetch(kind,q,function(items){if(document.activeElement!==el)return;feBoxShow(el,items,function(it){el._fePick=true;el.value=it.value;el.dispatchEvent(new Event('input',{bubbles:true}));});});},220);},true);
+  document.addEventListener('mousedown',function(e){if(feActive&&feBox&&!feBox.contains(e.target)&&e.target!==feActive)feBoxClose();},true);
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')feBoxClose();},true);
+  window.addEventListener('scroll',function(){if(feActive)feBoxPos(feActive);},true);
+  window.addEventListener('resize',function(){if(feActive)feBoxPos(feActive);});
+  function isVille(lab){return /(ville|commune|localite)|lieu de naissance|lieu de reunion|ville du rcs|ville de signature|fait a/.test(lab)&&!/adresse/.test(lab);}
+  function isCP(lab){return /code postal|(^| )cp( |$)/.test(lab);}
+  function isAddr(lab){return /adresse/.test(lab);}
   function feScan(root){
     root=root||document.body;var ins;
     try{ins=root.querySelectorAll('input:not([data-fe])');}catch(e){return;}
@@ -16848,6 +16864,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       var lab=feLabel(el);
       if(isCivil(lab)&&t==='text'){el.setAttribute('data-fe','civ');try{toCivilSelect(el);}catch(e){}return;}
       if(isNat(lab)&&t==='text'){el.setAttribute('data-fe','nat');try{toNatSelect(el);}catch(e){}return;}
+      if(isAddr(lab)&&t==='text'){el.setAttribute('data-fe','addr');el.setAttribute('autocomplete','off');return;}
+      if(isCP(lab)&&(t==='text'||t==='tel')){el.setAttribute('data-fe','cp');el.setAttribute('autocomplete','off');return;}
+      if(isVille(lab)&&t==='text'){el.setAttribute('data-fe','ville');el.setAttribute('autocomplete','off');return;}
       if(isDate(el,lab)){el.setAttribute('data-fe','date');el.setAttribute('data-fe-date','1');if(!el.getAttribute('placeholder'))el.setAttribute('placeholder','jj/mm/aaaa');if(el.getAttribute('type')==='date')el.setAttribute('type','text');return;}
       el.setAttribute('data-fe','1');
     });
