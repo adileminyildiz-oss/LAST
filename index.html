@@ -3091,7 +3091,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=333;
+var LAST_VER=334;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -16558,19 +16558,20 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(k==='souscripteurs'&&(forme==='SARL'||forme==='EURL'))lbl='Liste des souscripteurs de parts';
     var data={};if(edSchema(realK).some(function(g){return g.f.some(function(f){return f[0]==='forme';});}))data.forme=forme||'SAS';
     var titre=lbl+((forme&&EDFORMS[k])?(' — '+forme):'');
-    var doc={id:'edl_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),k:realK,titre:titre,data:data,ts:Date.now(),updated:Date.now()};
+    var doc={id:'edl_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),k:realK,titre:titre,titreBase:titre,titreAuto:true,data:data,ts:Date.now(),updated:Date.now()};
     DB.editionsLibres.unshift(doc);save();state.edLibId=doc.id;state.edOpenType='';render();
   };
   window.edLibOpen=function(id){state.edLibId=id;render();};
   window.edLibClose=function(){state.edLibId='';render();};
   window.edLibDel=function(id){ if(typeof confirm==='function'&&!confirm('Supprimer ce document ?'))return; DB.editionsLibres=(DB.editionsLibres||[]).filter(function(x){return x.id!==id;}); if(state.edLibId===id)state.edLibId=''; save();render(); };
-  window.edLibRename=function(id,v){var d=(DB.editionsLibres||[]).filter(function(x){return x.id===id;})[0];if(d){d.titre=v;d.updated=Date.now();save();}};
+  window.edLibRename=function(id,v){var d=(DB.editionsLibres||[]).filter(function(x){return x.id===id;})[0];if(d){d.titre=v;d.titreAuto=false;d.updated=Date.now();save();}};
   function edDoc(id){return (DB.editionsLibres||[]).filter(function(x){return x.id===id;})[0];}
   var _edT=null;
   window.edLibCheck=function(id,key,checked){var d=edDoc(id);if(!d)return;d.data=d.data||{};d.data[key]=!!checked;d.updated=Date.now();save();render();};
   window.edLibFile=function(id,key,inp){var d=edDoc(id);if(!d)return;var f=inp&&inp.files&&inp.files[0];if(!f)return;d.data=d.data||{};d.data[key]=f.name;d.updated=Date.now();try{var r=new FileReader();r.onload=function(){try{d.data[key+'_data']=r.result;save();}catch(e){}};r.readAsDataURL(f);}catch(e){}save();render();};
   window.edLibField=function(id,key,val){
     var d=edDoc(id);if(!d)return;d.data=d.data||{};d.data[key]=val;d.updated=Date.now();
+    if(key==='denomination'&&d.titreAuto!==false){var base=d.titreBase||d.titre||'Document';var dn=(''+val).trim();d.titre=base+(dn?(' — '+dn):'');var ti=document.getElementById('edlib-title');if(ti&&document.activeElement!==ti)ti.value=d.titre;}
     edRepaint(id);
     var s=document.getElementById('edlib-saved');if(s)s.textContent='Enregistrement…';
     if(_edT)clearTimeout(_edT);_edT=setTimeout(function(){save();var s2=document.getElementById('edlib-saved');if(s2)s2.textContent='Enregistré';},500);
@@ -16685,7 +16686,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var switcher='';
     var top='<div class="ed2-topbar">'
       +'<button class="btn btn-sm btn-ghost ed2-back" onclick="edLibClose()" title="Revenir à la liste des documents">← Retour</button>'
-      +'<input class="ed2-title" value="'+edE(cur.titre)+'" oninput="edLibRename(\''+cur.id+'\',this.value)" aria-label="Titre">'
+      +'<input class="ed2-title" id="edlib-title" value="'+edE(cur.titre)+'" oninput="edLibRename(\''+cur.id+'\',this.value)" aria-label="Titre">'
       +'<span class="ed2-saved" id="edlib-saved">Enregistré</span>'
       +'<span class="ed2-sp"></span>'
       +'<span class="ed2-zoom"><button class="ed2-zb" title="Dézoomer" onclick="edLibZoom(-0.1)">−</button><span class="ed2-zlbl" id="edlib-zlbl">'+Math.round((state.edLibZoom||1)*100)+'%</span><button class="ed2-zb" title="Zoomer" onclick="edLibZoom(0.1)">+</button></span>'
