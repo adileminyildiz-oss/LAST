@@ -3090,7 +3090,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=314;
+var LAST_VER=315;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -5067,6 +5067,7 @@ window.modalDemandeView=function(id){
   };
   /* Carte « Traitement » : actions du dossier — boutons pro */
   window.espTraitementCard=function(d){
+    var isModif=!!(d&&(d.formaliteNature==='modification'||d.modifKind||d.nature==='modification'));
     return '<div class="card esp-traitcard"><div class="card-h"><h2>Traitement</h2>'
      +'<button class="tr-arch" title="Archiver le dossier" onclick="espArchiverDossier(\''+d.id+'\')">'+TR_IC.arch+'<span>Archiver</span></button></div><div class="card-b">'
      +'<button class="tr-primary" onclick="espEdOpen(\''+d.id+'\',\'statuts\')">'+TR_IC.ed+'<span>Éditer les documents</span></button>'
@@ -5075,7 +5076,7 @@ window.modalDemandeView=function(id){
      +'<button class="tr-b" onclick="espFicheOpen(\''+d.id+'\')">'+TR_IC.mail+'<span>Mail au client</span></button>'
      +'<button class="tr-b" onclick="coutModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.6a3.5 3.5 0 1 0 .2 5M8 11h5M8 13.4h5"/></svg><span>Estimer le coût</span></button>'
      +'<button class="tr-b" onclick="annonceModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 8h3v9a2 2 0 0 1-2 2M8 9h6M8 12h6M8 15h4"/></svg><span>Annonce légale</span></button>'
-     +'<button class="tr-b" onclick="acteModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span>Acte de modification</span></button>'
+     +(isModif?('<button class="tr-b" onclick="acteModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span>Acte de modification</span></button>'):'')
      +'<button class="tr-b" onclick="signModal(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-1 4-9 7-9s2 6 4 6 2-3 4-3M3 21h18"/></svg><span>Signature électronique</span></button>'
      +'<button class="tr-b" onclick="espSuiviClient(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M21 12a9 9 0 1 1-6.2-8.5"/></svg><span>Fiche de suivi (client)</span></button>'
      +'<button class="tr-b" onclick="espAttestation(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2"/><path d="M9 3a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M8 12h8M8 16h5"/><circle cx="16.5" cy="16.5" r="2.2"/></svg><span>Attestation</span></button>'
@@ -15505,7 +15506,21 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var verdict=P.ready
       ? '<span class="pf-verdict ok">Prêt à déposer</span>'
       : '<span class="pf-verdict ko">'+P.blockers.length+' point'+(P.blockers.length>1?'s':'')+' à régler</span>';
-    var blk=P.ready?'' : '<div class="pf-blockers"><div class="pf-blockers-h">À régler avant le dépôt</div>'+P.blockers.map(function(b){return '<div class="pf-blk">'+E(b)+'</div>';}).join('')+'</div>';
+    var blk='';
+    if(!P.ready){
+      var bl={pieces:[],incoh:[],autres:[]};
+      P.blockers.forEach(function(b){
+        if(b.indexOf('Pièce manquante : ')===0) bl.pieces.push(b.replace('Pièce manquante : ',''));
+        else if(b.indexOf('Incohérence : ')===0) bl.incoh.push(b.replace('Incohérence : ',''));
+        else bl.autres.push(b);
+      });
+      var bullet=function(x){return '<div class="pf-blk">'+E(x)+'</div>';};
+      blk='<div class="pf-blockers"><div class="pf-blockers-h">À régler avant le dépôt</div>'
+        +bl.autres.map(bullet).join('')
+        +(bl.incoh.length?('<div class="pf-blk-sub">Incohérences</div>'+bl.incoh.map(bullet).join('')):'')
+        +(bl.pieces.length?('<div class="pf-blk-sub">Pièces manquantes ('+bl.pieces.length+')</div>'+bl.pieces.map(bullet).join('')):'')
+        +'</div>';
+    }
     return '<div class="card pf-card '+(P.ready?'is-ready':'is-todo')+'"><div class="card-h"><h2>Contrôle du dossier</h2><span class="sub" style="margin-left:auto">'+verdict+'</span></div>'
       +'<div class="card-b"><div class="pf-gates">'+chips+'</div>'+blk+'</div></div>';
   };
@@ -15525,7 +15540,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.pf-gate-l{flex:1;color:#c9c9d2}.pf-gate-d{color:#8f8f98;font-size:11px;font-variant-numeric:tabular-nums}',
     '.pf-blockers{margin-top:12px;border-top:1px solid #242428;padding-top:10px}',
     '.pf-blockers-h{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#d0a86a;font-weight:700;margin-bottom:6px}',
-    '.pf-blk{font-size:12px;color:#cbb89a;padding:4px 0 4px 14px;position:relative}.pf-blk::before{content:"•";position:absolute;left:2px;color:#d0a86a}'
+    '.pf-blk{font-size:12px;color:#cbb89a;padding:4px 0 4px 14px;position:relative}.pf-blk::before{content:"•";position:absolute;left:2px;color:#d0a86a}',
+    '.pf-blk-sub{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin:9px 0 3px}'
   ].join('');document.head.appendChild(st); }catch(e){}
 })();
 </script>
