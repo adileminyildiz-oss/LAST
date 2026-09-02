@@ -719,6 +719,7 @@ const nivTag=n=>`<span class="tag ${n==='chaud'?'hot':n==='tiède'?'warm':'mut'}
 const PAGES=[
   {id:'demandes',lbl:'Demandes',ic:'inbox',sub:'Réception & qualification IA'},
   {id:'espace',lbl:'Traitement',ic:'espace',sub:'Travail & génération des dossiers'},
+  {id:'editions',lbl:'Éditions',ic:'doc',sub:'Documents générés & prêts à éditer'},
   {id:'pilotage',lbl:'Pilotage',ic:'dash',sub:'Tableau de bord temps réel',hidden:true},
   {id:'params',lbl:'Paramètres',ic:'gear',sub:'Équipe & réglages'}
 ];
@@ -783,7 +784,7 @@ function navBadgeCount(id){
   return 0;
 }
 function buildNav(){
-  const act=PAGES.filter(p=>p.id==='demandes'||p.id==='espace');
+  const act=PAGES.filter(p=>p.id==='demandes'||p.id==='espace'||p.id==='editions');
   const sys=PAGES.filter(p=>p.id==='params');
   document.getElementById('nav').innerHTML=
     `<div class="nav-lbl">Activité</div>`+
@@ -812,7 +813,7 @@ function render(){
   document.getElementById('psub').textContent=p.sub;
   const V=document.getElementById('view');
   var __bb=(typeof backupBannerHTML==='function')?backupBannerHTML():'';
-  V.innerHTML=__bb+({demandes:pageDemandes,espace:pageEspace,params:pageParams,pilotage:(typeof pagePilotage==='function'?pagePilotage:pageDemandes)}[state.page]||pageDemandes)();
+  V.innerHTML=__bb+({demandes:pageDemandes,espace:pageEspace,params:pageParams,editions:(typeof pageEditions==='function'?pageEditions:pageDemandes),pilotage:(typeof pagePilotage==='function'?pagePilotage:pageDemandes)}[state.page]||pageDemandes)();
   wireCards();
 }
 
@@ -3090,7 +3091,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=318;
+var LAST_VER=319;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -16247,6 +16248,47 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     }catch(e){}
   }
   function sweep(){try{var bs=document.querySelectorAll('button, .btn, [role="button"]');for(var i=0;i<bs.length;i++)cleanBtn(bs[i]);}catch(e){}}
+  /* ===== Module Éditions : centre des documents générés & prêts à éditer ===== */
+  window.pageEditions=function(){
+    var E=(typeof esc==='function')?esc:function(s){return ''+(s==null?'':s);};
+    var doss=(DB.dossiers||[]).filter(function(d){return !d.archived;});
+    if(!doss.length) return '<div class="ed-wrap"><div class="card"><div class="card-b"><div class="empty">Aucun dossier pour le moment. Les éditions apparaissent une fois un dossier créé dans le Traitement.</div></div></div></div>';
+    var cards=doss.map(function(d){
+      var reqs=(typeof espDocsRequis==='function')?espDocsRequis(d):[];
+      var st=d.docState||{};
+      var nGen=0;
+      var rows=reqs.map(function(dc){
+        var s=st[dc.k]||{};var gen=!!(s.ts);
+        var complet=gen&&((typeof espDocManques==='function')?(espDocManques(d,dc.k).length===0):true);
+        if(gen)nGen++;
+        var tag=gen?(complet?'<span class="tag ok">Prêt</span>':'<span class="tag warm">À compléter</span>'):'<span class="tag mut">À générer</span>';
+        return '<div class="ed-row"><span class="ed-doc">'+E(dc.l)+'</span>'+tag
+          +'<span class="ed-acts"><button class="btn btn-sm" onclick="espEdOpen(\''+d.id+'\',\''+dc.k+'\')">Éditer</button>'
+          +(gen?('<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+dc.k+'\')">Voir</button>'):'')
+          +'</span></div>';
+      }).join('')||'<div class="empty" style="padding:8px 2px">Aucun document requis pour ce dossier.</div>';
+      var nom=(typeof dossierClients==='function')?(dossierClients(d)||d.ref):(d.ref||'Dossier');
+      return '<div class="card ed-card"><div class="card-h"><h2>'+E(nom)+'</h2>'
+        +'<span class="sub" style="margin-left:auto">'+E(d.numeroDossier||d.ref||'')+' · '+nGen+'/'+reqs.length+'</span></div>'
+        +'<div class="card-b"><div class="ed-list">'+rows+'</div>'
+        +'<div class="ed-foot">'
+        +'<button class="btn btn-sm btn-ghost" onclick="espFicheTechnique(\''+d.id+'\')">Fiche technique</button>'
+        +'<button class="btn btn-sm btn-ghost" onclick="espImprimerTout(\''+d.id+'\')">Imprimer tout</button>'
+        +'<button class="btn btn-sm btn-ghost" onclick="espTelechargerOuvrir(\''+d.id+'\')">Télécharger</button>'
+        +'</div></div></div>';
+    }).join('');
+    return '<div class="ed-wrap">'+cards+'</div>';
+  };
+  try{ if(!document.getElementById('editions-css')){var es=document.createElement('style');es.id='editions-css';
+    es.textContent=[
+      '.ed-wrap{display:flex;flex-direction:column;gap:16px;max-width:1100px;margin:0 auto;padding:2px 0 40px}',
+      '.ed-list{display:flex;flex-direction:column;gap:2px}',
+      '.ed-row{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--line-soft,#1c1c1e)}',
+      '.ed-row:last-child{border-bottom:0}',
+      '.ed-doc{flex:1;min-width:0;font-size:13px;color:var(--ink,#e7e7ec)}',
+      '.ed-acts{display:flex;gap:6px;flex:none}',
+      '.ed-foot{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft,#1c1c1e)}'
+    ].join('');document.head.appendChild(es);} }catch(e){}
   /* Conformité de présentation — uniformise en-têtes, pastilles, rythme et champs sur tous les onglets */
   try{ if(!document.getElementById('conformity-css')){var cs=document.createElement('style');cs.id='conformity-css';
     cs.textContent=[
