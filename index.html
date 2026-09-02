@@ -3091,7 +3091,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=330;
+var LAST_VER=331;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -16827,6 +16827,18 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     [['',''],['M.','M.'],['Mme','Mme']].forEach(function(o){var op=document.createElement('option');op.value=o[0];op.textContent=o[1];if(o[0]===cur)op.selected=true;sel.appendChild(op);});
     el.parentNode.replaceChild(sel,el);return sel;
   }
+  var FE_NAT=[['🇫🇷','Française'],['🇩🇪','Allemande'],['🇦🇱','Albanaise'],['🇩🇿','Algérienne'],['🇦🇴','Angolaise'],['🇸🇦','Saoudienne'],['🇦🇷','Argentine'],['🇦🇲','Arménienne'],['🇦🇺','Australienne'],['🇦🇹','Autrichienne'],['🇦🇿','Azerbaïdjanaise'],['🇧🇩','Bangladaise'],['🇧🇪','Belge'],['🇧🇯','Béninoise'],['🇧🇾','Biélorusse'],['🇧🇦','Bosnienne'],['🇧🇷','Brésilienne'],['🇧🇬','Bulgare'],['🇧🇫','Burkinabée'],['🇨🇲','Camerounaise'],['🇨🇦','Canadienne'],['🇨🇻','Cap-verdienne'],['🇨🇱','Chilienne'],['🇨🇳','Chinoise'],['🇨🇾','Chypriote'],['🇨🇴','Colombienne'],['🇰🇲','Comorienne'],['🇨🇬','Congolaise'],['🇰🇷','Sud-coréenne'],['🇨🇮','Ivoirienne'],['🇭🇷','Croate'],['🇩🇰','Danoise'],['🇪🇬','Égyptienne'],['🇦🇪','Émirienne'],['🇪🇸','Espagnole'],['🇪🇪','Estonienne'],['🇺🇸','Américaine'],['🇫🇮','Finlandaise'],['🇬🇦','Gabonaise'],['🇬🇪','Géorgienne'],['🇬🇭','Ghanéenne'],['🇬🇷','Grecque'],['🇬🇳','Guinéenne'],['🇭🇺','Hongroise'],['🇮🇳','Indienne'],['🇮🇩','Indonésienne'],['🇮🇶','Irakienne'],['🇮🇷','Iranienne'],['🇮🇪','Irlandaise'],['🇮🇸','Islandaise'],['🇮🇱','Israélienne'],['🇮🇹','Italienne'],['🇯🇵','Japonaise'],['🇱🇧','Libanaise'],['🇱🇻','Lettone'],['🇱🇹','Lituanienne'],['🇱🇺','Luxembourgeoise'],['🇲🇰','Macédonienne'],['🇲🇬','Malgache'],['🇲🇱','Malienne'],['🇲🇹','Maltaise'],['🇲🇦','Marocaine'],['🇲🇺','Mauricienne'],['🇲🇷','Mauritanienne'],['🇲🇽','Mexicaine'],['🇲🇩','Moldave'],['🇳🇱','Néerlandaise'],['🇳🇿','Néo-zélandaise'],['🇳🇪','Nigérienne'],['🇳🇬','Nigériane'],['🇳🇴','Norvégienne'],['🇵🇰','Pakistanaise'],['🇵🇸','Palestinienne'],['🇵🇪','Péruvienne'],['🇵🇭','Philippine'],['🇵🇱','Polonaise'],['🇵🇹','Portugaise'],['🇶🇦','Qatarienne'],['🇬🇧','Britannique'],['🇷🇴','Roumaine'],['🇷🇺','Russe'],['🇸🇳','Sénégalaise'],['🇷🇸','Serbe'],['🇸🇰','Slovaque'],['🇸🇮','Slovène'],['🇱🇰','Sri-lankaise'],['🇿🇦','Sud-africaine'],['🇸🇪','Suédoise'],['🇨🇭','Suisse'],['🇸🇾','Syrienne'],['🇨🇿','Tchèque'],['🇹🇩','Tchadienne'],['🇹🇭','Thaïlandaise'],['🇹🇬','Togolaise'],['🇹🇳','Tunisienne'],['🇹🇷','Turque'],['🇺🇦','Ukrainienne'],['🇻🇪','Vénézuélienne'],['🇻🇳','Vietnamienne']];
+  function isNat(lab){return /nationalit/.test(lab);}
+  function toNatSelect(el){
+    var sel=document.createElement('select');
+    ['class','id','name','style','aria-label'].forEach(function(a){if(el.hasAttribute(a))sel.setAttribute(a,el.getAttribute(a));});
+    sel.setAttribute('data-fe','nat');
+    var h=el.getAttribute('oninput')||el.getAttribute('onchange')||'';if(h)sel.setAttribute('onchange',h);
+    var cur=(el.value||'').trim();
+    var op0=document.createElement('option');op0.value='';op0.textContent='';sel.appendChild(op0);
+    FE_NAT.forEach(function(o){var op=document.createElement('option');op.value=o[1];op.textContent=o[0]+' '+o[1];if(o[1].toLowerCase()===cur.toLowerCase())op.selected=true;sel.appendChild(op);});
+    el.parentNode.replaceChild(sel,el);return sel;
+  }
   function feScan(root){
     root=root||document.body;var ins;
     try{ins=root.querySelectorAll('input:not([data-fe])');}catch(e){return;}
@@ -16835,6 +16847,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       if(t==='hidden'||t==='checkbox'||t==='radio'||t==='file'||t==='number'||t==='email'||t==='password'){el.setAttribute('data-fe','1');return;}
       var lab=feLabel(el);
       if(isCivil(lab)&&t==='text'){el.setAttribute('data-fe','civ');try{toCivilSelect(el);}catch(e){}return;}
+      if(isNat(lab)&&t==='text'){el.setAttribute('data-fe','nat');try{toNatSelect(el);}catch(e){}return;}
       if(isDate(el,lab)){el.setAttribute('data-fe','date');el.setAttribute('data-fe-date','1');if(!el.getAttribute('placeholder'))el.setAttribute('placeholder','jj/mm/aaaa');if(el.getAttribute('type')==='date')el.setAttribute('type','text');return;}
       el.setAttribute('data-fe','1');
     });
