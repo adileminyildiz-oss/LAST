@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=361;
+var LAST_VER=362;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -18693,5 +18693,186 @@ return '<span class="dem-bar-acts">'+'<button class="btn btn-sm btn-pri" onclick
 if(typeof window.demVueDetail==='function'){var _dv=window.demVueDetail;window.demVueDetail=function(id){var h=_dv(id);try{h=stripBlock(h,'dem-view-cards');if(h&&h.indexOf('<span class="dem-nav">')>=0)h=h.replace('<span class="dem-nav">',barActions(id)+'<span class="dem-nav">');}catch(e){}return h;};}
 try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createElement('style');st.id='dem-bar-acts-css';st.textContent='.dem-bar-acts{display:inline-flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}.dem-bar-acts .btn{white-space:nowrap}.dem-bar-assign{font:inherit;font-size:12px;background:#111114;color:#eef0f4;border:1px solid #34343a;border-radius:8px;padding:6px 9px;cursor:pointer;max-width:200px}.dem-bar-assign:hover{border-color:#45454d}';document.head.appendChild(st);}}catch(e){}
 })();</script>
+<script id="analyse-pipeline-mod">(function(){
+  /* Pipeline « Analyse & auto-remplissage » (Piste B) — orchestre les briques existantes :
+     pièces (d.pieces) → OCR (espOcrRead) + parsing (espParseDoc) → champs (d.verif.extract)
+     → validation → génération (espDocGen). Carte routée dans l'étape « Documents » du wizard. */
+  function has(f){return typeof window[f]==='function';}
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  var CK='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>';
+  var LK='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+  var REQ=['nom','dateNaissance','lieuNaissance','nationalite','adresse'];
+  function doss(id){return (typeof espDoss==='function'?espDoss():(DB.dossiers||[])).filter(function(x){return x.id===id;})[0];}
+  function pieces(d){return (typeof DIRIGEANT_PIECES!=='undefined')?DIRIGEANT_PIECES:[];}
+  function pstate(d,k){return (typeof espPieceState==='function')?espPieceState(d,k):((d.pieces||{})[k]||{recu:false});}
+  function ex(d){d.verif=d.verif||{};d.verif.extract=d.verif.extract||{};return d.verif.extract;}
+  function reqFilled(d){var e=ex(d);return REQ.every(function(f){return (''+(e[f]||'')).trim();});}
+  function anaState(d){
+    d.analyse=d.analyse||{};
+    var np=pieces(d).filter(function(pc){return pstate(d,pc.k).data;}).length;
+    return {np:np, tot:pieces(d).length, done1:np>0, done2:!!d.analyse.done, done3:!!d.analyse.valide, reqOk:reqFilled(d)};
+  }
+  function curBand(s){ if(!s.done1)return 'pieces'; if(!s.done2)return 'analyse'; if(!s.done3)return 'fiche'; return 'gen'; }
+
+  /* ---- assignation parsed → extract, par type de pièce ---- */
+  function assign(e,kind,p){
+    if(!p)return; function set(k,v){ if(v&&(''+v).trim()) e[k]=(''+v).trim(); }
+    if(kind==='identite'){ set('nom',p.nom);set('prenom',p.prenom);set('civilite',p.civilite);set('dateNaissance',p.dateNaissance);set('lieuNaissance',p.lieuNaissance);set('paysNaissance',p.paysNaissance);set('nationalite',p.nationalite);set('typePiece',p.typePiece);set('numPiece',p.numPiece);if(p.travailAutorise)e.travailAutorise=p.travailAutorise; }
+    else if(kind==='edf'){ set('adresse',p.adresse); }
+    else if(kind==='impot'){ set('revenuFiscal',p.revenuFiscal); if(!(''+(e.adresse||'')).trim())set('adresse',p.adresse); }
+    else if(kind==='domiciliation'){ set('siege',p.siege||p.adresse);set('domiciliataire',p.domiciliataire); }
+  }
+  /* seed depuis la fiche client (utile même hors-ligne) */
+  function seed(d){
+    var e=ex(d); var c=(typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{};
+    var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
+    var pres=assoc.filter(function(a){return (''+(a.nom||'')).trim()===(''+(c.president||'')).trim();})[0]||assoc[0]||{};
+    function si(k,v){ if(v&&!(''+(e[k]||'')).trim())e[k]=(''+v).trim(); }
+    var full=((c.president||pres.nom||'')+'').trim();var parts=full.split(/\s+/).filter(Boolean);
+    si('civilite','M.'); if(parts.length>=2){si('prenom',parts.slice(0,-1).join(' '));si('nom',parts[parts.length-1]);}else if(full)si('nom',full);
+    si('dateNaissance',pres.naissance||'');si('lieuNaissance',pres.lieuNaissance||'');si('paysNaissance','France');si('nationalite','française');
+    si('adresse',((pres.adresse||c.adresse||'')+'').trim());si('siege',((c.siege||(DB.societe&&DB.societe.adresse)||'')+'').trim());
+  }
+
+  window.anaOpen=function(id,band){var d=doss(id);if(!d)return;var s=anaState(d);
+    var order=['pieces','analyse','fiche','gen'];var reach={pieces:true,analyse:s.done1,fiche:s.done1&&s.done2,gen:s.done3};
+    if(!reach[band]){ if(typeof toast==='function')toast('Terminez d’abord l’étape en cours.'); return; }
+    d.analyse=d.analyse||{}; d.analyse.open=band; try{save();}catch(e){} try{render();}catch(e){}; };
+  window.anaUpload=function(id,k,inp){var f=inp&&inp.files&&inp.files[0];if(!f)return;var d=doss(id);if(!d)return;var r=new FileReader();
+    r.onload=function(e){d.pieces=d.pieces||{};d.pieces[k]=Object.assign(pstate(d,k),{recu:true,nom:f.name,data:e.target.result});d.analyse=d.analyse||{};d.analyse.open='pieces';try{save();}catch(_){}if(typeof toast==='function')toast('Pièce jointe');try{render();}catch(_){}};
+    r.readAsDataURL(f); };
+  window.anaAnalyser=function(id){var d=doss(id);if(!d)return;var e=ex(d);var pcs=pieces(d).filter(function(pc){return pstate(d,pc.k).data;});
+    d.analyse=d.analyse||{}; d.analyse.pstate=d.analyse.pstate||{}; d.analyse.open='analyse';
+    seed(d);
+    if(!pcs.length){ d.analyse.done=true; try{save();}catch(_){}; if(typeof toast==='function')toast('Aucune pièce déposée — informations pré-remplies depuis la fiche. Déposez les pièces pour l’OCR.'); try{render();}catch(_){}; return; }
+    if(!has('espOcrRead')){ d.analyse.done=true; try{save();}catch(_){}; try{render();}catch(_){}; return; }
+    d.analyse.running=true; pcs.forEach(function(pc){d.analyse.pstate[pc.k]='run';}); try{save();}catch(_){}; try{render();}catch(_){};
+    var pending=pcs.length;
+    pcs.forEach(function(pc){
+      var st=pstate(d,pc.k);
+      try{
+        window.espOcrRead(st.data,function(text){
+          var parsed=(text&&has('espParseDoc'))?window.espParseDoc(text):null;
+          d.analyse.pstate[pc.k]=(text&&text.length>10)?'ok':(navigator.onLine?'warn':'off');
+          if(parsed)assign(e,pc.k,parsed);
+          pending--; if(pending<=0){d.analyse.running=false;d.analyse.done=true;try{save();}catch(_){}; if(typeof toast==='function')toast('Analyse terminée — vérifiez les informations extraites.'); try{render();}catch(_){}; }
+        });
+      }catch(err){ d.analyse.pstate[pc.k]='warn'; pending--; if(pending<=0){d.analyse.running=false;d.analyse.done=true;try{save();}catch(_){}; try{render();}catch(_){}; } }
+    });
+  };
+  window.anaExtract=function(id,fk,val){var d=doss(id);if(!d)return;ex(d)[fk]=val;try{save();}catch(_){}; };
+  window.anaValider=function(id){var d=doss(id);if(!d)return;if(!reqFilled(d)){ if(typeof toast==='function')toast('Complétez au moins : Nom, date & lieu de naissance, nationalité, adresse.'); return; } d.analyse=d.analyse||{}; d.analyse.valide=true; d.analyse.open='gen'; try{save();}catch(_){}; if(typeof toast==='function')toast('Informations validées — génération débloquée.'); try{render();}catch(_){}; };
+  window.anaDevalider=function(id){var d=doss(id);if(!d||!d.analyse)return;d.analyse.valide=false;d.analyse.open='fiche';try{save();}catch(_){}; try{render();}catch(_){}; };
+  window.anaGen=function(id,k){var d=doss(id);if(!d)return;if(!(d.analyse&&d.analyse.valide)){ if(typeof toast==='function')toast('Validez d’abord les informations.'); return; } if(has('espDocGen'))espDocGen(id,k); };
+
+  function band(d,key,num,title,sub,stateCls,ico,body){
+    var open=(d.analyse&&d.analyse.open)||curBand(anaState(d));
+    var isOpen=(open===key);
+    var st=stateCls;
+    var stTxt=st==='done'?(CK+' terminé'):st==='cur'?'en cours':(LK+' verrouillé');
+    return '<div class="ana-band '+st+(isOpen?' open':'')+'"><button class="ana-head" onclick="anaOpen(\''+d.id+'\',\''+key+'\')">'
+      +'<span class="ana-num">'+(st==='done'?CK:num)+'</span>'
+      +'<span class="ana-tit"><b>'+title+'</b><small>'+sub+'</small></span>'
+      +'<span class="ana-st">'+stTxt+'</span></button>'
+      +(isOpen?('<div class="ana-body">'+body+'</div>'):'')+'</div>';
+  }
+
+  window.anaCard=function(d){
+    if(!d)return '';
+    var s=anaState(d); var cur=curBand(s);
+    /* Band 1 — Pièces */
+    var pcRows=pieces(d).map(function(pc){var st=pstate(d,pc.k);
+      return '<div class="ana-row"><span class="ana-ic">'+(st.data?CK:'')+'</span><span class="ana-n"><b>'+E(pc.l)+'</b>'+(st.nom?('<small>'+E(st.nom)+'</small>'):'<small>Aucun fichier</small>')+'</span>'
+        +'<label class="ana-b" style="cursor:pointer">＋ Déposer<input type="file" accept="image/*,application/pdf" style="display:none" onchange="anaUpload(\''+d.id+'\',\''+pc.k+'\',this)"></label></div>';
+    }).join('');
+    var b1=band(d,'pieces','1','Pièces reçues',s.np+' / '+s.tot+' déposée(s)', s.done1?'done':(cur==='pieces'?'cur':'lock'), '', '<div class="ana-list">'+pcRows+'</div>');
+    /* Band 2 — Analyse */
+    var pst=(d.analyse&&d.analyse.pstate)||{};
+    var anaRows=pieces(d).filter(function(pc){return pstate(d,pc.k).data;}).map(function(pc){
+      var s2=pst[pc.k];var lab=s2==='ok'?(CK+' analysée'):s2==='run'?'analyse…':s2==='off'?'hors-ligne — OCR indisponible':s2==='warn'?'peu de texte lu':'en attente';
+      return '<div class="ana-row"><span class="ana-ic">'+(s2==='ok'?CK:'')+'</span><span class="ana-n"><b>'+E(pc.l)+'</b></span><span class="ana-mono">'+lab+'</span></div>';
+    }).join('')||'<div class="ana-empty">Déposez des pièces à l’étape 1 pour lancer l’OCR.</div>';
+    var onl=navigator.onLine;
+    var b2body='<div class="ana-list">'+anaRows+'</div>'
+      +'<div class="ana-foot"><span class="ana-hint">'+(onl?'L’OCR lit les pièces et pré-remplit la fiche. Vérifiez ensuite les valeurs.':'Hors-ligne : l’OCR des scans est indisponible — la fiche est pré-remplie depuis les informations connues, à compléter à la main.')+'</span>'
+      +'<button class="ana-b ana-go" onclick="anaAnalyser(\''+d.id+'\')">'+(d.analyse&&d.analyse.running?'Analyse en cours…':(s.done2?'Relancer l’analyse (OCR)':'Analyser les pièces (OCR)'))+'</button></div>';
+    var b2=band(d,'analyse','2','Analyse & extraction', onl?'OCR disponible':'hors-ligne', s.done2?'done':(cur==='analyse'?'cur':'lock'), '', b2body);
+    /* Band 3 — Fiche */
+    var e=ex(d);
+    var fgrid=(typeof EXTRACT_FIELDS!=='undefined'?EXTRACT_FIELDS:[]).map(function(ff){
+      var val=e[ff.k]||''; var req=REQ.indexOf(ff.k)>=0; var miss=req&&!(''+val).trim();
+      if(ff.type==='bool')return '<label class="ana-f ana-f-bool"><span class="k">'+E(ff.l)+'</span><input type="checkbox" '+(val?'checked':'')+' onchange="anaExtract(\''+d.id+'\',\''+ff.k+'\',this.checked)"></label>';
+      return '<label class="ana-f'+(miss?' miss':'')+'"><span class="k">'+E(ff.l)+(req?' *':'')+'</span><input value="'+E(val)+'" oninput="anaExtract(\''+d.id+'\',\''+ff.k+'\',this.value)" placeholder="—"></label>';
+    }).join('');
+    var b3body='<div class="ana-note">Ces informations remplissent automatiquement les statuts et tous les actes. Champs requis marqués *.</div>'
+      +'<div class="ana-fgrid">'+fgrid+'</div>'
+      +'<div class="ana-foot"><span class="ana-hint">'+(s.reqOk?'Informations complètes.':'Complétez les champs requis (*) pour valider.')+'</span>'
+      +(s.done3?'<button class="ana-b" onclick="anaDevalider(\''+d.id+'\')">Modifier les informations</button>':'<button class="ana-b ana-go" onclick="anaValider(\''+d.id+'\')">Valider les informations</button>')+'</div>';
+    var b3=band(d,'fiche','3','Fiche du dossier', s.done3?'validée':'à valider', s.done3?'done':(cur==='fiche'?'cur':'lock'), '', b3body);
+    /* Band 4 — Génération */
+    var docs=(typeof DOC_JUR!=='undefined'?DOC_JUR:[]);
+    var genRows=docs.map(function(dc){var ds=(typeof espDocState==='function')?espDocState(d,dc.k):{genere:false};
+      return '<div class="ana-row"><span class="ana-ic">'+(ds.genere?CK:'')+'</span><span class="ana-n"><b>'+E(dc.l)+'</b><small>'+(ds.genere?'Généré':'À générer')+'</small></span>'
+        +(ds.genere&&has('espDocVoir')?'<button class="ana-b" onclick="espDocVoir(\''+d.id+'\',\''+dc.k+'\')">Voir</button>':'')
+        +'<button class="ana-b '+(s.done3?'ana-go':'')+'" '+(s.done3?'':'disabled')+' onclick="anaGen(\''+d.id+'\',\''+dc.k+'\')">'+(ds.genere?'Régénérer':'Générer')+'</button></div>';
+    }).join('');
+    var b4body=s.done3?('<div class="ana-list">'+genRows+'</div>'):('<div class="ana-empty">'+LK+' Verrouillé — validez la fiche (étape 3) pour générer les documents.</div>');
+    var b4=band(d,'gen','4','Génération des documents', s.done3?'débloqué':'verrouillé', s.done3?'cur':'lock', '', b4body);
+
+    var s2=anaState(d); var nDone=[s2.done1,s2.done2,s2.done3].filter(Boolean).length;
+    return '<div class="card ana-card tr-doccard"><div class="card-h"><h2>Analyse &amp; auto-remplissage</h2>'
+      +'<span class="ana-prog">'+nDone+' / 4 · pièces → documents</span></div>'
+      +'<div class="card-b ana-pipe">'+b1+b2+b3+b4+'</div></div>';
+  };
+
+  /* injection dans la vue dossier (route vers l'étape Documents via la classe tr-doccard) */
+  if(typeof window.espPanel==='function'){ var _p=window.espPanel;
+    window.espPanel=function(d,list,id){ var h=_p(d,list,id); try{
+      if(d&&h&&h.indexOf('esp-main')>=0 && h.indexOf('ana-card')<0){
+        var c=window.anaCard(d)||'';
+        if(c){ if(h.indexOf('esp-main esp-grid')>=0)h=h.replace('<div class="esp-main esp-grid">','<div class="esp-main esp-grid">'+c); else h=h.replace('<div class="esp-main">','<div class="esp-main">'+c); }
+      }
+    }catch(e){} return h; }; }
+
+  try{ if(!document.getElementById('ana-css')){var st=document.createElement('style');st.id='ana-css';
+    st.textContent=[
+      '.ana-card .ana-prog{margin-left:auto;font-family:ui-monospace,monospace;font-size:11.5px;color:#8b93a1}',
+      '.ana-pipe{display:flex;flex-direction:column;gap:0;padding:0!important}',
+      '.ana-band{border-top:1px solid #23262d}.ana-band:first-child{border-top:0}',
+      '.ana-head{display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:none;border:0;color:inherit;cursor:pointer;padding:14px 16px;font:inherit}',
+      '.ana-band.lock .ana-head{cursor:not-allowed}',
+      '.ana-num{width:29px;height:29px;flex:none;border-radius:8px;display:grid;place-items:center;font-family:ui-monospace,monospace;font-size:12.5px;font-weight:600;border:1.5px solid #313640;color:#8b93a1;background:#0d0e11}',
+      '.ana-band.done .ana-num{background:#fff;border-color:#fff;color:#0a0b0d}',
+      '.ana-band.cur .ana-num{border-color:#fff;color:#fff}',
+      '.ana-tit{flex:1;min-width:0}.ana-tit b{display:block;font-size:14px;font-weight:700}',
+      '.ana-band.lock .ana-tit b{color:#5a616c}',
+      '.ana-tit small{font-size:11px;color:#6b7280;font-family:ui-monospace,monospace}',
+      '.ana-st{flex:none;font-size:11.5px;font-family:ui-monospace,monospace;color:#8b93a1;display:inline-flex;align-items:center;gap:6px}',
+      '.ana-body{padding:2px 16px 18px}',
+      '.ana-list{display:flex;flex-direction:column;gap:8px}',
+      '.ana-row{display:flex;align-items:center;gap:11px;padding:10px 12px;border:1px solid #2a2e37;border-radius:9px;background:#0d0e11}',
+      '.ana-ic{width:22px;height:22px;flex:none;border-radius:6px;display:grid;place-items:center;color:#0a0b0d;background:transparent}',
+      '.ana-row .ana-ic:not(:empty){background:#fff}',
+      '.ana-n{flex:1;min-width:0}.ana-n b{display:block;font-size:13px;font-weight:600}.ana-n small{font-size:11px;color:#6b7280}',
+      '.ana-mono{font-family:ui-monospace,monospace;font-size:11.5px;color:#8b93a1;white-space:nowrap}',
+      '.ana-b{display:inline-flex;align-items:center;gap:6px;border:1px solid #313640;background:transparent;color:#aab2c0;border-radius:8px;padding:8px 13px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}',
+      '.ana-b:hover{color:#f4f6fa;border-color:#434a56}',
+      '.ana-go{background:#fff;border-color:#fff;color:#0a0b0d}.ana-go:hover{background:#e9ecf1;color:#0a0b0d}',
+      '.ana-b[disabled]{opacity:.4;cursor:not-allowed}',
+      '.ana-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:12px}',
+      '.ana-hint{font-size:12px;color:#8b93a1}',
+      '.ana-note{font-size:12px;color:#8b93a1;margin:0 0 12px;line-height:1.5}',
+      '.ana-empty{font-size:12.5px;color:#8b93a1;background:#0d0e11;border:1px dashed #2a2e37;border-radius:9px;padding:14px;display:flex;align-items:center;gap:9px}',
+      '.ana-fgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}',
+      '.ana-f{display:flex;flex-direction:column;gap:4px}',
+      '.ana-f .k{font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;font-family:ui-monospace,monospace}',
+      '.ana-f input{background:#0d0e11;border:1px solid #2a2e37;border-radius:8px;color:#f4f6fa;font:inherit;font-size:13px;padding:9px 11px}',
+      '.ana-f input:focus{outline:none;border-color:#434a56}',
+      '.ana-f.miss input{border-color:#5a4a2a}',
+      '.ana-f-bool{flex-direction:row;align-items:center;justify-content:space-between;border:1px solid #2a2e37;border-radius:8px;padding:9px 11px;background:#0d0e11}',
+      '@media(max-width:640px){.ana-fgrid{grid-template-columns:1fr}}'
+    ].join('');document.head.appendChild(st);} }catch(e){}
+})();
+</script>
 </body>
 </html>
