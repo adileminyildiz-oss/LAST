@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=371;
+var LAST_VER=372;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -19577,10 +19577,24 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     }
     save();render();if(has('toast'))toast('Informations du client chargées dans le document');
   };
-  /* injection du sélecteur dans le volet de saisie d'Éditions */
+  /* Sélection d'une société/client à la CRÉATION du document (pré-remplissage automatique). */
+  window.edSetClient=function(id){window.__edClientSel=id||'';render();};
+  try{ var _eln2=window.edLibNew; if(typeof _eln2==='function'){ window.edLibNew=function(k,forme){ var r=_eln2.apply(this,arguments);
+    try{ if(window.__edClientSel&&clientById(window.__edClientSel)&&typeof clientFillEdition==='function'){ clientFillEdition(window.__edClientSel); } }catch(e){}
+    return r; }; } }catch(e){}
+  /* injection des sélecteurs (création + volet de saisie) dans Éditions */
   try{ var _pe=window.pageEditions; if(typeof _pe==='function'){ window.pageEditions=function(){ var h=_pe.apply(this,arguments);
-    try{ if(typeof h==='string' && h.indexOf('ed2-form-t')>-1 && h.indexOf('cli-fill')<0){
-      var cls=(DB.clients||[]); if(cls.length){
+    try{ if(typeof h==='string'){
+      var cls=(DB.clients||[]);
+      /* a) écran de création : sélecteur en tête, au-dessus des modèles */
+      if(cls.length && h.indexOf('ed2-create')>-1 && h.indexOf('ed-clipick')<0){
+        var sc=window.__edClientSel||'';
+        var o1='<option value="">— Aucune (document vierge) —</option>'+cls.map(function(c){var t=cliIsPart(c)?'Particulier':(c.forme||'Entreprise');return '<option value="'+c.id+'"'+(sc===c.id?' selected':'')+'>'+E(cliName(c))+' — '+E(t)+'</option>';}).join('');
+        var pick='<div class="ed-clipick"><span class="ed-clipick-l">Société / client pour ce document</span><select class="ed2-in" onchange="edSetClient(this.value)">'+o1+'</select><span class="ed-clipick-hint">'+(sc&&clientById(sc)?('✓ Le document créé sera pré-rempli avec « '+E(cliName(clientById(sc)))+' ».'):'Choisissez une fiche : le document créé sera pré-rempli automatiquement.')+'</span></div>';
+        h=h.replace('<div class="ed2-create">',pick+'<div class="ed2-create">');
+      }
+      /* b) volet de saisie : sélecteur « Pré-remplir » */
+      if(h.indexOf('ed2-form-t')>-1 && h.indexOf('cli-fill')<0 && cls.length){
         var opts='<option value="">— Charger depuis un client —</option>'+cls.map(function(c){return '<option value="'+c.id+'">'+E(cliName(c))+'</option>';}).join('');
         var sel='<div class="cli-fill"><span class="cli-fill-l">Pré-remplir</span><select class="ed2-in" onchange="clientFillEdition(this.value)">'+opts+'</select></div>';
         h=h.replace('<div class="ed2-form-t">Saisie des informations</div>','<div class="ed2-form-t">Saisie des informations</div>'+sel);
@@ -19731,7 +19745,12 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.cmn-ok:hover{background:#e6e9ee}',
     '.cmn-no{background:#0d0e11;color:#c9ccd3}',
     '.cmn-no:hover{background:#181b21;border-color:#3a414d}',
-    '@media(max-width:860px){.cli-wrap{grid-template-columns:1fr}.cli-side{position:static}.cli-grid{grid-template-columns:1fr}}'
+    '.ed-clipick{max-width:1000px;margin:0 auto 18px;display:flex;flex-direction:column;gap:6px;background:#0e0f13;border:1px solid #23262d;border-radius:12px;padding:14px 16px}',
+    '.ed-clipick-l{font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.05em;text-transform:uppercase;color:#8a8a92}',
+    '.ed-clipick select{background:#0a0b0d;border:1px solid #2a2e37;border-radius:8px;padding:10px 11px;color:#f4f6fa;font:13px "Hanken Grotesk",system-ui,sans-serif;max-width:420px}',
+    '.ed-clipick select:focus{outline:none;border-color:#5a616c}',
+    '.ed-clipick-hint{font:12px/1.4 "Hanken Grotesk",system-ui,sans-serif;color:#6b7280}',
+    '@media(max-width:860px){.cli-wrap{grid-template-columns:1fr}.cli-side{position:static}.cli-grid{grid-template-columns:1fr}.ed-clipick select{max-width:none}}'
   ].join('');document.head.appendChild(st);} }catch(e){}
 
   try{ if(typeof state!=='undefined'&&state.page==='clients'&&has('render'))render(); }catch(e){}
