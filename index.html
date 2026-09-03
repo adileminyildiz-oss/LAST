@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=372;
+var LAST_VER=373;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -19551,10 +19551,10 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       var pnom=((c.prenom?c.prenom+' ':'')+(c.nom||'')).trim();
       var padr=[c.adresse,[c.cp,c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
       S('denomination',pnom);S('president',pnom);S('representant',pnom);S('mandant',pnom);S('clientrep',pnom);S('signataire',pnom);
-      S('civilite',c.civilite);S('nom',c.nom);S('prenom',c.prenom);
+      S('civilite',c.civilite);S('nom',pnom);S('prenom',c.prenom);
       S('naissance',c.dateNaissance);S('lieuNaissance',c.lieuNaissance);S('nationalite',c.nationalite);
       S('adresse',padr);S('clientadr',padr);S('cp',c.cp);S('ville',c.ville);
-      S('salnom',pnom);S('saladr',padr);S('salnat',c.nationalite);
+      S('salnom',pnom);S('saladr',padr);S('salnat',c.nationalite);S('debiteur',pnom);S('debadr',padr);
       S('benef',pnom);S('benefadr',padr);S('benefnat',c.nationalite);S('benefnaiss',c.dateNaissance);
       S('villesig',c.ville);S('villeSignature',c.ville);
       try{var so1=DB.societe||{};S('cabinet',so1.raison||so1.nom);S('cabinetadr',[so1.adresse,[so1.cp,so1.ville].filter(Boolean).join(' ')].filter(Boolean).join(', '));}catch(e){}
@@ -19579,6 +19579,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   };
   /* Sélection d'une société/client à la CRÉATION du document (pré-remplissage automatique). */
   window.edSetClient=function(id){window.__edClientSel=id||'';render();};
+  window.edSetClientKind=function(k){window.__edClientKind=(k==='particulier')?'particulier':'entreprise';var sc=window.__edClientSel;if(sc){var c=clientById(sc);if(c&&(cliIsPart(c)?'particulier':'entreprise')!==window.__edClientKind)window.__edClientSel='';}render();};
   try{ var _eln2=window.edLibNew; if(typeof _eln2==='function'){ window.edLibNew=function(k,forme){ var r=_eln2.apply(this,arguments);
     try{ if(window.__edClientSel&&clientById(window.__edClientSel)&&typeof clientFillEdition==='function'){ clientFillEdition(window.__edClientSel); } }catch(e){}
     return r; }; } }catch(e){}
@@ -19588,9 +19589,16 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       var cls=(DB.clients||[]);
       /* a) écran de création : sélecteur en tête, au-dessus des modèles */
       if(cls.length && h.indexOf('ed2-create')>-1 && h.indexOf('ed-clipick')<0){
+        var kind=(window.__edClientKind==='particulier')?'particulier':'entreprise';
         var sc=window.__edClientSel||'';
-        var o1='<option value="">— Aucune (document vierge) —</option>'+cls.map(function(c){var t=cliIsPart(c)?'Particulier':(c.forme||'Entreprise');return '<option value="'+c.id+'"'+(sc===c.id?' selected':'')+'>'+E(cliName(c))+' — '+E(t)+'</option>';}).join('');
-        var pick='<div class="ed-clipick"><span class="ed-clipick-l">Société / client pour ce document</span><select class="ed2-in" onchange="edSetClient(this.value)">'+o1+'</select><span class="ed-clipick-hint">'+(sc&&clientById(sc)?('✓ Le document créé sera pré-rempli avec « '+E(cliName(clientById(sc)))+' ».'):'Choisissez une fiche : le document créé sera pré-rempli automatiquement.')+'</span></div>';
+        var kinds=cls.filter(function(c){return (cliIsPart(c)?'particulier':'entreprise')===kind;});
+        var seg='<div class="ed-clipick-seg"><button class="ed-cseg'+(kind==='entreprise'?' on':'')+'" onclick="edSetClientKind(\'entreprise\')">Société</button><button class="ed-cseg'+(kind==='particulier'?' on':'')+'" onclick="edSetClientKind(\'particulier\')">Particulier</button></div>';
+        var o1;
+        if(kinds.length){ o1='<option value="">— Aucun (document vierge) —</option>'+kinds.map(function(c){var t=cliIsPart(c)?'Particulier':(c.forme||'Entreprise');return '<option value="'+c.id+'"'+(sc===c.id?' selected':'')+'>'+E(cliName(c))+' — '+E(t)+'</option>';}).join(''); }
+        else { o1='<option value="">— Aucun(e) '+(kind==='particulier'?'particulier':'société')+' enregistré(e) —</option>'; }
+        var selc=(sc&&clientById(sc))?clientById(sc):null;
+        var hint=selc?('✓ Le document créé sera pré-rempli avec « '+E(cliName(selc))+' ».'):('Choisissez '+(kind==='particulier'?'un particulier':'une société')+' : le document créé sera pré-rempli automatiquement.');
+        var pick='<div class="ed-clipick"><span class="ed-clipick-l">Remplir pour</span>'+seg+'<select class="ed2-in"'+(kinds.length?'':' disabled')+' onchange="edSetClient(this.value)">'+o1+'</select><span class="ed-clipick-hint">'+hint+'</span></div>';
         h=h.replace('<div class="ed2-create">',pick+'<div class="ed2-create">');
       }
       /* b) volet de saisie : sélecteur « Pré-remplir » */
@@ -19750,6 +19758,11 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.ed-clipick select{background:#0a0b0d;border:1px solid #2a2e37;border-radius:8px;padding:10px 11px;color:#f4f6fa;font:13px "Hanken Grotesk",system-ui,sans-serif;max-width:420px}',
     '.ed-clipick select:focus{outline:none;border-color:#5a616c}',
     '.ed-clipick-hint{font:12px/1.4 "Hanken Grotesk",system-ui,sans-serif;color:#6b7280}',
+    '.ed-clipick-seg{display:inline-flex;border:1px solid #2a2e37;border-radius:8px;overflow:hidden;width:max-content}',
+    '.ed-cseg{border:0;padding:8px 16px;font:600 12px/1 "Hanken Grotesk",system-ui,sans-serif;cursor:pointer}',
+    'html body:not(#mq):not(#mq) .ed-clipick .ed-clipick-seg .ed-cseg{background:#0a0b0d !important;color:#8a8a92 !important}',
+    'html body:not(#mq):not(#mq) .ed-clipick .ed-clipick-seg .ed-cseg:hover{background:#181b21 !important;color:#c9ccd3 !important}',
+    'html body:not(#mq):not(#mq) .ed-clipick .ed-clipick-seg .ed-cseg.on{background:#f4f6fa !important;color:#0a0b0d !important}',
     '@media(max-width:860px){.cli-wrap{grid-template-columns:1fr}.cli-side{position:static}.cli-grid{grid-template-columns:1fr}.ed-clipick select{max-width:none}}'
   ].join('');document.head.appendChild(st);} }catch(e){}
 
