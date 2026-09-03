@@ -3026,7 +3026,13 @@ function lastGate(){
     +'#last-gate .lg-hint{font-size:11.5px;line-height:1.5;color:#5b5040;background:#f6efdf;border:1px solid #e7ddc4;border-radius:9px;padding:10px 12px;margin-bottom:12px}'
     +'#last-gate .lg-secret{font-family:ui-monospace,Menlo,monospace;font-size:13px;letter-spacing:1px;word-break:break-all;background:#2a2b31;color:#e9dcc0;border-radius:8px;padding:9px 11px;text-align:center;margin:8px 0}'
     +'#last-gate .lg-qr{display:block;margin:10px auto;width:172px;height:172px;background:#fff;border:1px solid #e2ddd2;border-radius:10px}'
-    +'#last-gate .lg-blob{width:100%;height:64px;font-family:ui-monospace,Menlo,monospace;font-size:10px;border:1px solid #e2ddd2;border-radius:8px;padding:8px;resize:none;box-sizing:border-box}';
+    +'#last-gate .lg-blob{width:100%;height:64px;font-family:ui-monospace,Menlo,monospace;font-size:10px;border:1px solid #e2ddd2;border-radius:8px;padding:8px;resize:none;box-sizing:border-box}'
+    +'#last-gate .lg-setup{margin-top:14px;border-top:1px solid #ece6d8;padding-top:12px}'
+    +'#last-gate .lg-setup>summary{cursor:pointer;font-size:11.5px;font-weight:600;color:#8a7d69;list-style:none;user-select:none}'
+    +'#last-gate .lg-setup>summary::-webkit-details-marker{display:none}'
+    +'#last-gate .lg-setup>summary::before{content:"＋ ";color:#b08a3c;font-weight:700}'
+    +'#last-gate .lg-setup[open]>summary::before{content:"− "}'
+    +'#last-gate .lg-setup[open]>summary{margin-bottom:10px}';
     document.head.appendChild(st);}
   if(!document.getElementById('last-gate')){var g=document.createElement('div');g.id='last-gate';g.innerHTML='<div class="lg-shell"><div class="lg-left"><div class="lg-left-top"><span class="brand-logo" aria-label="Mar’q"></span></div><div class="lg-left-mid"></div><div class="lg-left-bot"><div class="lg-headline">Pilotez toutes vos formalités<br><b>depuis une seule plateforme.</b></div><div class="lg-lead">Création, modification, dépôt — AEM CONSEIL centralise vos démarches juridiques et fiscales au même endroit.</div><div class="lg-dots"><i class="on"></i><i></i><i></i></div></div></div><div class="lg-right"><div class="lg-right-top"><span class="brand-logo lg-rlogo" aria-label="Mar’q"></span><span class="lg-reserved">Accès réservé · AEM CONSEIL</span></div><div class="lg-right-mid"><div class="lg-welcome">Bienvenue sur Mar’q</div><div class="lg-welcome-sub">Saisissez vos identifiants pour accéder à votre espace interne.</div><div class="lg-lock">🔒 Accès protégé — double authentification</div><div id="lg-body"></div></div><div class="lg-right-foot"><span>© 2026 Mar’q · AEM CONSEIL</span><span>Accès strictement personnel</span></div></div></div>';document.body.appendChild(g);}
   lastGateRender('pwd');
@@ -3042,12 +3048,19 @@ function lastGateRender(stage,data){
       +'<button class="btn btn-pri" type="submit" style="width:100%;justify-content:center;margin-top:12px">Continuer</button></form></div>';
     var i=document.getElementById('lg-pwd');if(i)i.focus();
   } else if(stage==='otp'){
+    var _u2='otpauth://totp/'+encodeURIComponent('Mar’q (AEM CONSEIL)')+':titulaire?secret='+(_authSecret||'')+'&issuer='+encodeURIComponent('Mar’q')+'&digits=6&period=30&algorithm=SHA1';
+    var _q2='https://api.qrserver.com/v1/create-qr-code/?size=172x172&data='+encodeURIComponent(_u2);
     b.innerHTML='<form class="lg-form" onsubmit="return lastGateOtp(event)">'
       +'<div class="lg-step">Étape 2 / 2 · Code de sécurité</div>'
       +'<label>Code à 6 chiffres (votre application d\'authentification)</label>'
       +'<input id="lg-otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" autofocus placeholder="000000">'
       +'<div id="lg-err" class="lg-err"></div>'
       +'<button class="btn btn-pri" type="submit" style="width:100%;justify-content:center;margin-top:12px">Se connecter</button>'
+      +'<details class="lg-setup"><summary>Première connexion ? Configurer Google Authenticator</summary>'
+      +'<div class="lg-hint">Ouvrez <b>Google Authenticator</b> → <b>＋</b> → « Scanner un code QR », puis visez l\'image ci-dessous. Ou saisissez la clé manuellement (type : basé sur le temps).</div>'
+      +'<img class="lg-qr" alt="QR code d\'authentification" src="'+_q2+'" onerror="this.style.display=\'none\'">'
+      +'<label>Clé (si le scan est impossible)</label><div class="lg-secret">'+(_authSecret||'').replace(/(.{4})/g,'$1 ').trim()+'</div>'
+      +'</details>'
       +'<div style="text-align:center"><button type="button" class="lg-back" onclick="lastGateRender(\'pwd\')">← Retour</button></div></form>';
     var i2=document.getElementById('lg-otp');if(i2)i2.focus();
   } else if(stage==='enroll'){
@@ -3088,7 +3101,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=354;
+var LAST_VER=355;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
