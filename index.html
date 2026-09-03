@@ -1285,7 +1285,7 @@ function mailSrcdoc(d){var SO='<'+'style>',SC='</'+'style>';
     +'.it .k{font:700 9px/1 ui-sans-serif,Arial;text-transform:uppercase;letter-spacing:.5px;color:#f0a0b2}'
     +'.it .val{font-size:12px;margin-top:3px;color:#eef0f4;word-break:break-word}.it a{color:#5ab0ff;text-decoration:none}'
     +'.dwrap{padding:0 2px}.dlbl{font:700 9px/1 ui-sans-serif,Arial;text-transform:uppercase;letter-spacing:.5px;color:#f0a0b2;margin:0 0 5px}'
-    +'.dem{border-left:3px solid #e0a6b4;background:#fdf3f5;padding:9px 11px;border-radius:0 8px 8px 0;white-space:pre-wrap;font-size:11.5px;line-height:1.5}'
+    +'.dem{border-left:3px solid #e0a6b4;background:#fdf3f5;color:#2a2226;padding:9px 11px;border-radius:0 8px 8px 0;white-space:pre-wrap;font-size:11.5px;line-height:1.5}'
     +'.notif{display:flex;align-items:center;gap:7px;margin:0 0 11px;padding:8px 11px;background:#eaf5ec;border:1px solid #bfe0c7;border-radius:9px;color:#2f7d47;font-weight:600;font-size:11.5px}'
     +'.notif .dot{width:8px;height:8px;border-radius:50%;background:#2f7d47;box-shadow:0 0 0 4px rgba(47,125,71,.15)}'
     +'.msg{margin:0 0 9px;border:1px solid #efe0e4;border-radius:11px;background:#fff;overflow:hidden;box-shadow:0 2px 8px rgba(90,40,55,.05)}'
@@ -1296,7 +1296,7 @@ function mailSrcdoc(d){var SO='<'+'style>',SC='</'+'style>';
     +'.msg .av-s{width:23px;height:23px;border-radius:50%;background:linear-gradient(135deg,#be123c,#881337);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:9.5px}'
     +'.msg .mh b,.msg summary b{color:#241f1b}.msg .dt{color:#8b8288;margin-left:2px}.msg .badge{margin-left:auto;font-size:10px;font-weight:700;color:#9f1239;background:#fff1f4;border:1px solid #f3d7de;border-radius:20px;padding:2px 8px}'
     +'.msg .sub{margin-left:auto;font-size:10.5px;color:#a35267;font-weight:400}'
-    +'.msg .mb{padding:10px 12px;white-space:pre-wrap;word-break:break-word;font-size:11.5px;line-height:1.5}'
+    +'.msg .mb{padding:10px 12px;white-space:pre-wrap;word-break:break-word;font-size:11.5px;line-height:1.5;color:#241f1b}'
     +'a{color:#9f1239}';
   var head='<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+SO+css+SC+'</head><body>';
   /* Un seul message → carte « fiche » soignée */
@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=358;
+var LAST_VER=359;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -18631,6 +18631,11 @@ document.addEventListener('scroll',schedule,true);
 try{var mo=new MutationObserver(function(){schedule();});mo.observe(document.body,{childList:true,subtree:true});}catch(e){}
 setInterval(sync,800);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(sync,200);});else setTimeout(sync,200);
+})();</script>
+<script id="dem-view-trim">(function(){
+/* Vue d une demande : retrait des 3 blocs du bas (Traitement / Étapes de traitement / Informations transmises) — à la demande. */
+function stripBlock(h,cls){var i=h.indexOf('<div class="'+cls);if(i<0)return h;var re=/<div\b|<\/div>/g;re.lastIndex=i;var depth=0,m;while((m=re.exec(h))){if(m[0]==='</div>'){depth--;if(depth===0)return h.slice(0,i)+h.slice(re.lastIndex);}else depth++;}return h;}
+if(typeof window.demVueDetail==='function'){var _dv=window.demVueDetail;window.demVueDetail=function(id){var h=_dv(id);try{h=stripBlock(h,'dem-view-cards');}catch(e){}return h;};}
 })();</script>
 </body>
 </html>

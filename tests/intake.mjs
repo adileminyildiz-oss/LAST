@@ -75,7 +75,7 @@ check('demande sans payload non enrichie', r.enrich3 === false);
 check('fiche : dénomination', /INNOV SAS/.test(r.fiche));
 check('fiche : associés', /Associé 1/.test(r.fiche) && /Durand/.test(r.fiche));
 check('fiche : n° dossier', /DOS-2026-123456/.test(r.fiche));
-check('détail affiche « Fiche prospect qualifiée »', /Fiche prospect qualifiée/.test(r.detail) && /INNOV SAS/.test(r.detail));
+check('détail : vue demande allégée (blocs client/traitement retirés)', !/dem-view-cards/.test(r.detail) && /Mail reçu/.test(r.detail));
 check('aucun pageerror', perr.length === 0);
 
 const ok = results.filter(x => x.ok).length, tot = results.length;
