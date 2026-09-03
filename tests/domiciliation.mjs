@@ -33,8 +33,17 @@ const r=await page.evaluate(()=>{
   // carte + établir
   out.card=/dom-card/.test(window.domicilCard(d))&&/Établir le dossier de domiciliation/.test(window.domicilCard(d));
   window.domicilEtablir(d.id);out.done=!!(d.domicil&&d.domicil.done);
+  // Éditions : groupe Domiciliation + génération du contrat
+  try{ state.page='editions'; if(state.edOpenType!==undefined)state.edOpenType=''; render();
+    var ev=document.getElementById('view').innerHTML;
+    out.edGroup=/Domiciliation/.test(ev)&&/Contrat de domiciliation/.test(ev)&&/Attestation de domiciliation/.test(ev)&&/Déclaration de domiciliation/.test(ev);
+    edLibNew('contratdomicil');
+  }catch(e){out.edGroup='ERR:'+e;}
   return out;
 });
+await page.waitForTimeout(250);
+const r2=await page.evaluate(()=>({edContrat:/CONTRAT DE DOMICILIATION/.test(document.getElementById('view').innerHTML)}));
+r.edContrat=r2.edContrat;
 await browser.close();
 check('générateurs présents',r.hasFns);
 check('contrat de domiciliation généré (parties, locaux, agrément, articles)',r.contrat);
@@ -44,6 +53,8 @@ check('type « domicile » → déclaration au domicile (pas d’attestation soc
 check('documents enregistrés dans le moteur (ESP_DOCS + DOC_MODELS)',r.registered);
 check('carte « Domiciliation du siège » + bouton établir',r.card);
 check('« Établir » marque le dossier',r.done);
+check('Éditions : groupe Domiciliation (contrat + attestation + déclaration)',r.edGroup===true);
+check('Éditions : ouverture du contrat de domiciliation',r.edContrat===true);
 check('aucun pageerror',perr.length===0);
 const ok=results.filter(x=>x.ok).length,tot=results.length;
 results.forEach(x=>{if(!x.ok)console.log('✗ '+x.n);});
