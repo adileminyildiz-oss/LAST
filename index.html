@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=375;
+var LAST_VER=376;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -6745,6 +6745,33 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
     if(!b)return '';
     return '<div class="card ana-card tr-fisccard"><div class="card-h"><h2>Outils fiscaux</h2><span class="sub" style="margin-left:auto">Analyse et régime fiscal du dossier</span></div><div class="card-b"><div class="tr-actions">'+b+'</div></div></div>';
   }
+  /* Étape 2 (Analyse) : bouton « Formulaire » pour compléter les informations du client
+     (ex. après un rendez-vous). Ouvre le formulaire pré-rempli avec les infos connues du dossier. */
+  window.trFormClient=function(id){
+    var d=(has('espDoss')?espDoss():((typeof DB!=='undefined'&&DB.dossiers)||[])).filter(function(x){return x.id===id;})[0]; if(!d)return;
+    var sd={}; try{ if(typeof window.stDossData==='function')sd=window.stDossData(d)||{}; }catch(e){}
+    var cli={}; try{ if(typeof clientById==='function')cli=clientById((d.clientIds||[])[0])||{}; }catch(e){}
+    var set=function(p,v){ if(v!=null&&v!==''&&typeof window.formSet==='function')window.formSet(p,v); };
+    try{ if(typeof window.formNature==='function'){ /* garde la nature en création par défaut */ } }catch(e){}
+    set('societe.denomination', sd.denom||cli.denomination||d.denomination||'');
+    set('societe.capital', sd.cap||cli.capital||'');
+    set('societe.objet', cli.objet||((cli.activites||[]).join(', '))||'');
+    set('siege.rue', sd.siege||sd.siegeComplet||cli.siege||'');
+    set('siege.cp', sd.cp||cli.cp||'');
+    set('siege.ville', sd.ville||cli.ville||'');
+    set('dates.rcsVille', sd.rcsVille||'');
+    set('contact.email', cli.email||d.clientEmail||'');
+    set('contact.tel', cli.tel||d.clientTel||'');
+    if(sd.president){ var pn=(''+sd.president).trim().split(/\s+/); if(pn.length){ set('direction.prenom', pn[0]); set('direction.nom', pn.slice(1).join(' ')); } }
+    if(typeof state!=='undefined')state.page='formulaire';
+    try{render();}catch(e){}
+    try{ if(typeof toast==='function')toast('Formulaire ouvert — complétez les informations du client, puis enregistrez.'); }catch(e){}
+  };
+  function formClientCard(d){
+    return '<div class="card ana-card tr-formclient"><div class="card-h"><h2>Informations client</h2><span class="sub" style="margin-left:auto">À compléter après le rendez-vous</span></div>'
+      +'<div class="card-b"><p class="tr-fc-p">Renseignez ou complétez les informations du client dans le formulaire (identité, dirigeant, société, profil).</p>'
+      +'<div class="tr-actions"><button class="tr-act tr-act-pri" onclick="trFormClient(\''+d.id+'\')">📝 Ouvrir le formulaire</button></div></div></div>';
+  }
   if(typeof window.espPanel==='function'){ var _p=window.espPanel;
     window.espPanel=function(d,list,id){ var h=_p(d,list,id); if(!d||!h||h.indexOf('<div class="esp-main"')<0) return h;
       try{
@@ -6757,7 +6784,7 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
         h=stripCard(h,'card pj-card');
         var pfCard=''; try{ if(typeof window.dossierPreflightCard==='function') pfCard=window.dossierPreflightCard(d)||''; }catch(e){}
         var rcCard=''; try{ if(typeof window.dossierRecapCard==='function') rcCard=window.dossierRecapCard(d)||''; }catch(e){}
-        h=h.replace('<div class="esp-main">','<div class="esp-main esp-grid">'+trHead(d)+fiscCard(d)+pfCard+rcCard+docCard);
+        h=h.replace('<div class="esp-main">','<div class="esp-main esp-grid">'+trHead(d)+formClientCard(d)+fiscCard(d)+pfCard+rcCard+docCard);
       }catch(e){}
       return h;
     };
@@ -14618,6 +14645,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +r2('Code postal',fI('dirx.cp'),'Ville',fI('dirx.ville'))
       +r2('Type de pièce d\'identité',fSel('dirx.typePiece',[['','—'],['Carte nationale d\'identité','Carte nationale d\'identité'],['Passeport','Passeport'],['Titre de séjour','Titre de séjour']],get('dirx.typePiece')),'N° de la pièce',fI('dirx.numPiece'))
       +r2('Nom du père',fI('dirx.pereNom'),'Nom de la mère',fI('dirx.mereNom')));
+    /* Profil du dirigeant — mode de vie & objectifs (alimente la recommandation en bas de page) */
+    var profil=grp('Profil du dirigeant — mode de vie & objectifs',
+      r2('Le dirigeant crée',fSel('profil.entourage',[['seul','Seul (société unipersonnelle)'],['plusieurs','À plusieurs (avec associés)']],get('profil.entourage')||'seul'),'Nombre d\'associés envisagés',fI('profil.nbAssocies','1'))
+      +r2('Faire entrer des investisseurs / lever des fonds',fSel('profil.investisseurs',[['non','Non'],['oui','Oui, ouverture du capital prévue']],get('profil.investisseurs')||'non'),'Nature de l\'activité',fSel('profil.activiteType',[['commerciale','Commerciale (achat-vente, négoce)'],['artisanale','Artisanale'],['liberale','Libérale / prestations intellectuelles'],['immobiliere','Immobilière — location civile'],['agricole','Agricole']],get('profil.activiteType')||'commerciale'))
+      +r2('Chiffre d\'affaires annuel prévisionnel (€)',fI('profil.caPrev','ex. 80000'),'Objectif principal du dirigeant',fSel('profil.objectif',[['remuneration','Se rémunérer dès maintenant'],['capitalisation','Capitaliser / réinvestir dans la société'],['transmission','Transmettre le patrimoine'],['patrimoine','Protéger son patrimoine personnel'],['investisseurs','Accueillir des investisseurs']],get('profil.objectif')||'remuneration'))
+      +r2('Mode de rémunération souhaité',fSel('profil.remun',[['salaire','Salaire régulier'],['dividendes','Plutôt des dividendes'],['mixte','Mixte (salaire + dividendes)']],get('profil.remun')||'mixte'),'Priorité protection sociale',fSel('profil.protection',[['forte','Forte — couverture maximale'],['moyenne','Moyenne — équilibrée'],['faible','Faible — optimiser les charges']],get('profil.protection')||'moyenne'))
+      +r2('Autre activité exercée (pluriactivité)',fSel('profil.autreActivite',[['aucune','Aucune — activité principale'],['salarie','Salarié par ailleurs'],['tns','Indépendant (TNS) par ailleurs'],['retraite','Retraité'],['demandeur','Demandeur d\'emploi'],['etudiant','Étudiant']],get('profil.autreActivite')||'aucune'),'Situation familiale',fSel('profil.famille',[['celibataire','Célibataire'],['marie','Marié(e)'],['pacse','Pacsé(e)'],['divorce','Divorcé(e)'],['veuf','Veuf(ve)']],get('profil.famille')||'celibataire'))
+      +r2('Régime matrimonial (si marié)',fSel('profil.matrimonial',[['','—'],['communaute','Communauté réduite aux acquêts'],['separation','Séparation de biens'],['universelle','Communauté universelle'],['participation','Participation aux acquêts']],get('profil.matrimonial')),'Personnes à charge',fI('profil.charge','0'))
+      +r2('Horizon du projet',fSel('profil.horizon',[['court','Court terme (< 3 ans)'],['moyen','Moyen terme (3 à 8 ans)'],['long','Long terme (> 8 ans)']],get('profil.horizon')||'moyen'),'Patrimoine personnel à protéger',fSel('profil.patrimoine',[['non','Non'],['oui','Oui — biens personnels importants']],get('profil.patrimoine')||'non'))
+      +r2('Flexibilité des statuts souhaitée',fSel('profil.flexibilite',[['standard','Standard — cadre légal simple'],['forte','Forte — statuts sur mesure, clauses spécifiques']],get('profil.flexibilite')||'standard'),'Tolérance au formalisme',fSel('profil.formalisme',[['souple','Souple — peu de formalités'],['cadre','Cadré — sécurité juridique']],get('profil.formalisme')||'souple'))
+      +'<div class="hint" style="margin-top:6px">Ces éléments alimentent la <b>recommandation fiscale &amp; juridique</b> en bas de page (forme de société, régime fiscal, statut social du dirigeant et clauses statutaires flexibles adaptées).</div>');
     /* Titres & montants */
     var titres=grp('Titres & montants',
       r2('Valeur nominale (€)',fI('titres.nominal','laisser vide = calculé'),'Nombre de parts / actions',fI('titres.nbTitres','laisser vide = calculé'))
@@ -14697,9 +14735,156 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<button class="btn'+(okAll?'':' is-disabled')+'" id="fi-save"'+dis+' onclick="formCreerDossier(false)">Enregistrer le dossier</button>'
       +'<button class="btn btn-pri'+(okAll?'':' is-disabled')+'" id="fi-save-doc"'+dis+' onclick="formCreerDossier(true)">Enregistrer &amp; ouvrir les documents</button>'
       +'</div></div></div></div>';
-    return '<div class="fi-wrap" oninput="formUpdateGate()" onchange="formUpdateGate()">'+resume+head+soc+dir+titres+dates+assoc+depot+ben+apports+conj+notes+contact+coherence+actions+'</div>';
+    /* Recommandation fiscale & juridique (en bas de page) — d'après le profil du dirigeant */
+    var recoBar='<div class="card fi-card fi-reco-card"><div class="card-b fi-reco-b">'
+      +'<div class="fi-reco-txt"><b>Recommandation fiscale &amp; juridique</b><div class="hint" style="margin-top:2px">D\'après le mode de vie et les objectifs du dirigeant : forme de société, régime fiscal, statut social et statuts flexibles adaptés. À présenter au client (ex. après un rendez-vous).</div></div>'
+      +'<div class="fi-reco-btns"><button class="btn btn-pri" onclick="formRecoOuvrir()">⚖️ Analyse fiscaliste</button></div>'
+      +'</div></div>';
+    return '<div class="fi-wrap" oninput="formUpdateGate()" onchange="formUpdateGate()">'+resume+head+soc+dir+profil+titres+dates+assoc+depot+ben+apports+conj+notes+contact+coherence+recoBar+actions+'</div>';
   }
   window.pageFormulaire=pageFormulaire;
+
+  /* ===== Recommandation fiscale & juridique d'après le profil du dirigeant =====
+     Lit les données du formulaire (mode de vie, objectifs) et recommande la forme
+     de société, le régime fiscal, le statut social et les clauses statutaires. */
+  function recoNum(v){v=parseFloat((''+(v==null?'':v)).replace(/[^\d.,-]/g,'').replace(',','.'));return isFinite(v)?v:0;}
+  function recoGet(path){ var o=FD(),ks=path.split('.'),c=o; for(var i=0;i<ks.length;i++){ if(c==null)return ''; c=c[ks[i]]; } return c==null?'':c; }
+  var FORME_LBL={SAS:'SAS',SASU:'SASU',SARL:'SARL',EURL:'EURL',SCI:'SCI',EI:'Entreprise individuelle'};
+  window.formReco=function(){
+    var P={
+      entourage:recoGet('profil.entourage')||'seul',
+      nbAssocies:recoNum(recoGet('profil.nbAssocies')),
+      investisseurs:recoGet('profil.investisseurs')||'non',
+      activiteType:recoGet('profil.activiteType')||'commerciale',
+      caPrev:recoNum(recoGet('profil.caPrev')),
+      objectif:recoGet('profil.objectif')||'remuneration',
+      remun:recoGet('profil.remun')||'mixte',
+      protection:recoGet('profil.protection')||'moyenne',
+      autreActivite:recoGet('profil.autreActivite')||'aucune',
+      famille:recoGet('profil.famille')||'celibataire',
+      matrimonial:recoGet('profil.matrimonial')||'',
+      charge:recoNum(recoGet('profil.charge')),
+      horizon:recoGet('profil.horizon')||'moyen',
+      patrimoine:recoGet('profil.patrimoine')||'non',
+      flexibilite:recoGet('profil.flexibilite')||'standard',
+      formalisme:recoGet('profil.formalisme')||'souple',
+      regimeChoisi:((recoGet('societe.regime')||'')+'').toUpperCase()
+    };
+    var seul=(P.entourage==='seul')||(P.nbAssocies<=1&&P.entourage!=='plusieurs');
+    var immo=(P.activiteType==='immobiliere');
+    var S={SAS:0,SASU:0,SARL:0,EURL:0,SCI:0,EI:0};
+    /* entourage */
+    if(seul){S.SASU+=2;S.EURL+=2;S.EI+=1;} else {S.SAS+=2;S.SARL+=2;}
+    /* investisseurs / flexibilité → SAS/SASU (liberté statutaire) */
+    if(P.investisseurs==='oui'||P.objectif==='investisseurs'){S.SAS+=3;S.SASU+=3;S.SARL-=2;S.EURL-=2;S.EI-=2;}
+    if(P.flexibilite==='forte'){S.SAS+=2;S.SASU+=2;S.SARL-=1;}
+    if(P.formalisme==='cadre'){S.SARL+=1;S.EURL+=1;}
+    /* protection sociale forte / salaire régulier → assimilé salarié (SAS/SASU) */
+    if(P.protection==='forte'||P.remun==='salaire'){S.SAS+=2;S.SASU+=2;}
+    /* charges faibles / dividendes → TNS (SARL majoritaire / EURL) */
+    if(P.protection==='faible'||P.remun==='dividendes'){S.SARL+=2;S.EURL+=2;}
+    /* immobilier locatif civil → SCI */
+    if(immo){S.SCI+=5; if(P.objectif==='transmission'||P.objectif==='patrimoine')S.SCI+=2; S.EI-=3;}
+    /* petit CA + rémunération immédiate → structures légères */
+    if(P.caPrev&&P.caPrev<40000){S.EI+=2;S.EURL+=1;S.SARL+=1;}
+    if(P.caPrev&&P.caPrev>=200000){S.SAS+=1;S.SARL+=1;S.EI-=1;}
+    /* patrimoine à protéger → responsabilité limitée */
+    if(P.patrimoine==='oui'){S.SAS+=1;S.SASU+=1;S.SARL+=1;S.EURL+=1;}
+    /* objectif capitalisation → sociétés à l'IS */
+    if(P.objectif==='capitalisation'){S.SAS+=1;S.SASU+=1;S.SARL+=1;}
+    /* activité libérale seul → souvent SASU/EURL */
+    if(P.activiteType==='liberale'&&seul){S.SASU+=1;S.EURL+=1;}
+    /* pluriactivité salarié → cohérent avec assimilé salarié */
+    if(P.autreActivite==='salarie'){S.SAS+=1;S.SASU+=1;}
+    /* choix forcé du régime IR → oriente IR-compatibles */
+    if(P.regimeChoisi==='IR'){S.EURL+=2;S.SCI+=1;S.EI+=1;S.SAS-=1;S.SASU-=1;}
+    if(P.regimeChoisi==='IS'){S.SAS+=1;S.SASU+=1;S.SARL+=1;}
+    /* meilleure forme */
+    var best=Object.keys(S).sort(function(a,b){return S[b]-S[a];})[0];
+    /* cohérence unipersonnel/pluripersonnel */
+    if(seul&&best==='SAS')best='SASU'; if(seul&&best==='SARL')best='EURL';
+    if(!seul&&best==='SASU')best='SAS'; if(!seul&&best==='EURL')best='SARL';
+    /* régime fiscal */
+    var regime,regimeWhy;
+    if(best==='SCI'){ regime=(P.objectif==='capitalisation')?'IS':'IR'; regimeWhy=(regime==='IS')?'SCI à l\'IS pour capitaliser — attention : option IRRÉVERSIBLE (perte du régime des plus-values des particuliers).':'SCI à l\'IR (transparence fiscale) — les résultats sont imposés chez les associés ; régime des plus-values des particuliers conservé.'; }
+    else if(best==='EI'){ regime='IR'; regimeWhy='Entreprise individuelle à l\'IR (option IS possible). Régime micro envisageable si le CA reste sous les seuils.'; }
+    else if(best==='EURL'){ regime=(P.regimeChoisi==='IS'||P.objectif==='capitalisation')?'IS':'IR'; regimeWhy=(regime==='IS')?'EURL avec option IS (révocable 5 ans puis irrévocable) — utile pour capitaliser et arbitrer rémunération/dividendes.':'EURL à l\'IR par défaut (transparence) — imposition directe chez l\'associé unique.'; }
+    else { regime=(P.regimeChoisi==='IR')?'IR':'IS'; regimeWhy=(regime==='IS')?(best+' à l\'IS — taux réduit 15 % jusqu\'à 42 500 € de bénéfice puis 25 % (si capital libéré et détenu à ≥ 75 % par des personnes physiques).'):(best+' avec option IR temporaire (5 ans max) — à réserver aux premières années déficitaires.'); }
+    /* statut social du dirigeant */
+    var social,socialWhy;
+    if(best==='SAS'||best==='SASU'){ social='Assimilé salarié'; socialWhy='Président de '+best+' → régime général (protection forte hors chômage). Charges élevées (~70-80 % du net) mais aucune cotisation sans rémunération : arbitrage rémunération/dividendes ouvert (PFU 30 % sur les dividendes).'; }
+    else if(best==='EURL'){ social='TNS (SSI)'; socialWhy='Gérant associé unique d\'EURL → travailleur non salarié. Cotisations plus faibles (~40-45 %) mais protection à compléter ; cotisations minimales dues même sans rémunération.'; }
+    else if(best==='SARL'){ social=(P.remun==='dividendes'||P.protection==='faible')?'TNS (gérance majoritaire conseillée)':'À arbitrer selon la majorité de gérance'; socialWhy='SARL : gérant MAJORITAIRE → TNS (charges réduites) ; gérant minoritaire/égalitaire → assimilé salarié. La répartition des parts du gérant détermine le statut.'; }
+    else if(best==='SCI'){ social='Non affilié (au titre de la gérance)'; socialWhy='Gérant de SCI : pas d\'affiliation sociale au titre de la gérance (sauf activité relevant d\'un régime social).'; }
+    else { social='TNS (SSI)'; socialWhy='Entrepreneur individuel → travailleur non salarié.'; }
+    /* statuts flexibles / clauses recommandées */
+    var statuts;
+    if(best==='SAS'||best==='SASU'){ statuts=['Liberté statutaire quasi-totale : organe de direction sur mesure (président, DG, comité).','Clauses d\'agrément, de préemption, d\'exclusion et d\'inaliénabilité ajustables.','Actions de préférence et outils d\'intéressement (BSA, BSPCE) pour accueillir des investisseurs.','Règles de majorité et de quorum librement fixées dans les statuts.']; }
+    else if(best==='SARL'||best==='EURL'){ statuts=['Cadre légal protecteur et sécurisé : gérance encadrée par la loi.','Cession de parts à des tiers soumise à agrément (majorité légale) — clause d\'agrément renforçable.','Majorités et quorums largement fixés par la loi (moins de rédaction, plus de sécurité).','Clause de continuation, d\'exclusion et de préemption possibles dans un cadre défini.']; }
+    else if(best==='SCI'){ statuts=['Objet civil : répartition des parts et pouvoirs du gérant ajustables.','Clause d\'agrément pour la cession de parts (protection de l\'actionnariat familial).','Démembrement des parts (usufruit/nue-propriété) pour préparer la transmission.','Option IR/IS à arbitrer (l\'IS est irréversible).']; }
+    else { statuts=['Pas de statuts (absence de personne morale).','Patrimoine personnel protégé depuis 2022 (patrimoine professionnel séparé de plein droit).','Régime micro-entreprise possible sous les seuils de CA ; passage en société ultérieur.']; }
+    /* raisons du choix de forme */
+    var why=[];
+    if(seul)why.push('Le dirigeant crée seul → forme unipersonnelle.'); else why.push('Création à plusieurs ('+(P.nbAssocies||'2')+' associés) → forme pluripersonnelle.');
+    if(P.investisseurs==='oui'||P.objectif==='investisseurs')why.push('Ouverture du capital / levée de fonds prévue → la SAS/SASU offre la plus grande souplesse (actions de préférence, pactes).');
+    if(P.flexibilite==='forte')why.push('Besoin de statuts sur mesure → liberté statutaire de la SAS/SASU.');
+    if(P.protection==='forte'||P.remun==='salaire')why.push('Priorité à la protection sociale / salaire régulier → dirigeant assimilé salarié (SAS/SASU).');
+    if(P.protection==='faible'||P.remun==='dividendes')why.push('Optimisation des charges / rémunération en dividendes → statut TNS (SARL majoritaire / EURL), cotisations plus faibles.');
+    if(immo)why.push('Activité immobilière de location civile → SCI (gestion et transmission d\'un patrimoine immobilier).');
+    if(P.objectif==='capitalisation')why.push('Objectif de capitalisation → société à l\'IS (taux réduit 15 %, réinvestissement).');
+    if(P.objectif==='transmission')why.push('Objectif de transmission → structure facilitant la donation de titres (SCI, démembrement).');
+    if(P.caPrev&&P.caPrev<40000)why.push('CA prévisionnel modéré → structure légère et peu coûteuse envisageable.');
+    /* vigilance */
+    var vig=[];
+    if(P.autreActivite==='salarie')vig.push('Pluriactivité (salarié par ailleurs) : cumul possible, cotisations coordonnées entre régimes — vérifier une éventuelle clause d\'exclusivité de l\'employeur.');
+    if(P.autreActivite==='retraite')vig.push('Cumul emploi-retraite : conditions et plafonds à vérifier selon le régime de retraite.');
+    if(P.autreActivite==='demandeur'||P.autreActivite==='etudiant')vig.push('Début d\'activité : l\'ACRE (exonération partielle de charges la 1ʳᵉ année) est probablement mobilisable.');
+    if((P.famille==='marie'||P.famille==='pacse')&&(P.matrimonial==='communaute'||P.matrimonial==='universelle'))vig.push('Régime de communauté : l\'accord du conjoint est requis pour l\'apport de biens communs ; le conjoint peut revendiquer la qualité d\'associé.');
+    if(immo&&/meubl|saisonni|airbnb/.test((recoGet('societe.objet')||'').toLowerCase()))vig.push('Location meublée en SCI : activité commerciale → risque d\'assujettissement d\'office à l\'IS. Envisager une SARL de famille.');
+    if(regime==='IS'&&(best==='SARL'||best==='EURL')&&social.indexOf('TNS')>=0)vig.push('Gérant majoritaire TNS à l\'IS : la fraction des dividendes > 10 % du capital est soumise aux cotisations sociales — un capital plus élevé réduit cette part.');
+    if(recoNum(recoGet('societe.capital'))>0&&recoNum(recoGet('societe.capital'))<100)vig.push('Capital social très faible : légal mais nuit à la crédibilité et au financement.');
+    vig.push('Recommandation automatisée à partir des règles usuelles (forme sociale, CGI, statut social, TVA). À confirmer selon la loi de finances en vigueur et la situation précise du client.');
+    var synthese=FORME_LBL[best]+' · '+regime+' · '+social;
+    return {best:best,forme:FORME_LBL[best],regime:regime,regimeWhy:regimeWhy,social:social,socialWhy:socialWhy,statuts:statuts,why:why,vigilance:vig,scores:S,synthese:synthese,seul:seul};
+  };
+  window.formRecoHTML=function(){
+    var r=window.formReco();
+    var li=function(a){return '<ul class="fr-ul">'+a.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>';};
+    return '<div class="fr-wrap">'
+      +'<div class="fr-verdict"><span class="fr-verdict-k">Forme recommandée</span><b class="fr-forme">'+esc(r.forme)+'</b>'
+      +'<span class="fr-synth">'+esc(r.synthese)+'</span></div>'
+      +'<div class="fr-grid">'
+      +'<div class="fr-card"><div class="fr-card-t">Pourquoi cette forme</div>'+li(r.why)+'</div>'
+      +'<div class="fr-card"><div class="fr-card-t">Régime fiscal recommandé — '+esc(r.regime)+'</div><p class="fr-p">'+esc(r.regimeWhy)+'</p></div>'
+      +'<div class="fr-card"><div class="fr-card-t">Statut social du dirigeant — '+esc(r.social)+'</div><p class="fr-p">'+esc(r.socialWhy)+'</p></div>'
+      +'<div class="fr-card"><div class="fr-card-t">Statuts flexibles &amp; clauses adaptées</div>'+li(r.statuts)+'</div>'
+      +'</div>'
+      +'<div class="fr-card fr-vig"><div class="fr-card-t">Points de vigilance</div>'+li(r.vigilance)+'</div>'
+      +'</div>';
+  };
+  window.formRecoOuvrir=function(){
+    if(typeof openModal!=='function')return;
+    openModal('⚖️ Analyse fiscaliste — recommandation d\'après le profil du dirigeant',window.formRecoHTML(),
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+  };
+  try{ if(!document.getElementById('fi-reco-css')){var _rst=document.createElement('style');_rst.id='fi-reco-css';
+    _rst.textContent=[
+      '.fi-reco-b{display:flex;align-items:center;gap:14px;flex-wrap:wrap}',
+      '.fi-reco-txt{flex:1;min-width:240px}',
+      '.fr-wrap{display:flex;flex-direction:column;gap:14px}',
+      '.fr-verdict{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 16px;border:1px solid #23262d;border-radius:12px;background:#111317}',
+      '.fr-verdict-k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8b93a1}',
+      '.fr-forme{font-size:22px;font-weight:800;color:#fff}',
+      '.fr-synth{margin-left:auto;font-family:ui-monospace,monospace;font-size:13px;color:#aab2c0}',
+      '.fr-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}',
+      '@media(max-width:760px){.fr-grid{grid-template-columns:1fr}}',
+      '.fr-card{border:1px solid #23262d;border-radius:12px;background:#0f1115;padding:12px 14px}',
+      '.fr-card-t{font-size:13px;font-weight:700;color:#e6e9ef;margin-bottom:8px}',
+      '.fr-p{font-size:13px;line-height:1.5;color:#c2c8d2;margin:0}',
+      '.fr-ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px}',
+      '.fr-ul li{font-size:13px;line-height:1.45;color:#c2c8d2}',
+      '.fr-vig{border-color:#3a3320;background:#16130c}.fr-vig .fr-card-t{color:#e0c489}'
+    ].join('');document.head.appendChild(_rst);} }catch(e){}
 
   /* Génération des documents = vérification (champs requis) + contrôle de cohérence STRICTS.
      Les documents ne sont PAS générés si le dossier est mal complété ou incohérent
@@ -19419,7 +19604,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   };
 
   /* Injection dans l'étape « Documents » du wizard */
-  if(need('espPanel')){ var _ep=window.espPanel; window.espPanel=function(d,list,sel){ var h=_ep.apply(this,arguments); try{ if(d&&(''+h).indexOf('dom-card')<0){ h+=window.domicilCard(d); } }catch(e){} return h; }; }
+  /* Carte « Domiciliation du siège » retirée du module Traitement (à la demande).
+     Les documents de domiciliation restent disponibles dans le module Éditions. */
 
   /* CSS */
   try{ if(!document.getElementById('dom-css')){ var st=document.createElement('style'); st.id='dom-css'; st.textContent=[
@@ -20057,6 +20243,26 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.fp-x{color:#e88 !important}',
     '.fp-empty{color:#8a8a92;font:13px "Hanken Grotesk",system-ui,sans-serif;padding:16px;text-align:center}'
   ].join(''); document.head.appendChild(st); } }catch(e){}
+})();
+</script>
+<script id="logo-home-mod">(function(){
+  /* Logo Mar'q = bouton : va au Traitement ; si déjà sur Traitement → revient à la page précédente. */
+  var hist=[];
+  function rec(){ try{ var p=(typeof state!=='undefined')?state.page:''; if(p&&hist[hist.length-1]!==p){ hist.push(p); if(hist.length>40)hist.shift(); } }catch(e){} }
+  window.logoClick=function(){
+    try{
+      if(typeof state==='undefined')return;
+      if(state.page!=='espace'){ if(typeof go==='function')go('espace'); else {state.page='espace';if(typeof render==='function')render();} return; }
+      /* déjà sur Traitement → revenir en arrière (dernière page ≠ Traitement) */
+      var prev='';
+      for(var i=hist.length-1;i>=0;i--){ if(hist[i]&&hist[i]!=='espace'){ prev=hist[i]; break; } }
+      if(prev){ if(typeof go==='function')go(prev); else {state.page=prev;if(typeof render==='function')render();} }
+      else { try{ if(window.history&&history.length>1)history.back(); }catch(e){} }
+    }catch(e){}
+  };
+  function wire(){ try{ var el=document.querySelector('#side .brand-logo')||document.querySelector('.brand-logo'); if(el&&!el.__logoWired){ el.__logoWired=1; el.style.cursor='pointer'; el.setAttribute('role','button'); el.setAttribute('tabindex','0'); el.title="Aller au Traitement — appuyer à nouveau pour revenir en arrière"; el.addEventListener('click',function(e){ e.preventDefault(); window.logoClick(); }); el.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); window.logoClick(); } }); } }catch(e){} }
+  try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var x=_r.apply(this,arguments); try{rec();}catch(e){} try{wire();}catch(e){} return x; }; } }catch(e){}
+  try{ if(document.readyState!=='loading')wire(); else document.addEventListener('DOMContentLoaded',wire); }catch(e){}
 })();
 </script>
 </body>
