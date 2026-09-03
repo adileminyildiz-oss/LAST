@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=360;
+var LAST_VER=361;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -6714,13 +6714,9 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
   }
   function extractCard(h,cls){ var i=h.indexOf('<div class="'+cls); if(i<0) return ''; var re=/<div\b|<\/div>/g; re.lastIndex=i; var depth=0,m; while((m=re.exec(h))){ if(m[0]==='</div>'){ depth--; if(depth===0) return h.slice(i,re.lastIndex); } else depth++; } return ''; }
   function progress(d){ try{
-    var ok=0,total=6;
-    if(has('piecesEtat')){var pi=piecesEtat(d); if(pi&&pi.t&&pi.ok)ok++;}
-    if(has('actesEtat')){var ac=actesEtat(d); if(ac&&ac.t&&ac.n===ac.t)ok++;}
-    if(has('cqEtat')){var cq=cqEtat(d); if(cq&&!cq.ko&&!cq.warn)ok++;}
-    if(has('sigEtat')){var sg=sigEtat(d); if(sg&&sg.total&&sg.tous)ok++;}
-    if(has('depose')&&depose(d))ok++;
-    if(has('clot')&&clot(d))ok++;
+    var W=['demande','documents','controle','annonce','recap','depot'],total=6,ok=0;
+    var w=(d&&d.wf&&typeof d.wf==='object')?d.wf:{};
+    for(var i=0;i<W.length;i++){ if(w[W[i]])ok++; }
     return {ok:ok,total:total,pct:Math.round(ok/total*100)};
   }catch(e){ return {ok:0,total:6,pct:0}; } }
   function nomD(d){ try{ var n=dossierClients(d); if(n) return n; }catch(e){} return (d&&(d.ref||d.numeroDossier))||'Dossier'; }
@@ -16179,10 +16175,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 })();
 </script>
 <script id="esp-task-tabs-mod">(function(){
-  /* Un module par tâche : la page Traitement d'un dossier est découpée en onglets
-     (Traitement · Contrôle · Demande · Documents · Annonce · Récap · Dépôt · Notes).
-     Réorganisation au niveau du DOM après rendu — n'altère aucune carte ni handler. */
-  var TABDEF=[['traitement','Traitement'],['controle','Contrôle'],['demande','Demande'],['documents','Documents'],['annonce','Annonce légale'],['recap','Récapitulatif'],['depot','Dépôt'],['notes','Notes']];
+  /* Module Traitement — parcours guidé « Piste B » : barre latérale verticale (6 étapes
+     verrouillées) + contenu de l'étape + validation. Réorganise au niveau du DOM après
+     rendu, sans altérer les cartes ni leurs handlers. */
+  var WF=[['demande','Demande'],['documents','Documents'],['controle','Contrôle'],['annonce','Annonce légale'],['recap','Récapitulatif'],['depot','Dépôt']];
+  var UTIL=[['traitement','Outils'],['notes','Notes']];
+  var CHECK='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>';
+  var LOCK='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+  var DOT='<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="7"/></svg>';
   function tabOf(el){
     var c=' '+(el.className||'')+' ';
     if(/\besp-mailcard\b/.test(c))return 'demande';
@@ -16194,47 +16194,99 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     try{var h=el.querySelector('h2');if(h&&/Notes internes/i.test(h.textContent))return 'notes';}catch(e){}
     return 'traitement';
   }
+  function curDossier(){ try{ if(typeof state==='undefined')return null; var id=state.espaceDossier; var d=(DB.dossiers||[]).filter(function(x){return x.id===id;})[0]; if(!d)d=(DB.dossiers||[]).filter(function(x){return !x.archived;})[0]; return d||null; }catch(e){return null;} }
+  function wfObj(d){ if(!d.wf||typeof d.wf!=='object')d.wf={}; return d.wf; }
+  function wfCur(d){ var w=wfObj(d); for(var i=0;i<WF.length;i++){ if(!w[WF[i][0]]) return i; } return WF.length; }
+  function wfState(d,i){ var w=wfObj(d); if(w[WF[i][0]])return 'done'; if(i===wfCur(d))return 'cur'; return 'lock'; }
+  function wfReach(d,i){ return i<=wfCur(d); }
+  function idxOf(key){ for(var i=0;i<WF.length;i++)if(WF[i][0]===key)return i; return -1; }
+  window.trwValider=function(id,key){ var d=(DB.dossiers||[]).filter(function(x){return x.id===id;})[0]; if(!d)return; var w=wfObj(d); var idx=idxOf(key); if(idx<0)return; for(var j=0;j<=idx;j++){ if(!w[WF[j][0]])w[WF[j][0]]=Date.now(); } var nx=WF[idx+1]; if(typeof state!=='undefined')state.espTab=nx?nx[0]:key; try{save();}catch(e){} try{render();}catch(e){} };
+  window.trwRevoquer=function(id,key){ var d=(DB.dossiers||[]).filter(function(x){return x.id===id;})[0]; if(!d||!d.wf)return; var idx=idxOf(key); if(idx<0)return; for(var j=idx;j<WF.length;j++){ delete d.wf[WF[j][0]]; } if(typeof state!=='undefined')state.espTab=key; try{save();}catch(e){} try{render();}catch(e){} };
+  window.trwGo=function(key){ var d=curDossier(); var idx=idxOf(key); if(d&&idx>=0&&!wfReach(d,idx)){ if(typeof toast==='function')toast('Validez d’abord l’étape en cours.'); return; } if(typeof state!=='undefined')state.espTab=key; try{render();}catch(e){} };
+  function footer(d,key,idx){
+    var done=!!wfObj(d)[key]; var isLast=idx===WF.length-1;
+    var hint='<span class="trw-hint">'+(done?'Étape validée — vous pouvez la modifier ou continuer.':'Validez cette étape pour débloquer la suivante.')+'</span>';
+    var btns='<span class="trw-btns">';
+    if(idx>0)btns+='<button class="trw-b" onclick="trwGo(\''+WF[idx-1][0]+'\')">Étape précédente</button>';
+    if(done){ btns+='<button class="trw-b" onclick="trwRevoquer(\''+d.id+'\',\''+key+'\')">Annuler la validation</button>'; if(!isLast)btns+='<button class="trw-b trw-go" onclick="trwGo(\''+WF[idx+1][0]+'\')">Étape suivante</button>'; }
+    else btns+='<button class="trw-b trw-go" onclick="trwValider(\''+d.id+'\',\''+key+'\')">'+(isLast?'Terminer le dossier':'Valider l’étape')+'</button>';
+    btns+='</span>';
+    var f=document.createElement('div'); f.className='trw-foot'; f.innerHTML=hint+btns; return f;
+  }
   function organize(){
-    var main=document.querySelector('.esp-main');if(!main)return;
+    var main=document.querySelector('.esp-main'); if(!main)return;
     if(main.getAttribute('data-tabbed')==='1')return;
     var head=main.querySelector(':scope > .tr-head');
     var cards=Array.prototype.filter.call(main.children,function(el){return el!==head&&el.nodeType===1;});
-    if(cards.length<2)return;
-    var groups={};cards.forEach(function(el){var t=tabOf(el);(groups[t]=groups[t]||[]).push(el);});
-    var order=TABDEF.filter(function(t){return groups[t[0]]&&groups[t[0]].length;});
-    if(order.length<2)return;
-    var active=(typeof state!=='undefined'&&state.espTab)||order[0][0];
-    if(!groups[active])active=order[0][0];
+    if(cards.length<1)return;
+    var groups={}; cards.forEach(function(el){var t=tabOf(el);(groups[t]=groups[t]||[]).push(el);});
+    var d=curDossier();
+    var curKey=(d&&wfCur(d)<WF.length)?WF[wfCur(d)][0]:WF[WF.length-1][0];
+    var active=(typeof state!=='undefined'&&state.espTab)||curKey;
+    var ai=idxOf(active);
+    if(d&&ai>=0&&!wfReach(d,ai))active=curKey;
+    var utilAvail=UTIL.filter(function(t){return groups[t[0]]&&groups[t[0]].length;});
+    if(idxOf(active)<0 && !utilAvail.some(function(t){return t[0]===active;}))active=curKey;
     main.classList.remove('esp-grid');
-    var bar=document.createElement('div');bar.className='esp-tabs';
-    bar.innerHTML=order.map(function(t){return '<button class="esp-tab'+(t[0]===active?' on':'')+'" data-tab="'+t[0]+'">'+t[1]+'<span class="esp-tab-n">'+groups[t[0]].length+'</span></button>';}).join('');
-    if(head&&head.nextSibling)main.insertBefore(bar,head.nextSibling);else main.insertBefore(bar,main.firstChild);
-    order.forEach(function(t){
-      var panel=document.createElement('div');panel.className='esp-tabpanel';panel.setAttribute('data-tab',t[0]);
-      if(t[0]!==active)panel.style.display='none';
-      groups[t[0]].forEach(function(el){panel.appendChild(el);});
-      main.appendChild(panel);
+    var rail=document.createElement('div'); rail.className='trw-rail'; var rh='';
+    WF.forEach(function(t,i){
+      var st=d?wfState(d,i):(i===0?'cur':'lock');
+      var num=(st==='done')?CHECK:(''+(i+1));
+      var ico=(st==='done')?CHECK:(st==='lock'?LOCK:'');
+      rh+='<button class="trw-step '+st+(t[0]===active?' sel':'')+'" data-k="'+t[0]+'"'+(st==='lock'?' data-lock="1"':'')+'>'
+        +'<span class="trw-num">'+num+'</span><span class="trw-l"><b>'+t[1]+'</b><small>Étape '+(i+1)+'</small></span>'
+        +(ico?('<span class="trw-ic">'+ico+'</span>'):'')+'</button>';
     });
+    if(utilAvail.length){ rh+='<div class="trw-sep">Outils</div>'; utilAvail.forEach(function(t){ rh+='<button class="trw-step util'+(t[0]===active?' sel':'')+'" data-k="'+t[0]+'"><span class="trw-num">'+DOT+'</span><span class="trw-l"><b>'+t[1]+'</b></span></button>'; }); }
+    rail.innerHTML=rh;
+    var content=document.createElement('div'); content.className='trw-content';
+    var keys=WF.map(function(t){return t[0];}).concat(utilAvail.map(function(t){return t[0];}));
+    keys.forEach(function(k){
+      var panel=document.createElement('div'); panel.className='esp-tabpanel'; panel.setAttribute('data-tab',k);
+      if(k!==active)panel.style.display='none';
+      (groups[k]||[]).forEach(function(el){panel.appendChild(el);});
+      var wi=idxOf(k);
+      if(wi>=0 && (!groups[k]||!groups[k].length)){ var hint=document.createElement('div'); hint.className='trw-empty'; hint.textContent='Rien à préparer automatiquement pour cette étape — utilisez les Outils, puis validez pour continuer.'; panel.appendChild(hint); }
+      if(wi>=0 && d){ panel.appendChild(footer(d,k,wi)); }
+      content.appendChild(panel);
+    });
+    var wrap=document.createElement('div'); wrap.className='trw'; wrap.appendChild(rail); wrap.appendChild(content);
+    if(head&&head.nextSibling)main.insertBefore(wrap,head.nextSibling); else main.appendChild(wrap);
     main.setAttribute('data-tabbed','1');
-    bar.addEventListener('click',function(e){var btn=e.target.closest('.esp-tab');if(!btn)return;var tk=btn.getAttribute('data-tab');
-      if(typeof state!=='undefined')state.espTab=tk;
-      Array.prototype.forEach.call(bar.querySelectorAll('.esp-tab'),function(x){x.classList.toggle('on',x.getAttribute('data-tab')===tk);});
-      Array.prototype.forEach.call(main.querySelectorAll('.esp-tabpanel'),function(p){p.style.display=(p.getAttribute('data-tab')===tk)?'':'none';});
-      try{main.scrollIntoView&&0;window.scrollTo&&window.scrollTo(0,0);}catch(_e){}
-    });
+    rail.addEventListener('click',function(e){ var btn=e.target.closest('.trw-step'); if(!btn)return; if(btn.getAttribute('data-lock')==='1'){ if(typeof toast==='function')toast('Validez d’abord l’étape en cours.'); return; } trwGo(btn.getAttribute('data-k')); });
   }
-  try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var x=_r.apply(this,arguments);
-    try{ if(typeof state!=='undefined'&&state.page==='espace') organize(); }catch(e){} return x; }; } }catch(e){}
-  try{ if(!document.getElementById('esp-tabs-css')){var st=document.createElement('style');st.id='esp-tabs-css';
+  try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var x=_r.apply(this,arguments); try{ if(typeof state!=='undefined'&&state.page==='espace') organize(); }catch(e){} return x; }; } }catch(e){}
+  try{ if(!document.getElementById('trw-css')){var st=document.createElement('style');st.id='trw-css';
     st.textContent=[
-      '.esp-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 4px;padding-bottom:10px;border-bottom:1px solid var(--line,#232d3d)}',
-      '.esp-tab{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border:1px solid var(--line,#232d3d);border-radius:9px;background:transparent;color:var(--ink-2,#b6c3d6);cursor:pointer;font:inherit;font-size:12.5px;font-weight:600;line-height:1}',
-      '.esp-tab:hover{border-color:var(--ink-3,#8494aa);color:var(--ink,#f5f9fe)}',
-      '.esp-tab.on{background:var(--ink,#f5f9fe);color:#0a0a0c;border-color:var(--ink,#f5f9fe)}',
-      '.esp-tab-n{font-size:10.5px;font-weight:800;opacity:.7;border:1px solid currentColor;border-radius:10px;padding:0 5px;line-height:1.5}',
-      '.esp-tab.on .esp-tab-n{opacity:1}',
-      '.esp-tabpanel{display:flex;flex-direction:column;gap:16px}',
-      '.esp-main[data-tabbed="1"]{display:flex!important;flex-direction:column;gap:14px}'
+      '.esp-main[data-tabbed="1"]{display:flex!important;flex-direction:column;gap:14px}',
+      '.trw{display:grid;grid-template-columns:250px 1fr;border:1px solid #23262d;border-radius:14px;overflow:hidden;background:#0d0e11}',
+      '.trw-rail{border-right:1px solid #23262d;background:#111317;padding:12px;display:flex;flex-direction:column;gap:4px}',
+      '.trw-step{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:none;border:1px solid transparent;border-radius:10px;padding:10px 11px;cursor:pointer;color:inherit;font:inherit;transition:background .12s,border-color .12s}',
+      '.trw-step:hover{background:#181b21;border-color:#2a2e37}',
+      '.trw-step.lock{cursor:not-allowed;opacity:.55}',
+      '.trw-step.lock:hover{background:none;border-color:transparent}',
+      '.trw-step.sel{background:#1b1f27;border-color:#3a414d}',
+      '.trw-num{width:28px;height:28px;flex:none;border-radius:8px;display:grid;place-items:center;font-family:ui-monospace,monospace;font-size:12.5px;font-weight:600;border:1.5px solid #313640;color:#8b93a1;background:#0d0e11}',
+      '.trw-step.done .trw-num{background:#fff;border-color:#fff;color:#0a0b0d}',
+      '.trw-step.cur .trw-num{border-color:#fff;color:#fff}',
+      '.trw-step.util .trw-num{border-style:dashed;width:24px;height:24px}',
+      '.trw-l{flex:1;min-width:0}.trw-l b{display:block;font-size:13px;font-weight:600;color:#aab2c0;line-height:1.2}',
+      '.trw-step.sel .trw-l b,.trw-step.done .trw-l b,.trw-step.cur .trw-l b{color:#f4f6fa}',
+      '.trw-l small{font-size:10.5px;color:#6b7280;font-family:ui-monospace,monospace}',
+      '.trw-step.lock .trw-l b{color:#5a616c}',
+      '.trw-ic{flex:none;color:#8b93a1;display:flex;align-items:center}.trw-step.done .trw-ic{color:#f4f6fa}',
+      '.trw-sep{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#5a616c;font-weight:700;padding:12px 8px 4px;margin-top:6px;border-top:1px solid #23262d}',
+      '.trw-content{padding:16px;display:flex;flex-direction:column;min-width:0}',
+      '.trw-content .esp-tabpanel{display:flex;flex-direction:column;gap:14px}',
+      '.trw-content .card{margin:0!important}',
+      '.trw-empty{color:#8b93a1;font-size:13px;background:#111317;border:1px dashed #2a2e37;border-radius:10px;padding:16px;line-height:1.5}',
+      '.trw-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:4px;padding-top:14px;border-top:1px solid #23262d}',
+      '.trw-hint{font-size:12px;color:#8b93a1}',
+      '.trw-btns{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}',
+      '.trw-b{display:inline-flex;align-items:center;gap:6px;border:1px solid #313640;background:transparent;color:#aab2c0;border-radius:9px;padding:9px 15px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:.12s}',
+      '.trw-b:hover{color:#f4f6fa;border-color:#434a56}',
+      '.trw-go{background:#fff;border-color:#fff;color:#0a0b0d}.trw-go:hover{background:#e9ecf1;color:#0a0b0d}',
+      '@media(max-width:820px){.trw{grid-template-columns:1fr}.trw-rail{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid #23262d}.trw-step{min-width:150px}}'
     ].join('');document.head.appendChild(st);} }catch(e){}
 })();
 </script>
