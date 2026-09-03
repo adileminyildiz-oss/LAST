@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=368;
+var LAST_VER=369;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -19310,6 +19310,39 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.cliNew=function(type){type=(type==='particulier')?'particulier':'entreprise';DB.clients=DB.clients||[];var id=(has('uid')?uid('c'):'c'+Date.now());var base={id:id,clientType:type,associes:[],docVars:{},createdAt:(has('today')?today():'')};if(type==='entreprise'){base.denomination='';base.forme='SAS';}DB.clients.unshift(base);state.cliSel=id;save();render();};
   window.cliSetType=function(id,t){var c=clientById(id);if(!c)return;c.clientType=(t==='particulier')?'particulier':'entreprise';save();render();};
   window.cliFilter=function(t){window.__cliType=t||'';render();};
+  /* ---- Fusion AUTOMATIQUE : une société qui utilise les infos d'un gérant absorbe le particulier ---- */
+  function cliNorm(s){s=(''+(s||'')).toLowerCase();try{s=s.normalize('NFD').replace(/[̀-ͯ]/g,'');}catch(e){}return s.replace(/\s+/g,' ').trim();}
+  function partFull(p){return ((p.prenom?p.prenom+' ':'')+(p.nom||'')).trim();}
+  function enrichGerant(p,soc){
+    soc.associes=soc.associes||[];var full=partFull(p);var nf=cliNorm(full);
+    var adr=[p.adresse,[p.cp,p.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    var a=soc.associes.filter(function(x){return x&&cliNorm(x.nom)===nf;})[0];
+    if(!a){a={nom:full,role:'Gérant',parts:''};soc.associes.unshift(a);}
+    a.prenom=a.prenom||p.prenom||'';a.nomFamille=a.nomFamille||p.nom||'';a.civilite=a.civilite||p.civilite||'';
+    a.naissance=a.naissance||p.dateNaissance||'';a.lieuNaissance=a.lieuNaissance||p.lieuNaissance||'';a.nationalite=a.nationalite||p.nationalite||'';a.adresse=a.adresse||adr;a.role=a.role||'Gérant';
+    if(!soc.president||cliNorm(soc.president)===nf)soc.president=full;
+    if(!soc.presidentFonction)soc.presidentFonction='Gérant';
+    if(!soc.email&&p.email)soc.email=p.email;if(!soc.tel&&p.tel)soc.tel=p.tel;
+    DB.clients=(DB.clients||[]).filter(function(x){return x.id!==p.id;});
+    if(state.cliSel===p.id)state.cliSel=soc.id;
+  }
+  /* Repère chaque particulier dont l'identité est utilisée comme gérant/président/associé d'une société → fusion. */
+  window.cliAutoMergeGerants=function(){
+    var parts=(DB.clients||[]).filter(cliIsPart);if(!parts.length)return [];
+    var merges=[];
+    parts.forEach(function(p){
+      var full=partFull(p);var nf=cliNorm(full);if(!nf)return;
+      var ents=(DB.clients||[]).filter(function(c){return !cliIsPart(c)&&c.id!==p.id;});
+      var soc=null;
+      for(var i=0;i<ents.length;i++){var e=ents[i];
+        if(cliNorm(e.president)===nf){soc=e;break;}
+        if((e.associes||[]).some(function(a){return a&&cliNorm(a.nom)===nf;})){soc=e;break;}
+      }
+      if(soc){enrichGerant(p,soc);merges.push({nom:full,soc:cliName(soc)});}
+    });
+    if(merges.length)save();
+    return merges;
+  };
   window.cliSel=function(id){state.cliSel=id;render();};
   window.cliDel=function(id){var c=clientById(id);if(!c)return;if(typeof confirm==='function'&&!confirm('Supprimer définitivement ce client ?'))return;DB.clients=DB.clients.filter(function(x){return x.id!==id;});if(state.cliSel===id)state.cliSel=(DB.clients[0]||{}).id||null;save();render();};
   window.cliSet=function(id,key,val){var c=clientById(id);if(!c)return;if(key==='activites'){c.activites=(''+val).split(',').map(function(s){return s.trim();}).filter(Boolean);}else{c[key]=val;}save();var lbl=document.getElementById('cli-name-'+id);if(lbl)lbl.textContent=cliName(c);};
@@ -19424,6 +19457,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
 
   /* ---- Hook de rendu ---- */
   try{ var _rd=window.render; if(typeof _rd==='function'){ window.render=function(){
+    try{ if(!window.__cliMerging&&has('cliAutoMergeGerants')){ window.__cliMerging=true; var _mg=cliAutoMergeGerants(); window.__cliMerging=false; if(_mg&&_mg.length&&has('toast')){ _mg.forEach(function(m){toast('Fusion : « '+m.nom+' » rattaché(e) à '+m.soc+' (la société prime).');}); } } }catch(e){window.__cliMerging=false;}
     if(typeof state!=='undefined'&&state.page==='clients'){
       try{buildNav();}catch(e){}
       try{document.body.dataset.page='clients';}catch(e){}
@@ -19482,6 +19516,20 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.cli-tt{background:#0d0e11;border:0;padding:8px 12px;color:#8a8a92;font:600 12px/1 "Hanken Grotesk",system-ui,sans-serif;cursor:pointer}',
     '.cli-tt:hover{background:#181b21;color:#c9ccd3}',
     '.cli-tt.on{background:#f4f6fa;color:#0a0b0d}',
+    '.cli-mod{max-width:520px}',
+    '.cli-modp{font:13px/1.6 "Hanken Grotesk",system-ui,sans-serif;color:#aab2c0;margin:0 0 14px}',
+    '.cli-modh{font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.05em;text-transform:uppercase;color:#6b7280;margin:14px 0 8px}',
+    '.cli-soclist{display:flex;flex-direction:column;gap:6px}',
+    '.cli-socb{display:flex;flex-direction:column;gap:2px;text-align:left;background:#0d0e11;border:1px solid #23262d;border-radius:9px;padding:10px 12px;color:#f4f6fa;cursor:pointer}',
+    '.cli-socb:hover{background:#181b21;border-color:#3a414d}',
+    '.cli-socb span{font:500 11px/1 "IBM Plex Mono",monospace;color:#8a8a92}',
+    '.cli-or{text-align:center;color:#6b7280;font:600 11px/1 "IBM Plex Mono",monospace;margin:14px 0 4px}',
+    '.cli-newsoc{display:flex;gap:8px;flex-wrap:wrap;align-items:center}',
+    '.cli-modin{background:#0a0b0d;border:1px solid #2a2e37;border-radius:8px;padding:9px 11px;color:#f4f6fa;font:13px "Hanken Grotesk",system-ui,sans-serif}',
+    '.cli-modin:focus{outline:none;border-color:#5a616c}',
+    '#cli-newsoc-denom{flex:1;min-width:180px}',
+    '.cli-b-go{background:#f4f6fa;color:#0a0b0d;border-color:#f4f6fa}',
+    '.cli-b-go:hover{background:#e6e9ee}',
     '@media(max-width:860px){.cli-wrap{grid-template-columns:1fr}.cli-side{position:static}.cli-grid{grid-template-columns:1fr}}'
   ].join('');document.head.appendChild(st);} }catch(e){}
 
