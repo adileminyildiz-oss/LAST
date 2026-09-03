@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=362;
+var LAST_VER=363;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -18872,6 +18872,191 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       '.ana-f-bool{flex-direction:row;align-items:center;justify-content:space-between;border:1px solid #2a2e37;border-radius:8px;padding:9px 11px;background:#0d0e11}',
       '@media(max-width:640px){.ana-fgrid{grid-template-columns:1fr}}'
     ].join('');document.head.appendChild(st);} }catch(e){}
+})();
+</script>
+<script id="domiciliation-mod">(function(){
+  /* « Établir un dossier de domiciliation » — génère le Contrat de domiciliation,
+     l'Attestation de domiciliation et assemble le dossier complet, pré-rempli depuis
+     les données du dossier (stDossData). Carte routée dans l'étape « Documents » du wizard. */
+  function need(f){return typeof window[f]==='function';}
+  function esc2(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function d0(v){v=(''+(v==null?'':v)).trim();return v;}
+  function moisFr(dt){return ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][dt.getMonth()];}
+  function dateLongue(iso){ if(!iso){var n=new Date();return n.getDate()+' '+moisFr(n)+' '+n.getFullYear();} var p=(''+iso).split('-'); if(p.length===3){var dt=new Date(+p[0],+p[1]-1,+p[2]); if(!isNaN(dt))return dt.getDate()+' '+moisFr(dt)+' '+dt.getFullYear();} return iso; }
+  var TYPES=[['societe','Société de domiciliation'],['domicile','Domicile du dirigeant'],['bail','Local commercial (bail)']];
+
+  function dom(d){ d.domicil=d.domicil||{}; var x=(need('stDossData')?stDossData(d):{}); var ex=(d.verif&&d.verif.extract)||{}; var o=d.domicil;
+    if(!o.type)o.type='societe';
+    if(o.domiciliataire==null)o.domiciliataire=d0(ex.domiciliataire)||'';
+    if(o.adrDom==null)o.adrDom=d0(x.siege)||'';
+    if(o.cpDom==null)o.cpDom=d0(x.cp)||'';
+    if(o.villeDom==null)o.villeDom=d0(x.villeMaj)||'';
+    if(o.agrement==null)o.agrement='';
+    if(o.representant==null)o.representant='';
+    if(o.duree==null)o.duree='3 mois, renouvelable par tacite reconduction';
+    if(o.redevance==null)o.redevance='';
+    if(o.dateDebut==null)o.dateDebut='';
+    return o; }
+
+  function adrDomComplete(o){ var r=d0(o.adrDom); var loc=[d0(o.cpDom),d0(o.villeDom)].filter(Boolean).join(' '); return (r?r:'«adresse des locaux»')+(loc?(', '+loc):''); }
+
+  /* ===== Contrat de domiciliation ===== */
+  window.contratDomiciliationHTML=function(d){
+    var x=(need('stDossData')?stDossData(d):{}); var o=dom(d);
+    var forme=x.forme||'SAS'; var qualite=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'gérant':'président';
+    var capTxt=(x.cap?(need('stNum')?stNum(x.cap):x.cap):'«…»')+' euros';
+    var adrLoc=adrDomComplete(o);
+    var domName=d0(o.domiciliataire)||'«société de domiciliation»';
+    var rep=d0(o.representant)||'son représentant légal';
+    var agr=d0(o.agrement); var agrTxt=agr?('agréée sous le numéro '+esc2(agr)):'agréée conformément à l’article L.123-11-3 du Code de commerce';
+    var red=d0(o.redevance); var redTxt=red?(esc2(red)+' € par mois'):'«redevance mensuelle»';
+    var dureeTxt=d0(o.duree)||'3 mois, renouvelable par tacite reconduction';
+    var debut=o.dateDebut?dateLongue(o.dateDebut):'«date de début»';
+    var villeSig=d0(x.villeSignature)||d0(o.villeDom)||'«ville»';
+    function art(n,t,c){return '<p style="margin-top:12px"><b>Article '+n+' — '+t+'</b></p><p>'+c+'</p>';}
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">CONTRAT DE DOMICILIATION</div>'
+      +'<p style="margin-top:12px"><b>ENTRE LES SOUSSIGNÉS :</b></p>'
+      +'<p><b>'+esc2(domName)+'</b>, société de domiciliation '+agrTxt+', dont les locaux sont situés '+esc2(adrLoc)+', représentée par '+esc2(rep)+',</p>'
+      +'<p style="text-align:right;font-style:italic">ci-après « le Domiciliataire »,</p>'
+      +'<p style="margin-top:8px"><b>ET :</b></p>'
+      +'<p>La société <b>'+esc2(x.denom||'«DÉNOMINATION»')+'</b>, '+esc2(forme)+' au capital de '+capTxt+', en cours d’immatriculation, représentée par '+esc2(x.president||'«'+qualite+'»')+', en qualité de '+qualite+',</p>'
+      +'<p style="text-align:right;font-style:italic">ci-après « la Société domiciliée »,</p>'
+      +'<p style="margin-top:10px">Il a été convenu ce qui suit :</p>'
+      +art('1','Objet','Le Domiciliataire met à la disposition de la Société domiciliée une adresse afin d’y établir le siège social de cette dernière, dans les locaux désignés à l’article 2, conformément aux articles L.123-11-3 et R.123-166-1 et suivants du Code de commerce.')
+      +art('2','Désignation des locaux','Le siège social de la Société domiciliée est fixé à l’adresse suivante : <b>'+esc2(adrLoc)+'</b>. Le Domiciliataire dispose de la jouissance des locaux et y met à disposition une pièce propre à assurer la confidentialité et à permettre une réunion régulière des organes de la société.')
+      +art('3','Durée','Le présent contrat est conclu pour une durée de <b>'+esc2(dureeTxt)+'</b>, à compter du '+esc2(debut)+'. Il ne peut être conclu pour une durée inférieure à trois mois.')
+      +art('4','Redevance','En contrepartie des prestations, la Société domiciliée versera une redevance de <b>'+esc2(redTxt)+'</b>, payable à terme échu. Toute prestation complémentaire fera l’objet d’une facturation distincte.')
+      +art('5','Obligations de la Société domiciliée','La Société domiciliée s’engage à utiliser effectivement et exclusivement les locaux comme siège de son entreprise, à déclarer tout changement relatif à sa forme, son objet, sa dénomination ou son dirigeant, à prendre connaissance du courrier reçu et à donner mandat au Domiciliataire de recevoir en son nom toute notification.')
+      +art('6','Obligations du Domiciliataire','Le Domiciliataire s’engage à mettre les locaux à disposition pendant toute la durée du contrat, à tenir à la disposition des autorités habilitées les dossiers relatifs à la Société domiciliée, à informer le greffe du tribunal de commerce à l’expiration du contrat ou en cas de résiliation, et à communiquer la liste des sociétés domiciliées.')
+      +art('7','Résiliation','Le contrat peut être résilié par l’une ou l’autre des parties, par lettre recommandée avec accusé de réception, moyennant le respect d’un préavis d’un mois. En cas de manquement grave, la résiliation pourra être immédiate.')
+      +art('8','Attribution de juridiction','Tout litige relatif à l’exécution ou à l’interprétation du présent contrat sera soumis aux tribunaux compétents du ressort du siège du Domiciliataire.')
+      +'<div class="st-fin" style="margin-top:24px"><p>Fait à '+esc2(villeSig)+', le '+dateLongue(o.dateDebut||'')+', en deux exemplaires originaux.</p>'
+      +'<div class="st-sign" style="margin-top:26px;display:flex;justify-content:space-between;gap:24px">'
+      +'<div class="sg"><b>Le Domiciliataire</b><br>'+esc2(domName)+'<br><span style="font-style:italic">Signature</span></div>'
+      +'<div class="sg"><b>La Société domiciliée</b><br>'+esc2(x.denom||'')+'<br>Le '+qualite+', '+esc2(x.president||'')+'<br><span style="font-style:italic">Signature</span></div>'
+      +'</div></div></div></div>';
+  };
+
+  /* ===== Attestation de domiciliation ===== */
+  window.attestationDomiciliationHTML=function(d){
+    var x=(need('stDossData')?stDossData(d):{}); var o=dom(d);
+    var adrLoc=adrDomComplete(o);
+    var domName=d0(o.domiciliataire)||'«société de domiciliation»';
+    var rep=d0(o.representant)||'son représentant légal';
+    var villeSig=d0(x.villeSignature)||d0(o.villeDom)||'«ville»';
+    var debut=o.dateDebut?dateLongue(o.dateDebut):dateLongue('');
+    return '<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">ATTESTATION DE DOMICILIATION</div>'
+      +'<p style="margin-top:16px">Je soussigné, <b>'+esc2(rep)+'</b>, agissant au nom et pour le compte de <b>'+esc2(domName)+'</b>, société de domiciliation,</p>'
+      +'<p style="margin-top:10px"><b>atteste par la présente</b> que la société <b>'+esc2(x.denom||'«DÉNOMINATION»')+'</b> ('+esc2(x.forme||'SAS')+') est domiciliée dans les locaux situés <b>'+esc2(adrLoc)+'</b>, et que ces locaux sont mis à sa disposition pour y établir son siège social, en vertu du contrat de domiciliation conclu le '+esc2(debut)+'.</p>'
+      +'<p style="margin-top:10px">La présente attestation est établie pour servir et valoir ce que de droit, en vue de l’immatriculation de la société susvisée au Registre du Commerce et des Sociétés.</p>'
+      +'<div class="st-fin" style="margin-top:30px"><p>Fait à '+esc2(villeSig)+', le '+dateLongue('')+'</p>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+esc2(domName)+'</b><br>'+esc2(rep)+'<br><span style="font-style:italic">Signature et cachet</span></div></div></div>'
+      +'</div></div>';
+  };
+
+  /* ===== Dossier de domiciliation (assemblage) ===== */
+  window.dossierDomiciliationHTML=function(d){
+    var x=(need('stDossData')?stDossData(d):{}); var o=dom(d);
+    var typeLbl=(TYPES.filter(function(t){return t[0]===o.type;})[0]||TYPES[0])[1];
+    var recap='<div class="st-doc"><div class="st-page">'
+      +'<div class="st-titre">DOSSIER DE DOMICILIATION</div>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">Établi le '+dateLongue('')+' — Dossier '+esc2(d.ref||d.id||'')+'</p>'
+      +'<table class="st-tbl" style="margin-top:6px"><tbody>'
+      +'<tr><td class="al"><b>Société domiciliée</b></td><td>'+esc2(x.denom||'—')+' ('+esc2(x.forme||'SAS')+')</td></tr>'
+      +'<tr><td class="al"><b>Type de domiciliation</b></td><td>'+esc2(typeLbl)+'</td></tr>'
+      +'<tr><td class="al"><b>Adresse du siège</b></td><td>'+esc2(adrDomComplete(o))+'</td></tr>'
+      +(o.type==='societe'?('<tr><td class="al"><b>Société de domiciliation</b></td><td>'+esc2(d0(o.domiciliataire)||'—')+(d0(o.agrement)?(' — agrément n° '+esc2(o.agrement)):'')+'</td></tr>'):'')
+      +'<tr><td class="al"><b>Durée</b></td><td>'+esc2(d0(o.duree)||'—')+'</td></tr>'
+      +(o.type==='societe'?('<tr><td class="al"><b>Redevance</b></td><td>'+(d0(o.redevance)?(esc2(o.redevance)+' € / mois'):'—')+'</td></tr>'):'')
+      +'<tr><td class="al"><b>Représentant du dirigeant</b></td><td>'+esc2(x.president||'—')+'</td></tr>'
+      +'</tbody></table>'
+      +'<div class="dg-note" style="margin-top:14px">Pièces constitutives du dossier : '+(o.type==='domicile'?'déclaration sur l’honneur de domiciliation au domicile du dirigeant + justificatif de domicile':'contrat de domiciliation + attestation de domiciliation + justificatif de jouissance des locaux du domiciliataire')+'.</div>'
+      +'</div></div>';
+    var pieces;
+    if(o.type==='domicile'){ pieces=(need('declaDomicileHTML')?declaDomicileHTML(d):''); }
+    else { pieces=window.contratDomiciliationHTML(d)+window.attestationDomiciliationHTML(d); }
+    return recap+pieces;
+  };
+
+  /* ===== Enregistrement dans le moteur de documents ===== */
+  function register(){
+    try{ if(typeof ESP_DOCS!=='undefined'){
+      if(!ESP_DOCS.some(function(x){return x.k==='contratdomicil';})) ESP_DOCS.push({k:'contratdomicil',l:'Contrat de domiciliation',prix:0,optional:true});
+      if(!ESP_DOCS.some(function(x){return x.k==='attestdomicil';})) ESP_DOCS.push({k:'attestdomicil',l:'Attestation de domiciliation',prix:0,optional:true});
+    } }catch(e){}
+    if(window.DOC_MODELS){
+      window.DOC_MODELS.contratdomicil=[{id:'standard',label:'Contrat de domiciliation — modèle',fn:function(d){return window.contratDomiciliationHTML(d);}}];
+      window.DOC_MODELS.attestdomicil=[{id:'standard',label:'Attestation de domiciliation — modèle',fn:function(d){return window.attestationDomiciliationHTML(d);}}];
+    }
+  }
+  register(); setTimeout(register,600);
+
+  /* ===== Handlers ===== */
+  function curD(id){ return (need('espDoss')?espDoss():(window.DB&&DB.dossiers)||[]).filter(function(x){return x.id===id;})[0]; }
+  window.domicilType=function(id,v){ var d=curD(id); if(!d)return; dom(d).type=v; save(); render(); };
+  window.domicilSet=function(id,f,v){ var d=curD(id); if(!d)return; dom(d)[f]=v; save(); var pv=document.getElementById('dom-prev-'+id); if(pv)pv.innerHTML='<div class="doc-gen">'+window.dossierDomiciliationHTML(d)+'</div>'; };
+  window.domicilEtablir=function(id){ var d=curD(id); if(!d)return; d.domicil=d.domicil||{}; d.domicil.done=true; d.domicil.date=(need('today')?today():''); save();
+    if(need('openModal')){ openModal('Dossier de domiciliation','<div class="fv-view-scroll" style="background:#e7e0d1"><div class="doc-gen">'+window.dossierDomiciliationHTML(d)+'</div></div>','<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="espDocPrint()">Imprimer</button>'); }
+    if(need('toast'))toast('Dossier de domiciliation établi'); render(); };
+  window.domicilVoir=function(id,which){ var d=curD(id); if(!d)return; var html=which==='contrat'?window.contratDomiciliationHTML(d):window.attestationDomiciliationHTML(d); var t=which==='contrat'?'Contrat de domiciliation':'Attestation de domiciliation';
+    if(need('openModal'))openModal(t,'<div class="fv-view-scroll" style="background:#e7e0d1"><div class="doc-gen">'+html+'</div></div>','<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="espDocPrint()">Imprimer</button>'); };
+
+  /* ===== Carte « Domiciliation du siège » ===== */
+  window.domicilCard=function(d){
+    if(!d)return ''; var o=dom(d);
+    var seg=TYPES.map(function(t){return '<button class="dom-seg'+(o.type===t[0]?' on':'')+'" onclick="domicilType(\''+d.id+'\',\''+t[0]+'\')">'+esc2(t[1])+'</button>';}).join('');
+    function fld(f,l,ph){ return '<label class="dom-f"><span>'+esc2(l)+'</span><input value="'+esc2(o[f]||'')+'" placeholder="'+esc2(ph||'')+'" oninput="domicilSet(\''+d.id+'\',\''+f+'\',this.value)"></label>'; }
+    var soc=(o.type==='societe');
+    var form='<div class="dom-grid">'
+      +(soc?fld('domiciliataire','Société de domiciliation','Nom du domiciliataire'):'')
+      +(soc?fld('agrement','N° d’agrément préfectoral','ex. 75-2020-…'):'')
+      +fld('adrDom','Adresse des locaux','N° et rue')
+      +fld('cpDom','Code postal','75002')
+      +fld('villeDom','Ville','PARIS')
+      +(soc?fld('representant','Représentant du domiciliataire','Nom du signataire'):'')
+      +fld('duree','Durée','3 mois, renouvelable par tacite reconduction')
+      +(soc?fld('redevance','Redevance mensuelle (€)','ex. 30'):'')
+      +'<label class="dom-f"><span>Date de début</span><input type="date" value="'+esc2(o.dateDebut||'')+'" oninput="domicilSet(\''+d.id+'\',\'dateDebut\',this.value)"></label>'
+      +'</div>';
+    var acts='<div class="dom-acts"><button class="dom-b dom-go" onclick="domicilEtablir(\''+d.id+'\')">Établir le dossier de domiciliation</button>'
+      +(soc?'<button class="dom-b" onclick="domicilVoir(\''+d.id+'\',\'contrat\')">Voir le contrat</button><button class="dom-b" onclick="domicilVoir(\''+d.id+'\',\'attestation\')">Voir l’attestation</button>':'')
+      +'</div>';
+    var badge=(o.done?'<span class="dom-badge on">✓ Établi</span>':'<span class="dom-badge">à établir</span>');
+    return '<div class="card dom-card tr-doccard"><h2>Domiciliation du siège'+badge+'</h2>'
+      +'<p class="muted" style="margin:-4px 0 12px">Établit le dossier de domiciliation du siège social — pré-rempli depuis les données du dossier.</p>'
+      +'<div class="dom-segs">'+seg+'</div>'+form+acts
+      +'<div class="dom-prev-wrap"><div class="dom-prev-t">Aperçu du dossier</div><div class="dom-prev" id="dom-prev-'+d.id+'"><div class="doc-gen">'+window.dossierDomiciliationHTML(d)+'</div></div></div>'
+      +'</div>';
+  };
+
+  /* Injection dans l'étape « Documents » du wizard */
+  if(need('espPanel')){ var _ep=window.espPanel; window.espPanel=function(d,list,sel){ var h=_ep.apply(this,arguments); try{ if(d&&(''+h).indexOf('dom-card')<0){ h+=window.domicilCard(d); } }catch(e){} return h; }; }
+
+  /* CSS */
+  try{ if(!document.getElementById('dom-css')){ var st=document.createElement('style'); st.id='dom-css'; st.textContent=[
+    '.dom-card h2{display:flex;align-items:center;gap:10px}',
+    '.dom-badge{font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;color:#6b7280;border:1px solid #313640;border-radius:20px;padding:4px 10px}',
+    '.dom-badge.on{color:#0a0b0d;background:#f4f6fa;border-color:#f4f6fa}',
+    '.dom-segs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}',
+    '.dom-seg{flex:1;min-width:150px;background:#0d0e11;border:1px solid #2a2e37;border-radius:9px;padding:10px 12px;color:#aab2c0;font:600 13px/1.2 "Hanken Grotesk",system-ui,sans-serif;cursor:pointer;transition:background .12s,border-color .12s,color .12s}',
+    '.dom-seg:hover{border-color:#3a414d;background:#14161b}',
+    '.dom-seg.on{background:#f4f6fa;border-color:#f4f6fa;color:#0a0b0d}',
+    '.dom-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}',
+    '.dom-f{display:flex;flex-direction:column;gap:5px}',
+    '.dom-f span{font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;color:#6b7280;text-transform:uppercase}',
+    '.dom-f input{background:#0d0e11;border:1px solid #2a2e37;border-radius:8px;padding:9px 11px;color:#f4f6fa;font:14px/1.3 "Hanken Grotesk",system-ui,sans-serif}',
+    '.dom-f input:focus{outline:none;border-color:#5a616c}',
+    '.dom-acts{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px}',
+    '.dom-b{background:#0d0e11;border:1px solid #2a2e37;border-radius:9px;padding:10px 15px;color:#f4f6fa;font:600 13px/1 "Hanken Grotesk",system-ui,sans-serif;cursor:pointer;transition:background .12s,border-color .12s}',
+    '.dom-b:hover{background:#181b21;border-color:#3a414d}',
+    '.dom-go{background:#f4f6fa;border-color:#f4f6fa;color:#0a0b0d}',
+    '.dom-go:hover{background:#e6e9ee;border-color:#e6e9ee}',
+    '.dom-prev-t{font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;color:#6b7280;text-transform:uppercase;margin-bottom:8px}',
+    '.dom-prev{max-height:420px;overflow:auto;border:1px solid #23262d;border-radius:10px;background:#e7e0d1;padding:10px}',
+    '@media(max-width:640px){.dom-grid{grid-template-columns:1fr}}'
+  ].join(''); document.head.appendChild(st); } }catch(e){}
 })();
 </script>
 </body>
