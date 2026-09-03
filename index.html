@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=373;
+var LAST_VER=374;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -6714,11 +6714,11 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
   }
   function extractCard(h,cls){ var i=h.indexOf('<div class="'+cls); if(i<0) return ''; var re=/<div\b|<\/div>/g; re.lastIndex=i; var depth=0,m; while((m=re.exec(h))){ if(m[0]==='</div>'){ depth--; if(depth===0) return h.slice(i,re.lastIndex); } else depth++; } return ''; }
   function progress(d){ try{
-    var W=['demande','documents','controle','annonce','recap','depot'],total=6,ok=0;
+    var W=['reception','analyse','validation','generation','annonce','capital','inpi','dossier','cloture'],total=9,ok=0;
     var w=(d&&d.wf&&typeof d.wf==='object')?d.wf:{};
     for(var i=0;i<W.length;i++){ if(w[W[i]])ok++; }
     return {ok:ok,total:total,pct:Math.round(ok/total*100)};
-  }catch(e){ return {ok:0,total:6,pct:0}; } }
+  }catch(e){ return {ok:0,total:9,pct:0}; } }
   function nomD(d){ try{ var n=dossierClients(d); if(n) return n; }catch(e){} return (d&&(d.ref||d.numeroDossier))||'Dossier'; }
   function trHead(d){
     var col=(has('statColor')?statColor(d.statut):'#6a6a72');
@@ -16178,19 +16178,22 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   /* Module Traitement — parcours guidé « Piste B » : barre latérale verticale (6 étapes
      verrouillées) + contenu de l'étape + validation. Réorganise au niveau du DOM après
      rendu, sans altérer les cartes ni leurs handlers. */
-  var WF=[['demande','Demande'],['documents','Documents'],['controle','Contrôle'],['annonce','Annonce légale'],['recap','Récapitulatif'],['depot','Dépôt']];
+  var WF=[['reception','Réception'],['analyse','Analyse'],['validation','Validation'],['generation','Génération'],['annonce','Annonce légale'],['capital','Dépôt de capital'],['inpi','Dépôt INPI'],['dossier','Dossier complet'],['cloture','Clôture']];
   var UTIL=[['traitement','Outils'],['notes','Notes']];
   var CHECK='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>';
   var LOCK='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
   var DOT='<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="7"/></svg>';
   function tabOf(el){
     var c=' '+(el.className||'')+' ';
-    if(/\besp-mailcard\b/.test(c))return 'demande';
-    if(/\bpf-card\b|\bpg-card\b/.test(c))return 'controle';
-    if(/\btr-doccard\b|\bdpret-card\b/.test(c))return 'documents';
+    if(/\besp-mailcard\b/.test(c))return 'reception';
+    if(/\bana-card\b/.test(c))return 'analyse';
+    if(/\bcrea-valid\b/.test(c))return 'validation';
+    if(/\bcrea-gen\b/.test(c))return 'generation';
     if(/\bal-card\b/.test(c))return 'annonce';
-    if(/\brc-card\b/.test(c))return 'recap';
-    if(/\binpi-card\b|\bfin-card\b/.test(c))return 'depot';
+    if(/\bcrea-capital\b/.test(c))return 'capital';
+    if(/\binpi-card\b/.test(c))return 'inpi';
+    if(/\bcrea-dossier\b|\bfin-card\b/.test(c))return 'dossier';
+    if(/\bcrea-cloture\b/.test(c))return 'cloture';
     try{var h=el.querySelector('h2');if(h&&/Notes internes/i.test(h.textContent))return 'notes';}catch(e){}
     return 'traitement';
   }
@@ -19767,6 +19770,173 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   ].join('');document.head.appendChild(st);} }catch(e){}
 
   try{ if(typeof state!=='undefined'&&state.page==='clients'&&has('render'))render(); }catch(e){}
+})();
+</script>
+<script id="crea-flux-mod">(function(){
+  /* Parcours de création (9 étapes) : cartes dédiées + auto-validation VERTE dès réception d'un justificatif.
+     Réutilise l'existant (pièces, annonceLegale, docs, stDossData). Cartes routées par classe dans le wizard. */
+  function has(f){return typeof window[f]==='function';}
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function dos(id){return (has('espDoss')?espDoss():(window.DB&&DB.dossiers)||[]).filter(function(x){return x.id===id;})[0];}
+  function crea(d){d.crea=d.crea||{};d.crea.capital=d.crea.capital||{};return d.crea;}
+  var CREA_DOCS=['statuts','souscripteurs','pouvoir','dnc','rbe'];
+  function annonceRecu(d){return !!(d&&d.annonceLegale&&d.annonceLegale.fichier);}
+  function capitalRecu(d){return !!(d&&d.crea&&d.crea.capital&&d.crea.capital.justifData);}
+
+  /* ===== Auto-validation : dès réception d'un justificatif, l'étape passe au vert ===== */
+  window.creaAutoValidate=function(d){ if(!d)return []; d.wf=d.wf||{}; var done=[];
+    if(annonceRecu(d)&&!d.wf.annonce){d.wf.annonce=Date.now();done.push('Annonce légale');}
+    if(capitalRecu(d)&&!d.wf.capital){d.wf.capital=Date.now();done.push('Dépôt de capital');}
+    return done;
+  };
+
+  /* ===== Étape Validation ===== */
+  window.creaValidCard=function(d){ if(!d)return '';
+    var ex=(d.verif&&d.verif.extract)||{}; var ok=has('espVerifOk')?espVerifOk(d):true;
+    var champs=(typeof EXTRACT_FIELDS!=='undefined')?EXTRACT_FIELDS:[];
+    var rows=champs.map(function(f){var v=(''+(ex[f.k]||'')).trim();return '<div class="cf-r'+(v?'':' cf-empty')+'"><span>'+E(f.l)+'</span><b>'+(v?E(v):'—')+'</b></div>';}).join('');
+    var badge=ok?'<span class="crea-badge ok">✓ Informations complètes</span>':'<span class="crea-badge wait">À compléter</span>';
+    return '<div class="card crea-valid"><div class="card-h"><h2>Validation des informations</h2><span style="margin-left:auto">'+badge+'</span></div><div class="card-b">'
+      +'<p class="crea-p">Vérifiez les informations extraites des pièces, puis validez l\'étape pour accepter le dossier.</p>'
+      +'<div class="cf-grid">'+(rows||'<div class="cf-r cf-empty"><span>Aucune information</span><b>—</b></div>')+'</div>'
+      +'</div></div>';
+  };
+
+  /* ===== Étape Génération ===== */
+  window.creaGenTous=function(id){ var d=dos(id); if(!d)return; d.docs=d.docs||{}; var n=0;
+    CREA_DOCS.forEach(function(k){ if(!(d.docs[k]&&d.docs[k].genere)){ d.docs[k]={genere:true,date:(has('today')?today():'')}; n++; } });
+    if(d.crea&&/domicile/i.test((crea(d).siegeType||''))){ if(!(d.docs.decladomicile&&d.docs.decladomicile.genere))d.docs.decladomicile={genere:true}; }
+    save(); if(has('toast'))toast(n?('Documents générés : '+n):'Documents déjà générés'); render();
+  };
+  window.creaGenCard=function(d){ if(!d)return ''; d.docs=d.docs||{};
+    var list=(typeof ESP_DOCS!=='undefined')?ESP_DOCS.filter(function(x){return CREA_DOCS.indexOf(x.k)>=0;}):[];
+    var allGen=list.length&&list.every(function(x){return d.docs[x.k]&&d.docs[x.k].genere;});
+    var rows=list.map(function(x){var g=d.docs[x.k]&&d.docs[x.k].genere;return '<tr><td>'+E(x.l)+'</td><td>'+(g?'<span class="crea-badge ok">✓ Généré</span>':'<span class="crea-badge">À générer</span>')+'</td><td style="text-align:right">'+(g&&has('espDocVoir')?'<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+x.k+'\')">Voir</button>':'')+'</td></tr>';}).join('');
+    return '<div class="card crea-gen"><div class="card-h"><h2>Génération des documents</h2><span style="margin-left:auto">'+(allGen?'<span class="crea-badge ok">✓ Complet</span>':'')+'</span></div><div class="card-b">'
+      +'<p class="crea-p">Génération complète du dossier de constitution, pré-rempli depuis la fiche société.</p>'
+      +'<button class="btn btn-pri crea-b-go" onclick="creaGenTous(\''+d.id+'\')">⚙ Générer tous les documents</button>'
+      +'<table class="crea-t"><tbody>'+rows+'</tbody></table>'
+      +'</div></div>';
+  };
+
+  /* ===== Étape Dépôt de capital (suivi + réception du justificatif → auto-vert) ===== */
+  var CAP_STATUTS=[['afaire','À faire'],['effectue','Dépôt effectué'],['recu','Attestation reçue']];
+  window.creaCapitalStatut=function(id,s){ var d=dos(id); if(!d)return; crea(d).capital.statut=s; save(); render(); };
+  window.creaCapitalUpload=function(id,input){ var d=dos(id); if(!d||!input||!input.files||!input.files[0])return; var f=input.files[0];
+    var r=new FileReader(); r.onload=function(){ crea(d).capital.justifNom=f.name; crea(d).capital.justifData=r.result; crea(d).capital.statut='recu';
+      (d.historique=d.historique||[]).unshift({d:(has('today')?today():''),t:'Attestation de dépôt de capital reçue'});
+      save(); if(has('toast'))toast('Attestation de dépôt reçue — étape validée ✓'); render(); }; r.readAsDataURL(f); };
+  window.creaCapitalVoir=function(id){ var d=dos(id); var c=d&&d.crea&&d.crea.capital; if(!c||!c.justifData)return; try{var w=window.open();if(w)w.document.write('<iframe src="'+c.justifData+'" style="border:0;width:100vw;height:100vh"></iframe>');}catch(e){} };
+  window.creaCapitalSuppr=function(id){ var d=dos(id); if(!d||!d.crea)return; d.crea.capital.justifData=null;d.crea.capital.justifNom=null; if(d.wf)delete d.wf.capital; save(); render(); };
+  window.creaCapitalSimuler=function(id){ var d=dos(id); if(!d)return; crea(d).capital.justifNom='attestation-depot-capital.pdf'; crea(d).capital.justifData='data:application/pdf;base64,JVBERi0xLjQKJ+A='; crea(d).capital.statut='recu';
+    (d.historique=d.historique||[]).unshift({d:(has('today')?today():''),t:'Attestation de dépôt reçue par e-mail (simulation)'}); save(); if(has('toast'))toast('📥 Justificatif reçu par e-mail — étape validée ✓'); render(); };
+  window.creaCapitalCard=function(d){ if(!d)return ''; var c=crea(d).capital; var recu=capitalRecu(d);
+    var seg=CAP_STATUTS.map(function(s){return '<button class="crea-seg'+((c.statut||'afaire')===s[0]?' on':'')+'" onclick="creaCapitalStatut(\''+d.id+'\',\''+s[0]+'\')">'+s[1]+'</button>';}).join('');
+    var recept=recu?('<div class="crea-recu"><span>✓ Reçu : 📄 '+E(c.justifNom||'justificatif')+'</span><span><button class="btn btn-sm btn-ghost" onclick="creaCapitalVoir(\''+d.id+'\')">Voir</button><button class="btn btn-sm btn-ghost" onclick="creaCapitalSuppr(\''+d.id+'\')">Retirer</button></span></div>')
+      :('<div class="crea-drop"><label class="btn btn-sm btn-pri">Déposer le justificatif (banque/notaire)<input type="file" accept="image/*,application/pdf" style="display:none" onchange="creaCapitalUpload(\''+d.id+'\',this)"></label><button class="btn btn-sm btn-ghost" onclick="creaCapitalSimuler(\''+d.id+'\')">📥 Simuler la réception e-mail</button></div>');
+    var badge=recu?'<span class="crea-badge ok">✓ Justificatif reçu</span>':'<span class="crea-badge wait">En attente du justificatif</span>';
+    return '<div class="card crea-capital"><div class="card-h"><h2>Dépôt de capital</h2><span style="margin-left:auto">'+badge+'</span></div><div class="card-b">'
+      +'<div class="crea-seg-w">'+seg+'</div>'
+      +'<div class="crea-recept-t">Réception de l\'attestation de dépôt (e-mail ou dépôt)</div>'+recept
+      +'<div class="crea-note">Dès réception du justificatif, l\'étape passe automatiquement au vert. L\'attestation est émise par la banque, le notaire ou la Caisse des Dépôts.</div>'
+      +'</div></div>';
+  };
+
+  /* ===== Étape Dossier complet (export vers le logiciel de comptabilité) ===== */
+  function synthesePage(d){ var x=has('stDossData')?stDossData(d):{}; var c=(has('clientById')&&clientById((d.clientIds||[])[0]))||{};
+    function r(l,v){return '<div class="dg-l">'+l+'</div><div>'+E(v||'—')+'</div>';}
+    return '<div class="doc-gen"><div class="dg-page"><div class="dg-head"><div class="dg-t">DOSSIER SOCIÉTÉ — SYNTHÈSE</div></div>'
+      +'<div class="dg-grid2">'+r('Dénomination',x.denom)+r('Forme',x.forme)+r('Capital',(x.cap||'')+' €')+r('Siège',x.siegeComplet||x.siege)
+      +r('Dirigeant',x.president)+r('SIREN',c.siren)+'</div>'
+      +'<div class="dg-note">Dossier généré par Mar’q le '+(has('frDate')?frDate(has('today')?today():''):'')+'.</div></div></div>'; }
+  window.creaImprimerDossier=function(id){ var d=dos(id); if(!d)return; d.docs=d.docs||{};
+    var html=synthesePage(d);
+    (typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).forEach(function(x){ if(d.docs[x.k]&&d.docs[x.k].genere&&has('espDocHTML')){ html+='<div class="doc-gen" style="page-break-before:always">'+espDocHTML(d,x)+'</div>'; } });
+    var pa=document.getElementById('fv-printarea'); if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}
+    try{ if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS(); }catch(e){}
+    pa.innerHTML=html; setTimeout(function(){window.print();},150); };
+  window.creaExportJSON=function(id){ var d=dos(id); if(!d)return; var x=has('stDossData')?stDossData(d):{}; var c=(has('clientById')&&clientById((d.clientIds||[])[0]))||{};
+    var docs=Object.keys(d.docs||{}).filter(function(k){return d.docs[k]&&d.docs[k].genere;});
+    var out={ exportLe:(has('today')?today():''), reference:d.ref||d.id,
+      societe:{denomination:x.denom,forme:x.forme,capital:x.cap,siege:x.siege,cp:x.cp,ville:x.ville,siren:c.siren||'',activite:(c.activites||[]).join(', ')},
+      dirigeant:{nom:x.president,adresse:(c.adresse||'')}, associes:(x.assoc||[]).map(function(a){return {nom:a.nom,parts:a.parts,nationalite:a.nationalite,adresse:a.adresse};}),
+      immatriculation:{siren:c.siren||'', inpi:(d.inpi&&d.inpi.ref)||''}, documents:docs };
+    try{ var blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='dossier-'+((x.denom||'societe')+'').toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.json'; a.click(); setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+      crea(d).exported=true; save(); if(has('toast'))toast('Données du dossier exportées (JSON)'); render(); }catch(e){ if(has('toast'))toast('Export impossible'); } };
+  window.creaMarquerEnvoye=function(id){ var d=dos(id); if(!d)return; crea(d).envoyeCompta=true; (d.historique=d.historique||[]).unshift({d:(has('today')?today():''),t:'Dossier envoyé au logiciel de comptabilité'}); save(); if(has('toast'))toast('Dossier marqué comme envoyé à la comptabilité'); render(); };
+  window.creaDossierCard=function(d){ if(!d)return ''; d.docs=d.docs||{}; var nGen=Object.keys(d.docs).filter(function(k){return d.docs[k]&&d.docs[k].genere;}).length;
+    var env=crea(d).envoyeCompta; var badge=env?'<span class="crea-badge ok">✓ Envoyé à la comptabilité</span>':'<span class="crea-badge">Prêt à exporter</span>';
+    return '<div class="card crea-dossier"><div class="card-h"><h2>Dossier complet — envoi à la comptabilité</h2><span style="margin-left:auto">'+badge+'</span></div><div class="card-b">'
+      +'<p class="crea-p">'+nGen+' document(s) généré(s). Constituez le dossier complet et transmettez-le au logiciel de comptabilité.</p>'
+      +'<div class="crea-acts"><button class="btn btn-sm" onclick="creaImprimerDossier(\''+d.id+'\')">🖨 Dossier complet (PDF)</button>'
+      +'<button class="btn btn-sm" onclick="creaExportJSON(\''+d.id+'\')">⤓ Exporter les données (JSON)</button>'
+      +'<button class="btn btn-sm btn-pri" onclick="creaMarquerEnvoye(\''+d.id+'\')">📤 Envoyer à la comptabilité</button></div>'
+      +'</div></div>';
+  };
+
+  /* ===== Étape Clôture ===== */
+  window.creaCloturer=function(id){ var d=dos(id); if(!d)return; d.statut='Clôturé'; crea(d).cloture=true; d.wf=d.wf||{}; d.wf.cloture=Date.now(); (d.historique=d.historique||[]).unshift({d:(has('today')?today():''),t:'Dossier clôturé'}); save(); if(has('toast'))toast('Dossier clôturé ✓'); render(); };
+  window.creaClotureCard=function(d){ if(!d)return ''; var closed=crea(d).cloture; var w=d.wf||{};
+    var steps=[['reception','Réception'],['analyse','Analyse'],['validation','Validation'],['generation','Génération'],['annonce','Annonce légale'],['capital','Dépôt de capital'],['inpi','Dépôt INPI'],['dossier','Dossier complet']];
+    var rows=steps.map(function(s){var ok=!!w[s[0]];return '<div class="cf-r"><span>'+E(s[1])+'</span><b>'+(ok?'<span class="crea-badge ok">✓</span>':'<span class="crea-badge">—</span>')+'</b></div>';}).join('');
+    return '<div class="card crea-cloture"><div class="card-h"><h2>Clôture du dossier</h2><span style="margin-left:auto">'+(closed?'<span class="crea-badge ok">✓ Clôturé</span>':'')+'</span></div><div class="card-b">'
+      +'<p class="crea-p">Récapitulatif du parcours avant clôture définitive.</p><div class="cf-grid">'+rows+'</div>'
+      +(closed?'<div class="crea-recu" style="margin-top:12px"><span>✓ Dossier clôturé</span></div>':'<button class="btn btn-pri crea-b-go" style="margin-top:12px" onclick="creaCloturer(\''+d.id+'\')">🔒 Clôturer le dossier</button>')
+      +'</div></div>';
+  };
+
+  /* ===== Injection des cartes dans le dossier ===== */
+  try{ var _ep=window.espPanel; if(typeof _ep==='function' && !_ep.__crea){ window.espPanel=function(d,list,sel){ var h=_ep.apply(this,arguments);
+    try{ if(d && typeof h==='string' && h.indexOf('crea-valid')<0){
+      var add=window.creaValidCard(d)+window.creaGenCard(d)+window.creaCapitalCard(d)+window.creaDossierCard(d)+window.creaClotureCard(d);
+      if(h.indexOf('</div></div>')>-1 && /esp-main/.test(h)){ h=h.replace(/(<div class="esp-main[^"]*">)/, '$1'+add); }
+    } }catch(e){}
+    return h; }; window.espPanel.__crea=true; } }catch(e){}
+
+  /* ===== Lien plateforme d'annonce légale (ajout à la carte existante) ===== */
+  try{ var _al=window.annonceLegaleCard; if(typeof _al==='function' && !_al.__crealink){ window.annonceLegaleCard=function(d){ var h=_al.apply(this,arguments);
+    try{ if(typeof h==='string' && h.indexOf('al-note')>-1 && h.indexOf('crea-jal')<0){ h=h.replace('<div class="al-note">','<div class="crea-jal"><a class="btn btn-sm" href="https://actulegales.fr/annonces-legales" target="_blank" rel="noopener">🔗 Publier sur une plateforme d\'annonces légales</a><span class="crea-jal-h">Réception automatique : dès dépôt de l\'attestation, l\'étape passe au vert.</span></div><div class="al-note">'); } }catch(e){}
+    return h; }; window.annonceLegaleCard.__crealink=true; } }catch(e){}
+
+  /* ===== Hook d'enregistrement : auto-validation à chaque réception (robuste, indépendant du rendu) ===== */
+  try{ var _sv=window.save; if(typeof _sv==='function' && !_sv.__crea){ window.save=function(){
+    try{ if(!window.__creaSv){ window.__creaSv=true; var msgs=[]; var _ds=(has('espDoss')?espDoss():((typeof DB!=='undefined'&&DB.dossiers)||[])); _ds.forEach(function(d){ try{ var r=window.creaAutoValidate(d); if(r&&r.length)r.forEach(function(x){msgs.push(x);}); }catch(e){} }); window.__creaSv=false; window.__creaMsgs=(window.__creaMsgs||[]).concat(msgs); } }catch(e){window.__creaSv=false;}
+    return _sv.apply(this,arguments); }; window.save.__crea=true; } }catch(e){}
+  /* Notification une fois le rendu fait (best-effort, sans dépendre du wrap de render). */
+  try{ setInterval(function(){ try{ var m=window.__creaMsgs; if(m&&m.length){ window.__creaMsgs=[]; if(has('toast'))m.forEach(function(x){toast('✓ '+x+' — étape validée automatiquement (justificatif reçu).');}); } }catch(e){} }, 400); }catch(e){}
+
+  /* ===== Style ===== */
+  try{ if(!document.getElementById('crea-flux-css')){ var st=document.createElement('style'); st.id='crea-flux-css'; st.textContent=[
+    '.crea-p{font:13px/1.6 "Hanken Grotesk",system-ui,sans-serif;color:#aab2c0;margin:0 0 12px}',
+    '.crea-badge{display:inline-block;font:600 11px/1.5 "IBM Plex Mono",monospace;letter-spacing:.03em;padding:3px 9px;border-radius:20px;border:1px solid #313640;color:#8a8a92}',
+    '.crea-badge.ok{background:#123324;border-color:#1f8a4d;color:#57d98a}',
+    '.crea-badge.wait{border-color:#4a4030;color:#d8b877}',
+    '.cf-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}',
+    '.cf-r{display:flex;justify-content:space-between;gap:12px;align-items:center;background:#0d0e11;border:1px solid #23262d;border-radius:8px;padding:8px 11px}',
+    '.cf-r>span{font:600 10.5px/1.2 "IBM Plex Mono",monospace;letter-spacing:.03em;color:#6b7280;text-transform:uppercase}',
+    '.cf-r>b{font:13px/1.2 "Hanken Grotesk",system-ui,sans-serif;color:#f4f6fa;text-align:right}',
+    '.cf-r.cf-empty>b{color:#5a616c}',
+    '.crea-t{width:100%;border-collapse:collapse;margin-top:12px}',
+    '.crea-t td{padding:9px 6px;border-bottom:1px solid #1c1f25;font:13px "Hanken Grotesk",system-ui,sans-serif;color:#e7e7ec}',
+    '.crea-b-go{margin-top:2px}',
+    '.crea-seg-w{display:inline-flex;border:1px solid #2a2e37;border-radius:8px;overflow:hidden;margin-bottom:14px}',
+    'html body:not(#mq):not(#mq) .crea-capital .crea-seg-w .crea-seg{background:#0a0b0d !important;border:0;padding:8px 14px;color:#8a8a92 !important;font:600 12px/1 "Hanken Grotesk",system-ui,sans-serif;cursor:pointer}',
+    'html body:not(#mq):not(#mq) .crea-capital .crea-seg-w .crea-seg:hover{background:#181b21 !important;color:#c9ccd3 !important}',
+    'html body:not(#mq):not(#mq) .crea-capital .crea-seg-w .crea-seg.on{background:#1f8a4d !important;color:#fff !important}',
+    '.crea-recept-t{font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}',
+    '.crea-drop{display:flex;gap:8px;flex-wrap:wrap;align-items:center}',
+    '.crea-recu{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#123324;border:1px solid #1f8a4d;border-radius:9px;padding:10px 13px;color:#57d98a;font:600 13px/1.3 "Hanken Grotesk",system-ui,sans-serif}',
+    '.crea-note{font:12px/1.5 "Hanken Grotesk",system-ui,sans-serif;color:#6b7280;margin-top:12px}',
+    '.crea-acts{display:flex;gap:8px;flex-wrap:wrap}',
+    '.crea-jal{display:flex;flex-direction:column;gap:6px;margin:10px 0}',
+    '.crea-jal-h{font:12px/1.4 "Hanken Grotesk",system-ui,sans-serif;color:#6b7280}',
+    '.dg-grid2{display:grid;grid-template-columns:130px 1fr;gap:6px 14px;margin:12px 0}',
+    /* rail : étape validée en VERT */
+    'html body:not(#mq):not(#mq) .trw-step.done .trw-num{background:#1f8a4d !important;border-color:#1f8a4d !important;color:#fff !important}',
+    'html body:not(#mq):not(#mq) .trw-step.done{border-color:#1f8a4d !important}',
+    'html body:not(#mq):not(#mq) .trw-step.done .trw-l b{color:#8fe3b0 !important}',
+    '@media(max-width:640px){.cf-grid{grid-template-columns:1fr}}'
+  ].join(''); document.head.appendChild(st); } }catch(e){}
 })();
 </script>
 </body>
