@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=359;
+var LAST_VER=360;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -18633,9 +18633,13 @@ setInterval(sync,800);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(sync,200);});else setTimeout(sync,200);
 })();</script>
 <script id="dem-view-trim">(function(){
-/* Vue d une demande : retrait des 3 blocs du bas (Traitement / Étapes de traitement / Informations transmises) — à la demande. */
+/* Vue d une demande : retrait des 3 blocs du bas + actions essentielles (Accepter / Refuser / Assigner) compactes dans la barre du haut. */
 function stripBlock(h,cls){var i=h.indexOf('<div class="'+cls);if(i<0)return h;var re=/<div\b|<\/div>/g;re.lastIndex=i;var depth=0,m;while((m=re.exec(h))){if(m[0]==='</div>'){depth--;if(depth===0)return h.slice(0,i)+h.slice(re.lastIndex);}else depth++;}return h;}
-if(typeof window.demVueDetail==='function'){var _dv=window.demVueDetail;window.demVueDetail=function(id){var h=_dv(id);try{h=stripBlock(h,'dem-view-cards');}catch(e){}return h;};}
+function barActions(id){var d=null;try{d=(DB.demandes||[]).find(function(x){return x.id===id;});}catch(e){}
+var opts='<option value="">— Assigner —</option>';try{(DB.users||[]).forEach(function(u){opts+='<option value="'+u.id+'"'+((d&&d.assigneA===u.id)?' selected':'')+'>'+esc(u.nom)+(u.role==='admin'?' (admin)':'')+'</option>';});}catch(e){}
+return '<span class="dem-bar-acts">'+'<button class="btn btn-sm btn-pri" onclick="demAccepter(\''+id+'\')">✓ Accepter</button>'+'<button class="btn btn-sm" onclick="demRefuser(\''+id+'\')">✕ Refuser</button>'+'<select id="dm-assign" class="dem-bar-assign" title="Assigner à un collaborateur" onchange="assignDemande(\''+id+'\')">'+opts+'</select>'+'</span>';}
+if(typeof window.demVueDetail==='function'){var _dv=window.demVueDetail;window.demVueDetail=function(id){var h=_dv(id);try{h=stripBlock(h,'dem-view-cards');if(h&&h.indexOf('<span class="dem-nav">')>=0)h=h.replace('<span class="dem-nav">',barActions(id)+'<span class="dem-nav">');}catch(e){}return h;};}
+try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createElement('style');st.id='dem-bar-acts-css';st.textContent='.dem-bar-acts{display:inline-flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}.dem-bar-acts .btn{white-space:nowrap}.dem-bar-assign{font:inherit;font-size:12px;background:#111114;color:#eef0f4;border:1px solid #34343a;border-radius:8px;padding:6px 9px;cursor:pointer;max-width:200px}.dem-bar-assign:hover{border-color:#45454d}';document.head.appendChild(st);}}catch(e){}
 })();</script>
 </body>
 </html>
