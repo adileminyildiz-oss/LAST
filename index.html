@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=365;
+var LAST_VER=366;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -19274,6 +19274,182 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.dom-prev{max-height:420px;overflow:auto;border:1px solid #23262d;border-radius:10px;background:#e7e0d1;padding:10px}',
     '@media(max-width:640px){.dom-grid{grid-template-columns:1fr}}'
   ].join(''); document.head.appendChild(st); } }catch(e){}
+})();
+</script>
+<script id="client-module-mod">(function(){
+  /* Module CLIENT — liste + fiche complète des informations client, source des documents.
+     Injection façon module « Formulaire » (PAGES + buildNav + render). */
+  function has(f){return typeof window[f]==='function';}
+  var FORMES=(typeof window.FORMES!=='undefined')?window.FORMES:['SAS','SASU','SARL','EURL','SCI','SC','SNC','SA'];
+  function cliName(c){return (c&&(c.denomination||((c.prenom?c.prenom+' ':'')+(c.nom||'')).trim()))||'(sans nom)';}
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+
+  /* ---- Enregistrement de la page dans le routage ---- */
+  try{ if(typeof PAGES!=='undefined' && !PAGES.some(function(p){return p.id==='clients';})){
+    var iEd=PAGES.findIndex(function(p){return p.id==='editions';});
+    var entry={id:'clients',lbl:'Clients',ic:'users',sub:'Liste & informations des clients'};
+    if(iEd>=0)PAGES.splice(iEd+1,0,entry);else PAGES.push(entry);
+  } }catch(e){}
+
+  /* ---- Bouton de navigation « Clients » ---- */
+  function injectBtn(){
+    var nav=document.getElementById('nav');if(!nav)return;
+    if(nav.querySelector('[data-clibtn]'))return;
+    var ed=nav.querySelector('button.nav-btn[onclick*="editions"]')||nav.querySelector('button.nav-btn[onclick*="formulaire"]');
+    var on=(typeof state!=='undefined'&&state.page==='clients')?' on':'';
+    var ico='';try{ if(typeof svg==='function'&&typeof IC!=='undefined')ico=svg(IC.users||IC.idcard||IC.building||''); }catch(e){}
+    var b=document.createElement('button');
+    b.className='nav-btn'+on;b.setAttribute('data-clibtn','1');b.setAttribute('onclick',"go('clients')");
+    b.innerHTML=ico+'<span class="nav-btn-lbl">Clients</span>';
+    if(ed&&ed.parentNode)ed.parentNode.insertBefore(b,ed.nextSibling);else nav.appendChild(b);
+  }
+  try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){var r=_bn.apply(this,arguments);try{injectBtn();}catch(e){}return r;}; } }catch(e){}
+
+  /* ---- Handlers ---- */
+  window.cliNew=function(){DB.clients=DB.clients||[];var id=(has('uid')?uid('c'):'c'+Date.now());DB.clients.unshift({id:id,denomination:'',forme:'SAS',associes:[],docVars:{},createdAt:(has('today')?today():'')});state.cliSel=id;save();render();};
+  window.cliSel=function(id){state.cliSel=id;render();};
+  window.cliDel=function(id){var c=clientById(id);if(!c)return;if(typeof confirm==='function'&&!confirm('Supprimer définitivement ce client ?'))return;DB.clients=DB.clients.filter(function(x){return x.id!==id;});if(state.cliSel===id)state.cliSel=(DB.clients[0]||{}).id||null;save();render();};
+  window.cliSet=function(id,key,val){var c=clientById(id);if(!c)return;if(key==='activites'){c.activites=(''+val).split(',').map(function(s){return s.trim();}).filter(Boolean);}else{c[key]=val;}save();var lbl=document.getElementById('cli-name-'+id);if(lbl)lbl.textContent=cliName(c);};
+  window.cliDV=function(id,key,val){var c=clientById(id);if(!c)return;c.docVars=c.docVars||{};c.docVars[key]=val;save();};
+  window.cliAssocSet=function(id,i,key,val){var c=clientById(id);if(!c)return;c.associes=c.associes||[];if(!c.associes[i])c.associes[i]={};c.associes[i][key]=val;save();};
+  window.cliAssocAdd=function(id){var c=clientById(id);if(!c)return;c.associes=c.associes||[];c.associes.push({nom:'',parts:''});save();render();};
+  window.cliAssocDel=function(id,i){var c=clientById(id);if(!c)return;c.associes=c.associes||[];c.associes.splice(i,1);save();render();};
+  window.cliSearch=function(q){window.__cliQ=(q||'').toLowerCase();var el=document.getElementById('cli-list');if(el)el.innerHTML=cliListHTML();};
+
+  /* ---- Pré-remplissage d'un document Éditions depuis un client ---- */
+  window.clientFillEdition=function(cid){
+    if(!cid)return;var d=(DB.editionsLibres||[]).filter(function(x){return x.id===state.edLibId;})[0];if(!d)return;var c=clientById(cid);if(!c)return;
+    d.data=d.data||{};var D=d.data;var dv=c.docVars||{};
+    var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
+    var pres=assoc.filter(function(a){return (''+(a.nom||'')).trim()===(''+(c.president||'')).trim();})[0]||assoc[0]||{};
+    var orgAdr=[c.siege,[c.cp,c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    function S(k,v){if(v!=null&&(''+v).trim()!=='')D[k]=(''+v);}
+    S('denomination',cliName(c));S('forme',c.forme);S('capital',c.capital);
+    S('siege',c.siege);S('cp',c.cp);S('ville',c.ville);S('siret',c.siret);S('siren',c.siren);
+    S('rcsVille',dv.rcsVille||c.ville);S('activite',(c.activites||[]).join(', '));
+    S('president',c.president);S('representant',c.president);S('clientrep',c.president);S('mandant',c.president);
+    S('clientadr',orgAdr);
+    S('civilite',pres.civilite);S('naissance',pres.naissance);S('lieuNaissance',pres.lieuNaissance);S('pays',pres.pays);S('nationalite',pres.nationalite);
+    S('pereNom',dv.pereNom);S('mereNom',dv.mereNom);S('nominal',dv.nominal);S('dateActe',dv.dateActe);
+    S('villeSignature',dv.villeSignature||c.ville);S('villesig',dv.villeSignature||c.ville);
+    S('benef',c.president);S('benefadr',pres.adresse);S('benefnat',pres.nationalite);S('benefnaiss',pres.naissance);
+    var constit={statuts:1,souscripteurs:1,pouvoir:1,dnc:1};
+    if(constit[d.k])S('adresse',pres.adresse||c.adresse);else S('adresse',orgAdr);
+    try{var so=DB.societe||{};S('cabinet',so.raison||so.nom);S('cabinetadr',[so.adresse,[so.cp,so.ville].filter(Boolean).join(' ')].filter(Boolean).join(', '));}catch(e){}
+    if(assoc.length){D._assocCount=Math.max(1,Math.min(8,assoc.length));
+      assoc.slice(0,8).forEach(function(a,i){var n=i+1;S('a'+n+'_nom',a.nom);S('a'+n+'_civ',a.civilite);S('a'+n+'_parts',a.parts);S('a'+n+'_adr',a.adresse);S('a'+n+'_naiss',a.naissance);S('a'+n+'_lieu',a.lieuNaissance);S('a'+n+'_nat',a.nationalite);});
+    }
+    save();render();if(has('toast'))toast('Informations du client chargées dans le document');
+  };
+  /* injection du sélecteur dans le volet de saisie d'Éditions */
+  try{ var _pe=window.pageEditions; if(typeof _pe==='function'){ window.pageEditions=function(){ var h=_pe.apply(this,arguments);
+    try{ if(typeof h==='string' && h.indexOf('ed2-form-t')>-1 && h.indexOf('cli-fill')<0){
+      var cls=(DB.clients||[]); if(cls.length){
+        var opts='<option value="">— Charger depuis un client —</option>'+cls.map(function(c){return '<option value="'+c.id+'">'+E(cliName(c))+'</option>';}).join('');
+        var sel='<div class="cli-fill"><span class="cli-fill-l">Pré-remplir</span><select class="ed2-in" onchange="clientFillEdition(this.value)">'+opts+'</select></div>';
+        h=h.replace('<div class="ed2-form-t">Saisie des informations</div>','<div class="ed2-form-t">Saisie des informations</div>'+sel);
+      }
+    } }catch(e){}
+    return h;
+  }; } }catch(e){}
+
+  /* ---- Rendu de la liste + fiche ---- */
+  function fld(id,key,lab,ty,opts,dv){
+    var c=clientById(id)||{};var get=dv?((c.docVars||{})[key]):(key==='activites'?((c.activites||[]).join(', ')):c[key]);
+    var v=(get!=null)?E(get):'';var fn=dv?'cliDV':'cliSet';
+    if(ty==='sel'){var oo=opts||FORMES;return '<label class="cli-f"><span>'+E(lab)+'</span><select onchange="'+fn+'(\''+id+'\',\''+key+'\',this.value)">'+oo.map(function(o){return '<option'+(((get||'')===o)?' selected':'')+'>'+E(o)+'</option>';}).join('')+'</select></label>';}
+    return '<label class="cli-f"><span>'+E(lab)+'</span><input value="'+v+'"'+(ty==='date'?' placeholder="jj/mm/aaaa"':'')+' oninput="'+fn+'(\''+id+'\',\''+key+'\',this.value)"></label>';
+  }
+  function grp(title,inner){return '<div class="cli-grp"><div class="cli-grp-h">'+E(title)+'</div><div class="cli-grid">'+inner+'</div></div>';}
+  function assocEditor(c){
+    var rows=(c.associes||[]).map(function(a,i){
+      function af(key,lab,ty){var v=E(a[key]||'');if(ty==='sel'){return '<label class="cli-f"><span>'+lab+'</span><select onchange="cliAssocSet(\''+c.id+'\','+i+',\''+key+'\',this.value)"><option value=""></option>'+['M.','Mme'].map(function(o){return '<option'+((a[key]||'')===o?' selected':'')+'>'+o+'</option>';}).join('')+'</select></label>';}
+        return '<label class="cli-f"><span>'+lab+'</span><input value="'+v+'" oninput="cliAssocSet(\''+c.id+'\','+i+',\''+key+'\',this.value)"></label>';}
+      return '<div class="cli-assoc"><div class="cli-assoc-h"><b>Associé '+(i+1)+'</b><button class="cli-x" onclick="cliAssocDel(\''+c.id+'\','+i+')">Retirer</button></div><div class="cli-grid">'
+        +af('nom','Nom & prénom')+af('civilite','Civilité','sel')+af('parts','Nombre de titres')+af('adresse','Adresse')+af('naissance','Date de naissance','date')+af('lieuNaissance','Lieu de naissance')+af('nationalite','Nationalité')+'</div></div>';
+    }).join('');
+    return '<div class="cli-grp"><div class="cli-grp-h">Associés<button class="cli-add" onclick="cliAssocAdd(\''+c.id+'\')">＋ Ajouter</button></div>'+(rows||'<div class="cli-empty2">Aucun associé — ajoutez-en un.</div>')+'</div>';
+  }
+  function cliFiche(id){
+    var c=clientById(id);if(!c)return '<div class="cli-empty">Sélectionnez un client dans la liste, ou créez-en un.</div>';
+    var id2=c.id;
+    var identity=grp('Identité société',fld(id2,'denomination','Dénomination sociale')+fld(id2,'nomCommercial','Nom commercial')+fld(id2,'forme','Forme juridique','sel')+fld(id2,'capital','Capital (€)')+fld(id2,'siren','SIREN')+fld(id2,'siret','SIRET')+fld(id2,'regime','Régime fiscal')+fld(id2,'dateDebut','Début d\'activité','date')+fld(id2,'activites','Activité(s) — séparées par des virgules'));
+    var siege=grp('Siège social',fld(id2,'siege','Adresse du siège')+fld(id2,'cp','Code postal')+fld(id2,'ville','Ville')+fld(id2,'siegeType','Type de siège')+fld(id2,'bailleur','Bailleur')+fld(id2,'domiciliataire','Société de domiciliation'));
+    var contact=grp('Contact',fld(id2,'email','E-mail')+fld(id2,'tel','Téléphone')+fld(id2,'adresse','Adresse (dirigeant / courrier)'));
+    var dir=grp('Dirigeant',fld(id2,'president','Président / Gérant (nom & prénom)')+fld(id2,'presidentFonction','Fonction'));
+    var acte=grp('Acte & mentions',fld(id2,'rcsVille','Ville du RCS',null,null,true)+fld(id2,'nominal','Valeur nominale du titre (€)',null,null,true)+fld(id2,'dateActe','Date de l\'acte','date',null,true)+fld(id2,'villeSignature','Ville de signature',null,null,true)+fld(id2,'pereNom','Nom du père',null,null,true)+fld(id2,'mereNom','Nom de la mère',null,null,true));
+    var head='<div class="cli-fiche-head"><div><div class="cli-fiche-nom">'+E(cliName(c))+'</div><div class="cli-fiche-sub">'+E(c.forme||'—')+' · '+E(c.ville||'—')+'</div></div>'
+      +'<div class="cli-fiche-act"><button class="cli-b" onclick="go(\'editions\')">Créer un document →</button><button class="cli-b cli-b-x" onclick="cliDel(\''+id2+'\')">Supprimer</button></div></div>';
+    return '<div class="cli-fiche">'+head+identity+siege+contact+dir+assocEditor(c)+acte+'</div>';
+  }
+  function cliListHTML(){
+    var q=window.__cliQ||'';var cls=(DB.clients||[]).filter(function(c){return !q||(cliName(c)+' '+(c.ville||'')+' '+(c.email||'')).toLowerCase().indexOf(q)>-1;});
+    if(!cls.length)return '<div class="cli-empty2">Aucun client'+(q?' pour « '+E(q)+' »':'')+'.</div>';
+    return cls.map(function(c){var on=(state.cliSel===c.id)?' on':'';return '<button class="cli-row'+on+'" onclick="cliSel(\''+c.id+'\')"><span class="cli-name" id="cli-name-'+c.id+'">'+E(cliName(c))+'</span><span class="cli-meta">'+E(c.forme||'—')+' · '+E(c.ville||'—')+'</span></button>';}).join('');
+  }
+  window.pageClients=function(){
+    if(state.cliSel&&!clientById(state.cliSel))state.cliSel=null;
+    if(!state.cliSel&&(DB.clients||[]).length)state.cliSel=DB.clients[0].id;
+    return '<div class="cli-wrap"><aside class="cli-side"><div class="cli-side-h"><button class="cli-new" onclick="cliNew()">＋ Nouveau client</button></div>'
+      +'<input class="cli-srch" placeholder="Rechercher un client…" value="'+E(window.__cliQ||'')+'" oninput="cliSearch(this.value)">'
+      +'<div class="cli-list" id="cli-list">'+cliListHTML()+'</div></aside>'
+      +'<div class="cli-main">'+cliFiche(state.cliSel)+'</div></div>';
+  };
+
+  /* ---- Hook de rendu ---- */
+  try{ var _rd=window.render; if(typeof _rd==='function'){ window.render=function(){
+    if(typeof state!=='undefined'&&state.page==='clients'){
+      try{buildNav();}catch(e){}
+      try{document.body.dataset.page='clients';}catch(e){}
+      var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='clients';}):null;
+      try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Clients';}catch(e){}
+      try{document.getElementById('psub').textContent=(p&&p.sub)||'';}catch(e){}
+      var V=document.getElementById('view');if(V)V.innerHTML=pageClients();
+      return;
+    }
+    return _rd.apply(this,arguments);
+  }; } }catch(e){}
+
+  /* ---- Style (thème noir) ---- */
+  try{ if(!document.getElementById('client-mod-css')){var st=document.createElement('style');st.id='client-mod-css';st.textContent=[
+    '.cli-wrap{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start;padding:4px 0 40px}',
+    '.cli-side{position:sticky;top:8px;display:flex;flex-direction:column;gap:10px}',
+    '.cli-new{width:100%;background:#f4f6fa;color:#0a0b0d;border:0;border-radius:9px;padding:11px;font:600 13px/1 "Hanken Grotesk",system-ui,sans-serif;cursor:pointer}',
+    '.cli-new:hover{background:#e6e9ee}',
+    '.cli-srch{background:#0d0e11;border:1px solid #2a2e37;border-radius:8px;padding:9px 11px;color:#f4f6fa;font:13px "Hanken Grotesk",system-ui,sans-serif}',
+    '.cli-srch:focus{outline:none;border-color:#5a616c}',
+    '.cli-list{display:flex;flex-direction:column;gap:5px;max-height:70vh;overflow:auto}',
+    '.cli-row{display:flex;flex-direction:column;gap:2px;text-align:left;background:#0d0e11;border:1px solid #23262d;border-radius:9px;padding:10px 12px;color:#f4f6fa;cursor:pointer;transition:background .12s,border-color .12s}',
+    '.cli-row:hover{background:#14161b;border-color:#313640}',
+    '.cli-row.on{background:#1b1f27;border-color:#3a414d}',
+    '.cli-name{font:600 13px/1.2 "Hanken Grotesk",system-ui,sans-serif}',
+    '.cli-meta{font:500 11px/1 "IBM Plex Mono",monospace;color:#8a8a92;letter-spacing:.02em}',
+    '.cli-main{min-width:0}',
+    '.cli-empty,.cli-empty2{color:#8a8a92;font:13px "Hanken Grotesk",system-ui,sans-serif;padding:16px;border:1px dashed #2a2e37;border-radius:10px}',
+    '.cli-fiche-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}',
+    '.cli-fiche-nom{font:700 20px/1.2 "Hanken Grotesk",system-ui,sans-serif;color:#f4f6fa}',
+    '.cli-fiche-sub{font:500 12px/1 "IBM Plex Mono",monospace;color:#8a8a92;margin-top:4px}',
+    '.cli-fiche-act{display:flex;gap:8px;flex:none}',
+    '.cli-b{background:#0d0e11;border:1px solid #2a2e37;border-radius:8px;padding:9px 13px;color:#f4f6fa;font:600 12px/1 "Hanken Grotesk",system-ui,sans-serif;cursor:pointer}',
+    '.cli-b:hover{background:#181b21;border-color:#3a414d}',
+    '.cli-b-x{color:#e88}',
+    '.cli-grp{border:1px solid #23262d;border-radius:12px;padding:14px 16px;margin-bottom:12px;background:#0e0f13}',
+    '.cli-grp-h{display:flex;align-items:center;justify-content:space-between;font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:#8a8a92;margin-bottom:12px}',
+    '.cli-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}',
+    '.cli-f{display:flex;flex-direction:column;gap:5px}',
+    '.cli-f>span{font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.03em;color:#6b7280;text-transform:uppercase}',
+    '.cli-f input,.cli-f select{background:#0a0b0d;border:1px solid #2a2e37;border-radius:8px;padding:9px 10px;color:#f4f6fa;font:13px "Hanken Grotesk",system-ui,sans-serif}',
+    '.cli-f input:focus,.cli-f select:focus{outline:none;border-color:#5a616c}',
+    '.cli-add{background:#1b1f27;border:1px solid #3a414d;border-radius:7px;padding:5px 10px;color:#f4f6fa;font:600 11px/1 "Hanken Grotesk",system-ui,sans-serif;cursor:pointer;text-transform:none;letter-spacing:0}',
+    '.cli-assoc{border:1px solid #23262d;border-radius:9px;padding:11px 12px;margin-top:10px;background:#0a0b0d}',
+    '.cli-assoc-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;font-size:12px;color:#c9ccd3}',
+    '.cli-x{background:none;border:1px solid #2a2e37;border-radius:6px;color:#e88;padding:4px 9px;font:600 11px "Hanken Grotesk",system-ui,sans-serif;cursor:pointer}',
+    '.cli-fill{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #23262d}',
+    '.cli-fill-l{font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.03em;color:#6b7280;text-transform:uppercase}',
+    '@media(max-width:860px){.cli-wrap{grid-template-columns:1fr}.cli-side{position:static}.cli-grid{grid-template-columns:1fr}}'
+  ].join('');document.head.appendChild(st);} }catch(e){}
+
+  try{ if(typeof state!=='undefined'&&state.page==='clients'&&has('render'))render(); }catch(e){}
 })();
 </script>
 </body>

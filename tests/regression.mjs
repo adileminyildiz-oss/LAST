@@ -33,13 +33,13 @@ const r = await page.evaluate(async () => {
   window.confirm = () => true;
 
   // 1) Navigation réduite à 3 pages + redirection des pages inconnues
-  out.navTrim = Array.isArray(PAGES) && PAGES.map(p => p.id).join(',') === 'demandes,espace,formulaire,editions,pilotage,params';
+  out.navTrim = Array.isArray(PAGES) && PAGES.map(p => p.id).join(',') === 'demandes,espace,formulaire,editions,clients,pilotage,params';
   state.page = 'facturation'; render(); out.redirect = (state.page === 'facturation') ? true : true; // dispatch inconnu → pageDemandes
   const badHTML = document.getElementById('view').innerHTML;
   out.redirectSafe = badHTML.length > 50;
   buildNav(); const navHTML = document.getElementById('nav').innerHTML;
   out.navHasCore = /Demandes/.test(navHTML) && /Traitement/.test(navHTML) && /Paramètres/.test(navHTML);
-  out.navNoOld = !/Facturation|Devis|Clients|Rentabilité|Suivi|Rapprochement/.test(navHTML);
+  out.navNoOld = !/Facturation|Devis|Rentabilité|Suivi|Rapprochement/.test(navHTML);
 
   // 2) Rendu des 3 pages
   ['demandes', 'espace', 'params'].forEach(p => { state.page = p; render(); out['page_' + p] = document.getElementById('view').innerHTML.length; });
