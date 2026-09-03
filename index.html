@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=374;
+var LAST_VER=375;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -6725,13 +6725,8 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
     var pr=progress(d);
     var syn='',prof='';
     try{ if(has('avocatFiscaliste')){var a=window.avocatFiscaliste(d); syn=(a&&a.synthese)||''; if(a&&a.profil){prof=[a.profil.forme,a.profil.regimeFiscal].filter(Boolean).join(' · ');} } }catch(e){}
-    var next=''; try{ if(has('tacheDossier')){var t=window.tacheDossier(d); if(t&&t.act){ next='<button class="tr-act tr-act-pri" onclick="'+t.act.replace(/"/g,'&quot;')+'">Traiter</button>'; } } }catch(e){}
-    var acts='<div class="tr-actions">'
-      +next
-      +(has('iaResumeDossier')?'<button class="tr-act" onclick="iaResumeDossier(\''+d.id+'\')">Résumé IA</button>':'')
-      +(has('ouvrirAvocatFiscaliste')?'<button class="tr-act" onclick="ouvrirAvocatFiscaliste(\''+d.id+'\')">Analyse fiscaliste</button>':'')
-      +(has('fiscalHubOpen')?'<button class="tr-act tr-act-fisc" onclick="fiscalHubOpen(\''+d.id+'\')">Module fiscal</button>':'')
-      +'</div>';
+    /* Boutons « Traiter » et « Résumé IA » retirés de l'en-tête.
+       « Analyse fiscaliste » et « Module fiscal » déplacés vers l'étape Analyse (fiscCard). */
     return '<div class="tr-head">'
       +'<div class="tr-head-row">'
         +'<div class="tr-id"><div class="tr-name">'+E(nomD(d))+'</div>'
@@ -6740,8 +6735,15 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
         +'<span class="tr-stat" style="color:'+col+';border-color:'+col+'66;background:'+col+'1f">'+E(d.statut||'—')+'</span>'
       +'</div>'
       +'<div class="tr-prog"><div class="tr-prog-track"><div class="tr-prog-bar" style="width:'+pr.pct+'%"></div></div><span class="tr-prog-lbl">'+pr.ok+'/'+pr.total+' étapes · '+pr.pct+'%</span></div>'
-      +acts
       +'</div>';
+  }
+  /* Outils fiscaux déplacés dans l'étape « Analyse » du parcours (classe ana-card → routée par le wizard). */
+  function fiscCard(d){
+    var b=''
+      +(has('ouvrirAvocatFiscaliste')?'<button class="tr-act" onclick="ouvrirAvocatFiscaliste(\''+d.id+'\')">Analyse fiscaliste</button>':'')
+      +(has('fiscalHubOpen')?'<button class="tr-act tr-act-fisc" onclick="fiscalHubOpen(\''+d.id+'\')">Module fiscal</button>':'');
+    if(!b)return '';
+    return '<div class="card ana-card tr-fisccard"><div class="card-h"><h2>Outils fiscaux</h2><span class="sub" style="margin-left:auto">Analyse et régime fiscal du dossier</span></div><div class="card-b"><div class="tr-actions">'+b+'</div></div></div>';
   }
   if(typeof window.espPanel==='function'){ var _p=window.espPanel;
     window.espPanel=function(d,list,id){ var h=_p(d,list,id); if(!d||!h||h.indexOf('<div class="esp-main"')<0) return h;
@@ -6755,7 +6757,7 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
         h=stripCard(h,'card pj-card');
         var pfCard=''; try{ if(typeof window.dossierPreflightCard==='function') pfCard=window.dossierPreflightCard(d)||''; }catch(e){}
         var rcCard=''; try{ if(typeof window.dossierRecapCard==='function') rcCard=window.dossierRecapCard(d)||''; }catch(e){}
-        h=h.replace('<div class="esp-main">','<div class="esp-main esp-grid">'+trHead(d)+pfCard+rcCard+docCard);
+        h=h.replace('<div class="esp-main">','<div class="esp-main esp-grid">'+trHead(d)+fiscCard(d)+pfCard+rcCard+docCard);
       }catch(e){}
       return h;
     };
@@ -19835,9 +19837,11 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var recept=recu?('<div class="crea-recu"><span>✓ Reçu : 📄 '+E(c.justifNom||'justificatif')+'</span><span><button class="btn btn-sm btn-ghost" onclick="creaCapitalVoir(\''+d.id+'\')">Voir</button><button class="btn btn-sm btn-ghost" onclick="creaCapitalSuppr(\''+d.id+'\')">Retirer</button></span></div>')
       :('<div class="crea-drop"><label class="btn btn-sm btn-pri">Déposer le justificatif (banque/notaire)<input type="file" accept="image/*,application/pdf" style="display:none" onchange="creaCapitalUpload(\''+d.id+'\',this)"></label><button class="btn btn-sm btn-ghost" onclick="creaCapitalSimuler(\''+d.id+'\')">📥 Simuler la réception e-mail</button></div>');
     var badge=recu?'<span class="crea-badge ok">✓ Justificatif reçu</span>':'<span class="crea-badge wait">En attente du justificatif</span>';
+    var et=(!recu&&has('creaEtatEtape'))?window.creaEtatEtape(d,'capital'):null;
+    var etHtml=et?('<div class="crea-att '+(et.statut==='retard'?'ret':'att')+'">'+(et.statut==='retard'?('⚠ En retard — '+et.jours+' j écoulés (délai habituel '+et.delai+' j). Pensez à relancer le prestataire.'):('⏳ En attente du justificatif — '+et.jours+' j (délai habituel '+et.delai+' j).'))+'</div>'):'';
     return '<div class="card crea-capital"><div class="card-h"><h2>Dépôt de capital</h2><span style="margin-left:auto">'+badge+'</span></div><div class="card-b">'
       +'<div class="crea-seg-w">'+seg+'</div>'
-      +'<div class="crea-recept-t">Réception de l\'attestation de dépôt (e-mail ou dépôt)</div>'+recept
+      +'<div class="crea-recept-t">Réception de l\'attestation de dépôt (e-mail ou dépôt)</div>'+recept+etHtml
       +'<div class="crea-note">Dès réception du justificatif, l\'étape passe automatiquement au vert. L\'attestation est émise par la banque, le notaire ou la Caisse des Dépôts.</div>'
       +'</div></div>';
   };
@@ -19902,8 +19906,24 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   try{ var _sv=window.save; if(typeof _sv==='function' && !_sv.__crea){ window.save=function(){
     try{ if(!window.__creaSv){ window.__creaSv=true; var msgs=[]; var _ds=(has('espDoss')?espDoss():((typeof DB!=='undefined'&&DB.dossiers)||[])); _ds.forEach(function(d){ try{ var r=window.creaAutoValidate(d); if(r&&r.length)r.forEach(function(x){msgs.push(x);}); }catch(e){} }); window.__creaSv=false; window.__creaMsgs=(window.__creaMsgs||[]).concat(msgs); } }catch(e){window.__creaSv=false;}
     return _sv.apply(this,arguments); }; window.save.__crea=true; } }catch(e){}
-  /* Notification une fois le rendu fait (best-effort, sans dépendre du wrap de render). */
-  try{ setInterval(function(){ try{ var m=window.__creaMsgs; if(m&&m.length){ window.__creaMsgs=[]; if(has('toast'))m.forEach(function(x){toast('✓ '+x+' — étape validée automatiquement (justificatif reçu).');}); } }catch(e){} }, 400); }catch(e){}
+  /* Délai « normal » de retour du prestataire habituel (jours) — au-delà = retard (rouge). */
+  window.DELAI_PRESTA={annonce:3,capital:5,inpi:15};
+  function delai(k){ try{ var d=(typeof DB!=='undefined'&&DB.parametres&&DB.parametres.delaisPresta)||{}; return d[k]||window.DELAI_PRESTA[k]; }catch(e){ return window.DELAI_PRESTA[k]; } }
+  window.creaEtatEtape=function(d,key){ /* renvoie {statut:'attente'|'retard', jours, delai} pour une étape en cours dépendant d'un prestataire */
+    if(!d||!window.DELAI_PRESTA[key])return null; if(d.wf&&d.wf[key])return null;
+    d.crea=d.crea||{}; d.crea.attente=d.crea.attente||{}; if(!d.crea.attente[key]){d.crea.attente[key]=Date.now();}
+    var j=Math.floor((Date.now()-d.crea.attente[key])/86400000); var dl=delai(key);
+    return {statut:(j>dl?'retard':'attente'),jours:j,delai:dl};
+  };
+  /* Décorateur du rail : colore l'étape courante (jaune en attente, rouge en retard). */
+  function decorRail(){ try{ if(typeof state==='undefined'||state.page!=='espace')return;
+    var d=(typeof espDoss==='function'?espDoss():[]).filter(function(x){return x.id===state.espaceDossier;})[0]; if(!d)return;
+    var cur=document.querySelector('.trw-rail .trw-step.cur'); if(!cur)return; var k=cur.getAttribute('data-k');
+    var e=window.creaEtatEtape(d,k);
+    if(e&&e.statut==='retard')cur.classList.add('crea-retard'); else cur.classList.remove('crea-retard');
+  }catch(e){} }
+  /* Notification + décoration périodiques (best-effort, sans dépendre du wrap de render). */
+  try{ setInterval(function(){ try{ decorRail(); var m=window.__creaMsgs; if(m&&m.length){ window.__creaMsgs=[]; if(has('toast'))m.forEach(function(x){toast('✓ '+x+' — étape validée automatiquement (justificatif reçu).');}); } }catch(e){} }, 500); }catch(e){}
 
   /* ===== Style ===== */
   try{ if(!document.getElementById('crea-flux-css')){ var st=document.createElement('style'); st.id='crea-flux-css'; st.textContent=[
@@ -19931,11 +19951,111 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.crea-jal{display:flex;flex-direction:column;gap:6px;margin:10px 0}',
     '.crea-jal-h{font:12px/1.4 "Hanken Grotesk",system-ui,sans-serif;color:#6b7280}',
     '.dg-grid2{display:grid;grid-template-columns:130px 1fr;gap:6px 14px;margin:12px 0}',
-    /* rail : étape validée en VERT */
+    /* rail : validée=VERT, en attente=JAUNE, en retard=ROUGE */
     'html body:not(#mq):not(#mq) .trw-step.done .trw-num{background:#1f8a4d !important;border-color:#1f8a4d !important;color:#fff !important}',
     'html body:not(#mq):not(#mq) .trw-step.done{border-color:#1f8a4d !important}',
     'html body:not(#mq):not(#mq) .trw-step.done .trw-l b{color:#8fe3b0 !important}',
+    'html body:not(#mq):not(#mq) .trw-step.cur:not(.crea-retard) .trw-num{background:#d9a441 !important;border-color:#d9a441 !important;color:#0a0b0d !important}',
+    'html body:not(#mq):not(#mq) .trw-step.cur:not(.crea-retard){border-color:#d9a441 !important}',
+    'html body:not(#mq):not(#mq) .trw-step.cur:not(.crea-retard) .trw-l b{color:#f0cf87 !important}',
+    'html body:not(#mq):not(#mq) .trw-step.crea-retard .trw-num{background:#c0553a !important;border-color:#c0553a !important;color:#fff !important}',
+    'html body:not(#mq):not(#mq) .trw-step.crea-retard{border-color:#c0553a !important}',
+    'html body:not(#mq):not(#mq) .trw-step.crea-retard .trw-l b{color:#e88a72 !important}',
+    '.crea-att{font:12px/1.5 "Hanken Grotesk",system-ui,sans-serif;margin-top:8px;padding:8px 11px;border-radius:8px}',
+    '.crea-att.att{background:#2a2410;border:1px solid #5a4a1e;color:#f0cf87}',
+    '.crea-att.ret{background:#2e1512;border:1px solid #7a3325;color:#e88a72}',
     '@media(max-width:640px){.cf-grid{grid-template-columns:1fr}}'
+  ].join(''); document.head.appendChild(st); } }catch(e){}
+})();
+</script>
+<script id="factures-prestataires-mod">(function(){
+  /* Factures des prestataires (JAL, INPI, etc.) reçues par mail → dossier SÉPARÉ,
+     hors dossiers clients, pour justifier les paiements du cabinet. */
+  function has(f){return typeof window[f]==='function';}
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+  function store(){ if(typeof DB==='undefined')return []; DB.facturesPrestataires=DB.facturesPrestataires||[]; return DB.facturesPrestataires; }
+
+  /* ---- Routage ---- */
+  try{ if(typeof PAGES!=='undefined' && !PAGES.some(function(p){return p.id==='prestataires';})){
+    var _pg={id:'prestataires',lbl:'Factures prestataires',ic:'receipt',sub:'Justificatifs de paiement du cabinet (hors dossiers clients)'};
+    var _pi=PAGES.map(function(p){return p.id;}).indexOf('params');
+    if(_pi<0)PAGES.push(_pg); else PAGES.splice(_pi,0,_pg);
+  } }catch(e){}
+  function injectBtn(){
+    var nav=document.getElementById('nav');if(!nav)return; if(nav.querySelector('[data-fpbtn]'))return;
+    var params=nav.querySelector('button.nav-btn[onclick*="params"]');
+    var on=(typeof state!=='undefined'&&state.page==='prestataires')?' on':'';
+    var ico='';try{ if(has('svg')&&typeof IC!=='undefined')ico=svg(IC.receipt||IC.file||IC.euro||IC.idcard||''); }catch(e){}
+    var b=document.createElement('button');
+    b.className='nav-btn'+on;b.setAttribute('data-fpbtn','1');b.setAttribute('onclick',"go('prestataires')");
+    b.innerHTML=ico+'<span class="nav-btn-lbl">Factures prestataires</span>';
+    if(params&&params.parentNode)params.parentNode.insertBefore(b,params);else nav.appendChild(b);
+  }
+  try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){var r=_bn.apply(this,arguments);try{injectBtn();}catch(e){}return r;}; } }catch(e){}
+
+  /* ---- Handlers ---- */
+  window.fpUpload=function(input){ if(!input||!input.files||!input.files[0])return; var f=input.files[0]; var r=new FileReader();
+    r.onload=function(){ store().unshift({id:(has('uid')?uid('fp'):'fp'+Date.now()),fournisseur:'',objet:'',montant:'',date:(has('today')?today():''),fichierNom:f.name,fichierData:r.result,ts:Date.now()}); save(); if(has('toast'))toast('Facture prestataire ajoutée'); render(); }; r.readAsDataURL(f); };
+  window.fpSimuler=function(){ store().unshift({id:(has('uid')?uid('fp'):'fp'+Date.now()),fournisseur:'Journal d\'annonces légales',objet:'Publication annonce légale',montant:'',date:(has('today')?today():''),fichierNom:'facture-annonce-legale.pdf',fichierData:'data:application/pdf;base64,JVBERi0xLjQK',ts:Date.now(),recuMail:true}); save(); if(has('toast'))toast('📥 Facture prestataire reçue par e-mail'); render(); };
+  window.fpSet=function(id,k,v){ var e=store().filter(function(x){return x.id===id;})[0]; if(!e)return; e[k]=v; save(); };
+  window.fpDel=function(id){ if(has('confirm')&&!confirm('Supprimer cette facture ?'))return; if(typeof DB!=='undefined')DB.facturesPrestataires=store().filter(function(x){return x.id!==id;}); save(); render(); };
+  window.fpVoir=function(id){ var e=store().filter(function(x){return x.id===id;})[0]; if(!e||!e.fichierData)return; try{var w=window.open();if(w)w.document.write('<iframe src="'+e.fichierData+'" style="border:0;width:100vw;height:100vh"></iframe>');}catch(err){} };
+  window.fpDl=function(id){ var e=store().filter(function(x){return x.id===id;})[0]; if(!e||!e.fichierData)return; var a=document.createElement('a'); a.href=e.fichierData; a.download=e.fichierNom||'facture'; a.click(); };
+
+  /* ---- Page ---- */
+  window.pageFactPresta=function(){
+    var list=store(); var total=list.reduce(function(n,e){var m=parseFloat((''+(e.montant||'')).replace(',','.').replace(/[^0-9.]/g,''));return n+(isNaN(m)?0:m);},0);
+    var rows=list.map(function(e){
+      return '<tr><td><input class="fp-in" value="'+E(e.fournisseur||'')+'" placeholder="Prestataire" oninput="fpSet(\''+e.id+'\',\'fournisseur\',this.value)"></td>'
+        +'<td><input class="fp-in" value="'+E(e.objet||'')+'" placeholder="Objet" oninput="fpSet(\''+e.id+'\',\'objet\',this.value)"></td>'
+        +'<td><input class="fp-in fp-num" value="'+E(e.montant||'')+'" placeholder="€" oninput="fpSet(\''+e.id+'\',\'montant\',this.value)"></td>'
+        +'<td><input class="fp-in" type="date" value="'+E(e.date||'')+'" oninput="fpSet(\''+e.id+'\',\'date\',this.value)"></td>'
+        +'<td class="fp-file">'+(e.recuMail?'<span class="fp-mail">📥 e-mail</span> ':'')+'📄 '+E(e.fichierNom||'—')+'</td>'
+        +'<td style="text-align:right;white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="fpVoir(\''+e.id+'\')">Voir</button><button class="btn btn-sm btn-ghost" onclick="fpDl(\''+e.id+'\')">⤓</button><button class="btn btn-sm btn-ghost fp-x" onclick="fpDel(\''+e.id+'\')">✕</button></td></tr>';
+    }).join('');
+    return '<div class="fp-wrap">'
+      +'<div class="card fp-head"><div class="card-b">'
+      +'<p class="fp-note">Ces factures (annonces légales, INPI, autres prestataires) sont reçues par mail et conservées ici, <b>séparément des dossiers clients</b>, pour justifier les paiements du cabinet.</p>'
+      +'<div class="fp-add"><label class="btn btn-pri">＋ Déposer une facture<input type="file" accept="image/*,application/pdf" style="display:none" onchange="fpUpload(this)"></label>'
+      +'<button class="btn btn-ghost" onclick="fpSimuler()">📥 Simuler une réception e-mail</button>'
+      +'<span class="fp-total">Total : <b>'+(total?total.toLocaleString('fr-FR'):'0')+' €</b> · '+list.length+' facture(s)</span></div>'
+      +'</div></div>'
+      +'<div class="card"><div class="card-b">'
+      +(list.length?('<table class="fp-t"><thead><tr><th>Prestataire</th><th>Objet</th><th>Montant</th><th>Date</th><th>Justificatif</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>')
+        :'<div class="fp-empty">Aucune facture prestataire. Déposez-en une ou simulez une réception e-mail.</div>')
+      +'</div></div></div>';
+  };
+
+  /* ---- Hook de rendu ---- */
+  try{ var _rd=window.render; if(typeof _rd==='function' && !_rd.__fp){ window.render=function(){
+    if(typeof state!=='undefined'&&state.page==='prestataires'){
+      try{buildNav();}catch(e){}
+      try{document.body.dataset.page='prestataires';}catch(e){}
+      var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='prestataires';}):null;
+      try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Factures prestataires';}catch(e){}
+      try{document.getElementById('psub').textContent=(p&&p.sub)||'';}catch(e){}
+      var V=document.getElementById('view');if(V)V.innerHTML=pageFactPresta();
+      return;
+    }
+    return _rd.apply(this,arguments); }; window.render.__fp=true; } }catch(e){}
+
+  /* ---- Style ---- */
+  try{ if(!document.getElementById('fp-css')){ var st=document.createElement('style'); st.id='fp-css'; st.textContent=[
+    '.fp-wrap{display:flex;flex-direction:column;gap:14px;padding:4px 0 40px}',
+    '.fp-note{font:13px/1.6 "Hanken Grotesk",system-ui,sans-serif;color:#aab2c0;margin:0 0 12px}',
+    '.fp-add{display:flex;gap:10px;align-items:center;flex-wrap:wrap}',
+    '.fp-total{margin-left:auto;font:13px "Hanken Grotesk",system-ui,sans-serif;color:#8a8a92}',
+    '.fp-total b{color:#f4f6fa}',
+    '.fp-t{width:100%;border-collapse:collapse}',
+    '.fp-t th{text-align:left;font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;padding:0 8px 10px}',
+    '.fp-t td{padding:6px 8px;border-top:1px solid #1c1f25;vertical-align:middle}',
+    'html body:not(#mq):not(#mq) .fp-t .fp-in{background:#0a0b0d !important;border:1px solid #2a2e37;border-radius:7px;padding:8px 9px;color:#f4f6fa !important;font:13px "Hanken Grotesk",system-ui,sans-serif;width:100%}',
+    'html body:not(#mq):not(#mq) .fp-t .fp-in:focus{outline:none;border-color:#5a616c}',
+    '.fp-num{max-width:90px}',
+    '.fp-file{font:12px "Hanken Grotesk",system-ui,sans-serif;color:#c9ccd3;white-space:nowrap}',
+    '.fp-mail{font:600 10px/1 "IBM Plex Mono",monospace;color:#57d98a;border:1px solid #1f8a4d;border-radius:5px;padding:2px 5px}',
+    '.fp-x{color:#e88 !important}',
+    '.fp-empty{color:#8a8a92;font:13px "Hanken Grotesk",system-ui,sans-serif;padding:16px;text-align:center}'
   ].join(''); document.head.appendChild(st); } }catch(e){}
 })();
 </script>
