@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=366;
+var LAST_VER=367;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -19281,7 +19281,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
      Injection façon module « Formulaire » (PAGES + buildNav + render). */
   function has(f){return typeof window[f]==='function';}
   var FORMES=(typeof window.FORMES!=='undefined')?window.FORMES:['SAS','SASU','SARL','EURL','SCI','SC','SNC','SA'];
-  function cliName(c){return (c&&(c.denomination||((c.prenom?c.prenom+' ':'')+(c.nom||'')).trim()))||'(sans nom)';}
+  function cliIsPart(c){return !!(c&&c.clientType==='particulier');}
+  function cliName(c){if(!c)return '(sans nom)';var pn=((c.prenom?c.prenom+' ':'')+(c.nom||'')).trim();if(cliIsPart(c))return pn||'(particulier)';return c.denomination||pn||'(sans nom)';}
   function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
 
   /* ---- Enregistrement de la page dans le routage ---- */
@@ -19306,7 +19307,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){var r=_bn.apply(this,arguments);try{injectBtn();}catch(e){}return r;}; } }catch(e){}
 
   /* ---- Handlers ---- */
-  window.cliNew=function(){DB.clients=DB.clients||[];var id=(has('uid')?uid('c'):'c'+Date.now());DB.clients.unshift({id:id,denomination:'',forme:'SAS',associes:[],docVars:{},createdAt:(has('today')?today():'')});state.cliSel=id;save();render();};
+  window.cliNew=function(type){type=(type==='particulier')?'particulier':'entreprise';DB.clients=DB.clients||[];var id=(has('uid')?uid('c'):'c'+Date.now());var base={id:id,clientType:type,associes:[],docVars:{},createdAt:(has('today')?today():'')};if(type==='entreprise'){base.denomination='';base.forme='SAS';}DB.clients.unshift(base);state.cliSel=id;save();render();};
+  window.cliSetType=function(id,t){var c=clientById(id);if(!c)return;c.clientType=(t==='particulier')?'particulier':'entreprise';save();render();};
+  window.cliFilter=function(t){window.__cliType=t||'';render();};
   window.cliSel=function(id){state.cliSel=id;render();};
   window.cliDel=function(id){var c=clientById(id);if(!c)return;if(typeof confirm==='function'&&!confirm('Supprimer définitivement ce client ?'))return;DB.clients=DB.clients.filter(function(x){return x.id!==id;});if(state.cliSel===id)state.cliSel=(DB.clients[0]||{}).id||null;save();render();};
   window.cliSet=function(id,key,val){var c=clientById(id);if(!c)return;if(key==='activites'){c.activites=(''+val).split(',').map(function(s){return s.trim();}).filter(Boolean);}else{c[key]=val;}save();var lbl=document.getElementById('cli-name-'+id);if(lbl)lbl.textContent=cliName(c);};
@@ -19324,6 +19327,19 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var pres=assoc.filter(function(a){return (''+(a.nom||'')).trim()===(''+(c.president||'')).trim();})[0]||assoc[0]||{};
     var orgAdr=[c.siege,[c.cp,c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
     function S(k,v){if(v!=null&&(''+v).trim()!=='')D[k]=(''+v);}
+    if(cliIsPart(c)){
+      var pnom=((c.prenom?c.prenom+' ':'')+(c.nom||'')).trim();
+      var padr=[c.adresse,[c.cp,c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+      S('denomination',pnom);S('president',pnom);S('representant',pnom);S('mandant',pnom);S('clientrep',pnom);S('signataire',pnom);
+      S('civilite',c.civilite);S('nom',c.nom);S('prenom',c.prenom);
+      S('naissance',c.dateNaissance);S('lieuNaissance',c.lieuNaissance);S('nationalite',c.nationalite);
+      S('adresse',padr);S('clientadr',padr);S('cp',c.cp);S('ville',c.ville);
+      S('salnom',pnom);S('saladr',padr);S('salnat',c.nationalite);
+      S('benef',pnom);S('benefadr',padr);S('benefnat',c.nationalite);S('benefnaiss',c.dateNaissance);
+      S('villesig',c.ville);S('villeSignature',c.ville);
+      try{var so1=DB.societe||{};S('cabinet',so1.raison||so1.nom);S('cabinetadr',[so1.adresse,[so1.cp,so1.ville].filter(Boolean).join(' ')].filter(Boolean).join(', '));}catch(e){}
+      save();render();if(has('toast'))toast('Informations du particulier chargées dans le document');return;
+    }
     S('denomination',cliName(c));S('forme',c.forme);S('capital',c.capital);
     S('siege',c.siege);S('cp',c.cp);S('ville',c.ville);S('siret',c.siret);S('siren',c.siren);
     S('rcsVille',dv.rcsVille||c.ville);S('activite',(c.activites||[]).join(', '));
@@ -19378,20 +19394,30 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var contact=grp('Contact',fld(id2,'email','E-mail')+fld(id2,'tel','Téléphone')+fld(id2,'adresse','Adresse (dirigeant / courrier)'));
     var dir=grp('Dirigeant',fld(id2,'president','Président / Gérant (nom & prénom)')+fld(id2,'presidentFonction','Fonction'));
     var acte=grp('Acte & mentions',fld(id2,'rcsVille','Ville du RCS',null,null,true)+fld(id2,'nominal','Valeur nominale du titre (€)',null,null,true)+fld(id2,'dateActe','Date de l\'acte','date',null,true)+fld(id2,'villeSignature','Ville de signature',null,null,true)+fld(id2,'pereNom','Nom du père',null,null,true)+fld(id2,'mereNom','Nom de la mère',null,null,true));
-    var head='<div class="cli-fiche-head"><div><div class="cli-fiche-nom">'+E(cliName(c))+'</div><div class="cli-fiche-sub">'+E(c.forme||'—')+' · '+E(c.ville||'—')+'</div></div>'
-      +'<div class="cli-fiche-act"><button class="cli-b" onclick="go(\'editions\')">Créer un document →</button><button class="cli-b cli-b-x" onclick="cliDel(\''+id2+'\')">Supprimer</button></div></div>';
+    var tog='<div class="cli-typetog">'+['entreprise','particulier'].map(function(t){var on=(((c.clientType==='particulier')?'particulier':'entreprise')===t)?' on':'';return '<button class="cli-tt'+on+'" onclick="cliSetType(\''+id2+'\',\''+t+'\')">'+(t==='entreprise'?'Entreprise':'Particulier')+'</button>';}).join('')+'</div>';
+    var sub=cliIsPart(c)?'Particulier':(E(c.forme||'—')+' · '+E(c.ville||'—'));
+    var head='<div class="cli-fiche-head"><div><div class="cli-fiche-nom">'+E(cliName(c))+'</div><div class="cli-fiche-sub">'+sub+'</div></div>'
+      +'<div class="cli-fiche-act">'+tog+'<button class="cli-b" onclick="go(\'editions\')">Créer un document →</button><button class="cli-b cli-b-x" onclick="cliDel(\''+id2+'\')">Supprimer</button></div></div>';
+    if(cliIsPart(c)){
+      var pid=grp('Identité',fld(id2,'civilite','Civilité','sel',['','M.','Mme'])+fld(id2,'prenom','Prénom')+fld(id2,'nom','Nom')+fld(id2,'dateNaissance','Date de naissance','date')+fld(id2,'lieuNaissance','Lieu de naissance')+fld(id2,'nationalite','Nationalité')+fld(id2,'numPiece','N° pièce d\'identité'));
+      var pco=grp('Coordonnées',fld(id2,'adresse','Adresse')+fld(id2,'cp','Code postal')+fld(id2,'ville','Ville')+fld(id2,'email','E-mail')+fld(id2,'tel','Téléphone'));
+      var pdiv=grp('Divers',fld(id2,'profession','Profession')+fld(id2,'situation','Situation familiale'));
+      return '<div class="cli-fiche">'+head+pid+pco+pdiv+'</div>';
+    }
     return '<div class="cli-fiche">'+head+identity+siege+contact+dir+assocEditor(c)+acte+'</div>';
   }
   function cliListHTML(){
-    var q=window.__cliQ||'';var cls=(DB.clients||[]).filter(function(c){return !q||(cliName(c)+' '+(c.ville||'')+' '+(c.email||'')).toLowerCase().indexOf(q)>-1;});
+    var q=window.__cliQ||'';var ft=window.__cliType||'';
+    var cls=(DB.clients||[]).filter(function(c){var t=cliIsPart(c)?'particulier':'entreprise';if(ft&&t!==ft)return false;return !q||(cliName(c)+' '+(c.ville||'')+' '+(c.email||'')).toLowerCase().indexOf(q)>-1;});
     if(!cls.length)return '<div class="cli-empty2">Aucun client'+(q?' pour « '+E(q)+' »':'')+'.</div>';
-    return cls.map(function(c){var on=(state.cliSel===c.id)?' on':'';return '<button class="cli-row'+on+'" onclick="cliSel(\''+c.id+'\')"><span class="cli-name" id="cli-name-'+c.id+'">'+E(cliName(c))+'</span><span class="cli-meta">'+E(c.forme||'—')+' · '+E(c.ville||'—')+'</span></button>';}).join('');
+    return cls.map(function(c){var on=(state.cliSel===c.id)?' on':'';var part=cliIsPart(c);var meta=part?('Particulier · '+E(c.ville||'—')):(E(c.forme||'—')+' · '+E(c.ville||'—'));var tag='<span class="cli-tag '+(part?'cli-tag-p':'cli-tag-e')+'">'+(part?'PART':'ENT')+'</span>';return '<button class="cli-row'+on+'" onclick="cliSel(\''+c.id+'\')"><span class="cli-name" id="cli-name-'+c.id+'">'+tag+E(cliName(c))+'</span><span class="cli-meta">'+meta+'</span></button>';}).join('');
   }
   window.pageClients=function(){
     if(state.cliSel&&!clientById(state.cliSel))state.cliSel=null;
     if(!state.cliSel&&(DB.clients||[]).length)state.cliSel=DB.clients[0].id;
-    return '<div class="cli-wrap"><aside class="cli-side"><div class="cli-side-h"><button class="cli-new" onclick="cliNew()">＋ Nouveau client</button></div>'
+    return '<div class="cli-wrap"><aside class="cli-side"><div class="cli-side-h"><button class="cli-new" onclick="cliNew(\'entreprise\')">＋ Entreprise</button><button class="cli-new cli-new-alt" onclick="cliNew(\'particulier\')">＋ Particulier</button></div>'
       +'<input class="cli-srch" placeholder="Rechercher un client…" value="'+E(window.__cliQ||'')+'" oninput="cliSearch(this.value)">'
+      +'<div class="cli-filter">'+['','entreprise','particulier'].map(function(t){var lbl=t===''?'Tous':(t==='entreprise'?'Entreprises':'Particuliers');var on=((window.__cliType||'')===t)?' on':'';return '<button class="cli-filt'+on+'" onclick="cliFilter(\''+t+'\')">'+lbl+'</button>';}).join('')+'</div>'
       +'<div class="cli-list" id="cli-list">'+cliListHTML()+'</div></aside>'
       +'<div class="cli-main">'+cliFiche(state.cliSel)+'</div></div>';
   };
@@ -19446,6 +19472,19 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.cli-x{background:none;border:1px solid #2a2e37;border-radius:6px;color:#e88;padding:4px 9px;font:600 11px "Hanken Grotesk",system-ui,sans-serif;cursor:pointer}',
     '.cli-fill{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #23262d}',
     '.cli-fill-l{font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.03em;color:#6b7280;text-transform:uppercase}',
+    '.cli-side-h{display:grid;grid-template-columns:1fr 1fr;gap:8px}',
+    '.cli-new-alt{background:#0d0e11;color:#f4f6fa;border:1px solid #2a2e37}',
+    '.cli-new-alt:hover{background:#181b21;border-color:#3a414d}',
+    '.cli-filter{display:flex;gap:6px}',
+    '.cli-filt{flex:1;background:#0d0e11;border:1px solid #23262d;border-radius:7px;padding:7px 6px;color:#8a8a92;font:600 11px/1 "Hanken Grotesk",system-ui,sans-serif;cursor:pointer;transition:background .12s,color .12s,border-color .12s}',
+    '.cli-filt:hover{border-color:#313640;color:#c9ccd3}',
+    '.cli-filt.on{background:#f4f6fa;border-color:#f4f6fa;color:#0a0b0d}',
+    '.cli-tag{display:inline-block;font:700 9px/1.4 "IBM Plex Mono",monospace;letter-spacing:.04em;padding:2px 5px;border-radius:4px;margin-right:7px;vertical-align:middle;border:1px solid #313640;color:#aab2c0}',
+    '.cli-tag-p{border-color:#4a4340;color:#d8c4a8}',
+    '.cli-typetog{display:inline-flex;border:1px solid #2a2e37;border-radius:8px;overflow:hidden;margin-right:4px}',
+    '.cli-tt{background:#0d0e11;border:0;padding:8px 12px;color:#8a8a92;font:600 12px/1 "Hanken Grotesk",system-ui,sans-serif;cursor:pointer}',
+    '.cli-tt:hover{background:#181b21;color:#c9ccd3}',
+    '.cli-tt.on{background:#f4f6fa;color:#0a0b0d}',
     '@media(max-width:860px){.cli-wrap{grid-template-columns:1fr}.cli-side{position:static}.cli-grid{grid-template-columns:1fr}}'
   ].join('');document.head.appendChild(st);} }catch(e){}
 
