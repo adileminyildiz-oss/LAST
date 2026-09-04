@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=377;
+var LAST_VER=378;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14880,26 +14880,37 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     vig.push('Recommandation automatisée à partir des règles usuelles (forme sociale, CGI, statut social, TVA). À confirmer selon la loi de finances en vigueur et la situation précise du client.');
     var synthese=FORME_LBL[best]+' · '+regime+' · '+social;
     /* ===== Analyse COMPLÈTE : chaque décision + son « pourquoi » ===== */
-    var D=function(d,p){return {d:d,p:p};};
+    var D=function(d,p,a){return {d:d,p:p,alts:(a&&a.length?a:null)};};
     var soc=best==='SAS'||best==='SASU', tns=(social.indexOf('TNS')>=0), N=P.nbSalaries||0;
     var estSociete=(best!=='EI');
+    /* alternatives de forme (on exclut la forme retenue) */
+    var FA={SAS:'SAS — grande souplesse statutaire, dirigeant assimilé salarié, idéale pour accueillir des investisseurs.',SASU:'SASU — SAS à associé unique (dirigeant seul).',SARL:'SARL — cadre légal protecteur ; gérant majoritaire = TNS (charges réduites).',EURL:'EURL — SARL unipersonnelle, IR par défaut (option IS possible).',SCI:'SCI — détention et location d\'immobilier (objet civil), IR ou IS.',EI:'EI — sans société, patrimoine séparé de plein droit, régime micro possible.'};
+    var formeAlts=Object.keys(FA).filter(function(k){return k!==best;}).map(function(k){return FA[k];});
+    formeAlts.push('SA — grande structure / accès au marché (capital 37 000 €, conseil d\'administration).');
+    var regimeAlts=[(regime==='IS'?'':'✓ ')+'IR — transparence fiscale : le résultat est imposé chez les associés (défaut EURL/SCI ; option temporaire 5 ans pour SAS/SARL).',(regime==='IR'?'':'✓ ')+'IS — imposition au niveau de la société (15 %/25 %), dividendes en PFU.'];
+    var tvaAlts=['Franchise en base — aucune TVA facturée ni récupérée (sous les seuils).','Réel simplifié — déclaration annuelle (CA12) + acomptes semestriels.','Réel normal — déclaration mensuelle, récupération immédiate de la TVA.'];
+    var socialAlts=['Assimilé salarié (SAS/SASU, gérant minoritaire de SARL) — protection du régime général, charges ~70-80 %.','TNS / SSI (EURL, gérant majoritaire de SARL, EI) — cotisations ~40-45 %, protection à compléter.'];
+    var remunAlts=['Salaire régulier — déductible de l\'IS, ouvre des droits sociaux, charges élevées.','Dividendes — pas de cotisations (assimilé salarié), PFU 30 %, mais pas de droits sociaux.','Mixte — salaire (couverture) + dividendes (optimisation), à doser.'];
+    var domicilAlts=['Local commercial — bail commercial dédié.','Société de domiciliation — adresse prestigieuse, courrier géré.','Domicile du dirigeant — gratuit, sous conditions (durée, règlement de copropriété).','Pépinière / coworking — services mutualisés, souplesse.'];
+    var cacAlts=['Non requis sous les seuils (bilan 4 M€, CA 8 M€, 50 salariés).','Nomination volontaire possible (crédibilité, sécurisation).','Obligatoire si 2 des 3 seuils sont dépassés.'];
     /* Juridique — forme, statuts, responsabilité */
     var djur=[];
-    djur.push(D('Forme juridique : '+FORME_LBL[best], seul?('Le dirigeant crée seul → forme '+(best==='SASU'?'SASU':(best==='EURL'?'EURL':best))+' (unipersonnelle), sans co-associé.'):('Création à plusieurs → forme '+best+' permettant plusieurs associés.')+((P.investisseurs==='oui'||P.objectif==='investisseurs')?' L\'ouverture du capital pousse vers la SAS (actions, pactes).':(P.flexibilite==='forte'?' Le besoin de statuts sur mesure oriente vers la SAS.':''))));
-    if(estSociete)djur.push(D('Responsabilité limitée aux apports', 'Le patrimoine personnel des associés est protégé : ils ne risquent que leur apport (hors caution personnelle).'));
-    else djur.push(D('Patrimoine professionnel séparé (EI)', 'Depuis 2022, le patrimoine personnel de l\'entrepreneur individuel est protégé de plein droit, séparé du patrimoine professionnel.'));
-    djur.push(D('Statuts : '+(soc?'liberté statutaire (sur mesure)':(best==='SCI'?'objet civil, clauses d\'agrément':'cadre légal encadré')), soc?'La SAS/SASU offre la plus grande souplesse : direction, majorités, agrément, préemption et actions de préférence librement définies.':(best==='SCI'?'La SCI fixe librement la répartition des parts et les pouvoirs du gérant, avec agrément pour les cessions.':'La SARL/EURL suit un cadre légal protecteur : gérance et cessions de parts encadrées par la loi.')));
+    djur.push(D('Forme juridique : '+FORME_LBL[best], seul?('Le dirigeant crée seul → forme '+(best==='SASU'?'SASU':(best==='EURL'?'EURL':best))+' (unipersonnelle), sans co-associé.'):('Création à plusieurs → forme '+best+' permettant plusieurs associés.')+((P.investisseurs==='oui'||P.objectif==='investisseurs')?' L\'ouverture du capital pousse vers la SAS (actions, pactes).':(P.flexibilite==='forte'?' Le besoin de statuts sur mesure oriente vers la SAS.':'')), formeAlts));
+    if(estSociete)djur.push(D('Responsabilité limitée aux apports', 'Le patrimoine personnel des associés est protégé : ils ne risquent que leur apport (hors caution personnelle).', ['EI — patrimoine personnel séparé de plein droit (depuis 2022).','SNC — responsabilité indéfinie et solidaire des associés (à éviter sauf cas particulier).','Société (SAS/SARL/…) — responsabilité limitée aux apports.']));
+    else djur.push(D('Patrimoine professionnel séparé (EI)', 'Depuis 2022, le patrimoine personnel de l\'entrepreneur individuel est protégé de plein droit, séparé du patrimoine professionnel.', ['EURL/SASU — société unipersonnelle : responsabilité limitée + image « société ».','EI — patrimoine séparé, formalités allégées.']));
+    djur.push(D('Statuts : '+(soc?'liberté statutaire (sur mesure)':(best==='SCI'?'objet civil, clauses d\'agrément':'cadre légal encadré')), soc?'La SAS/SASU offre la plus grande souplesse : direction, majorités, agrément, préemption et actions de préférence librement définies.':(best==='SCI'?'La SCI fixe librement la répartition des parts et les pouvoirs du gérant, avec agrément pour les cessions.':'La SARL/EURL suit un cadre légal protecteur : gérance et cessions de parts encadrées par la loi.'), ['Statuts sur mesure (SAS/SASU) — clauses libres, pactes d\'associés.','Statuts encadrés (SARL/EURL) — cadre légal, plus simples et sécurisés.','Statuts-types — modèle standard, rapide mais peu personnalisé.']));
     /* Fiscal */
     var dfis=[];
-    dfis.push(D('Régime d\'imposition : '+regime, regimeWhy));
-    if(regime==='IS')dfis.push(D('Taux réduit d\'IS à 15 %', 'Bénéfice imposé à 15 % jusqu\'à 42 500 €, puis 25 %, si le capital est libéré et détenu à ≥ 75 % par des personnes physiques — avantageux pour une PME.'));
-    if(regime==='IS'&&(P.remun==='dividendes'||P.remun==='mixte'))dfis.push(D('Dividendes : PFU (flat tax) 30 %', 'Les dividendes distribués sont taxés au prélèvement forfaitaire unique de 30 % (12,8 % IR + 17,2 % prélèvements sociaux), sans cotisations sociales pour un dirigeant assimilé salarié.'));
-    dfis.push(D('TVA : '+((P.caPrev&&((P.activiteType==='commerciale'&&P.caPrev>85000)||(P.activiteType!=='commerciale'&&P.caPrev>37500)))?'régime réel (assujetti)':'franchise en base possible'), 'Sous les seuils (ventes ~85 000 €, services ~37 500 €), la franchise en base dispense de TVA. Au-delà, ou pour récupérer la TVA sur les achats/investissements, on opte pour le réel simplifié ou normal.'));
-    dfis.push(D('CFE'+((P.caPrev&&P.caPrev>500000)?' et CVAE':''), 'La cotisation foncière des entreprises (CFE) est due dès la 2ᵉ année. '+((P.caPrev&&P.caPrev>500000)?'Au-delà de 500 000 € de CA, la CVAE s\'ajoute.':'La CVAE ne s\'applique qu\'au-delà de 500 000 € de CA.')));
-    if(best==='EI'&&regime==='IR')dfis.push(D('Régime micro possible', 'Sous les seuils de CA, le régime micro (abattement forfaitaire) simplifie fortement l\'imposition et les obligations.'));
+    dfis.push(D('Régime d\'imposition : '+regime, regimeWhy, regimeAlts));
+    if(regime==='IS')dfis.push(D('Taux réduit d\'IS à 15 %', 'Bénéfice imposé à 15 % jusqu\'à 42 500 €, puis 25 %, si le capital est libéré et détenu à ≥ 75 % par des personnes physiques — avantageux pour une PME.', ['Taux réduit 15 % — jusqu\'à 42 500 € de bénéfice (conditions PME).','Taux normal 25 % — au-delà, ou si conditions non remplies.']));
+    if(regime==='IS'&&(P.remun==='dividendes'||P.remun==='mixte'))dfis.push(D('Dividendes : PFU (flat tax) 30 %', 'Les dividendes distribués sont taxés au prélèvement forfaitaire unique de 30 % (12,8 % IR + 17,2 % prélèvements sociaux), sans cotisations sociales pour un dirigeant assimilé salarié.', ['PFU 30 % — forfaitaire, simple (12,8 % IR + 17,2 % PS).','Barème progressif de l\'IR — sur option globale, avec abattement de 40 % (intéressant si TMI faible).']));
+    dfis.push(D('TVA : '+((P.caPrev&&((P.activiteType==='commerciale'&&P.caPrev>85000)||(P.activiteType!=='commerciale'&&P.caPrev>37500)))?'régime réel (assujetti)':'franchise en base possible'), 'Sous les seuils (ventes ~85 000 €, services ~37 500 €), la franchise en base dispense de TVA. Au-delà, ou pour récupérer la TVA sur les achats/investissements, on opte pour le réel simplifié ou normal.', tvaAlts));
+    dfis.push(D('CFE'+((P.caPrev&&P.caPrev>500000)?' et CVAE':''), 'La cotisation foncière des entreprises (CFE) est due dès la 2ᵉ année. '+((P.caPrev&&P.caPrev>500000)?'Au-delà de 500 000 € de CA, la CVAE s\'ajoute.':'La CVAE ne s\'applique qu\'au-delà de 500 000 € de CA.'), ['CFE — due dès la 2ᵉ année (exonération la 1ʳᵉ année).','CVAE — seulement au-delà de 500 000 € de CA (en voie de suppression progressive).','Exonérations de zone (ZFU, ZRR…) — selon l\'implantation.']));
+    if(best==='EI'&&regime==='IR')dfis.push(D('Régime micro possible', 'Sous les seuils de CA, le régime micro (abattement forfaitaire) simplifie fortement l\'imposition et les obligations.', ['Micro — abattement forfaitaire, comptabilité ultra-simplifiée.','Réel — charges réelles déduites (intéressant si charges élevées).']));
     /* Social — dirigeant + salariés */
     var dsoc=[];
-    dsoc.push(D('Statut social du dirigeant : '+social, socialWhy));
+    dsoc.push(D('Statut social du dirigeant : '+social, socialWhy, socialAlts));
+    dsoc.push(D('Rémunération : '+({salaire:'salaire régulier',dividendes:'dividendes',mixte:'mixte (salaire + dividendes)'}[P.remun]||'mixte'), 'Choix du mode de rémunération du dirigeant selon la couverture sociale voulue et l\'optimisation fiscale.', remunAlts));
     if(soc)dsoc.push(D('Charges du dirigeant : élevées mais protectrices', 'Assimilé salarié → cotisations ~70-80 % du net, protection du régime général (hors chômage). Aucune cotisation en l\'absence de rémunération.'+(P.chargesPatronales==='faible'?' ⚠ Vous souhaitez des charges faibles : envisagez alors une rémunération en dividendes ou une SARL (gérant TNS).':'')));
     if(tns)dsoc.push(D('Charges du dirigeant : réduites (TNS)', 'Travailleur non salarié → cotisations ~40-45 %, mais cotisations minimales dues même sans rémunération et protection à compléter (prévoyance, retraite).'+(P.chargesPatronales==='eleve'?' Vous acceptez des charges élevées : une SAS (assimilé salarié) offrirait une meilleure couverture.':'')));
     if(N>0){
@@ -14913,17 +14924,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     /* Gestion & administration */
     var dges=[];
     if(estSociete){
-      dges.push(D('Comptabilité + comptes annuels', 'Obligation de tenir une comptabilité et d\'établir chaque année les comptes annuels (bilan, compte de résultat, annexe) et la liasse fiscale.'));
+      dges.push(D('Comptabilité + comptes annuels', 'Obligation de tenir une comptabilité et d\'établir chaque année les comptes annuels (bilan, compte de résultat, annexe) et la liasse fiscale.', ['Expert-comptable — sécurise la tenue et les déclarations (recommandé).','Tenue interne + logiciel — plus économique, exige des compétences.','Comptabilité de trésorerie (micro) — la plus simple, réservée aux petits régimes.']));
       dges.push(D('Assemblée générale annuelle', 'Approbation des comptes en AG dans les 6 mois de la clôture, avec procès-verbal et registre des décisions.'));
-      if(best!=='SCI')dges.push(D('Dépôt des comptes au greffe', 'Les sociétés commerciales déposent leurs comptes annuels au greffe (option de confidentialité pour les petites entreprises).'));
+      if(best!=='SCI')dges.push(D('Dépôt des comptes au greffe', 'Les sociétés commerciales déposent leurs comptes annuels au greffe (option de confidentialité pour les petites entreprises).', ['Dépôt standard — comptes publics.','Option de confidentialité — comptes non publiés (petites entreprises éligibles).']));
       else dges.push(D('Déclaration 2072 (SCI à l\'IR)', 'La SCI à l\'IR dépose une déclaration de résultats 2072 ; chaque associé reporte sa quote-part sur sa déclaration de revenus.'));
       dges.push(D('Registre des bénéficiaires effectifs (RBE)', 'Déclaration obligatoire des bénéficiaires effectifs (> 25 %) au greffe, tenue à jour à chaque changement.'));
-      var seuilCAC=(N>=50)||(P.caPrev&&P.caPrev>=10000000);
-      dges.push(D('Commissaire aux comptes : '+(seuilCAC?'probablement requis':'non requis a priori'), seuilCAC?'Deux des trois seuils semblent atteints (bilan 5 M€, CA 10 M€, 50 salariés) → nomination d\'un CAC obligatoire.':'Sous les seuils légaux (bilan 5 M€, CA 10 M€, 50 salariés), aucun commissaire aux comptes n\'est imposé.'));
+      var seuilCAC=(N>=50)||(P.caPrev&&P.caPrev>=8000000);
+      dges.push(D('Commissaire aux comptes : '+(seuilCAC?'probablement requis':'non requis a priori'), seuilCAC?'Deux des trois seuils semblent atteints (bilan 4 M€, CA 8 M€, 50 salariés) → nomination d\'un CAC obligatoire.':'Sous les seuils légaux (bilan 4 M€, CA 8 M€, 50 salariés), aucun commissaire aux comptes n\'est imposé.', cacAlts));
     } else {
-      dges.push(D('Obligations comptables allégées', 'En entreprise individuelle (micro), la comptabilité est simplifiée (livre de recettes, éventuellement registre des achats).'));
+      dges.push(D('Obligations comptables allégées', 'En entreprise individuelle (micro), la comptabilité est simplifiée (livre de recettes, éventuellement registre des achats).', ['Micro — livre de recettes seul.','Réel — comptabilité complète (si option pour le réel).']));
     }
-    dges.push(D('Domiciliation du siège', 'Fixer l\'adresse du siège : local commercial, société de domiciliation, ou domicile du dirigeant (sous conditions) — pièce justificative requise à l\'immatriculation.'));
+    dges.push(D('Domiciliation du siège', 'Fixer l\'adresse du siège : local commercial, société de domiciliation, ou domicile du dirigeant (sous conditions) — pièce justificative requise à l\'immatriculation.', domicilAlts));
     dges.push(D('Formalités d\'immatriculation (INPI / Guichet unique)', 'Dépôt du dossier de création sur le Guichet unique (INPI) : statuts, annonce légale, dépôt de capital, pièces du dirigeant → obtention du SIREN/Kbis.'));
     var domaines=[
       {k:'juridique',t:'Juridique — société & statuts',items:djur},
@@ -14937,18 +14948,26 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var r=window.formReco();
     var li=function(a){return '<ul class="fr-ul">'+a.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>';};
     var ded=(r.deductions&&r.deductions.length)?('<div class="fr-card fr-ded"><div class="fr-card-t">Déduit de votre saisie libre (vision du projet)</div>'+li(r.deductions)+'</div>'):'';
-    var decision=function(it){return '<div class="fr-dec"><div class="fr-dec-d">'+esc(it.d)+'</div><div class="fr-dec-p"><span class="fr-why">Pourquoi</span> '+esc(it.p)+'</div></div>';};
+    var decision=function(it){
+      var hasAlt=it.alts&&it.alts.length;
+      var alts=hasAlt?('<div class="fr-alts"><div class="fr-alts-t">Autres choix possibles</div><ul class="fr-ul">'+it.alts.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>'):'';
+      return '<div class="fr-dec'+(hasAlt?' fr-dec-clk':'')+'"'+(hasAlt?' onclick="frToggle(this)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();frToggle(this);}" tabindex="0" role="button"':'')+'>'
+        +'<div class="fr-dec-d">'+esc(it.d)+(hasAlt?'<span class="fr-caret">▸</span>':'')+'</div>'
+        +'<div class="fr-dec-p"><span class="fr-why">Pourquoi</span> '+esc(it.p)+'</div>'
+        +alts+'</div>';
+    };
     var domaine=function(g){return '<div class="fr-dom fr-dom-'+g.k+'"><div class="fr-dom-t">'+esc(g.t)+'</div>'+(g.items||[]).map(decision).join('')+'</div>';};
     var doms=(r.domaines||[]).map(domaine).join('');
     return '<div class="fr-wrap">'
       +'<div class="fr-verdict"><span class="fr-verdict-k">Structure recommandée</span><b class="fr-forme">'+esc(r.forme)+'</b>'
       +'<span class="fr-synth">'+esc(r.synthese)+'</span></div>'
-      +'<div class="fr-intro">Analyse complète — <b>juridique, fiscal, social, gestion &amp; administration</b>. Chaque décision est justifiée. Si le client valide l\'ensemble, la structure est prête à être montée.</div>'
+      +'<div class="fr-intro">Analyse complète — <b>juridique, fiscal, social, gestion &amp; administration</b>. Chaque décision est justifiée. 👉 <b>Cliquez sur une décision</b> (marquée ▸) pour voir les <b>autres choix possibles</b>. Si le client valide l\'ensemble, la structure est prête à être montée.</div>'
       +ded
       +doms
       +'<div class="fr-card fr-vig"><div class="fr-card-t">Points de vigilance</div>'+li(r.vigilance)+'</div>'
       +'</div>';
   };
+  window.frToggle=function(el){ try{ el.classList.toggle('open'); }catch(e){} };
   window.formRecoOuvrir=function(){
     if(typeof openModal!=='function')return;
     openModal('⚖️ Analyse fiscaliste — recommandation d\'après le profil du dirigeant',window.formRecoHTML(),
@@ -14977,9 +14996,16 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '.fr-dom-t{font-size:13px;font-weight:800;color:#fff;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #23262d}',
       '.fr-dom-juridique .fr-dom-t{color:#cbd5ff}.fr-dom-fiscal .fr-dom-t{color:#bfe6ff}.fr-dom-social .fr-dom-t{color:#c7f0d4}.fr-dom-gestion .fr-dom-t{color:#f0dcc0}',
       '.fr-dec{padding:8px 0;border-bottom:1px dashed #202329}.fr-dec:last-child{border-bottom:0}',
-      '.fr-dec-d{font-size:13px;font-weight:700;color:#e6e9ef;margin-bottom:2px}',
+      '.fr-dec-d{font-size:13px;font-weight:700;color:#e6e9ef;margin-bottom:2px;display:flex;align-items:center;gap:6px}',
       '.fr-dec-p{font-size:12.5px;line-height:1.5;color:#b6bcc7}',
-      '.fr-why{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#0a0b0d;background:#9aa3b2;border-radius:4px;padding:1px 5px;margin-right:5px;vertical-align:1px}'
+      '.fr-why{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#0a0b0d;background:#9aa3b2;border-radius:4px;padding:1px 5px;margin-right:5px;vertical-align:1px}',
+      '.fr-dec-clk{cursor:pointer;border-radius:8px;margin:0 -8px;padding-left:8px;padding-right:8px;transition:background .12s}',
+      '.fr-dec-clk:hover{background:#17191f}.fr-dec-clk:focus-visible{outline:2px solid #4a5568;outline-offset:1px}',
+      '.fr-caret{margin-left:auto;color:#8b93a1;font-size:11px;transition:transform .15s;flex:none}',
+      '.fr-dec.open .fr-caret{transform:rotate(90deg);color:#cbd5ff}',
+      '.fr-alts{display:none;margin-top:8px;padding:9px 11px;border:1px solid #262a33;border-radius:9px;background:#0b0d11}',
+      '.fr-dec.open .fr-alts{display:block}',
+      '.fr-alts-t{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#8b93a1;margin-bottom:6px}'
     ].join('');document.head.appendChild(_rst);} }catch(e){}
 
   /* Génération des documents = vérification (champs requis) + contrôle de cohérence STRICTS.
