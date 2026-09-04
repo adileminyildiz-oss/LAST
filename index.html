@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=436;
+var LAST_VER=437;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22339,14 +22339,18 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
 
 </script>
 <script id="mod-pdfcal">
-/* ===== Outil de calibration PDF — Étape 1 : dépôt d'un PDF/image, rendu des pages, navigation ===== */
+/* ===== Outil de calibration PDF — Étapes 1 & 2 : dépôt/rendu + placement des champs ===== */
 (function(){
   if(window.__pdfcalInit) return; window.__pdfcalInit=1;
   var PDFJS_URL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
   var PDFJS_WORKER='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  var PCAL={pages:[],cur:0,name:'',titre:''};
+  var PCAL={pages:[],cur:0,name:'',titre:'',sel:null};
   window.__pcal=PCAL;
   function E(s){return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function A(s){return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  var ICONX='<svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8"/></svg>';
+  function cur(){ return PCAL.pages[PCAL.cur]||null; }
+  function r4(n){ return Math.round(n*100)/100; }
   function loadPdfjs(){
     if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
     if(window.__pdfjsLoading) return window.__pdfjsLoading;
@@ -22369,7 +22373,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
             var cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
             var ctx=cv.getContext('2d');
             return pg.render({canvasContext:ctx,viewport:vp}).promise.then(function(){
-              pages.push({img:cv.toDataURL('image/png'),w:vp.width,h:vp.height});
+              pages.push({img:cv.toDataURL('image/png'),w:vp.width,h:vp.height,fields:[]});
             });
           }); });
         })(i); }
@@ -22378,7 +22382,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     });
   }
   function imgToPage(dataUrl){
-    return new Promise(function(res){ var im=new Image(); im.onload=function(){ res({img:dataUrl,w:im.naturalWidth,h:im.naturalHeight}); }; im.onerror=function(){ res({img:dataUrl,w:794,h:1123}); }; im.src=dataUrl; });
+    return new Promise(function(res){ var im=new Image(); im.onload=function(){ res({img:dataUrl,w:im.naturalWidth,h:im.naturalHeight,fields:[]}); }; im.onerror=function(){ res({img:dataUrl,w:794,h:1123,fields:[]}); }; im.src=dataUrl; });
   }
   function status(msg){ var el=document.getElementById('pcal-status'); if(el) el.textContent=msg||''; }
   window.pdfCalDrop=function(files){
@@ -22386,36 +22390,64 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var f=files[0];
     PCAL.name=PCAL.name|| (f.name||'').replace(/\.[^.]+$/,'').replace(/[^a-z0-9]+/ig,'_').toLowerCase();
     PCAL.titre=PCAL.titre|| (f.name||'Document').replace(/\.[^.]+$/,'');
+    PCAL.sel=null;
     if(/pdf$/i.test(f.name)||f.type==='application/pdf'){
       status('Lecture du PDF…');
       var fr=new FileReader();
-      fr.onload=function(){ renderPdf(new Uint8Array(fr.result)).then(function(pages){ PCAL.pages=pages; PCAL.cur=0; status(pages.length+' page(s) chargée(s).'); pcalRender(); })
+      fr.onload=function(){ renderPdf(new Uint8Array(fr.result)).then(function(pages){ PCAL.pages=pages; PCAL.cur=0; status(pages.length+' page(s). Dessinez un rectangle sur le document pour créer un champ.'); pcalRender(); })
         .catch(function(e){ status(e&&e.message==='offline'?'Hors ligne : le rendu PDF nécessite une connexion (ou déposez une image PNG/JPG de la page).':'Impossible de lire ce PDF ('+((e&&e.message)||'')+'). Déposez plutôt une image PNG/JPG.'); }); };
       fr.readAsArrayBuffer(f);
     } else if(/^image\//.test(f.type)||/\.(png|jpe?g)$/i.test(f.name)){
       status('Lecture de l’image…');
       var fr2=new FileReader();
-      fr2.onload=function(){ imgToPage(fr2.result).then(function(pg){ PCAL.pages=[pg]; PCAL.cur=0; status('1 image chargée.'); pcalRender(); }); };
+      fr2.onload=function(){ imgToPage(fr2.result).then(function(pg){ PCAL.pages=[pg]; PCAL.cur=0; status('1 image. Dessinez un rectangle sur le document pour créer un champ.'); pcalRender(); }); };
       fr2.readAsDataURL(f);
     } else { status('Format non pris en charge — déposez un PDF ou une image PNG/JPG.'); }
   };
-  window.pdfCalNav=function(d){ if(!PCAL.pages.length)return; PCAL.cur=Math.max(0,Math.min(PCAL.pages.length-1,PCAL.cur+d)); pcalRender(); };
+  window.pdfCalNav=function(d){ if(!PCAL.pages.length)return; PCAL.cur=Math.max(0,Math.min(PCAL.pages.length-1,PCAL.cur+d)); PCAL.sel=null; pcalRender(); };
   window.pdfCalSetName=function(v){ PCAL.name=(v||'').replace(/[^a-z0-9]+/ig,'_').toLowerCase(); };
   window.pdfCalSetTitre=function(v){ PCAL.titre=v||''; };
+  /* ----- Champs ----- */
+  function nextKey(){ var p=cur(); if(!p) return 'champ1'; var n=p.fields.length+1, k='champ'+n; while(p.fields.some(function(f){return f.key===k;})){ n++; k='champ'+n; } return k; }
+  window.pdfCalAddField=function(l,t,w,h){ var p=cur(); if(!p) return; p.fields.push({key:nextKey(),type:'text',al:'left',label:'',l:r4(l),t:r4(t),w:r4(w),h:r4(h)}); PCAL.sel=p.fields.length-1; pcalRender(); };
+  window.pdfCalSel=function(i){ PCAL.sel=(PCAL.sel===i?null:i); pcalRender(); };
+  window.pdfCalDel=function(i){ var p=cur(); if(!p) return; p.fields.splice(i,1); PCAL.sel=null; pcalRender(); };
+  window.pdfCalUpd=function(i,prop,val){ var p=cur(); if(!p||!p.fields[i]) return; if(prop==='key'){ val=(val||'').replace(/[^a-z0-9_]+/ig,'_'); } p.fields[i][prop]=val; if(prop==='key'){ var el=document.querySelector('.pcal-fld[data-i="'+i+'"] .pcal-fld-k'); if(el) el.textContent=val; } };
+  /* ----- Rendu ----- */
+  function fldRects(){ var p=cur(); if(!p) return ''; return p.fields.map(function(f,i){
+    return '<div class="pcal-fld'+(PCAL.sel===i?' sel':'')+(f.type==='cb'?' cb':'')+'" data-i="'+i+'" style="left:'+f.l+'%;top:'+f.t+'%;width:'+f.w+'%;height:'+f.h+'%" onmousedown="event.stopPropagation();pdfCalSel('+i+')"><span class="pcal-fld-k">'+E(f.key)+'</span></div>';
+  }).join(''); }
   function pcalStageHTML(){
     if(!PCAL.pages.length){ return '<div class="pcal-empty"><div class="pcal-drop" id="pcal-drop"><div class="pcal-drop-ic">🎯</div><div><b>Déposez un PDF</b> (ou une image PNG/JPG d’une page)<br><span class="pcal-hint">glisser-déposer, ou cliquez pour choisir un fichier</span></div><input type="file" id="pcal-file" accept="application/pdf,image/*" style="display:none" onchange="pdfCalDrop(this.files)"></div></div>'; }
     var pg=PCAL.pages[PCAL.cur];
-    return '<div class="pcal-stage-wrap"><div class="pcal-stage" style="aspect-ratio:'+pg.w+' / '+pg.h+'"><img class="pcal-bg" src="'+pg.img+'" alt="page"></div></div>';
+    return '<div class="pcal-stage-wrap"><div class="pcal-stage" style="aspect-ratio:'+pg.w+' / '+pg.h+'"><img class="pcal-bg" src="'+pg.img+'" alt="page">'+fldRects()+'</div></div>';
+  }
+  function fldEditor(f,i){
+    var isCb=f.type==='cb';
+    return '<div class="pcal-fitem'+(PCAL.sel===i?' sel':'')+'">'
+      +'<div class="pcal-frow"><input class="pcal-fk" value="'+A(f.key)+'" title="Identifiant du champ" oninput="pdfCalUpd('+i+',\'key\',this.value)">'
+        +'<select class="pcal-fs" onchange="pdfCalUpd('+i+',\'type\',this.value);pcalRender()"><option value="text"'+(!isCb?' selected':'')+'>Texte</option><option value="cb"'+(isCb?' selected':'')+'>Case à cocher</option></select>'
+        +'<button class="pcal-fdel" title="Supprimer" onclick="pdfCalDel('+i+')" aria-label="Supprimer">'+ICONX+'</button></div>'
+      +(isCb?'' : '<div class="pcal-frow2"><select class="pcal-fs2" title="Alignement" onchange="pdfCalUpd('+i+',\'al\',this.value)"><option value="left"'+(f.al==='left'?' selected':'')+'>Gauche</option><option value="center"'+(f.al==='center'?' selected':'')+'>Centré</option><option value="right"'+(f.al==='right'?' selected':'')+'>Droite</option></select>'
+        +'<input class="pcal-flbl" placeholder="Libellé (barre latérale)" value="'+A(f.label)+'" oninput="pdfCalUpd('+i+',\'label\',this.value)"></div>')
+      +'</div>';
   }
   function pcalRender(){
     var ov=document.getElementById('pcal-ov'); if(!ov) return;
-    var multi=PCAL.pages.length>1;
     var nav=PCAL.pages.length?('<div class="pcal-pnav"><button class="pcal-b" onclick="pdfCalNav(-1)" '+(PCAL.cur<=0?'disabled':'')+'>‹</button><span>Page '+(PCAL.cur+1)+' / '+PCAL.pages.length+'</span><button class="pcal-b" onclick="pdfCalNav(1)" '+(PCAL.cur>=PCAL.pages.length-1?'disabled':'')+'>›</button></div>'):'';
     ov.querySelector('.pcal-stagecol').innerHTML=nav+pcalStageHTML();
-    var reload=PCAL.pages.length?('<button class="pcal-b" onclick="document.getElementById(\'pcal-file2\').click()">Changer de fichier</button><input type="file" id="pcal-file2" accept="application/pdf,image/*" style="display:none" onchange="window.__pcal.name=\'\';window.__pcal.titre=\'\';pdfCalDrop(this.files)">'):'';
-    var side=ov.querySelector('.pcal-side'); if(side){ var rl=side.querySelector('.pcal-reload'); if(rl) rl.innerHTML=reload; }
-    wireDrop();
+    var p=cur();
+    var fl=ov.querySelector('.pcal-fields');
+    if(fl){
+      if(!p){ fl.innerHTML=''; }
+      else { fl.innerHTML='<div class="pcal-gh">Champs — page '+(PCAL.cur+1)+' <span class="pcal-cnt">'+p.fields.length+'</span></div>'
+        +(p.fields.length? p.fields.map(fldEditor).join('') : '<div class="pcal-fnone">Aucun champ. Dessinez un rectangle sur le document.</div>'); }
+    }
+    var reload=PCAL.pages.length?('<button class="pcal-b" onclick="document.getElementById(\'pcal-file2\').click()">Changer de fichier</button><input type="file" id="pcal-file2" accept="application/pdf,image/*" style="display:none" onchange="window.__pcal.pages=[];window.__pcal.name=\'\';window.__pcal.titre=\'\';pdfCalDrop(this.files)">'):'';
+    var rl=ov.querySelector('.pcal-reload'); if(rl) rl.innerHTML=reload;
+    wireDrop(); wireStage();
   }
+  window.pcalRender=pcalRender;
   function wireDrop(){
     var dz=document.getElementById('pcal-drop'); if(!dz) return;
     dz.onclick=function(){ var f=document.getElementById('pcal-file'); if(f) f.click(); };
@@ -22423,14 +22455,32 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     dz.ondragleave=function(){ dz.classList.remove('over'); };
     dz.ondrop=function(e){ e.preventDefault(); dz.classList.remove('over'); if(e.dataTransfer&&e.dataTransfer.files) pdfCalDrop(e.dataTransfer.files); };
   }
+  function wireStage(){
+    var st=document.querySelector('#pcal-ov .pcal-stage'); if(!st) return;
+    st.onmousedown=function(e){
+      if(e.button!==0) return;
+      var r=st.getBoundingClientRect();
+      var x0=(e.clientX-r.left)/r.width, y0=(e.clientY-r.top)/r.height;
+      var band=document.createElement('div'); band.className='pcal-band'; st.appendChild(band);
+      function mv(ev){ var x=Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)), y=Math.max(0,Math.min(1,(ev.clientY-r.top)/r.height));
+        var l=Math.min(x0,x),t=Math.min(y0,y),w=Math.abs(x-x0),h=Math.abs(y-y0);
+        band.style.cssText='position:absolute;left:'+(l*100)+'%;top:'+(t*100)+'%;width:'+(w*100)+'%;height:'+(h*100)+'%;border:1.5px solid #2f8fff;background:rgba(47,143,255,.18);pointer-events:none;z-index:5'; }
+      function up(ev){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); band.remove();
+        var x=Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)), y=Math.max(0,Math.min(1,(ev.clientY-r.top)/r.height));
+        var l=Math.min(x0,x),t=Math.min(y0,y),w=Math.abs(x-x0),h=Math.abs(y-y0);
+        if(w*100>1 && h*100>0.5){ pdfCalAddField(l*100,t*100,w*100,h*100); } }
+      document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+      e.preventDefault();
+    };
+  }
   window.pdfCalClose=function(){ var ov=document.getElementById('pcal-ov'); if(ov) ov.remove(); };
   window.pdfCalOpen=function(){
-    PCAL.pages=[]; PCAL.cur=0; PCAL.name=''; PCAL.titre='';
+    PCAL.pages=[]; PCAL.cur=0; PCAL.name=''; PCAL.titre=''; PCAL.sel=null;
     var ov=document.getElementById('pcal-ov'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='pcal-ov';
     ov.innerHTML=
-      '<div class="pcal-top"><div class="pcal-ttl"><b>Calibration PDF</b><span>Étape 1 — dépôt & rendu des pages</span></div>'
-      +'<div class="pcal-act"><button class="pcal-x" onclick="pdfCalClose()" title="Fermer">✕</button></div></div>'
+      '<div class="pcal-top"><div class="pcal-ttl"><b>Calibration PDF</b><span>Étape 2 — placement des champs (dessinez sur le document)</span></div>'
+      +'<div class="pcal-act"><button class="pcal-x" onclick="pdfCalClose()" title="Fermer" aria-label="Fermer">'+ICONX+'</button></div></div>'
       +'<div class="pcal-body">'
       +'<div class="pcal-side">'
         +'<div class="pcal-grp"><div class="pcal-gh">Nouveau modèle</div>'
@@ -22438,12 +22488,13 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
           +'<label class="pcal-l">Identifiant (clé technique)</label><input class="pcal-in" placeholder="ex. certif_travail" oninput="pdfCalSetName(this.value)">'
           +'<div class="pcal-reload" style="margin-top:10px"></div>'
         +'</div>'
-        +'<div class="pcal-note" id="pcal-status">Déposez le PDF du document à rendre remplissable. Les étapes suivantes (placement des champs, export) arrivent ensuite.</div>'
+        +'<div class="pcal-fields"></div>'
+        +'<div class="pcal-note" id="pcal-status">Déposez le PDF du document à rendre remplissable, puis dessinez un rectangle sur chaque zone à remplir. L’export du code arrive à l’étape suivante.</div>'
       +'</div>'
       +'<div class="pcal-stagecol">'+pcalStageHTML()+'</div>'
       +'</div>';
     document.body.appendChild(ov);
-    wireDrop();
+    wireDrop(); wireStage();
   };
   /* Lanceur dans la page Éditions (écran de création) */
   try{ if(typeof window.pageEditions==='function' && !window.pageEditions.__pcal){ var _pe=window.pageEditions; window.pageEditions=function(){ var h=_pe.apply(this,arguments);
@@ -22452,26 +22503,42 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     } }catch(e){}
     return h; }; window.pageEditions.__pcal=1; } }catch(e){}
   /* Styles */
-  try{ if(!document.getElementById('pcal-css')){ var st=document.createElement('style'); st.id='pcal-css'; st.textContent=
+  try{ if(!document.getElementById('pcal-css')){ var st2=document.createElement('style'); st2.id='pcal-css'; st2.textContent=
     '#pcal-ov{position:fixed;inset:0;z-index:99990;background:#0b0f14;display:flex;flex-direction:column;color:#e7edf5;font:14px system-ui,Segoe UI,Arial,sans-serif}'
     +'.pcal-top{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1d2836;background:#0e141c}'
     +'.pcal-ttl b{font-size:16px}.pcal-ttl span{margin-left:10px;color:#8aa0b8;font-size:12px}'
-    +'.pcal-x{background:#1a2534;color:#e7edf5;border:1px solid #2a3a4e;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:15px}'
+    +'.pcal-x{background:#1a2534;color:#e7edf5;border:1px solid #2a3a4e;border-radius:8px;width:34px;height:34px;cursor:pointer;display:flex;align-items:center;justify-content:center}'
     +'.pcal-x:hover{background:#243247}'
     +'.pcal-body{flex:1;display:flex;min-height:0}'
-    +'.pcal-side{width:320px;flex:none;border-right:1px solid #1d2836;padding:16px;overflow:auto;background:#0e141c}'
+    +'.pcal-side{width:340px;flex:none;border-right:1px solid #1d2836;padding:16px;overflow:auto;background:#0e141c}'
     +'.pcal-grp{margin-bottom:14px}.pcal-gh{font-weight:700;color:#5ab0ff;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.03em}'
+    +'.pcal-cnt{display:inline-block;min-width:18px;text-align:center;background:#1e90ff;color:#fff;border-radius:9px;padding:0 6px;font-size:11px;margin-left:4px}'
     +'.pcal-l{display:block;color:#9fb6d0;font-size:12px;margin:8px 0 4px}'
     +'.pcal-in{width:100%;box-sizing:border-box;background:#0b1119;border:1px solid #26364a;color:#e7edf5;border-radius:8px;padding:8px 10px;font-size:13px}'
     +'.pcal-in:focus{outline:none;border-color:#2f8fff}'
+    +'.pcal-fields{margin-bottom:14px}'
+    +'.pcal-fitem{border:1px solid #22334a;border-radius:8px;padding:7px;margin-bottom:7px;background:#0b1119}'
+    +'.pcal-fitem.sel{border-color:#2f8fff;box-shadow:0 0 0 1px #2f8fff33}'
+    +'.pcal-frow{display:flex;gap:6px;align-items:center}.pcal-frow2{display:flex;gap:6px;margin-top:6px}'
+    +'.pcal-fk{flex:1;min-width:0;background:#0e1723;border:1px solid #26364a;color:#e7edf5;border-radius:6px;padding:5px 7px;font-size:12px;font-family:ui-monospace,Menlo,monospace}'
+    +'.pcal-fs{background:#0e1723;border:1px solid #26364a;color:#e7edf5;border-radius:6px;padding:5px;font-size:12px}'
+    +'.pcal-fs2{background:#0e1723;border:1px solid #26364a;color:#e7edf5;border-radius:6px;padding:5px;font-size:12px}'
+    +'.pcal-flbl{flex:1;min-width:0;background:#0e1723;border:1px solid #26364a;color:#e7edf5;border-radius:6px;padding:5px 7px;font-size:12px}'
+    +'.pcal-fdel{background:#2a1a1f;color:#ff8f9a;border:1px solid #52323a;border-radius:6px;width:26px;height:26px;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center}'
+    +'.pcal-fdel:hover{background:#3a232a}.pcal-fnone{color:#7f96b0;font-size:12px;padding:4px 2px}'
     +'.pcal-note{color:#9fb6d0;font-size:12px;line-height:1.5;background:#0b1119;border:1px solid #1d2836;border-radius:8px;padding:10px}'
     +'.pcal-b{background:#182433;color:#e7edf5;border:1px solid #2a3a4e;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px}'
     +'.pcal-b:hover:not([disabled]){background:#22334a}.pcal-b[disabled]{opacity:.4;cursor:default}'
     +'.pcal-stagecol{flex:1;min-width:0;overflow:auto;padding:18px;display:flex;flex-direction:column;align-items:center;gap:12px;background:#0b0f14}'
     +'.pcal-pnav{display:flex;align-items:center;gap:12px;color:#c7d6e8}'
     +'.pcal-stage-wrap{width:100%;display:flex;justify-content:center}'
-    +'.pcal-stage{position:relative;width:min(820px,100%);background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.45)}'
-    +'.pcal-bg{position:absolute;inset:0;width:100%;height:100%;display:block}'
+    +'.pcal-stage{position:relative;width:min(820px,100%);background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.45);cursor:crosshair;user-select:none}'
+    +'.pcal-bg{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}'
+    +'.pcal-fld{position:absolute;border:1.5px solid rgba(30,144,255,.9);background:rgba(30,144,255,.16);cursor:pointer;box-sizing:border-box;z-index:3}'
+    +'.pcal-fld.cb{border-color:rgba(36,209,122,.95);background:rgba(36,209,122,.18)}'
+    +'.pcal-fld.sel{border-width:2px;border-color:#ffd23f;background:rgba(255,210,63,.2);z-index:4}'
+    +'.pcal-fld-k{position:absolute;left:0;top:-15px;font:10px ui-monospace,monospace;color:#fff;background:#1e90ff;padding:0 4px;border-radius:3px;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}'
+    +'.pcal-fld.cb .pcal-fld-k{background:#18a463}.pcal-fld.sel .pcal-fld-k{background:#caa20a}'
     +'.pcal-empty{flex:1;display:flex;align-items:center;justify-content:center;width:100%}'
     +'.pcal-drop{border:2px dashed #2f4a66;border-radius:14px;padding:44px 40px;text-align:center;color:#c7d6e8;cursor:pointer;max-width:520px;background:#0d1420}'
     +'.pcal-drop.over{border-color:#2f8fff;background:#122033}'
@@ -22479,7 +22546,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.pcal-launch{margin-top:12px}'
     +'.pcal-launch-b{background:linear-gradient(#1e90ff,#0a64d6);color:#fff;border:none;border-radius:10px;padding:11px 16px;font-weight:600;cursor:pointer;font-size:14px}'
     +'.pcal-launch-b:hover{filter:brightness(1.08)}';
-    document.head.appendChild(st); } }catch(e){}
+    document.head.appendChild(st2); } }catch(e){}
 })();
 </script>
 
