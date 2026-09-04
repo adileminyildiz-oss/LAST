@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=446;
+var LAST_VER=447;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22830,7 +22830,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
 
   /* ---------- Catalogue des services (cartes du hub) ---------- */
   var SERVICES=[
-    {id:'echeancier',ico:'📅',t:'Échéancier fiscal & social',d:'Calendrier des obligations (TVA, DSN, acomptes IS, CFE, AG…) avec rappels automatiques. Vendable en abonnement.'}
+    {id:'echeancier',ico:'📅',t:'Échéancier fiscal & social',d:'Calendrier des obligations (TVA, DSN, acomptes IS, CFE, AG…) avec rappels automatiques. Vendable en abonnement.'},
+    {id:'simulateurs',ico:'🧮',t:'Simulateurs',d:'Coût d’embauche, impôt sur les sociétés, salaire vs dividendes. Outils de conseil & aimant à prospects.'}
   ];
 
   /* ================= SERVICE 1 : ÉCHÉANCIER FISCAL & SOCIAL ================= */
@@ -22885,6 +22886,57 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<div class="card svc-card"><h2>Obligations suivies</h2>'+rows+'</div></div>';
   }
 
+
+  /* ================= SERVICE 2 : SIMULATEURS ================= */
+  function simu(){ var o=store(); return o.simu||(o.simu={brut:2000,tauxPat:42,tauxNet:78,benefice:60000,distrib:40000}); }
+  function simuSave(st){ var o=store(); o.simu=st; save(o); }
+  function eur(n){ n=Math.round((+n||0)*100)/100; try{ return n.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }catch(e){ return n.toFixed(2)+' €'; } }
+  function num(v){ var n=parseFloat((''+(v==null?'':v)).replace(/\s/g,'').replace(',','.')); return isNaN(n)?0:n; }
+  window.svcSimSet=function(f,v){ var st=simu(); st[f]=num(v); simuSave(st); svcSimRefresh(); };
+  window.svcSimTab=function(t){ window.__svcSimTab=t; render(); };
+  function isCalcB(b){ var S=(window.barGet?window.barGet('fisc.isSeuil'):42500),R=(window.barGet?window.barGet('fisc.isReduit'):15)/100,N=(window.barGet?window.barGet('fisc.isNormal'):25)/100; if(b<=0)return 0; var r=Math.min(b,S)*R; if(b>S)r+=(b-S)*N; return r; }
+  function simuRes(tab){ var st=simu();
+    if(tab==='is'){ var b=st.benefice, is=isCalcB(b), tm=b>0?(is/b*100):0; var S=(window.barGet?window.barGet('fisc.isSeuil'):42500);
+      return '<div class="svc-res"><div class="svc-res-row"><span>Bénéfice imposable</span><b>'+eur(b)+'</b></div>'
+        +'<div class="svc-res-row"><span>IS taux réduit ('+(window.barGet?window.barGet('fisc.isReduit'):15)+' % jusqu’à '+eur(S)+')</span><b>'+eur(Math.min(b,S)*(window.barGet?window.barGet('fisc.isReduit'):15)/100)+'</b></div>'
+        +(b>S?('<div class="svc-res-row"><span>IS taux normal ('+(window.barGet?window.barGet('fisc.isNormal'):25)+' % au-delà)</span><b>'+eur((b-S)*(window.barGet?window.barGet('fisc.isNormal'):25)/100)+'</b></div>'):'')
+        +'<div class="svc-res-row svc-res-total"><span>IS total</span><b>'+eur(is)+'</b></div>'
+        +'<div class="svc-res-row"><span>Taux moyen</span><b>'+tm.toFixed(1)+' %</b></div>'
+        +'<div class="svc-res-row"><span>Résultat net après IS</span><b>'+eur(b-is)+'</b></div></div>';
+    }
+    if(tab==='divid'){ var m=st.distrib; var netDiv=m*0.70; var tp=st.tauxPat/100, tn=st.tauxNet/100; var brutS=m/(1+tp); var netS=brutS*tn;
+      return '<div class="svc-res"><div class="svc-res-h">Pour un même coût / montant distribuable de '+eur(m)+' :</div>'
+        +'<div class="svc-res-row"><span>Dividendes — flat tax (PFU) 30 %</span><b>'+eur(netDiv)+' net</b></div>'
+        +'<div class="svc-res-row"><span>Salaire — coût '+eur(m)+' → brut '+eur(brutS)+'</span><b>'+eur(netS)+' net</b></div>'
+        +'<div class="svc-res-row svc-res-total"><span>Écart (net en poche)</span><b>'+eur(netDiv-netS)+'</b></div></div>'
+        +'<div class="svc-note-min">Estimation simplifiée (PFU 30 % sur dividendes ; salaire : charges patronales + taux net paramétrables). Hors IR sur salaire, cotisations dirigeant TNS, abattement 40 %, prélèvements sociaux détaillés — à affiner selon la situation.</div>';
+    }
+    // embauche
+    var brut=st.brut, tp=st.tauxPat/100, tn=st.tauxNet/100; var net=brut*tn, chg=brut*tp, cout=brut+chg;
+    var smic=(window.barGet?window.barGet('paie.smic'):11.88)*151.67; var reduc=(brut<=1.6*smic)?' · éligible réduction générale de cotisations (bas salaires)':'';
+    return '<div class="svc-res"><div class="svc-res-row"><span>Salaire brut mensuel</span><b>'+eur(brut)+'</b></div>'
+      +'<div class="svc-res-row"><span>Net à payer (~'+st.tauxNet+' %)</span><b>'+eur(net)+'</b></div>'
+      +'<div class="svc-res-row"><span>Charges patronales (~'+st.tauxPat+' %)</span><b>'+eur(chg)+'</b></div>'
+      +'<div class="svc-res-row svc-res-total"><span>Coût total employeur / mois</span><b>'+eur(cout)+'</b></div>'
+      +'<div class="svc-res-row"><span>Coût annuel (×12)</span><b>'+eur(cout*12)+'</b></div>'
+      +'<div class="svc-res-hint">SMIC mensuel de référence : '+eur(smic)+reduc+'</div></div>';
+  }
+  window.svcSimRefresh=function(){ var el=document.getElementById('svc-sim-res'); if(el) el.innerHTML=simuRes(window.__svcSimTab||'embauche'); };
+  function fld(f,lbl,val,unit){ return '<div class="svc-f"><label>'+E(lbl)+'</label><div class="svc-f-in"><input value="'+E(val)+'" inputmode="decimal" oninput="svcSimSet(\''+f+'\',this.value)"><span>'+E(unit||'')+'</span></div></div>'; }
+  function simuView(){ var st=simu(); var tab=window.__svcSimTab||'embauche';
+    var tabs=[['embauche','Coût d’embauche'],['is','Impôt sociétés'],['divid','Salaire vs dividendes']].map(function(t){ return '<button class="svc-tab'+(tab===t[0]?' on':'')+'" onclick="svcSimTab(\''+t[0]+'\')">'+t[1]+'</button>'; }).join('');
+    var form;
+    if(tab==='is') form=fld('benefice','Bénéfice imposable annuel',st.benefice,'€');
+    else if(tab==='divid') form=fld('distrib','Montant distribuable / coût',st.distrib,'€')+fld('tauxPat','Charges patronales',st.tauxPat,'%')+fld('tauxNet','Taux net salaire',st.tauxNet,'%');
+    else form=fld('brut','Salaire brut mensuel',st.brut,'€')+fld('tauxPat','Charges patronales',st.tauxPat,'%')+fld('tauxNet','Taux net',st.tauxNet,'%');
+    return '<div class="svc-sub"><button class="btn btn-ghost svc-back" onclick="svcGo(\'\')">‹ Services</button>'
+      +'<h2 class="svc-h2">🧮 Simulateurs</h2>'
+      +'<p class="svc-lead">Outils de conseil chiffrés — estimations basées sur le barème du millésime (modifiable dans Paramètres → Barèmes).</p>'
+      +'<div class="svc-tabs">'+tabs+'</div>'
+      +'<div class="svc-sim-grid"><div class="card svc-card"><h2>Paramètres</h2>'+form+'</div>'
+      +'<div class="card svc-card"><h2>Résultat</h2><div id="svc-sim-res">'+simuRes(tab)+'</div></div></div></div>';
+  }
+
   /* ---------- HUB des services ---------- */
   function hub(){
     var cards=SERVICES.map(function(s){ return '<button class="svc-tile" onclick="svcGo(\''+s.id+'\')"><div class="svc-tile-ic">'+s.ico+'</div><div class="svc-tile-b"><div class="svc-tile-t">'+E(s.t)+'</div><div class="svc-tile-d">'+E(s.d)+'</div></div></button>'; }).join('');
@@ -22895,7 +22947,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<div class="svc-soon-h">Prochains services</div><div class="svc-soon-grid">'+soon+'</div></div>';
   }
   window.svcGo=function(view){ window.__svcView=view||''; try{ if(typeof go==='function') go('services'); else { S().page='services'; render(); } }catch(e){ try{S().page='services';render();}catch(_){} } };
-  function pageServices(){ return (window.__svcView==='echeancier')?echeView():hub(); }
+  function pageServices(){ if(window.__svcView==='echeancier')return echeView(); if(window.__svcView==='simulateurs')return simuView(); return hub(); }
   window.pageServices=pageServices;
 
   /* ---------- Enregistrement PAGE + nav (pattern Agenda, additif) ---------- */
@@ -22918,7 +22970,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       try{buildNav();}catch(e){} try{document.body.dataset.page='services';}catch(e){}
       var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='services';}):null;
       try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Services';}catch(e){}
-      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':((p&&p.sub)||'');}catch(e){}
+      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':(window.__svcView==='simulateurs'?'Simulateurs de conseil':((p&&p.sub)||''));}catch(e){}
       var V=document.getElementById('view'); if(V)V.innerHTML=pageServices();
       return;
     }
@@ -22949,6 +23001,16 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.svc-eche-rap{width:48px;text-align:right;background:#0b1119;border:1px solid #26364a;color:#e7edf5;border-radius:6px;padding:4px 6px;font-size:12px}.svc-eche-rl{font-size:11px;color:#8aa0b8;margin-right:4px}'
     +'.svc-eche-row.late .svc-eche-meta b{color:#ff8f9a}.svc-eche-row.soon .svc-eche-meta b{color:#f0c040}.svc-eche-row.off{opacity:.5}'
     +'.svc-eche-row.late{box-shadow:inset 3px 0 0 #e1342c}.svc-eche-row.soon{box-shadow:inset 3px 0 0 #c9a227}';
+    +'.svc-tabs{display:flex;gap:6px;margin:0 0 14px;flex-wrap:wrap}'
+    +'.svc-tab{background:#12161d;border:1px solid #26303c;color:#c7d6e8;border-radius:9px;padding:8px 14px;cursor:pointer;font-size:13px}'
+    +'.svc-tab.on{background:linear-gradient(#1e90ff,#0a64d6);color:#fff;border-color:#1e90ff;font-weight:600}'
+    +'.svc-sim-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:820px){.svc-sim-grid{grid-template-columns:1fr}}'
+    +'.svc-f{margin-bottom:12px}.svc-f label{display:block;font-size:12.5px;color:#9fb6d0;margin-bottom:5px}'
+    +'.svc-f-in{display:flex;align-items:center;gap:8px}.svc-f-in input{flex:1;background:#0b1119;border:1px solid #26364a;color:#e7edf5;border-radius:8px;padding:9px 11px;font-size:15px;text-align:right;font-variant-numeric:tabular-nums}'
+    +'.svc-f-in input:focus{outline:none;border-color:#2f8fff}.svc-f-in span{color:#8aa0b8;font-size:13px;width:24px}'
+    +'.svc-res-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:13.5px}.svc-res-row span{color:#c7d6e8}'
+    +'.svc-res-total{border-top:2px solid rgba(30,144,255,.4);border-bottom:none;margin-top:4px;padding-top:10px}.svc-res-total b{color:#5ab0ff;font-size:16px}'
+    +'.svc-res-h,.svc-res-hint{font-size:12px;color:#9fb6d0;margin:2px 0 8px}.svc-note-min{font-size:11.5px;color:#8aa0b8;margin-top:10px;line-height:1.5}'
     document.head.appendChild(st2); } }catch(e){}
 })();
 </script>
