@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=435;
+var LAST_VER=436;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22338,5 +22338,150 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
 })();
 
 </script>
+<script id="mod-pdfcal">
+/* ===== Outil de calibration PDF — Étape 1 : dépôt d'un PDF/image, rendu des pages, navigation ===== */
+(function(){
+  if(window.__pdfcalInit) return; window.__pdfcalInit=1;
+  var PDFJS_URL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  var PDFJS_WORKER='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  var PCAL={pages:[],cur:0,name:'',titre:''};
+  window.__pcal=PCAL;
+  function E(s){return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function loadPdfjs(){
+    if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if(window.__pdfjsLoading) return window.__pdfjsLoading;
+    window.__pdfjsLoading=new Promise(function(res,rej){
+      if(!navigator.onLine){ rej(new Error('offline')); return; }
+      var s=document.createElement('script'); s.src=PDFJS_URL;
+      s.onload=function(){ try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER; }catch(e){} res(window.pdfjsLib); };
+      s.onerror=function(){ rej(new Error('cdn')); };
+      document.head.appendChild(s);
+    });
+    return window.__pdfjsLoading;
+  }
+  function renderPdf(arrbuf){
+    return loadPdfjs().then(function(){
+      return window.pdfjsLib.getDocument({data:arrbuf}).promise.then(function(pdf){
+        var pages=[], chain=Promise.resolve();
+        for(var i=1;i<=pdf.numPages;i++){ (function(n){
+          chain=chain.then(function(){ return pdf.getPage(n).then(function(pg){
+            var vp=pg.getViewport({scale:2});
+            var cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
+            var ctx=cv.getContext('2d');
+            return pg.render({canvasContext:ctx,viewport:vp}).promise.then(function(){
+              pages.push({img:cv.toDataURL('image/png'),w:vp.width,h:vp.height});
+            });
+          }); });
+        })(i); }
+        return chain.then(function(){ return pages; });
+      });
+    });
+  }
+  function imgToPage(dataUrl){
+    return new Promise(function(res){ var im=new Image(); im.onload=function(){ res({img:dataUrl,w:im.naturalWidth,h:im.naturalHeight}); }; im.onerror=function(){ res({img:dataUrl,w:794,h:1123}); }; im.src=dataUrl; });
+  }
+  function status(msg){ var el=document.getElementById('pcal-status'); if(el) el.textContent=msg||''; }
+  window.pdfCalDrop=function(files){
+    if(!files||!files.length) return;
+    var f=files[0];
+    PCAL.name=PCAL.name|| (f.name||'').replace(/\.[^.]+$/,'').replace(/[^a-z0-9]+/ig,'_').toLowerCase();
+    PCAL.titre=PCAL.titre|| (f.name||'Document').replace(/\.[^.]+$/,'');
+    if(/pdf$/i.test(f.name)||f.type==='application/pdf'){
+      status('Lecture du PDF…');
+      var fr=new FileReader();
+      fr.onload=function(){ renderPdf(new Uint8Array(fr.result)).then(function(pages){ PCAL.pages=pages; PCAL.cur=0; status(pages.length+' page(s) chargée(s).'); pcalRender(); })
+        .catch(function(e){ status(e&&e.message==='offline'?'Hors ligne : le rendu PDF nécessite une connexion (ou déposez une image PNG/JPG de la page).':'Impossible de lire ce PDF ('+((e&&e.message)||'')+'). Déposez plutôt une image PNG/JPG.'); }); };
+      fr.readAsArrayBuffer(f);
+    } else if(/^image\//.test(f.type)||/\.(png|jpe?g)$/i.test(f.name)){
+      status('Lecture de l’image…');
+      var fr2=new FileReader();
+      fr2.onload=function(){ imgToPage(fr2.result).then(function(pg){ PCAL.pages=[pg]; PCAL.cur=0; status('1 image chargée.'); pcalRender(); }); };
+      fr2.readAsDataURL(f);
+    } else { status('Format non pris en charge — déposez un PDF ou une image PNG/JPG.'); }
+  };
+  window.pdfCalNav=function(d){ if(!PCAL.pages.length)return; PCAL.cur=Math.max(0,Math.min(PCAL.pages.length-1,PCAL.cur+d)); pcalRender(); };
+  window.pdfCalSetName=function(v){ PCAL.name=(v||'').replace(/[^a-z0-9]+/ig,'_').toLowerCase(); };
+  window.pdfCalSetTitre=function(v){ PCAL.titre=v||''; };
+  function pcalStageHTML(){
+    if(!PCAL.pages.length){ return '<div class="pcal-empty"><div class="pcal-drop" id="pcal-drop"><div class="pcal-drop-ic">🎯</div><div><b>Déposez un PDF</b> (ou une image PNG/JPG d’une page)<br><span class="pcal-hint">glisser-déposer, ou cliquez pour choisir un fichier</span></div><input type="file" id="pcal-file" accept="application/pdf,image/*" style="display:none" onchange="pdfCalDrop(this.files)"></div></div>'; }
+    var pg=PCAL.pages[PCAL.cur];
+    return '<div class="pcal-stage-wrap"><div class="pcal-stage" style="aspect-ratio:'+pg.w+' / '+pg.h+'"><img class="pcal-bg" src="'+pg.img+'" alt="page"></div></div>';
+  }
+  function pcalRender(){
+    var ov=document.getElementById('pcal-ov'); if(!ov) return;
+    var multi=PCAL.pages.length>1;
+    var nav=PCAL.pages.length?('<div class="pcal-pnav"><button class="pcal-b" onclick="pdfCalNav(-1)" '+(PCAL.cur<=0?'disabled':'')+'>‹</button><span>Page '+(PCAL.cur+1)+' / '+PCAL.pages.length+'</span><button class="pcal-b" onclick="pdfCalNav(1)" '+(PCAL.cur>=PCAL.pages.length-1?'disabled':'')+'>›</button></div>'):'';
+    ov.querySelector('.pcal-stagecol').innerHTML=nav+pcalStageHTML();
+    var reload=PCAL.pages.length?('<button class="pcal-b" onclick="document.getElementById(\'pcal-file2\').click()">Changer de fichier</button><input type="file" id="pcal-file2" accept="application/pdf,image/*" style="display:none" onchange="window.__pcal.name=\'\';window.__pcal.titre=\'\';pdfCalDrop(this.files)">'):'';
+    var side=ov.querySelector('.pcal-side'); if(side){ var rl=side.querySelector('.pcal-reload'); if(rl) rl.innerHTML=reload; }
+    wireDrop();
+  }
+  function wireDrop(){
+    var dz=document.getElementById('pcal-drop'); if(!dz) return;
+    dz.onclick=function(){ var f=document.getElementById('pcal-file'); if(f) f.click(); };
+    dz.ondragover=function(e){ e.preventDefault(); dz.classList.add('over'); };
+    dz.ondragleave=function(){ dz.classList.remove('over'); };
+    dz.ondrop=function(e){ e.preventDefault(); dz.classList.remove('over'); if(e.dataTransfer&&e.dataTransfer.files) pdfCalDrop(e.dataTransfer.files); };
+  }
+  window.pdfCalClose=function(){ var ov=document.getElementById('pcal-ov'); if(ov) ov.remove(); };
+  window.pdfCalOpen=function(){
+    PCAL.pages=[]; PCAL.cur=0; PCAL.name=''; PCAL.titre='';
+    var ov=document.getElementById('pcal-ov'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='pcal-ov';
+    ov.innerHTML=
+      '<div class="pcal-top"><div class="pcal-ttl"><b>Calibration PDF</b><span>Étape 1 — dépôt & rendu des pages</span></div>'
+      +'<div class="pcal-act"><button class="pcal-x" onclick="pdfCalClose()" title="Fermer">✕</button></div></div>'
+      +'<div class="pcal-body">'
+      +'<div class="pcal-side">'
+        +'<div class="pcal-grp"><div class="pcal-gh">Nouveau modèle</div>'
+          +'<label class="pcal-l">Titre du document</label><input class="pcal-in" placeholder="ex. Certificat de travail" oninput="pdfCalSetTitre(this.value)">'
+          +'<label class="pcal-l">Identifiant (clé technique)</label><input class="pcal-in" placeholder="ex. certif_travail" oninput="pdfCalSetName(this.value)">'
+          +'<div class="pcal-reload" style="margin-top:10px"></div>'
+        +'</div>'
+        +'<div class="pcal-note" id="pcal-status">Déposez le PDF du document à rendre remplissable. Les étapes suivantes (placement des champs, export) arrivent ensuite.</div>'
+      +'</div>'
+      +'<div class="pcal-stagecol">'+pcalStageHTML()+'</div>'
+      +'</div>';
+    document.body.appendChild(ov);
+    wireDrop();
+  };
+  /* Lanceur dans la page Éditions (écran de création) */
+  try{ if(typeof window.pageEditions==='function' && !window.pageEditions.__pcal){ var _pe=window.pageEditions; window.pageEditions=function(){ var h=_pe.apply(this,arguments);
+    try{ if(typeof h==='string' && h.indexOf('puis exportez en Word, PDF ou Excel.</p>')>-1 && h.indexOf('pcal-launch')<0){
+      h=h.replace('puis exportez en Word, PDF ou Excel.</p>','puis exportez en Word, PDF ou Excel.</p><div class="pcal-launch"><button class="pcal-launch-b" onclick="pdfCalOpen()">🎯 Calibrer un PDF (nouveau modèle remplissable)</button></div>');
+    } }catch(e){}
+    return h; }; window.pageEditions.__pcal=1; } }catch(e){}
+  /* Styles */
+  try{ if(!document.getElementById('pcal-css')){ var st=document.createElement('style'); st.id='pcal-css'; st.textContent=
+    '#pcal-ov{position:fixed;inset:0;z-index:99990;background:#0b0f14;display:flex;flex-direction:column;color:#e7edf5;font:14px system-ui,Segoe UI,Arial,sans-serif}'
+    +'.pcal-top{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1d2836;background:#0e141c}'
+    +'.pcal-ttl b{font-size:16px}.pcal-ttl span{margin-left:10px;color:#8aa0b8;font-size:12px}'
+    +'.pcal-x{background:#1a2534;color:#e7edf5;border:1px solid #2a3a4e;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:15px}'
+    +'.pcal-x:hover{background:#243247}'
+    +'.pcal-body{flex:1;display:flex;min-height:0}'
+    +'.pcal-side{width:320px;flex:none;border-right:1px solid #1d2836;padding:16px;overflow:auto;background:#0e141c}'
+    +'.pcal-grp{margin-bottom:14px}.pcal-gh{font-weight:700;color:#5ab0ff;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.03em}'
+    +'.pcal-l{display:block;color:#9fb6d0;font-size:12px;margin:8px 0 4px}'
+    +'.pcal-in{width:100%;box-sizing:border-box;background:#0b1119;border:1px solid #26364a;color:#e7edf5;border-radius:8px;padding:8px 10px;font-size:13px}'
+    +'.pcal-in:focus{outline:none;border-color:#2f8fff}'
+    +'.pcal-note{color:#9fb6d0;font-size:12px;line-height:1.5;background:#0b1119;border:1px solid #1d2836;border-radius:8px;padding:10px}'
+    +'.pcal-b{background:#182433;color:#e7edf5;border:1px solid #2a3a4e;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px}'
+    +'.pcal-b:hover:not([disabled]){background:#22334a}.pcal-b[disabled]{opacity:.4;cursor:default}'
+    +'.pcal-stagecol{flex:1;min-width:0;overflow:auto;padding:18px;display:flex;flex-direction:column;align-items:center;gap:12px;background:#0b0f14}'
+    +'.pcal-pnav{display:flex;align-items:center;gap:12px;color:#c7d6e8}'
+    +'.pcal-stage-wrap{width:100%;display:flex;justify-content:center}'
+    +'.pcal-stage{position:relative;width:min(820px,100%);background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.45)}'
+    +'.pcal-bg{position:absolute;inset:0;width:100%;height:100%;display:block}'
+    +'.pcal-empty{flex:1;display:flex;align-items:center;justify-content:center;width:100%}'
+    +'.pcal-drop{border:2px dashed #2f4a66;border-radius:14px;padding:44px 40px;text-align:center;color:#c7d6e8;cursor:pointer;max-width:520px;background:#0d1420}'
+    +'.pcal-drop.over{border-color:#2f8fff;background:#122033}'
+    +'.pcal-drop-ic{font-size:36px;margin-bottom:12px}.pcal-hint{color:#7f96b0;font-size:12px}'
+    +'.pcal-launch{margin-top:12px}'
+    +'.pcal-launch-b{background:linear-gradient(#1e90ff,#0a64d6);color:#fff;border:none;border-radius:10px;padding:11px 16px;font-weight:600;cursor:pointer;font-size:14px}'
+    +'.pcal-launch-b:hover{filter:brightness(1.08)}';
+    document.head.appendChild(st); } }catch(e){}
+})();
+</script>
+
 </body>
 </html>
