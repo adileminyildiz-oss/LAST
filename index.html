@@ -3103,7 +3103,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=386;
+var LAST_VER=387;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3949,7 +3949,7 @@ window.demMessagerieView=function(){
      var u=userById(d.assigneA);
      var serie=(typeof demSerie==='function')?demSerie(d):(d.code||'');
      var nAtt=(typeof demAttFew==='function')?demAttFew(d):0;
-     var sla=(typeof demSlaBadge==='function')?demSlaBadge(d):'';
+     var sla=(typeof window.demSlaMini==='function')?window.demSlaMini(d):'';
      var ctx=(typeof demContexte==='function')?demContexte(d):'';
      var cleanUrl=function(v){return (''+(v==null?'':v)).replace(/^\s*https?:\/\//i,'').replace(/^www\./i,'').replace(/\/+\s*$/,'').trim();};
      var canalRaw=window.demEstSite(d)?'aemconseil.eu':cleanUrl(d.canal||'E-mail');
@@ -8086,6 +8086,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var txt=(s.level==='late')?('⏰ en retard · '+ageLbl(s.days)):('reçue '+ageLbl(s.days));
     return '<span class="sla '+cls+'" title="Délai cible : '+s.sla+' j">'+E(txt)+'</span>';
   };
+  /* Badge SLA COMPACT pour la liste de réception (colonne Statut) — évite le débordement */
+  window.demSlaMini=function(d){
+    if(d&&(d.decision==='acceptee'||d.decision==='refusee'))return '';
+    var s=window.demSlaState(d);
+    if(s.level==='done')return '';
+    var cls=(s.level==='late')?'sla-late':(s.level==='warn'?'sla-warn':'sla-ok');
+    var txt=(s.days<=0)?'auj.':(s.days+' j');
+    var pre=(s.level==='late')?'⏰ ':'';
+    var tip=(s.level==='late'?'En retard · ':'Reçue ')+ageLbl(s.days)+' · délai cible '+s.sla+' j';
+    return '<span class="sla sla-mini '+cls+'" title="'+tip+'">'+pre+txt+'</span>';
+  };
   window.demRetardCount=function(list){return (list||DB.demandes||[]).filter(function(d){return !d.archived&&window.demSlaState(d).level==='late';}).length;};
   window.demSetSla=function(v){DB.parametres=DB.parametres||{};var n=parseInt(v,10);if(!isNaN(n)&&n>0){DB.parametres.slaJours=n;if(typeof save==='function')save();if(typeof render==='function')render();}};
 
@@ -8095,6 +8106,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'.sla-warn{color:#b45309;background:#fffaf0;border-color:#eed09a}'
       +'.sla-late{color:#be123c;background:#fff1f4;border-color:#f6cdd8}'
       +'.sla-done{color:var(--ink-3,#8a7f6c);background:var(--paper-2,#f6efe0);border-color:var(--line-2,#e2d9c6)}'
+      +'.sla-mini{padding:1px 7px;font-size:10px}'
       +'.dem-tbl .sla{margin-left:6px}'
       +'.nav-badge.nav-badge-late{background:linear-gradient(135deg,#e11d48,#9f1239)!important;color:#fff!important;box-shadow:0 2px 8px rgba(225,29,72,.45)!important}';
     document.head.appendChild(st);}
@@ -20555,9 +20567,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       '.dem-elist{display:flex;flex-direction:column}',
       '.dem-erow{border-bottom:1px solid #1b1e25}.dem-erow:last-child{border-bottom:0}',
       '.dem-ehdr{position:sticky;top:0;z-index:2;background:#0f1319;border-bottom:1px solid #23262d}',
-      '.dem-ehdr .dem-ehead{cursor:default;padding:9px 14px}',
+      '.dem-ehdr .dem-ehead{cursor:default;padding:9px 16px}',
       '.dem-ehdr .dem-ecol{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#8b93a1;font-weight:800}',
-      '.dem-ehead{display:grid;grid-template-columns:18px 12px 70px minmax(140px,1.4fr) 148px 160px 150px 142px 92px;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;transition:background .12s}',
+      '.dem-ehead{display:grid;grid-template-columns:16px 12px 64px minmax(150px,1.5fr) 118px minmax(150px,1.1fr) 140px 128px 84px;align-items:center;gap:14px;padding:11px 16px;cursor:pointer;transition:background .12s}',
       '.dem-erow:not(.dem-ehdr) .dem-ehead:hover{background:#141821}',
       '.dem-echev{color:#8b93a1;font-size:11px;transition:transform .15s;text-align:center}',
       '.dem-erow.open .dem-echev{transform:rotate(90deg);color:#cbd5ff}',
@@ -20565,6 +20577,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       '.dem-erow.unread .dem-edot{background:#4f9dff;box-shadow:0 0 0 3px rgba(79,157,255,.18)}',
       '.dem-ecol{min-width:0;overflow:hidden;display:flex;align-items:center;gap:7px}',
       '.dem-col-date,.dem-col-open{justify-content:flex-end;text-align:right}',
+      '.dem-col-st{gap:6px}',
       '.dem-ecode{font:700 11px ui-monospace,monospace;color:#8b93a1;background:#0d0f13;border:1px solid #23262d;border-radius:5px;padding:1px 6px;white-space:nowrap}',
       '.dem-ename{font-size:13.5px;font-weight:600;color:#e6e9ef;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.dem-erow.unread .dem-ename{font-weight:800;color:#fff}',
