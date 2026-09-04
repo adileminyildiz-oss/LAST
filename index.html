@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=448;
+var LAST_VER=449;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22834,7 +22834,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     {id:'echeancier',ico:'📅',t:'Échéancier fiscal & social',d:'Calendrier des obligations (TVA, DSN, acomptes IS, CFE, AG…) avec rappels automatiques. Vendable en abonnement.'},
     {id:'simulateurs',ico:'🧮',t:'Simulateurs',d:'Coût d’embauche, impôt sur les sociétés, salaire vs dividendes. Outils de conseil & aimant à prospects.'},
     {id:'catalogue',ico:'🧾',t:'Offres & tarifs',d:'Grille des prestations vendables (création, modifs, paie, conseil, abonnements) éditable et imprimable — à remettre aux clients.'},
-    {id:'marge',ico:'💰',t:'Marge & bénéfices',d:'Prestation sous-traitée : coût prestataire + marge cible → paiement client TTC, TVA à payer, montant versé au prestataire et bénéfice net. Optimisez une marge élevée.'}
+    {id:'marge',ico:'💰',t:'Marge & bénéfices',d:'Prestation sous-traitée : coût prestataire + marge cible → paiement client TTC, TVA à payer, montant versé au prestataire et bénéfice net. Optimisez une marge élevée.'},
+    {id:'abo',ico:'🔁',t:'Abonnements & revenu récurrent',d:'Suivi des clients abonnés (espace client, échéancier, packs…) : revenu mensuel récurrent (MRR), annuel (ARR), panier moyen et projection. Facturation en ligne récurrente.'}
   ];
 
   /* ================= SERVICE 1 : ÉCHÉANCIER FISCAL & SOCIAL ================= */
@@ -23047,17 +23048,75 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<p class="svc-note-min">Encaissement net = paiement client TTC − TVA à reverser − montant versé au prestataire = bénéfice HT (la TVA est neutre pour l’entreprise). Le prestataire est supposé assujetti à la TVA (TVA déductible sur son coût). Marge = taux de marque sur le prix de vente HT.</p></div>';
   }
 
+  /* ================= SERVICE 5 : ABONNEMENTS & REVENU RÉCURRENT (MRR) ================= */
+  var ABO_DEF=[
+    {client:'SARL Dupont',offre:'Espace client + coffre-fort',prix:29,freq:'mois',debut:'2025-01',statut:'actif'},
+    {client:'SAS Martin BTP',offre:'Échéancier & alertes',prix:19,freq:'mois',debut:'2025-03',statut:'actif'},
+    {client:'EURL Bernard',offre:'Pack documents self-service',prix:15,freq:'mois',debut:'2025-06',statut:'actif'},
+    {client:'SASU Petit',offre:'Espace client + coffre-fort',prix:290,freq:'an',debut:'2025-02',statut:'actif'},
+    {client:'SCI Durand',offre:'Échéancier & alertes',prix:19,freq:'mois',debut:'2024-11',statut:'suspendu'}
+  ];
+  function abo(){ var o=store(); if(!o.abo){ o.abo={list:ABO_DEF.map(function(a){return {client:a.client,offre:a.offre,prix:a.prix,freq:a.freq,debut:a.debut,statut:a.statut};})}; save(o); } return o.abo; }
+  function aboSave(st){ var o=store(); o.abo=st; save(o); }
+  function aboMrr(a){ if(a.statut!=='actif')return 0; var p=+a.prix||0; return a.freq==='an'?(p/12):p; }
+  window.svcAboSet=function(i,f,v){ var st=abo(); var a=st.list[i]; if(!a)return; a[f]=(f==='prix')?num(v):v; aboSave(st); if(f!=='client'&&f!=='offre'&&f!=='debut')svcAboRefresh(); };
+  window.svcAboAdd=function(){ var st=abo(); st.list.push({client:'Nouveau client',offre:'Espace client + coffre-fort',prix:29,freq:'mois',debut:'',statut:'actif'}); aboSave(st); render(); };
+  window.svcAboDel=function(i){ var st=abo(); st.list.splice(i,1); aboSave(st); render(); };
+  window.svcAboReset=function(){ function go(){ var o=store(); delete o.abo; save(o); render(); if(typeof toast==='function')toast('Abonnements réinitialisés'); } if(typeof uiConfirm==='function')uiConfirm('Réinitialiser la liste des abonnements ?',go,{okLabel:'Réinitialiser'}); else go(); };
+  window.svcAboRefresh=function(){ var st=abo(); var mrr=0,actifs=0;
+    st.list.forEach(function(a,i){ var m=aboMrr(a); mrr+=m; if(a.statut==='actif')actifs++; var el=document.getElementById('abo-m-'+i); if(el)el.textContent=eur(m); var tr=document.getElementById('abo-tr-'+i); if(tr)tr.className='abo-st-'+a.statut; });
+    var pm=actifs>0?(mrr/actifs):0;
+    function putS(id,v){ var el=document.getElementById(id); if(el)el.textContent=v; }
+    putS('abo-s-mrr',eur(mrr)); putS('abo-s-arr',eur(mrr*12)); putS('abo-s-nb',actifs); putS('abo-s-pm',eur(pm));
+  };
+  function aboOffres(){ try{ var st=window.__svcStore().cat; if(st&&st.groups){ var g=st.groups.filter(function(x){return /abonn/i.test(x.g);})[0]; if(g)return g.items.map(function(it){return it.n;}); } }catch(e){} return ['Espace client + coffre-fort','Échéancier & alertes','Pack documents self-service']; }
+  function aboView(){ var st=abo(); var offres=aboOffres();
+    var rows=st.list.map(function(a,i){ var m=aboMrr(a);
+      var offOpts=offres.concat(offres.indexOf(a.offre)<0&&a.offre?[a.offre]:[]).map(function(o){return '<option '+(o===a.offre?'selected':'')+'>'+E(o)+'</option>';}).join('');
+      var frOpts=[['mois','/ mois'],['an','/ an']].map(function(o){return '<option value="'+o[0]+'" '+(a.freq===o[0]?'selected':'')+'>'+o[1]+'</option>';}).join('');
+      var stOpts=[['actif','Actif'],['suspendu','Suspendu'],['resilie','Résilié']].map(function(o){return '<option value="'+o[0]+'" '+(a.statut===o[0]?'selected':'')+'>'+o[1]+'</option>';}).join('');
+      return '<tr id="abo-tr-'+i+'" class="abo-st-'+a.statut+'">'
+        +'<td><input class="mg-in mg-n" value="'+E(a.client)+'" oninput="svcAboSet('+i+',\'client\',this.value)"></td>'
+        +'<td><select class="mg-in mg-sel abo-off" onchange="svcAboSet('+i+',\'offre\',this.value)">'+offOpts+'</select></td>'
+        +'<td class="r"><input class="mg-in mg-num" inputmode="decimal" value="'+E(a.prix)+'" oninput="svcAboSet('+i+',\'prix\',this.value)"></td>'
+        +'<td><select class="mg-in mg-sel" onchange="svcAboSet('+i+',\'freq\',this.value)">'+frOpts+'</select></td>'
+        +'<td><input class="mg-in mg-num" style="width:88px" placeholder="AAAA-MM" value="'+E(a.debut)+'" oninput="svcAboSet('+i+',\'debut\',this.value)"></td>'
+        +'<td><select class="mg-in mg-sel" onchange="svcAboSet('+i+',\'statut\',this.value)">'+stOpts+'</select></td>'
+        +'<td class="r mg-c mg-strong" id="abo-m-'+i+'">'+eur(m)+'</td>'
+        +'<td class="r"><button class="svc-cat-x" title="Retirer" aria-label="Retirer" onclick="svcAboDel('+i+')">'+SVCX+'</button></td>'
+        +'</tr>';
+    }).join('');
+    var mrr=0,actifs=0; st.list.forEach(function(a){ mrr+=aboMrr(a); if(a.statut==='actif')actifs++; }); var pm=actifs>0?(mrr/actifs):0;
+    var synth='<div class="svc-eche-kpis">'
+      +'<div class="svc-kpi mg-kpi-ben"><div class="svc-kpi-v" id="abo-s-mrr">'+eur(mrr)+'</div><div class="svc-kpi-l">Revenu mensuel récurrent (MRR)</div></div>'
+      +'<div class="svc-kpi"><div class="svc-kpi-v" id="abo-s-arr">'+eur(mrr*12)+'</div><div class="svc-kpi-l">Revenu annuel (ARR)</div></div>'
+      +'<div class="svc-kpi"><div class="svc-kpi-v" id="abo-s-nb">'+actifs+'</div><div class="svc-kpi-l">Abonnements actifs</div></div>'
+      +'<div class="svc-kpi"><div class="svc-kpi-v" id="abo-s-pm">'+eur(pm)+'</div><div class="svc-kpi-l">Panier moyen / mois</div></div>'
+      +'</div>';
+    var table='<div class="svc-mg-wrap"><table class="svc-mg-t"><thead><tr>'
+      +'<th style="text-align:left">Client</th><th style="text-align:left">Offre</th><th>Prix</th><th style="text-align:left">Fréquence</th><th style="text-align:left">Depuis</th><th style="text-align:left">Statut</th><th>MRR équivalent</th><th></th>'
+      +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
+      +'<button class="btn btn-sm btn-ghost svc-cat-add" onclick="svcAboAdd()">+ Ajouter un abonnement</button>';
+    return '<div class="svc-sub"><button class="btn btn-ghost svc-back" onclick="svcGo(\'\')">‹ Services</button>'
+      +'<h2 class="svc-h2">🔁 Abonnements & revenu récurrent</h2>'
+      +'<p class="svc-lead">Suivi des clients abonnés à vos offres récurrentes (espace client, échéancier, packs). Le <b>MRR</b> (revenu mensuel récurrent) et l’<b>ARR</b> (annuel) se calculent automatiquement — les abonnements annuels sont ramenés au mois. Base d’une facturation en ligne récurrente.</p>'
+      +'<div class="svc-cat-act"><button class="btn btn-ghost" onclick="svcAboReset()">↺ Réinitialiser</button></div>'
+      +synth
+      +'<div class="card svc-card">'+table+'</div>'
+      +'<p class="svc-note-min">MRR = somme des abonnements <b>actifs</b> ramenés au mois (annuel ÷ 12). ARR = MRR × 12. Les statuts « suspendu » et « résilié » sont exclus du MRR. Les offres proposées proviennent du groupe « Abonnements » de votre catalogue.</p></div>';
+  }
+
   /* ---------- HUB des services ---------- */
   function hub(){
     var cards=SERVICES.map(function(s){ return '<button class="svc-tile" onclick="svcGo(\''+s.id+'\')"><div class="svc-tile-ic">'+s.ico+'</div><div class="svc-tile-b"><div class="svc-tile-t">'+E(s.t)+'</div><div class="svc-tile-d">'+E(s.d)+'</div></div></button>'; }).join('');
-    var soon=['Simulateurs (coût d’embauche, rémunération dirigeant, IS)','Facturation en ligne (abonnement client)','Coffre-fort & portail client','Signature électronique des documents','Tableau de bord dirigeant','Veille réglementaire annuelle']
+    var soon=['Coffre-fort & portail client','Signature électronique des documents','Tableau de bord dirigeant','Veille réglementaire annuelle']
       .map(function(x){ return '<div class="svc-soon">'+E(x)+' <span class="svc-soon-b">à venir</span></div>'; }).join('');
     return '<div class="svc-hub"><p class="svc-lead">Modules de services vendables aux clients — indépendants de l’activité opérationnelle du cabinet.</p>'
       +'<div class="svc-grid">'+cards+'</div>'
       +'<div class="svc-soon-h">Prochains services</div><div class="svc-soon-grid">'+soon+'</div></div>';
   }
   window.svcGo=function(view){ window.__svcView=view||''; try{ if(typeof go==='function') go('services'); else { S().page='services'; render(); } }catch(e){ try{S().page='services';render();}catch(_){} } };
-  function pageServices(){ if(window.__svcView==='echeancier')return echeView(); if(window.__svcView==='simulateurs')return simuView(); if(window.__svcView==='catalogue')return catView(); if(window.__svcView==='marge')return margeView(); return hub(); }
+  function pageServices(){ if(window.__svcView==='echeancier')return echeView(); if(window.__svcView==='simulateurs')return simuView(); if(window.__svcView==='catalogue')return catView(); if(window.__svcView==='marge')return margeView(); if(window.__svcView==='abo')return aboView(); return hub(); }
   window.pageServices=pageServices;
 
   /* ---------- Enregistrement PAGE + nav (pattern Agenda, additif) ---------- */
@@ -23080,7 +23139,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       try{buildNav();}catch(e){} try{document.body.dataset.page='services';}catch(e){}
       var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='services';}):null;
       try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Services';}catch(e){}
-      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':(window.__svcView==='simulateurs'?'Simulateurs de conseil':(window.__svcView==='catalogue'?'Offres & tarifs':(window.__svcView==='marge'?'Marge & bénéfices':((p&&p.sub)||''))));}catch(e){}
+      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':(window.__svcView==='simulateurs'?'Simulateurs de conseil':(window.__svcView==='catalogue'?'Offres & tarifs':(window.__svcView==='marge'?'Marge & bénéfices':(window.__svcView==='abo'?'Abonnements & revenu récurrent':((p&&p.sub)||'')))));}catch(e){}
       var V=document.getElementById('view'); if(V)V.innerHTML=pageServices();
       return;
     }
@@ -23140,6 +23199,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'#view .mg-in{background:#0b1119!important;border:1px solid #26364a!important;color:#e7edf5!important;border-radius:7px!important;padding:7px 9px!important;font-size:13px!important;box-sizing:border-box!important;display:inline-block!important;margin:0!important}'
     +'#view .mg-in:focus{outline:none;border-color:#2f8fff!important}'
     +'#view .svc-mg-t .mg-n{width:100%!important;min-width:150px}#view .svc-mg-t .mg-num{width:96px!important;text-align:right;font-variant-numeric:tabular-nums}#view .svc-mg-t .mg-marge{width:74px!important}'
+    +'#view .svc-mg-t select.mg-sel{background:#0b1119!important;border:1px solid #26364a!important;color:#e7edf5!important;border-radius:7px!important;padding:6px 8px!important;font-size:12.5px!important;display:inline-block!important;width:auto!important;margin:0!important}#view .svc-mg-t .abo-off{max-width:220px}'
+    +'#view .svc-mg-t tr.abo-st-suspendu{opacity:.6}#view .svc-mg-t tr.abo-st-resilie{opacity:.42}#view .svc-mg-t tr.abo-st-resilie .mg-strong{color:#8aa0b8!important}'
     document.head.appendChild(st2); } }catch(e){}
 })();
 </script>

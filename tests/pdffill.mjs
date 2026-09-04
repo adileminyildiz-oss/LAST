@@ -110,6 +110,25 @@ const r = await page.evaluate(async () => {
     if (window.__svcSaveStore) { const o2 = window.__svcStore(); delete o2.marge; window.__svcSaveStore(o2); }
   } catch (e) { out.marge = { ok: false, err: '' + e }; }
 
+  // 7) Service « Abonnements & revenu récurrent » (MRR)
+  out.abo = { ok: false };
+  try {
+    if (window.__svcSaveStore) { const o = window.__svcStore(); delete o.abo; window.__svcSaveStore(o); }
+    window.svcGo('abo');
+    const V = document.getElementById('view');
+    const tab = V && V.querySelector('table.svc-mg-t');
+    const norm = s => parseFloat(('' + (s || '')).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
+    const g = id => (document.getElementById(id) || {}).textContent || '';
+    // défaut : 4 actifs, MRR = 29+19+15+290/12 = 87,17 ; suspendu exclu
+    const mrr = norm(g('abo-s-mrr')), nb = norm(g('abo-s-nb'));
+    const mrrOk = Math.abs(mrr - (29 + 19 + 15 + 290 / 12)) < 0.02 && nb === 4;
+    const annual = Math.abs(norm(g('abo-m-3')) - 290 / 12) < 0.02; // annuel ramené au mois
+    window.svcAboSet(0, 'statut', 'suspendu'); // suspend → -29
+    const live = Math.abs(norm(g('abo-s-mrr')) - (19 + 15 + 290 / 12)) < 0.02 && norm(g('abo-s-nb')) === 3;
+    out.abo = { ok: !!tab, calc: mrrOk, annual, live };
+    if (window.__svcSaveStore) { const o2 = window.__svcStore(); delete o2.abo; window.__svcSaveStore(o2); }
+  } catch (e) { out.abo = { ok: false, err: '' + e }; }
+
   return out;
 });
 
@@ -138,6 +157,9 @@ check('service Marge : table rendue en ligne', r.marge.ok && r.marge.table);
 check('service Marge : calculs exacts (prix/TTC/TVA/prestataire/bénéfice)', r.marge.calc);
 check('service Marge : encaissement net = bénéfice (identité TVA neutre)', r.marge.identity);
 check('service Marge : recalcul en direct', r.marge.live);
+check('service Abonnements : table rendue', r.abo.ok);
+check('service Abonnements : MRR/ARR exacts (annuel ramené au mois)', r.abo.calc && r.abo.annual);
+check('service Abonnements : recalcul en direct (suspension)', r.abo.live);
 check('aucun pageerror', perr.length === 0);
 
 const ok = results.filter(x => x.ok).length, tot = results.length;
