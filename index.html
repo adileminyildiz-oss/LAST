@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=381;
+var LAST_VER=382;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3921,32 +3921,56 @@ window.demMessagerieView=function(){
    +'<button class="btn btn-sm dem-imp-btn" onclick="demToutLu()"'+(nl?'':' disabled')+'>✓ Tout marquer lu</button>'
    +'<button class="btn btn-sm dem-imp-btn" onclick="demSyncConfig()">⚙ Configurer</button></div>';
  var search='<div class="dem-search">'+svg(IC.inbox)+'<input value="'+esc(state.q||'')+'" oninput="state.q=this.value.toLowerCase();render()" placeholder="Rechercher un expéditeur, une information…"></div>';
+ state.demOpen=state.demOpen||{};
  var box='';
  if(list.length){
-   box='<div class="msg-list">'+list.map(function(d){
+   var head='<div class="dem-erow dem-ehdr"><div class="dem-ehead">'
+     +'<span class="dem-echev"></span><span class="dem-edot" style="visibility:hidden"></span>'
+     +'<span class="dem-ecol dem-col-code">N°</span>'
+     +'<span class="dem-ecol dem-col-name">Client</span>'
+     +'<span class="dem-ecol dem-col-canal">Canal</span>'
+     +'<span class="dem-ecol dem-col-obj">Objet</span>'
+     +'<span class="dem-ecol dem-col-st">Statut</span>'
+     +'<span class="dem-ecol dem-col-date">Reçu</span>'
+     +'<span class="dem-ecol dem-col-open"></span>'
+     +'</div></div>';
+   box='<div class="dem-elist">'+head+list.map(function(d){
      var f=window.demFields(d);
-     var infos=f.filter(function(x){return !x.long;}).slice(0,4).map(function(x){return '<span class="msg-chip"><b>'+esc(x.label)+'</b> '+esc(x.value)+'</span>';}).join('');
-     var apercu=(mailDemande(d)||d.message||'').slice(0,150);
+     var apercu=(mailDemande(d)||d.message||'').slice(0,600);
      var u=userById(d.assigneA);
      var serie=(typeof demSerie==='function')?demSerie(d):(d.code||'');
      var nAtt=(typeof demAttFew==='function')?demAttFew(d):0;
      var sla=(typeof demSlaBadge==='function')?demSlaBadge(d):'';
      var ctx=(typeof demContexte==='function')?demContexte(d):'';
-     return '<div class="msg-item'+(d.lu?'':' unread')+'" onclick="demMsgOuvrir(\''+d.id+'\')">'
-       +'<span class="msg-dot"></span>'
-       +'<div class="msg-body">'
-         +'<div class="msg-top">'+(serie?'<span class="msg-serie">N° '+esc(serie)+'</span>':'')+'<span class="msg-from">'+esc(demBestName(d))+'</span>'
-           +'<span class="msg-canal">'+(window.demEstSite(d)?'🌐 aemconseil.eu':esc(d.canal||'E-mail'))+'</span>'
-           +(nAtt?'<span class="msg-att">📎 '+nAtt+'</span>':'')
-           +sla
-           +((typeof demSignauxHTML==='function')?demSignauxHTML(d):'')
-           +'<span class="msg-date">'+esc(mailDateHeure(d))+'</span></div>'
-         +'<div class="msg-obj"><span class="tag blue">'+esc(IA.objet(d))+'</span><span class="tag mut">'+esc(d.statut||'Nouveau')+'</span></div>'
-         +(infos?'<div class="msg-infos">'+infos+'</div>':'')
-         +(apercu?'<div class="msg-prev">'+esc(apercu)+(apercu.length>=150?'…':'')+'</div>':'')
-         +(ctx?'<div class="msg-ctx">'+esc(ctx)+'</div>':'')
+     var canal=window.demEstSite(d)?'🌐 aemconseil.eu':esc(d.canal||'E-mail');
+     var stCls=d.lu?'lu':'nouv'; var stLbl=d.lu?esc(d.statut||'Lu'):'Nouveau';
+     var open=(state.demOpen[d.id])?' open':'';
+     var cells=f.filter(function(x){return !x.long;}).map(function(x){return '<div class="dem-cell"><div class="dem-cl">'+esc(x.label)+'</div><div class="dem-cv">'+esc(x.value||'—')+'</div></div>';}).join('');
+     var meta='<div class="dem-cell"><div class="dem-cl">E-mail</div><div class="dem-cv">'+esc((d.clientEmail&&!/formsubmit/i.test(d.clientEmail))?d.clientEmail:'—')+'</div></div>'
+       +'<div class="dem-cell"><div class="dem-cl">Téléphone</div><div class="dem-cv">'+esc(d.clientTel||'—')+'</div></div>'
+       +'<div class="dem-cell"><div class="dem-cl">Canal</div><div class="dem-cv">'+canal+'</div></div>'
+       +'<div class="dem-cell"><div class="dem-cl">Reçu le</div><div class="dem-cv">'+esc(mailDateHeure(d))+'</div></div>'
+       +(nAtt?('<div class="dem-cell"><div class="dem-cl">Pièces jointes</div><div class="dem-cv">📎 '+nAtt+'</div></div>'):'')
+       +(u?('<div class="dem-cell"><div class="dem-cl">Assigné à</div><div class="dem-cv">'+esc(u.nom||u.prenom||'')+'</div></div>'):'');
+     return '<div class="dem-erow'+open+(d.lu?'':' unread')+'" data-id="'+d.id+'">'
+       +'<div class="dem-ehead" onclick="demRowToggle(\''+d.id+'\')">'
+         +'<span class="dem-echev">▸</span><span class="dem-edot"></span>'
+         +'<span class="dem-ecol dem-col-code"><span class="dem-ecode">'+(serie?esc(serie):'—')+'</span></span>'
+         +'<span class="dem-ecol dem-col-name"><span class="dem-ename">'+esc(demBestName(d))+'</span></span>'
+         +'<span class="dem-ecol dem-col-canal">'+canal+'</span>'
+         +'<span class="dem-ecol dem-col-obj"><span class="tag blue">'+esc(IA.objet(d))+'</span></span>'
+         +'<span class="dem-ecol dem-col-st"><span class="dem-st dem-st-'+stCls+'">'+stLbl+'</span>'+sla+'</span>'
+         +'<span class="dem-ecol dem-col-date">'+(nAtt?'<span class="dem-eatt">📎 '+nAtt+'</span>':'')+'<span class="dem-edate">'+esc(mailDateHeure(d))+'</span></span>'
+         +'<span class="dem-ecol dem-col-open"><button class="dem-eopen" onclick="event.stopPropagation();demMsgOuvrir(\''+d.id+'\')">Ouvrir ›</button></span>'
        +'</div>'
-       +'<span class="msg-go">Ouvrir ›</span>'
+       +'<div class="dem-edetail">'
+         +'<div class="dem-egrid">'+cells+meta+'</div>'
+         +(apercu?('<div class="dem-eprev"><div class="dem-cl">Message reçu</div><div class="dem-eprev-t">'+esc(apercu)+((mailDemande(d)||d.message||'').length>600?'…':'')+'</div></div>'):'')
+         +(ctx?('<div class="dem-ectx">'+esc(ctx)+'</div>'):'')
+         +'<div class="dem-eacts"><button class="btn btn-sm dem-imp-btn dem-imp-pri" onclick="demMsgOuvrir(\''+d.id+'\')">Ouvrir la demande</button>'
+           +(d.lu?'':'<button class="btn btn-sm dem-imp-btn" onclick="event.stopPropagation();demMarquerLu(\''+d.id+'\');render()">✓ Marquer lu</button>')
+           +'</div>'
+       +'</div>'
      +'</div>';
    }).join('')+'</div>';
  } else box='<div class="empty">Aucun message '+(canal==='site'?'du site ':(canal==='autres'?'hors site ':''))+'dans la boîte de réception.</div>';
@@ -20474,6 +20498,56 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function wire(){ try{ var el=document.querySelector('#side .brand-logo')||document.querySelector('.brand-logo'); if(el&&!el.__logoWired){ el.__logoWired=1; el.style.cursor='pointer'; el.setAttribute('role','button'); el.setAttribute('tabindex','0'); el.title="Aller au Traitement — appuyer à nouveau pour revenir en arrière"; el.addEventListener('click',function(e){ e.preventDefault(); window.logoClick(); }); el.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); window.logoClick(); } }); } }catch(e){} }
   try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var x=_r.apply(this,arguments); try{rec();}catch(e){} try{wire();}catch(e){} return x; }; } }catch(e){}
   try{ if(document.readyState!=='loading')wire(); else document.addEventListener('DOMContentLoaded',wire); }catch(e){}
+})();
+</script>
+<script id="dem-reception-redesign">(function(){
+  /* Réception des demandes : lignes ouvrables par client (dépliage inline des détails). */
+  window.demRowToggle=function(id){
+    try{
+      if(typeof state==='undefined')return; state.demOpen=state.demOpen||{};
+      var row=document.querySelector('.dem-erow[data-id="'+id+'"]');
+      if(state.demOpen[id]){ delete state.demOpen[id]; if(row)row.classList.remove('open'); }
+      else { state.demOpen[id]=1; if(row)row.classList.add('open'); }
+    }catch(e){}
+  };
+  try{ if(!document.getElementById('dem-recept-css')){ var st=document.createElement('style'); st.id='dem-recept-css';
+    st.textContent=[
+      '.dem-elist{display:flex;flex-direction:column}',
+      '.dem-erow{border-bottom:1px solid #1b1e25}.dem-erow:last-child{border-bottom:0}',
+      '.dem-ehdr{position:sticky;top:0;z-index:2;background:#0f1319;border-bottom:1px solid #23262d}',
+      '.dem-ehdr .dem-ehead{cursor:default;padding:9px 14px}',
+      '.dem-ehdr .dem-ecol{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#8b93a1;font-weight:800}',
+      '.dem-ehead{display:grid;grid-template-columns:18px 12px 70px minmax(140px,1.4fr) 148px 160px 150px 142px 92px;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;transition:background .12s}',
+      '.dem-erow:not(.dem-ehdr) .dem-ehead:hover{background:#141821}',
+      '.dem-echev{color:#8b93a1;font-size:11px;transition:transform .15s;text-align:center}',
+      '.dem-erow.open .dem-echev{transform:rotate(90deg);color:#cbd5ff}',
+      '.dem-edot{width:9px;height:9px;border-radius:50%;background:#3a3f49;justify-self:center}',
+      '.dem-erow.unread .dem-edot{background:#4f9dff;box-shadow:0 0 0 3px rgba(79,157,255,.18)}',
+      '.dem-ecol{min-width:0;overflow:hidden;display:flex;align-items:center;gap:7px}',
+      '.dem-col-date,.dem-col-open{justify-content:flex-end;text-align:right}',
+      '.dem-ecode{font:700 11px ui-monospace,monospace;color:#8b93a1;background:#0d0f13;border:1px solid #23262d;border-radius:5px;padding:1px 6px;white-space:nowrap}',
+      '.dem-ename{font-size:13.5px;font-weight:600;color:#e6e9ef;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.dem-erow.unread .dem-ename{font-weight:800;color:#fff}',
+      '.dem-col-canal{font-size:12px;color:#9aa3b2;white-space:nowrap}',
+      '.dem-col-obj .tag{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}',
+      '.dem-st{font-size:11px;font-weight:700;border-radius:20px;padding:2px 9px;white-space:nowrap}',
+      '.dem-st-nouv{background:#12233a;color:#7fb8ff;border:1px solid #274a72}',
+      '.dem-st-lu{background:#171a20;color:#9aa3b2;border:1px solid #2a2e37}',
+      '.dem-edate{font-size:11.5px;color:#8b93a1;white-space:nowrap}',
+      '.dem-eatt{font-size:11px;color:#e0c07a}',
+      '.dem-eopen{font-size:12px;font-weight:600;color:#5ab0ff;background:none;border:0;cursor:pointer;white-space:nowrap;padding:2px}',
+      '.dem-eopen:hover{text-decoration:underline}',
+      '.dem-edetail{display:none;padding:2px 18px 16px 40px;background:#0d0f13;border-top:1px dashed #23262d}',
+      '.dem-erow.open .dem-edetail{display:block}',
+      '.dem-egrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:9px;margin:12px 0}',
+      '.dem-cell{background:#12161d;border:1px solid #23262d;border-radius:9px;padding:8px 10px;min-width:0}',
+      '.dem-cl{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#8b93a1;margin-bottom:3px}',
+      '.dem-cv{font-size:13px;color:#e6e9ef;word-break:break-word}',
+      '.dem-eprev{margin:4px 0 10px}.dem-eprev-t{font-size:13px;line-height:1.5;color:#c2c8d2;background:#12161d;border:1px solid #23262d;border-radius:9px;padding:10px 12px;white-space:pre-wrap}',
+      '.dem-ectx{font-size:12px;color:#9aa3b2;margin-bottom:10px}',
+      '.dem-eacts{display:flex;gap:8px;flex-wrap:wrap}',
+      '@media(max-width:900px){.dem-ehead{grid-template-columns:16px 10px 1fr auto;grid-auto-rows:auto;gap:6px 8px}.dem-col-canal,.dem-col-obj,.dem-col-st{grid-column:3/5}.dem-col-date{grid-column:3}.dem-col-open{grid-column:4}.dem-ehdr{display:none}.dem-edetail{padding-left:18px}}'
+    ].join(''); document.head.appendChild(st); } }catch(e){}
 })();
 </script>
 </body>
