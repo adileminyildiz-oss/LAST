@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=432;
+var LAST_VER=433;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22094,19 +22094,19 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   var PARAM={ smic:12.31, pmss:3100.65, csgBase:98.25 };
   // Cotisations : base = 'brut' | 'plaf' (plafonnée) | 'csg' ; sal/pat en % ; imp=false -> non déductible du net imposable
   function COTIS(){ return [
-    {grp:'SANTÉ',            lib:'Sécurité sociale - Maladie Maternité', base:'brut', sal:0,    pat:7.00},
-    {grp:'SANTÉ',            lib:'Complémentaire / contribution',        base:'brut', sal:0,    pat:6.00},
-    {grp:'ACCIDENT DU TRAVAIL',lib:'Accident du travail - Mal. prof.',   base:'brut', sal:0,    pat:'AT'},
-    {grp:'RETRAITE',         lib:'Sécurité sociale plafonnée',           base:'plaf', sal:6.90, pat:8.55},
-    {grp:'RETRAITE',         lib:'Sécurité sociale déplafonnée',         base:'brut', sal:0.40, pat:2.11},
-    {grp:'RETRAITE',         lib:'Complémentaire Tranche 1',             base:'brut', sal:4.01, pat:6.01},
-    {grp:'FAMILLE',          lib:'Allocations familiales',               base:'brut', sal:0,    pat:5.25},
-    {grp:'ASSURANCE CHÔMAGE',lib:'Chômage',                             base:'brut', sal:0,    pat:4.00},
-    {grp:'ASSURANCE CHÔMAGE',lib:'AGS',                                 base:'brut', sal:0,    pat:0.25},
-    {grp:'AUTRES',           lib:"Autres contributions dues par l'employeur",base:'brut',sal:0,pat:0.9662},
-    {grp:'MUTUELLE',         lib:'Complémentaire santé (mutuelle)',      base:'brut', sal:'MUTS',pat:'MUTP', opt:true},
-    {grp:'CSG',              lib:"CSG déductible de l'impôt",            base:'csg',  sal:6.80, pat:0},
-    {grp:'CSG',              lib:"CSG/CRDS non déductible de l'impôt",   base:'csg',  sal:2.90, pat:0, imp:false}
+    {code:'santeMal', grp:'SANTÉ',            lib:'Sécurité sociale - Maladie Maternité', base:'brut', sal:0,    pat:7.00},
+    {code:'santeComp',grp:'SANTÉ',            lib:'Complémentaire / contribution',        base:'brut', sal:0,    pat:6.00},
+    {code:'at',       grp:'ACCIDENT DU TRAVAIL',lib:'Accident du travail - Mal. prof.',   base:'brut', sal:0,    pat:'AT'},
+    {code:'retPlaf',  grp:'RETRAITE',         lib:'Sécurité sociale plafonnée',           base:'plaf', sal:6.90, pat:8.55},
+    {code:'retDepl',  grp:'RETRAITE',         lib:'Sécurité sociale déplafonnée',         base:'brut', sal:0.40, pat:2.11},
+    {code:'complT1',  grp:'RETRAITE',         lib:'Complémentaire Tranche 1',             base:'brut', sal:4.01, pat:6.01},
+    {code:'famille',  grp:'FAMILLE',          lib:'Allocations familiales',               base:'brut', sal:0,    pat:5.25},
+    {code:'chomage',  grp:'ASSURANCE CHÔMAGE',lib:'Chômage',                             base:'brut', sal:0,    pat:4.00},
+    {code:'ags',      grp:'ASSURANCE CHÔMAGE',lib:'AGS',                                 base:'brut', sal:0,    pat:0.25},
+    {code:'autres',   grp:'AUTRES',           lib:"Autres contributions dues par l'employeur",base:'brut',sal:0,pat:0.9662},
+    {code:'mutuelle', grp:'MUTUELLE',         lib:'Complémentaire santé (mutuelle)',      base:'brut', sal:'MUTS',pat:'MUTP', opt:true},
+    {code:'csgDed',   grp:'CSG',              lib:"CSG déductible de l'impôt",            base:'csg',  sal:6.80, pat:0},
+    {code:'csgNd',    grp:'CSG',              lib:"CSG/CRDS non déductible de l'impôt",   base:'csg',  sal:2.90, pat:0, imp:false}
   ]; }
 
   function D(doc){ doc.data=doc.data||{}; var d=doc.data;
@@ -22133,7 +22133,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var csgBase=r2(brut*PARAM.csgBase/100);
     var plaf=Math.min(brut, PARAM.pmss);
     var at=num(d.at), mutS=num(d.mutS), mutP=num(d.mutP);
-    var totSalDed=0, totSal=0, totPat=0;
+    var totSalDed=0, totSal=0, totPat=0, byCode={};
     var lignes=COTIS().map(function(c){
       var sal=c.sal==='MUTS'?mutS:(c.sal==='MUTP'?mutP:c.sal);
       var pat=c.pat==='AT'?at:(c.pat==='MUTP'?mutP:c.pat);
@@ -22142,7 +22142,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       var base=c.base==='csg'?csgBase:(c.base==='plaf'?plaf:brut);
       var mSal=r2(base*sal/100), mPat=r2(base*pat/100);
       totSal=r2(totSal+mSal); totPat=r2(totPat+mPat); if(mSal>0 && c.imp!==false) totSalDed=r2(totSalDed+mSal);
-      return {grp:c.grp,lib:c.lib,base:base,sal:sal,pat:pat,mSal:mSal,mPat:mPat};
+      var L={code:c.code,grp:c.grp,lib:c.lib,base:base,sal:sal,pat:pat,mSal:mSal,mPat:mPat}; byCode[c.code]=L; return L;
     }).filter(Boolean);
     var netImp=r2(brut-totSalDed);
     var netAvantImpot=r2(brut-totSal);
@@ -22153,7 +22153,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var coutEmp=r2(brut+totPat-reduc);
     return {salBase:salBase,absLines:absLines,absMt:absMt,brut:brut,csgBase:csgBase,plaf:plaf,
       lignes:lignes,totSal:totSal,totSalDed:totSalDed,totPat:totPat,netImp:netImp,
-      netAvantImpot:netAvantImpot,pasTaux:pasTaux,pas:pas,netSocial:netSocial,netAPayer:netAPayer,reduc:reduc,coutEmp:coutEmp};
+      netAvantImpot:netAvantImpot,pasTaux:pasTaux,pas:pas,netSocial:netSocial,netAPayer:netAPayer,reduc:reduc,coutEmp:coutEmp,byCode:byCode};
   }
   window.paieExactCompute=compute;
 
@@ -22239,6 +22239,51 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function refreshDoc(){ var host=document.getElementById('pe-doc'); if(host){ try{host.innerHTML=window.paieExactDoc(window.__pfDoc);}catch(e){} } }
   function refreshLive(){ var doc=window.__pfDoc; if(!doc)return; var r=compute(D(doc)); var el=document.querySelector('#pf-ov .pe-live'); if(el)el.innerHTML='Brut <b>'+fr(r.brut)+' €</b> · Net imposable <b>'+fr(r.netImp)+' €</b> · Net à payer <b>'+fr(r.netAPayer)+' €</b>'; }
 
+  var PAIE_MAP={c3:{t:'v',f:'emp.nom'},c4:{t:'v',f:'emp.adr'},c5:{t:'v',f:'emp.cp'},c6:{t:'v',f:'emp.ville'},c7:{t:'v',f:'emp.siret'},c8:{t:'v',f:'emp.naf'},c9:{t:'perlbl'},c10:{t:'v',f:'per.paieLe'},c11:{t:'v',f:'per.du'},c12:{t:'v',f:'per.au'},c18:{t:'v',f:'sal.nom'},c19:{t:'v',f:'sal.adr'},c20:{t:'v',f:'sal.cp'},c21:{t:'v',f:'sal.ville'},c22:{t:'v',f:'sal.matricule'},c23:{t:'v',f:'sal.nss'},c24:{t:'v',f:'sal.entree'},c25:{t:'v',f:'sal.emploi'},c26:{t:'v',f:'sal.entree'},c27:{t:'v',f:'cp.n1a'},c13:{t:'v',f:'cp.na'},c14:{t:'v',f:'cp.n1p'},c15:{t:'v',f:'cp.np'},c16:{t:'v',f:'cp.n1s'},c17:{t:'v',f:'cp.ns'},c28:{t:'heures'},c29:{t:'th'},c30:{t:'salBase'},c31:{t:'abs',i:0,f:'lib'},c32:{t:'abs',i:0,f:'h'},c33:{t:'th'},c34:{t:'abs',i:0,f:'m'},c35:{t:'abs',i:1,f:'lib'},c36:{t:'abs',i:1,f:'h'},c37:{t:'th'},c38:{t:'abs',i:1,f:'m'},c39:{t:'brut'},c40:{t:'ln',c:'santeMal',col:'base'},c41:{t:'ln',c:'santeMal',col:'mPat'},c42:{t:'ln',c:'santeComp',col:'base'},c43:{t:'ln',c:'santeComp',col:'mPat'},c44:{t:'ln',c:'at',col:'base'},c45:{t:'ln',c:'at',col:'mPat'},c46:{t:'ln',c:'retPlaf',col:'base'},c47:{t:'ln',c:'retPlaf',col:'txSal'},c48:{t:'ln',c:'retPlaf',col:'mSal'},c49:{t:'ln',c:'retPlaf',col:'mPat'},c50:{t:'ln',c:'retDepl',col:'base'},c51:{t:'ln',c:'retDepl',col:'txSal'},c52:{t:'ln',c:'retDepl',col:'mSal'},c53:{t:'ln',c:'retDepl',col:'mPat'},c54:{t:'ln',c:'complT1',col:'base'},c55:{t:'ln',c:'complT1',col:'txSal'},c56:{t:'ln',c:'complT1',col:'mSal'},c57:{t:'ln',c:'complT1',col:'mPat'},c58:{t:'ln',c:'famille',col:'base'},c59:{t:'ln',c:'famille',col:'mPat'},c60:{t:'ln',c:'chomage',col:'base'},c61:{t:'ln',c:'chomage',col:'mPat'},c62:{t:'ln',c:'ags',col:'base'},c63:{t:'ln',c:'ags',col:'mPat'},c64:{t:'ln',c:'autres',col:'base'},c65:{t:'ln',c:'autres',col:'mPat'},c66:{t:'ln',c:'csgDed',col:'base'},c67:{t:'ln',c:'csgDed',col:'txSal'},c68:{t:'ln',c:'csgDed',col:'mSal'},c69:{t:'reduc'},c70:{t:'reduc'},c71:{t:'totSalDed'},c72:{t:'netPat'},c73:{t:'netImp'},c74:{t:'ln',c:'csgNd',col:'base'},c75:{t:'ln',c:'csgNd',col:'txSal'},c76:{t:'ln',c:'csgNd',col:'mSal'},c77:{t:'nav',f:'base'},c78:{t:'nav',f:'pct'},c79:{t:'nav',f:'montant'},c95:{t:'netImp'},c94:{t:'pas'},c90:{t:'pasTaux'},c91:{t:'pas'},c99:{t:'netAvant'},c88:{t:'netSal'},c93:{t:'netSal'},c1:{t:'smic'},c2:{t:'pmss'}};
+  function fd(n){ n=(+n)||0; return (Math.round(n*100)/100).toFixed(2); }
+  function ft(n){ n=(+n)||0; return n.toFixed(4); }
+  function pth(o,f){ var p=f.split('.'),v=o,i; for(i=0;i<p.length;i++){ v=v&&v[p[i]]; } return (v==null?'':v); }
+  function navMt(d){ return r2(num(d.navBase)*num(d.navPct)/100); }
+  function buildCells(doc){ var d=D(doc), r=compute(d), by=r.byCode, out={};
+    Object.keys(PAIE_MAP).forEach(function(k){ var s=PAIE_MAP[k], v='';
+      try{
+        if(s.t==='v') v=pth(d,s.f);
+        else if(s.t==='perlbl') v=perLbl(d);
+        else if(s.t==='heures') v=fd(num(d.heures)||151.67);
+        else if(s.t==='th') v=ft(num(d.tauxH));
+        else if(s.t==='salBase') v=fd(r.salBase);
+        else if(s.t==='brut') v=fd(r.brut);
+        else if(s.t==='abs'){ var a=(d.abs||[])[s.i]; if(a){ v=(s.f==='lib')?(a.lib||''):((s.f==='h')?fd(num(a.h)):fd(num(a.h)*num(d.tauxH))); } }
+        else if(s.t==='ln'){ var l=by[s.c]; if(l){ v=(s.col==='base')?fd(l.base):(s.col==='txSal')?(l.sal?ft(l.sal):''):(s.col==='mSal')?(l.mSal?fd(l.mSal):''):(s.col==='txPat')?(l.pat?ft(l.pat):''):(l.mPat?fd(l.mPat):''); } }
+        else if(s.t==='reduc') v=r.reduc?fd(-r.reduc):'';
+        else if(s.t==='totSalDed') v=fd(r.totSalDed);
+        else if(s.t==='netPat') v=fd(r2(r.totPat-r.reduc));
+        else if(s.t==='netImp') v=fd(r.netImp);
+        else if(s.t==='netAvant') v=fd(r.netAvantImpot);
+        else if(s.t==='netSal') v=fd(r2(r.netAvantImpot+navMt(d)));
+        else if(s.t==='nav') v=(s.f==='base')?(num(d.navBase)?fd(num(d.navBase)):''):((s.f==='pct')?(num(d.navPct)?ft(num(d.navPct)):''):(navMt(d)?fd(navMt(d)):''));
+        else if(s.t==='pas') v=(r.pasTaux? fd(-r.pas):'0.00');
+        else if(s.t==='pasTaux') v=fd(r.pasTaux);
+        else if(s.t==='smic') v=fd(PARAM.smic);
+        else if(s.t==='pmss') v=fd(PARAM.pmss);
+      }catch(e){}
+      out[k]=v;
+    });
+    return out;
+  }
+  window.pfPaieXOv=function(k,v){ var doc=window.__pfDoc; if(!doc)return; var d=D(doc); d.ov=d.ov||{}; d.ov[k]=v; doc.updated=Date.now(); try{save();}catch(e){} };
+  function renderDoc(doc){
+    var tpl=window.PF_TPL&&window.PF_TPL['paie']; if(!tpl||!tpl.pages[0])return '<div style="padding:20px;color:#111;background:#fff">Modèle de bulletin indisponible.</div>';
+    var pg=tpl.pages[0], cells=buildCells(doc), d=D(doc); d.ov=d.ov||{};
+    var flds=pg.fields.map(function(f){ var k=f[0], o=f[5]||{}, mapped=!!PAIE_MAP[k];
+      var jc=(o.al==='right'?'flex-end':o.al==='center'?'center':'flex-start');
+      var base='position:absolute;left:'+f[1]+'%;top:'+f[2]+'%;width:'+f[3]+'%;height:'+f[4]+'%;box-sizing:border-box;font:8px Arial,"Helvetica Neue",Helvetica,sans-serif;display:flex;align-items:center;justify-content:'+jc+';padding:0 1px;color:#111!important;-webkit-text-fill-color:#111!important;overflow:hidden;white-space:nowrap;line-height:1';
+      if(mapped){ return '<div class="pex-c" style="'+base+';background:transparent">'+E(cells[k]||'')+'</div>'; }
+      return '';
+    }).join('');
+    return '<div class="pex-page" style="position:relative;width:794px;height:1123px;margin:0 auto;box-shadow:0 8px 30px rgba(0,0,0,.25)"><img class="pex-bg" src="'+pg.img+'" style="position:absolute;inset:0;width:100%;height:100%;display:block">'+flds+'</div>';
+  }
+  window.paieExactDoc=function(doc){ return renderDoc(doc); };
   function render(){
     var ov=document.getElementById('pf-ov'); if(!ov)return; var doc=window.__pfDoc;
     var tb='<div class="pf-top"><div class="pf-title"><b>Fiche de paie</b><span>Bulletin calculé automatiquement</span></div>'
@@ -22250,7 +22295,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var ov=document.getElementById('pf-ov'); if(!ov){ov=document.createElement('div');ov.id='pf-ov';document.body.appendChild(ov);}
     ov.className='pf-ov show'+(document.body.classList.contains('dark')?' dark':''); document.body.style.overflow='hidden'; render(); };
   window.pfPaieXPrint=function(){ var doc=window.__pfDoc; if(!doc)return; var html=window.paieExactDoc(doc);
-    var css=PE_CSS+'@page{size:A4;margin:10mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#fff}.pe-a4{box-shadow:none!important;margin:0!important}';
+    var css='@page{size:A4;margin:0}*{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}body{margin:0;background:#fff}.pex-page{width:210mm!important;height:297mm!important;box-shadow:none!important;position:relative;background-repeat:no-repeat;background-size:100% 100%}.pex-c{position:absolute;font:8px Arial,sans-serif;display:flex;align-items:center;color:#111!important;overflow:hidden;white-space:nowrap;padding:0 1px}.pex-ov{border:none!important;background:transparent!important}';
     var w=window.open('','_blank'); if(!w){if(typeof toast==='function')toast('Autorisez les fenêtres.');return;}
     w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Bulletin de salaire</title><style>'+css+'</style></head><body>'+html+'</body></html>'); w.document.close(); setTimeout(function(){try{w.focus();w.print();}catch(e){}},300); };
 
@@ -22269,7 +22314,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.pe-tr{display:flex;justify-content:space-between;gap:16px;padding:5px 10px;font-size:11px;border-bottom:1px solid #eef2f6}.pe-tr:last-child{border-bottom:none}.pe-tr span{color:#546374!important;-webkit-text-fill-color:#546374!important}'
     +'.pe-hi{background:#f5f8fc;font-weight:700}.pe-social{background:#eef7f0;font-weight:700}.pe-net{background:#0a64d6;font-weight:800;font-size:13px}.pe-net span,.pe-net b{color:#fff!important;-webkit-text-fill-color:#fff!important}'
     +'.pe-foot{margin-top:10px;font-size:10px;border-top:1px solid #e7edf3;padding-top:6px}.pe-legal{margin-top:5px;font-size:8.5px;color:#7a8798!important;-webkit-text-fill-color:#7a8798!important;line-height:1.5}';
-  var PE_SIDE_CSS='.pe-doc-host{padding:16px;display:flex;justify-content:center}'
+  var PE_SIDE_CSS='.pe-doc-host{padding:16px;display:flex;justify-content:center;overflow:auto}'+'#pe-doc .pex-page{background:#fff!important}#pe-doc .pex-c{color:#111!important;-webkit-text-fill-color:#111!important}'+'#pe-doc .pex-ov{background:transparent!important;color:#111!important;-webkit-text-fill-color:#111!important;border-radius:0!important;box-shadow:none!important}#pe-doc .pex-ov::placeholder{color:rgba(0,0,0,.25)}#pe-doc .pex-bg{border:0}'
     +'.pe-live{margin:0 0 10px;padding:8px 10px;border-radius:8px;background:rgba(79,157,255,.12);border:1px solid rgba(79,157,255,.35);color:#cfe3ff;font-size:12px;line-height:1.5}'
     +'.pff-line{border:1px solid rgba(120,140,170,.3);border-radius:8px;padding:8px;margin-bottom:8px;background:rgba(120,150,190,.06)}'
     +'.pff-line-h{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:700;color:#7f9ac0;margin-bottom:5px}'
