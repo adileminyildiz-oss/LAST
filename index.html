@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=443;
+var LAST_VER=444;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -10941,7 +10941,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
   function eu(n){n=Math.round(n||0);return (typeof eur==='function')?eur(n):(n+' €');}
   function C(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
-  function isCalc(b){if(b<=0)return 0;var r=Math.min(b,42500)*0.15;if(b>42500)r+=(b-42500)*0.25;return r;}
+  function isCalc(b){var _s=window.barGet?window.barGet('fisc.isSeuil'):42500,_r=window.barGet?window.barGet('fisc.isReduit')/100:0.15,_n=window.barGet?window.barGet('fisc.isNormal')/100:0.25;if(b<=0)return 0;var r=Math.min(b,_s)*_r;if(b>_s)r+=(b-_s)*_n;return r;}
 
   /* Modèle simplifié et transparent (hypothèses = constantes affichées) */
   window.simuRemDiv=function(o){
@@ -11574,7 +11574,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function eu(n){n=Math.round(n||0);return (typeof eur==='function')?eur(n):(n+' €');}
   function C(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
   function pf(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.,]/g,'').replace(',','.'));return isNaN(n)?0:n;}
-  function isCalc(b){if(b<=0)return 0;var r=Math.min(b,42500)*0.15;if(b>42500)r+=(b-42500)*0.25;return r;}
+  function isCalc(b){var _s=window.barGet?window.barGet('fisc.isSeuil'):42500,_r=window.barGet?window.barGet('fisc.isReduit')/100:0.15,_n=window.barGet?window.barGet('fisc.isNormal')/100:0.25;if(b<=0)return 0;var r=Math.min(b,_s)*_r;if(b>_s)r+=(b-_s)*_n;return r;}
 
   /* Barème de l'impôt sur le revenu 2024 (par part, quotient familial) */
   window.baremeIR=function(imposable,parts){
@@ -11665,11 +11665,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var liber=(o.capitalLibere!==false);var pp=(o.detentionPP!==false);
     var eligibleReduit=(ca<10000000)&&liber&&pp;
     var tranches=[];var is=0;
+    var _S=window.barGet?window.barGet('fisc.isSeuil'):42500,_TR=window.barGet?window.barGet('fisc.isReduit')/100:0.15,_TN=window.barGet?window.barGet('fisc.isNormal')/100:0.25;
     if(eligibleReduit){
-      var t1=Math.min(b,42500);is+=t1*0.15;tranches.push({label:'15 % jusqu\'à 42 500 €',base:t1,taux:0.15,montant:t1*0.15});
-      if(b>42500){var t2=b-42500;is+=t2*0.25;tranches.push({label:'25 % au-delà',base:t2,taux:0.25,montant:t2*0.25});}
+      var t1=Math.min(b,_S);is+=t1*_TR;tranches.push({label:(_TR*100)+' % jusqu\'à '+_S.toLocaleString('fr-FR')+' €',base:t1,taux:_TR,montant:t1*_TR});
+      if(b>_S){var t2=b-_S;is+=t2*_TN;tranches.push({label:(_TN*100)+' % au-delà',base:t2,taux:_TN,montant:t2*_TN});}
     } else {
-      is=b*0.25;tranches.push({label:'25 % (taux normal)',base:b,taux:0.25,montant:is});
+      is=b*_TN;tranches.push({label:(_TN*100)+' % (taux normal)',base:b,taux:_TN,montant:is});
     }
     /* Contribution sociale sur l'IS : 3,3 % de (IS − 763 000 €) si CA ≥ 7,63 M€ */
     var contribution=0;
@@ -11735,7 +11736,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function pct(x){return Math.round(x*100)+' %';}
   function pf(v){var n=parseFloat((''+(v==null?'':v)).replace(/[^0-9.,]/g,'').replace(',','.'));return isNaN(n)?0:n;}
   function C(d){return (typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};}
-  function isCalc(b){if(b<=0)return 0;var r=Math.min(b,42500)*0.15;if(b>42500)r+=(b-42500)*0.25;return r;}
+  function isCalc(b){var _s=window.barGet?window.barGet('fisc.isSeuil'):42500,_r=window.barGet?window.barGet('fisc.isReduit')/100:0.15,_n=window.barGet?window.barGet('fisc.isNormal')/100:0.25;if(b<=0)return 0;var r=Math.min(b,_s)*_r;if(b>_s)r+=(b-_s)*_n;return r;}
 
   /* Évalue un partage donné : coût employeur affecté à la rémunération = Cr ; le reste (E − Cr) → IS puis dividendes. */
   function evalSplit(Env,Cr,social,cap,parts,autres){
@@ -12711,7 +12712,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   /* ---------- Données de référence ---------- */
   function tvaRegime(ca,forme){ // seuils indicatifs 2025
-    var svc=/SCI/.test(forme)?0:37500, ventes=85000;
+    var svc=/SCI/.test(forme)?0:(window.barGet?window.barGet('seuil.franchiseServices'):37500), ventes=(window.barGet?window.barGet('seuil.franchiseVentes'):85000);
     if(ca<=svc||ca<=ventes){
       if(ca<=svc||ca<=ventes) return {reg:'Franchise en base possible',detail:'Sous les seuils (services ~ 37 500 € · ventes ~ 85 000 €) : pas de TVA facturée ni déductible. Mention « TVA non applicable, art. 293 B du CGI ».',periodicite:'—'};
     }
@@ -13610,7 +13611,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     /* Holding */
     if(o.holding){add('SAS',8,'Tête de groupe / holding animatrice (régime mère-fille, intégration)');add('SASU',6);}
     /* Seuils micro */
-    var seuilMicro=/vente|commerce|marchandise|restaur|hebergement|hotel/i.test(actNorm(o.activite))?188700:77700;
+    var seuilMicro=/vente|commerce|marchandise|restaur|hebergement|hotel/i.test(actNorm(o.activite))?(window.barGet?window.barGet('seuil.microBIC'):188700):(window.barGet?window.barGet('seuil.microBNC'):77700);
     if(o.ca>0&&o.ca<=seuilMicro&&o.nbAssocies<2){add('MICRO',10,'CA sous le seuil micro ('+seuilMicro.toLocaleString('fr-FR')+' €) : régime ultra-simplifié');}
     if(o.ca>seuilMicro){add('MICRO',-30,'CA au-delà du seuil micro : régime inadapté','con');}
     /* Bénéfice élevé → IS */
@@ -22736,79 +22737,82 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
 })();
 </script>
 <script id="mod-baremes">
-/* ===== Barèmes & règles — millésime 2026 : source unique éditable, alimente les documents ===== */
+/* ===== Barèmes & règles — multi-millésimes : source unique éditable, pré-remplie chaque année ===== */
 (function(){
   if(window.__baremesInit) return; window.__baremesInit=1;
-  var MILLESIME=2026;
-  /* Valeurs 2026 pré-remplies — À VÉRIFIER auprès des sources officielles (URSSAF / impots.gouv.fr / service-public.fr) */
+  /* Structure d'affichage (libellés + unités) */
   var GROUPS=[
     {g:'Paie — cotisations & plafonds', items:[
-      ['paie.smic','SMIC horaire brut (€)',11.88,'€/h'],
-      ['paie.smicMensuel','SMIC mensuel brut 35 h (€)',1801.80,'€'],
-      ['paie.pmss','Plafond mensuel Sécurité sociale (€)',3925,'€'],
-      ['paie.pass','Plafond annuel Sécurité sociale (€)',47100,'€'],
-      ['paie.csgBase','Base CSG/CRDS (% du brut)',98.25,'%'],
-      ['paie.csgDed','CSG déductible (%)',6.80,'%'],
-      ['paie.csgNd','CSG/CRDS non déductible (%)',2.90,'%']
+      ['paie.smic','SMIC horaire brut','€/h'],['paie.smicMensuel','SMIC mensuel brut 35 h','€'],
+      ['paie.pmss','Plafond mensuel Sécurité sociale','€'],['paie.pass','Plafond annuel Sécurité sociale','€'],
+      ['paie.csgBase','Base CSG/CRDS (% du brut)','%'],['paie.csgDed','CSG déductible','%'],['paie.csgNd','CSG/CRDS non déductible','%']
     ]},
     {g:'Fiscalité — IS & TVA', items:[
-      ['fisc.isReduit','Impôt sociétés — taux réduit (%)',15,'%'],
-      ['fisc.isSeuil','IS — seuil du taux réduit (€ de bénéfice)',42500,'€'],
-      ['fisc.isNormal','Impôt sociétés — taux normal (%)',25,'%'],
-      ['fisc.tva20','TVA taux normal (%)',20,'%'],
-      ['fisc.tva10','TVA taux intermédiaire (%)',10,'%'],
-      ['fisc.tva55','TVA taux réduit (%)',5.5,'%'],
-      ['fisc.tva21','TVA taux particulier (%)',2.1,'%']
+      ['fisc.isReduit','Impôt sociétés — taux réduit','%'],['fisc.isSeuil','IS — seuil du taux réduit (bénéfice)','€'],['fisc.isNormal','Impôt sociétés — taux normal','%'],
+      ['fisc.tva20','TVA taux normal','%'],['fisc.tva10','TVA taux intermédiaire','%'],['fisc.tva55','TVA taux réduit','%'],['fisc.tva21','TVA taux particulier','%']
     ]},
     {g:'Seuils — franchise en base de TVA & micro', items:[
-      ['seuil.franchiseServices','Franchise en base — prestations de services (€)',37500,'€'],
-      ['seuil.franchiseVentes','Franchise en base — ventes de marchandises (€)',85000,'€'],
-      ['seuil.microBNC','Micro-BNC — plafond de recettes (€)',77700,'€'],
-      ['seuil.microBIC','Micro-BIC ventes — plafond (€)',188700,'€']
+      ['seuil.franchiseServices','Franchise en base — prestations de services','€'],['seuil.franchiseVentes','Franchise en base — ventes de marchandises','€'],
+      ['seuil.microBNC','Micro-BNC — plafond de recettes','€'],['seuil.microBIC','Micro-BIC ventes — plafond','€']
     ]}
   ];
-  var DEF={}; GROUPS.forEach(function(gr){ gr.items.forEach(function(it){ DEF[it[0]]=it[2]; }); });
-  function store(){ try{ return JSON.parse(localStorage.getItem('last-baremes')||'{}')||{}; }catch(e){ return {}; } }
+  /* Valeurs par ANNÉE — pré-remplies (À VÉRIFIER : URSSAF / impots.gouv.fr / service-public.fr). Années absentes = report de l'année connue la plus proche. */
+  var DEFYEAR={
+    2024:{'paie.smic':11.65,'paie.smicMensuel':1766.92,'paie.pmss':3864,'paie.pass':46368,'paie.csgBase':98.25,'paie.csgDed':6.80,'paie.csgNd':2.90,'fisc.isReduit':15,'fisc.isSeuil':42500,'fisc.isNormal':25,'fisc.tva20':20,'fisc.tva10':10,'fisc.tva55':5.5,'fisc.tva21':2.1,'seuil.franchiseServices':36800,'seuil.franchiseVentes':91900,'seuil.microBNC':77700,'seuil.microBIC':188700},
+    2025:{'paie.smic':11.88,'paie.smicMensuel':1801.80,'paie.pmss':3925,'paie.pass':47100,'paie.csgBase':98.25,'paie.csgDed':6.80,'paie.csgNd':2.90,'fisc.isReduit':15,'fisc.isSeuil':42500,'fisc.isNormal':25,'fisc.tva20':20,'fisc.tva10':10,'fisc.tva55':5.5,'fisc.tva21':2.1,'seuil.franchiseServices':37500,'seuil.franchiseVentes':85000,'seuil.microBNC':77700,'seuil.microBIC':188700},
+    2026:{'paie.smic':11.88,'paie.smicMensuel':1801.80,'paie.pmss':3925,'paie.pass':47100,'paie.csgBase':98.25,'paie.csgDed':6.80,'paie.csgNd':2.90,'fisc.isReduit':15,'fisc.isSeuil':42500,'fisc.isNormal':25,'fisc.tva20':20,'fisc.tva10':10,'fisc.tva55':5.5,'fisc.tva21':2.1,'seuil.franchiseServices':37500,'seuil.franchiseVentes':85000,'seuil.microBNC':77700,'seuil.microBIC':188700}
+  };
+  var KNOWN=Object.keys(DEFYEAR).map(Number).sort(function(a,b){return a-b;});
+  function defYear(y){ y=+y; if(DEFYEAR[y]) return DEFYEAR[y]; var pick=KNOWN[0]; for(var i=0;i<KNOWN.length;i++){ if(KNOWN[i]<=y) pick=KNOWN[i]; } return DEFYEAR[pick]; } /* report de l'année connue la plus proche */
+  function defVal(key,y){ var d=defYear(y); return d[key]; }
+  /* Millésime actif */
+  function activeYear(){ try{ var v=+localStorage.getItem('last-bareme-year'); return v||2026; }catch(e){ return 2026; } }
+  window.baremeMillesime=function(){ return activeYear(); };
+  window.baremeSetYear=function(y){ try{ localStorage.setItem('last-bareme-year',''+(+y||2026)); }catch(e){} if(typeof render==='function')render(); };
+  /* Surcharges par année : { "2026": {key:val} } (migration de l'ancien format plat) */
+  function store(){ try{ var o=JSON.parse(localStorage.getItem('last-baremes')||'{}')||{}; if(o && (o['paie.smic']!=null||o['fisc.isReduit']!=null)){ o={ '2026':o }; localStorage.setItem('last-baremes',JSON.stringify(o)); } return o; }catch(e){ return {}; } }
   function saveStore(o){ try{ localStorage.setItem('last-baremes',JSON.stringify(o)); }catch(e){} }
-  window.barGet=function(key){ var s=store(); var v=(s&&s[key]!=null&&s[key]!=='')?s[key]:DEF[key]; var n=parseFloat((''+v).replace(',','.')); return isNaN(n)?(DEF[key]||0):n; };
-  window.barGetRaw=function(key){ var s=store(); return (s&&s[key]!=null)?s[key]:DEF[key]; };
-  window.baremeMillesime=function(){ return MILLESIME; };
-  window.barSet=function(key,val){ var s=store(); if(val==null||(''+val).trim()===''){ delete s[key]; } else { s[key]=(''+val).trim(); } saveStore(s); var b=document.querySelector('.bar-badge'); if(b)b.textContent=Object.keys(store()).length? (Object.keys(store()).length+' valeur(s) personnalisée(s)') : 'valeurs 2026 par défaut'; };
-  window.barReset=function(){ if(typeof uiConfirm==='function'){ uiConfirm('Réinitialiser tous les barèmes aux valeurs 2026 par défaut ?',function(){ saveStore({}); if(typeof render==='function')render(); if(typeof toast==='function')toast('Barèmes réinitialisés (valeurs 2026 par défaut)'); },{okLabel:'Réinitialiser'}); } else { saveStore({}); if(typeof render==='function')render(); } };
+  window.barGet=function(key,year){ year=year||activeYear(); var s=store()[''+year]||{}; var v=(s[key]!=null&&s[key]!=='')?s[key]:defVal(key,year); var n=parseFloat((''+v).replace(',','.')); return isNaN(n)?(+defVal(key,year)||0):n; };
+  window.barGetRaw=function(key,year){ year=year||activeYear(); var s=store()[''+year]||{}; return (s[key]!=null)?s[key]:defVal(key,year); };
+  window.barIsCustom=function(key,year){ year=year||activeYear(); var s=store()[''+year]||{}; return s[key]!=null; };
+  window.barSet=function(key,val,year){ year=year||activeYear(); var o=store(); var y=o[''+year]=o[''+year]||{}; if(val==null||(''+val).trim()===''){ delete y[key]; if(!Object.keys(y).length) delete o[''+year]; } else { y[key]=(''+val).trim(); } saveStore(o); var b=document.querySelector('.bar-badge'); if(b){ var nn=Object.keys(store()[''+activeYear()]||{}).length; b.textContent=nn?(nn+' valeur(s) personnalisée(s)'):'valeurs '+activeYear()+' par défaut'; } };
+  window.barReset=function(){ var y=activeYear(); function go(){ var o=store(); delete o[''+y]; saveStore(o); if(typeof render==='function')render(); if(typeof toast==='function')toast('Barèmes '+y+' réinitialisés (valeurs par défaut)'); } if(typeof uiConfirm==='function'){ uiConfirm('Réinitialiser les barèmes '+y+' aux valeurs par défaut ?',go,{okLabel:'Réinitialiser'}); } else go(); };
   function esc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function baremesCard(){
-    var nOv=Object.keys(store()).length;
+    var y=activeYear();
+    var years=[]; for(var yy=2024; yy<=2028; yy++) years.push(yy); if(years.indexOf(y)<0)years.push(y); years.sort();
+    var opts=years.map(function(v){ return '<option value="'+v+'"'+(v===y?' selected':'')+'>'+v+(DEFYEAR[v]?'':' (report)')+'</option>'; }).join('');
+    var nOv=Object.keys(store()[''+y]||{}).length;
     var body=GROUPS.map(function(gr){
       var rows=gr.items.map(function(it){
-        var key=it[0],lbl=it[1],unit=it[3]||'';
-        var val=window.barGetRaw(key); var custom=(store()[key]!=null);
+        var key=it[0],lbl=it[1],unit=it[2]||''; var val=window.barGetRaw(key,y); var custom=window.barIsCustom(key,y);
         return '<div class="bar-row'+(custom?' bar-custom':'')+'"><label class="bar-l">'+esc(lbl)+'</label>'
           +'<div class="bar-in-wrap"><input class="bar-in" value="'+esc(val)+'" inputmode="decimal" oninput="barSet(\''+key+'\',this.value)"><span class="bar-u">'+esc(unit)+'</span></div></div>';
       }).join('');
       return '<div class="bar-grp"><div class="bar-gh">'+esc(gr.g)+'</div>'+rows+'</div>';
     }).join('');
-    return '<div class="card bar-card"><h2>⚖️ Barèmes &amp; règles — millésime '+MILLESIME+' <span class="bar-badge">'+(nOv?(nOv+' valeur(s) personnalisée(s)'):'valeurs 2026 par défaut')+'</span></h2>'
-      +'<div class="bar-note">⚠ Valeurs <b>pré-remplies pour '+MILLESIME+'</b> — à vérifier auprès des sources officielles (URSSAF, impots.gouv.fr, service-public.fr). Elles alimentent les documents (fiche de paie, fiscalité…). Modifiez une valeur pour l’ajuster ; elle est enregistrée et appliquée partout.</div>'
+    return '<div class="card bar-card"><h2>⚖️ Barèmes &amp; règles <span class="bar-badge">'+(nOv?(nOv+' valeur(s) personnalisée(s)'):'valeurs '+y+' par défaut')+'</span></h2>'
+      +'<div class="bar-yearbar"><label class="bar-yl">Millésime appliqué aux documents</label><select class="bar-year" onchange="baremeSetYear(this.value)">'+opts+'</select><span class="bar-yhint">Chaque année est pré-remplie ; « (report) » = valeurs de l’année connue la plus proche.</span></div>'
+      +'<div class="bar-note">⚠ Valeurs <b>pré-remplies</b> — à vérifier auprès des sources officielles (URSSAF, impots.gouv.fr, service-public.fr). Elles alimentent les documents (fiche de paie, IS, seuils…) selon le millésime choisi. Modifiez une valeur pour l’ajuster : enregistrée pour l’année '+y+'.</div>'
       +body
-      +'<div class="bar-act"><button class="btn btn-ghost" onclick="barReset()">↺ Réinitialiser aux valeurs '+MILLESIME+'</button></div>'
+      +'<div class="bar-act"><button class="btn btn-ghost" onclick="barReset()">↺ Réinitialiser '+y+' aux valeurs par défaut</button></div>'
       +'</div>';
   }
   window.baremesCard=baremesCard;
-  /* Greffe dans la page Paramètres */
   try{ var _pp=window.pageParams; if(typeof _pp==='function' && !_pp.__bar){ window.pageParams=function(){ var h=_pp.apply(this,arguments); try{ if(typeof h==='string' && h.indexOf('bar-card')<0){ h += baremesCard(); } }catch(e){} return h; }; window.pageParams.__bar=1; } }catch(e){}
-  /* Styles */
   try{ if(!document.getElementById('bar-css')){ var st=document.createElement('style'); st.id='bar-css'; st.textContent=
     '.bar-card .bar-badge{font-size:11px;font-weight:600;background:rgba(30,144,255,.15);color:#5ab0ff;border:1px solid rgba(30,144,255,.4);border-radius:20px;padding:2px 10px;margin-left:8px;vertical-align:middle}'
+    +'.bar-yearbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 12px}'
+    +'.bar-yl{font-size:12.5px;color:#9fb6d0;font-weight:600}'
+    +'.bar-year{background:#0b1119;border:1px solid #2f8fff;color:#e7edf5;border-radius:8px;padding:7px 12px;font-size:14px;font-weight:700}'
+    +'.bar-yhint{font-size:11.5px;color:#8aa0b8}'
     +'.bar-note{font-size:12.5px;line-height:1.5;background:rgba(255,193,7,.08);border:1px solid rgba(255,193,7,.3);border-radius:8px;padding:10px 12px;margin:6px 0 14px;color:#c9a227}'
     +'.bar-grp{margin-bottom:14px}.bar-gh{font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;color:#5ab0ff;margin-bottom:8px}'
     +'.bar-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)}'
-    +'.bar-l{font-size:13px;flex:1;min-width:0}'
-    +'.bar-in-wrap{display:flex;align-items:center;gap:6px;flex:none}'
+    +'.bar-l{font-size:13px;flex:1;min-width:0}.bar-in-wrap{display:flex;align-items:center;gap:6px;flex:none}'
     +'.bar-in{width:120px;text-align:right;background:#0b1119;border:1px solid #26364a;color:#e7edf5;border-radius:7px;padding:6px 9px;font-size:13px;font-variant-numeric:tabular-nums}'
-    +'.bar-in:focus{outline:none;border-color:#2f8fff}'
-    +'.bar-custom .bar-in{border-color:#2f8fff;background:#0e1b2c}'
-    +'.bar-u{font-size:12px;color:#8aa0b8;width:32px}'
-    +'.bar-act{margin-top:6px}';
+    +'.bar-in:focus{outline:none;border-color:#2f8fff}.bar-custom .bar-in{border-color:#2f8fff;background:#0e1b2c}'
+    +'.bar-u{font-size:12px;color:#8aa0b8;width:40px}.bar-act{margin-top:6px}';
     document.head.appendChild(st); } }catch(e){}
 })();
 </script>
