@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=417;
+var LAST_VER=418;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -21783,8 +21783,11 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   };
 
   /* Nombres au format français (séparateur de milliers + 2 décimales) */
-  function pfParseNum(v){ if(v==null)return NaN; var s=(''+v).replace(/[\s ]/g,'').replace(',','.').replace(/[^0-9.\-]/g,''); if(s===''||s==='-'||s==='.')return NaN; var n=parseFloat(s); return isNaN(n)?NaN:n; }
-  function pfFmt(n){ if(isNaN(n))return ''; var neg=n<0; n=Math.abs(n); var p=n.toFixed(2).split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,' '); return (neg?'-':'')+p[0]+','+p[1]; }
+  function pfParseNum(v){ if(v==null)return NaN; var s=(''+v).trim(); if(s==='')return NaN;
+    if(s.indexOf(',')>=0||s.indexOf('.')>=0){ s=s.replace(/[\s\u00a0 ]/g,'').replace(',','.'); }
+    else { var m=s.match(/^(-?[\d\s\u00a0 ]+)[\s\u00a0 ](\d{2})$/); if(m){ s=m[1].replace(/[\s\u00a0 ]/g,'')+'.'+m[2]; } else { s=s.replace(/[\s\u00a0 ]/g,''); } }
+    s=s.replace(/[^0-9.\-]/g,''); if(s===''||s==='-'||s==='.')return NaN; var n=parseFloat(s); return isNaN(n)?NaN:n; }
+  function pfFmt(n){ if(isNaN(n))return ''; var neg=n<0; n=Math.abs(n); var p=n.toFixed(2).split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,' '); return (neg?'-':'')+p[0]+' '+p[1]; }
   function pfIsComputed(pg,k){ return !!(pg.calc&&pg.calc[k]); }
   function pfRecalc(pg,store){
     if(!pg.calc)return;
