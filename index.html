@@ -1223,14 +1223,30 @@ function mailDateHeure(d){
   if(dd){var hh=(''+dd.getHours()).padStart(2,'0'),mi=(''+dd.getMinutes()).padStart(2,'0');return frDate(dd.toISOString().slice(0,10))+' à '+hh+':'+mi;}
   return frDate(d.date);
 }
+/* Retire le texte automatique (anglais) des notifications FormSubmit — pour n'afficher que le message du client, en français */
+function demStripBoilerplate(txt){
+  var s=''+(txt==null?'':txt);
+  s=s.replace(/someone\s+just\s+submitted\s+your\s+form[^\n]*/gi,'')
+     .replace(/here'?s\s+what\s+they\s+had\s+to\s+say\s*:?/gi,'')
+     .replace(/easy\s+form\s+endpoints[^\n]*/gi,'')
+     .replace(/for\s+your\s+html\s+forms\.?/gi,'')
+     .replace(/powered\s+by\s+formsubmit[^\n]*/gi,'')
+     .replace(/thanks?,?\s*(the\s+)?formsubmit(\.co)?(\s+team)?[^\n]*/gi,'')
+     .replace(/this\s+(email|message)\s+was\s+sent[^\n]*/gi,'')
+     .replace(/to\s+unsubscribe[^\n]*/gi,'')
+     .replace(/^\s*sent\s+(via|from|by)[^\n]*$/gim,'');
+  return s;
+}
 /* Demande écrite par le client (message), nettoyée des marqueurs et de la mention FormSubmit */
 function mailDemande(d){
   if(!d)return '—';var msg=(''+(d.message||'')).trim();
   if(/formsubmit/i.test(msg)||(msg.match(/\*/g)||[]).length>=3){
     try{var fx=formSubmitExtract({body:(d.rawHtml||d.rawBody||msg),from:''});if(fx&&fx.message)msg=fx.message;}catch(e){}}
+  msg=demStripBoilerplate(msg);
   msg=msg.replace(/\*\s*[^*\n]{1,40}\s*\*/g,' ').replace(/formsubmit(\.co)?/gi,'').replace(/submitted\s+at[\s\S]*$/i,'').replace(/\bsponsor(ed)?\b[\s\S]*$/i,'').replace(/https?:\/\/\S+/g,'').replace(/[ \t]{2,}/g,' ').replace(/\n{3,}/g,'\n\n').trim();
   return msg||'—';
 }
+window.demStripBoilerplate=demStripBoilerplate;
 /* Adresse e-mail récupérée (jamais un e-mail FormSubmit) */
 function mailEmail(d){var e=demReplyTo(d);return e||'—';}
 /* Vraie adresse du client ayant fait la demande (jamais submissions@formsubmit.co, ni AEM, ni bounce) */
@@ -1785,10 +1801,21 @@ function delService(id){if(!confirm('Supprimer ce service ?'))return;var i=DB.se
   toastUndo('Service supprimé',function(){DB.services.splice(Math.min(i,DB.services.length),0,item);save();render();toast('Suppression annulée');});render();}
 
 /* ---------- MARGE (aperçu) ---------- */
+function setLangue(v){
+  DB.params=DB.params||{};
+  if(v==='en'){ DB.params.langue='fr'; if(typeof save==='function')save(); if(typeof toast==='function')toast("L'interface est en français pour le moment — la version anglaise arrivera prochainement."); if(typeof render==='function')render(); return; }
+  DB.params.langue=v||'fr'; if(typeof save==='function')save(); if(typeof toast==='function')toast('Langue : Français'); if(typeof render==='function')render();
+}
 function pageParams(){
   return `<div class="grid g1">
     <div class="card"><div class="card-h"><h2>Réglages</h2><span class="sub" style="margin-left:auto">Poste unique</span></div><div class="card-b">
       <label>Nom du cabinet</label><input value="${esc(DB.params.cabinet)}" onchange="DB.params.cabinet=this.value;save();toast('Enregistré')">
+      <label style="margin-top:10px">Langue de l'interface</label>
+      <select onchange="setLangue(this.value)">
+        <option value="fr"${(DB.params.langue||'fr')==='fr'?' selected':''}>Français</option>
+        <option value="en"${(DB.params.langue||'fr')==='en'?' selected':''}>English (à venir)</option>
+      </select>
+      <p class="hint" style="margin:6px 0 0">L'interface est en français. Les demandes reçues sont automatiquement nettoyées (texte automatique en anglais retiré) et leurs champs affichés en français.</p>
       <div class="section-t">Pipeline de traitement</div>
       <div class="chips">${STATUTS.map(s=>`<span class="tag" style="border-color:${s.c}55"><span class="dot" style="background:${s.c}"></span>${s.k}</span>`).join('')}</div>
       <div class="section-t">Données</div>
@@ -3103,7 +3130,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=388;
+var LAST_VER=389;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3875,7 +3902,7 @@ window.demArchivesModal=function(){
     '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
 };
 /* ---- Informations transmises par le client via le formulaire du site (aemconseil.eu) ---- */
-window.demFieldLabels={nom:'Nom',prenom:'Prénom','nom complet':'Nom complet','nom et prenom':'Nom complet','nom de famille':'Nom',name:'Nom','full name':'Nom complet','votre nom':'Nom','first name':'Prénom','last name':'Nom',email:'E-mail','e-mail':'E-mail',mail:'E-mail',courriel:'E-mail','adresse email':'E-mail','adresse e-mail':'E-mail',telephone:'Téléphone',tel:'Téléphone',phone:'Téléphone',portable:'Téléphone',mobile:'Téléphone',numero:'Téléphone','numero de telephone':'Téléphone','type de societe':'Type de société','forme juridique':'Forme juridique',formalite:'Formalité','type de formalite':'Type de formalité','type de demande':'Type de demande',objet:'Objet',service:'Service demandé',sujet:'Sujet',message:'Message','votre message':'Message',demande:'Demande','votre demande':'Demande',projet:'Projet',description:'Description',commentaire:'Commentaire',denomination:'Dénomination',societe:'Société',entreprise:'Entreprise',adresse:'Adresse',ville:'Ville',cp:'Code postal','code postal':'Code postal',capital:'Capital',activite:'Activité'};
+window.demFieldLabels={nom:'Nom',prenom:'Prénom','nom complet':'Nom complet','nom et prenom':'Nom complet','nom de famille':'Nom',name:'Nom','full name':'Nom complet','votre nom':'Nom','first name':'Prénom','last name':'Nom',email:'E-mail','e-mail':'E-mail',mail:'E-mail',courriel:'E-mail','adresse email':'E-mail','adresse e-mail':'E-mail',telephone:'Téléphone',tel:'Téléphone',phone:'Téléphone',portable:'Téléphone',mobile:'Téléphone',numero:'Téléphone','numero de telephone':'Téléphone','type de societe':'Type de société','forme juridique':'Forme juridique',formalite:'Formalité','type de formalite':'Type de formalité','type de demande':'Type de demande',objet:'Objet',service:'Service demandé',sujet:'Sujet',message:'Message','votre message':'Message',demande:'Demande','votre demande':'Demande',projet:'Projet',description:'Description',commentaire:'Commentaire',denomination:'Dénomination',societe:'Société',entreprise:'Entreprise',adresse:'Adresse',ville:'Ville',cp:'Code postal','code postal':'Code postal',capital:'Capital',activite:'Activité',subject:'Sujet',comment:'Commentaire',comments:'Commentaire',company:'Société','company name':'Société',business:'Activité','company type':'Type de société','legal form':'Forme juridique',address:'Adresse',city:'Ville',country:'Pays',zip:'Code postal','zip code':'Code postal','postal code':'Code postal',website:'Site web','web site':'Site web',site:'Site web',budget:'Budget',request:'Demande',inquiry:'Demande',details:'Détails','how can we help':'Demande','how can we help you':'Demande','your enquiry':'Demande',enquiry:'Demande',firstname:'Prénom',lastname:'Nom',fullname:'Nom complet',tel1:'Téléphone',phone1:'Téléphone'};
 window.demFields=function(d){
  if(!d)return [];
  var F=d.fields;
