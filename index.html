@@ -3151,7 +3151,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=391;
+var LAST_VER=392;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14495,7 +14495,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   window.formBenDel=function(i){var o=FD();if(o.beneficiaires)o.beneficiaires.splice(i,1);if(typeof render==='function')render();};
   window.formBenReprendre=function(){var o=FD();var seuil=25;o.beneficiaires=(o.associes||[]).filter(function(a){var p=num(a.parts);var tot=(o.associes||[]).reduce(function(s,x){return s+(num(x.parts)||0);},0);return tot>0&&p!=null&&(p/tot*100)>=seuil;}).map(function(a){var tot=(o.associes||[]).reduce(function(s,x){return s+(num(x.parts)||0);},0);var p=num(a.parts);var pc=(tot>0&&p!=null)?Math.round(p/tot*100):'';return {nom:(((a.prenom||'')+' '+(a.nom||'')).trim())||a.nom||'',detention:pc,vote:pc,controle:'Détention directe',naissance:a.naissance||'',nationalite:a.nationalite||''};});if(!o.beneficiaires.length)o.beneficiaires=[{}];if(typeof render==='function')render();if(typeof toast==='function')toast(o.beneficiaires.length+' bénéficiaire(s) repris des associés (> 25 %)');};
   window.formType=function(v){FD().type=v;if(typeof render==='function')render();};
-  window.formReset=function(){window.__formData=blank();if(typeof render==='function')render();if(typeof toast==='function')toast('Formulaire réinitialisé');window.scrollTo(0,0);};
+  window.formReset=function(){window.__formData=blank();window.__formFromDemande=null;if(typeof render==='function')render();if(typeof toast==='function')toast('Formulaire réinitialisé');window.scrollTo(0,0);};
   function formEstVide(){var o=FD();return !((o.societe&&o.societe.denomination)||(o.direction&&(o.direction.nom||o.direction.prenom))||(o.associes&&o.associes.length));}
   function formDraft(){try{return DB.parametres&&DB.parametres.formDraft;}catch(e){return null;}}
   window.formBrouillon=function(){try{DB.parametres=DB.parametres||{};DB.parametres.formDraft={data:JSON.parse(JSON.stringify(FD())),ts:Date.now()};if(typeof save==='function')save();if(typeof render==='function')render();if(typeof toast==='function')toast('Brouillon enregistré');}catch(e){if(typeof toast==='function')toast('Impossible d\'enregistrer le brouillon');}};
@@ -15353,6 +15353,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       dos.pretInpi=Tinpi; dos.docsTest={nb:Tnb,total:Ttot,coherenceOk:T.coherenceOk,ts:Date.now()};
       dos.historique.unshift({d:today(),t:'Documents contrôlés (validité + cohérence) : '+Tnb+'/'+Ttot+' validés'+(Tinpi?' — dossier prêt à être dirigé vers l\'INPI':'')});
     } }catch(e){}
+    /* Rattachement à la demande d'origine si le formulaire a été pré-rempli depuis une demande */
+    try{ if(window.__formFromDemande){ var _dm=(DB.demandes||[]).find(function(x){return x.id===window.__formFromDemande;}); if(_dm){ _dm.dossierId=dos.id; dos.demandeId=_dm.id; (dos.historique=dos.historique||[]).unshift({d:today(),t:'Dossier créé depuis la demande de '+(_dm.clientNom||'')}); } window.__formFromDemande=null; } }catch(e){}
     DB.dossiers.unshift(dos);
     window.__formData=blank();
     try{ if(DB.parametres)delete DB.parametres.formDraft; }catch(e){}
@@ -15529,6 +15531,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       dos.pretInpi=Tinpi; dos.docsTest={nb:Tnb,total:Ttot,coherenceOk:T.coherenceOk,ts:Date.now()};
       dos.historique.unshift({d:today(),t:'Documents contrôlés (validité) : '+Tnb+'/'+Ttot+' validés'+(Tinpi?' — dossier prêt pour l\'INPI':'')});
     } }catch(e){}
+    /* Rattachement à la demande d'origine si le formulaire a été pré-rempli depuis une demande */
+    try{ if(window.__formFromDemande){ var _dm=(DB.demandes||[]).find(function(x){return x.id===window.__formFromDemande;}); if(_dm){ _dm.dossierId=dos.id; dos.demandeId=_dm.id; (dos.historique=dos.historique||[]).unshift({d:today(),t:'Dossier créé depuis la demande de '+(_dm.clientNom||'')}); } window.__formFromDemande=null; } }catch(e){}
     DB.dossiers.unshift(dos);
     window.__formData=blank();
     try{ if(DB.parametres)delete DB.parametres.formDraft; }catch(e){}
@@ -19589,9 +19593,48 @@ window.demSetCouleur=function(id,c){try{var d=(DB.demandes||[]).find(function(x)
 function demColorBar(id){var d=null;try{d=(DB.demandes||[]).find(function(x){return x.id===id;});}catch(e){}var eff=window.demCouleur(d);var manual=!!(d&&d.couleur);
   var sw=window.DEM_PALETTE.map(function(c){return '<button class="dem-sw'+(eff===c[0]?' on':'')+'" title="'+c[1]+'" style="background:'+c[0]+'" onclick="demSetCouleur(\''+id+'\',\''+c[0]+'\')"></button>';}).join('');
   return '<div class="dem-colorbar"><span class="dem-colorbar-l">Couleur du client <em>('+(manual?'choisie':'auto')+')</em></span>'+sw+(manual?'<button class="dem-sw-auto" onclick="demSetCouleur(\''+id+'\',\'\')" title="Revenir à la couleur automatique">auto</button>':'')+'</div>';}
-function barBottom(id){return '<div class="dem-bottom-acts"><button class="btn btn-pri" onclick="demAccepter(\''+id+'\')">✓ Accepter</button><button class="btn dem-refuse" onclick="demRefuser(\''+id+'\')">✕ Refuser</button></div>';}
+/* Ouvre le module Formulaire PRÉ-REMPLI avec les informations de la demande (nom, e-mail, tél, type, société, adresse, message).
+   À l'enregistrement du formulaire, le dossier créé est rattaché à cette demande. */
+window.formPrefillFromDemande=function(id){
+  var d=(DB.demandes||[]).find(function(x){return x.id===id;}); if(!d)return;
+  var o={type:'sas',numeroDossier:'',nature:'creation',modif:{kind:'siege',societe:{},dates:{},signataire:{},ancien:{},nouveau:{}},societe:{},siege:{},direction:{},dirx:{},titres:{},dates:{},associes:[],contact:{},depot:{},apports:{},conjoint:{},cac:{},extra:{},beneficiaires:[]};
+  var svc=((d.serviceSouhaite||'')+' '+((typeof IA!=='undefined'&&IA.objet)?IA.objet(d):'')+' '+((d.intake&&d.intake.type)||'')).toLowerCase();
+  o.type=/sasu/.test(svc)?'sasu':(/eurl/.test(svc)?'eurl':(/\bsci\b/.test(svc)?'sci':(/sarl/.test(svc)?'sarl':(/(\bei\b|micro|auto.?entrep|entreprise individuelle)/.test(svc)?'ei':'sas'))));
+  var nom=(typeof demBestName==='function')?demBestName(d):(d.clientNom||'');
+  var parts=(''+nom).trim().split(/\s+/); var prenom=parts[0]||'', nomFam=parts.slice(1).join(' ')||'';
+  var email=((typeof demReplyTo==='function')&&demReplyTo(d))||d.clientEmail||'';
+  o.contact={prenom:prenom,nom:nomFam,email:(/formsubmit/i.test(email)?'':email),tel:d.clientTel||''};
+  o.direction={civilite:'M.',prenom:prenom,nom:nomFam};
+  try{ var F={}; (window.demFields(d)||[]).forEach(function(x){F[(x.key||'').toLowerCase()]=x.value;});
+    var pick=function(){for(var i=0;i<arguments.length;i++){if(F[arguments[i]])return F[arguments[i]];}return '';};
+    var soc=pick('societe','entreprise','denomination','company','company name','raison sociale'); if(soc)o.societe.denomination=soc;
+    var act=pick('activite','activité','objet','business','projet'); if(act)o.societe.objet=act;
+    var adr=pick('adresse','address'); if(adr)o.siege.rue=adr;
+    var cp=pick('cp','code postal','postal code','zip','zip code'); if(cp)o.siege.cp=cp;
+    var ville=pick('ville','city'); if(ville)o.siege.ville=ville;
+    var cap=pick('capital'); if(cap)o.societe.capital=cap;
+  }catch(e){}
+  try{ var k=d.intake; if(k&&typeof k==='object'){
+    if(k.type)o.type=k.type;
+    if(k.societe)o.societe=Object.assign(o.societe,k.societe);
+    if(k.siege)o.siege=Object.assign(o.siege,k.siege);
+    if(k.direction)o.direction=Object.assign(o.direction,k.direction);
+    if(k.titres)o.titres=Object.assign(o.titres,k.titres);
+    if(k.depot)o.depot=Object.assign(o.depot,k.depot);
+    if(k.apports)o.apports=Object.assign(o.apports,k.apports);
+    if(k.contact)o.contact=Object.assign(o.contact,k.contact);
+    if(Array.isArray(k.associes)&&k.associes.length)o.associes=k.associes.slice();
+    if(Array.isArray(k.beneficiaires)&&k.beneficiaires.length)o.beneficiaires=k.beneficiaires.slice();
+  } }catch(e){}
+  try{ var msg=(typeof mailDemande==='function')?mailDemande(d):(d.message||''); if(msg&&msg!=='—')o.extra.notes=msg; }catch(e){}
+  window.__formData=o; window.__formFromDemande=id;
+  try{ if(typeof closeModal==='function')closeModal(); }catch(e){}
+  if(typeof go==='function')go('formulaire'); else {state.page='formulaire';if(typeof render==='function')render();}
+  if(typeof toast==='function')toast('Formulaire pré-rempli depuis la demande — complétez puis validez');
+};
+function barBottom(id){return '<div class="dem-bottom-acts"><button class="btn dem-form-btn" onclick="formPrefillFromDemande(\''+id+'\')">📝 Créer le dossier (Formulaire)</button><button class="btn btn-pri" onclick="demAccepter(\''+id+'\')">✓ Accepter</button><button class="btn dem-refuse" onclick="demRefuser(\''+id+'\')">✕ Refuser</button></div>';}
 if(typeof window.demVueDetail==='function'){var _dv=window.demVueDetail;window.demVueDetail=function(id){var h=_dv(id);try{h=stripBlock(h,'dem-view-cards');if(h.indexOf('<div class="dem-view-top">')>=0)h=h.replace('<div class="dem-view-top">',demColorBar(id)+'<div class="dem-view-top">');h=h+barBottom(id);}catch(e){}return h;};}
-try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createElement('style');st.id='dem-bar-acts-css';st.textContent='.dem-bottom-acts{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin:18px 0 4px}.dem-bottom-acts .btn{white-space:nowrap}.dem-refuse{color:#e78e75}'
+try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createElement('style');st.id='dem-bar-acts-css';st.textContent='.dem-bottom-acts{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin:18px 0 4px}.dem-bottom-acts .btn{white-space:nowrap}.dem-refuse{color:#e78e75}.dem-form-btn{margin-right:auto;color:#8fbcff;border-color:#2c4a72}'
   +'.dem-colorbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0 12px}.dem-colorbar-l{font-size:11px;color:#8b93a1;margin-right:4px}'
   +'.dem-colorbar-l em{font-style:normal;color:#6b7280}'
   +'.dem-sw{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;outline:none;box-shadow:0 0 0 1px rgba(255,255,255,.12)}'
