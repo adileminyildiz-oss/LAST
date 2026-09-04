@@ -129,6 +129,29 @@ const r = await page.evaluate(async () => {
     if (window.__svcSaveStore) { const o2 = window.__svcStore(); delete o2.abo; window.__svcSaveStore(o2); }
   } catch (e) { out.abo = { ok: false, err: '' + e }; }
 
+  // 8) Service « Tableau de bord dirigeant » — agrégation isolée + pilotage
+  out.cockpit = { ok: false };
+  try {
+    if (window.__svcSaveStore) { const o = window.__svcStore(); delete o.cockpit; delete o.abo; delete o.marge; window.__svcSaveStore(o); }
+    window.svcGo('abo'); window.svcGo('marge'); // seed defaults (abo MRR 87,17)
+    window.svcGo('cockpit');
+    const V = document.getElementById('view');
+    const norm = s => parseFloat(('' + (s || '')).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
+    const g = id => (document.getElementById(id) || {}).textContent || '';
+    const mrrCard = [].slice.call(V.querySelectorAll('.cok-card')).filter(c => /récurrent/i.test(c.textContent))[0];
+    const mrr = mrrCard ? norm(mrrCard.querySelector('.cok-card-v').textContent) : 0;
+    window.svcCokSet('caMois', '10000'); window.svcCokSet('chargesMois', '6000'); window.svcCokSet('objectifCA', '12000');
+    const bar = document.getElementById('cok-obj-bar');
+    out.cockpit = {
+      ok: !!document.getElementById('cok-treso'),
+      aggMrr: Math.abs(mrr - (29 + 19 + 15 + 290 / 12)) < 0.05,      // MRR repris du service Abonnements
+      result: Math.abs(norm(g('cok-res')) - 4000) < 0.01,           // CA − charges
+      objective: !!bar && /8[23]%/.test(bar.style.width),           // 10000/12000 ≈ 83 %
+      eche: V.querySelectorAll('.cok-eche-row').length > 0
+    };
+    if (window.__svcSaveStore) { const o2 = window.__svcStore(); delete o2.cockpit; delete o2.abo; delete o2.marge; window.__svcSaveStore(o2); }
+  } catch (e) { out.cockpit = { ok: false, err: '' + e }; }
+
   return out;
 });
 
@@ -160,6 +183,10 @@ check('service Marge : recalcul en direct', r.marge.live);
 check('service Abonnements : table rendue', r.abo.ok);
 check('service Abonnements : MRR/ARR exacts (annuel ramené au mois)', r.abo.calc && r.abo.annual);
 check('service Abonnements : recalcul en direct (suspension)', r.abo.live);
+check('tableau de bord : KPIs rendus', r.cockpit.ok);
+check('tableau de bord : MRR repris du service Abonnements', r.cockpit.aggMrr);
+check('tableau de bord : résultat du mois (CA − charges) + objectif', r.cockpit.result && r.cockpit.objective);
+check('tableau de bord : prochaines échéances listées', r.cockpit.eche);
 check('aucun pageerror', perr.length === 0);
 
 const ok = results.filter(x => x.ok).length, tot = results.length;

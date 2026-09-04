@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=449;
+var LAST_VER=450;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22835,7 +22835,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     {id:'simulateurs',ico:'🧮',t:'Simulateurs',d:'Coût d’embauche, impôt sur les sociétés, salaire vs dividendes. Outils de conseil & aimant à prospects.'},
     {id:'catalogue',ico:'🧾',t:'Offres & tarifs',d:'Grille des prestations vendables (création, modifs, paie, conseil, abonnements) éditable et imprimable — à remettre aux clients.'},
     {id:'marge',ico:'💰',t:'Marge & bénéfices',d:'Prestation sous-traitée : coût prestataire + marge cible → paiement client TTC, TVA à payer, montant versé au prestataire et bénéfice net. Optimisez une marge élevée.'},
-    {id:'abo',ico:'🔁',t:'Abonnements & revenu récurrent',d:'Suivi des clients abonnés (espace client, échéancier, packs…) : revenu mensuel récurrent (MRR), annuel (ARR), panier moyen et projection. Facturation en ligne récurrente.'}
+    {id:'abo',ico:'🔁',t:'Abonnements & revenu récurrent',d:'Suivi des clients abonnés (espace client, échéancier, packs…) : revenu mensuel récurrent (MRR), annuel (ARR), panier moyen et projection. Facturation en ligne récurrente.'},
+    {id:'cockpit',ico:'📊',t:'Tableau de bord dirigeant',d:'Cockpit de pilotage : trésorerie, CA & résultat du mois, revenu récurrent, rentabilité et prochaines échéances réunis en une vue. Objectif de CA suivi.'}
   ];
 
   /* ================= SERVICE 1 : ÉCHÉANCIER FISCAL & SOCIAL ================= */
@@ -23106,17 +23107,65 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<p class="svc-note-min">MRR = somme des abonnements <b>actifs</b> ramenés au mois (annuel ÷ 12). ARR = MRR × 12. Les statuts « suspendu » et « résilié » sont exclus du MRR. Les offres proposées proviennent du groupe « Abonnements » de votre catalogue.</p></div>';
   }
 
+  /* ================= SERVICE 6 : TABLEAU DE BORD DIRIGEANT (cockpit) ================= */
+  function cockpit(){ var o=store(); return o.cockpit||{treso:0,caMois:0,chargesMois:0,objectifCA:0}; }
+  function cockpitSave(c){ var o=store(); o.cockpit=c; save(o); }
+  window.svcCokSet=function(f,v){ var c=cockpit(); c[f]=num(v); cockpitSave(c); svcCokRefresh(); };
+  function cokMrr(){ var a=store().abo; if(!a||!a.list)return {mrr:0,nb:0}; var mrr=0,nb=0; a.list.forEach(function(x){ if(x.statut==='actif'){ var p=+x.prix||0; mrr+=(x.freq==='an'?p/12:p); nb++; } }); return {mrr:mrr,nb:nb}; }
+  function cokMarge(){ var m=store().marge; if(!m||!m.lignes)return {ben:0,marge:0}; var tva=(+m.tva||0)/100,ben=0,prixT=0; m.lignes.forEach(function(l){ var cout=+l.cout||0,mg=Math.max(0,Math.min(99.9,+l.marge||0)); var prix=(mg>=100)?cout:(cout/(1-mg/100)); ben+=(prix-cout); prixT+=prix; }); return {ben:ben,marge:prixT>0?(ben/prixT*100):0}; }
+  function cokEche(){ var src=(store().eche&&store().eche.items)||ECHE_DEF.map(function(e){return {id:e.id,lbl:e.lbl,peri:e.peri,day:e.day||null,md:e.md||null,note:e.note||'',actif:true,rappel:7};});
+    return src.filter(function(e){return e.actif!==false;}).map(function(e){return {lbl:e.lbl,d:nextDate(e),j:daysBetween(nextDate(e))};}).sort(function(a,b){return a.d-b.d;}); }
+  function cokCat(){ var c=store().cat; if(!c||!c.groups)return {n:0,moy:0}; var n=0,s=0; c.groups.forEach(function(g){ g.items.forEach(function(it){ n++; s+=(+it.p||0); }); }); return {n:n,moy:n>0?s/n:0}; }
+  window.svcCokRefresh=function(){ var c=cockpit(); var res=(+c.caMois||0)-(+c.chargesMois||0); var pct=(+c.objectifCA>0)?Math.min(100,(+c.caMois||0)/(+c.objectifCA)*100):0;
+    function put(id,v){ var el=document.getElementById(id); if(el)el.textContent=v; }
+    put('cok-treso',eur(c.treso)); put('cok-ca',eur(c.caMois)); put('cok-res',eur(res));
+    var rEl=document.getElementById('cok-res'); if(rEl){ rEl.style.color=res<0?'#ff8f9a':'#5bbf8a'; }
+    var bar=document.getElementById('cok-obj-bar'); if(bar)bar.style.width=pct.toFixed(0)+'%';
+    put('cok-obj-lbl',(+c.objectifCA>0)?(pct.toFixed(0)+' % de l’objectif ('+eur(c.objectifCA)+')'):'Objectif non défini');
+  };
+  function cockpitView(){ var c=cockpit(); var mr=cokMrr(),mg=cokMarge(),ec=cokEche(),ct=cokCat();
+    var res=(+c.caMois||0)-(+c.chargesMois||0); var pct=(+c.objectifCA>0)?Math.min(100,(+c.caMois||0)/(+c.objectifCA)*100):0;
+    var kpis='<div class="svc-eche-kpis">'
+      +'<div class="svc-kpi"><div class="svc-kpi-v" id="cok-treso">'+eur(c.treso)+'</div><div class="svc-kpi-l">Trésorerie</div></div>'
+      +'<div class="svc-kpi"><div class="svc-kpi-v" id="cok-ca">'+eur(c.caMois)+'</div><div class="svc-kpi-l">CA du mois</div></div>'
+      +'<div class="svc-kpi"><div class="svc-kpi-v" id="cok-res" style="color:'+(res<0?'#ff8f9a':'#5bbf8a')+'">'+eur(res)+'</div><div class="svc-kpi-l">Résultat du mois</div></div>'
+      +'<div class="svc-kpi mg-kpi-ben"><div class="svc-kpi-v">'+eur(mr.mrr)+'</div><div class="svc-kpi-l">Revenu récurrent (MRR)</div></div>'
+      +'</div>';
+    var obj='<div class="card svc-card cok-obj"><h2>Objectif de CA du mois</h2>'
+      +'<div class="cok-bar"><div class="cok-bar-in" id="cok-obj-bar" style="width:'+pct.toFixed(0)+'%"></div></div>'
+      +'<div class="cok-obj-lbl" id="cok-obj-lbl">'+((+c.objectifCA>0)?(pct.toFixed(0)+' % de l’objectif ('+eur(c.objectifCA)+')'):'Objectif non défini')+'</div></div>';
+    var pilot='<div class="card svc-card"><h2>Pilotage (saisie)</h2><div class="cok-form">'
+      +'<div class="svc-f"><label>Trésorerie</label><div class="svc-f-in"><input value="'+E(c.treso)+'" inputmode="decimal" oninput="svcCokSet(\'treso\',this.value)"><span>€</span></div></div>'
+      +'<div class="svc-f"><label>CA du mois</label><div class="svc-f-in"><input value="'+E(c.caMois)+'" inputmode="decimal" oninput="svcCokSet(\'caMois\',this.value)"><span>€</span></div></div>'
+      +'<div class="svc-f"><label>Charges du mois</label><div class="svc-f-in"><input value="'+E(c.chargesMois)+'" inputmode="decimal" oninput="svcCokSet(\'chargesMois\',this.value)"><span>€</span></div></div>'
+      +'<div class="svc-f"><label>Objectif de CA / mois</label><div class="svc-f-in"><input value="'+E(c.objectifCA)+'" inputmode="decimal" oninput="svcCokSet(\'objectifCA\',this.value)"><span>€</span></div></div>'
+      +'</div></div>';
+    var echeHTML=ec.slice(0,4).map(function(u){ var cls=u.j<0?'late':(u.j<=7?'soon':''); return '<div class="cok-eche-row '+cls+'"><span class="cok-eche-l">'+E(u.lbl)+'</span><span class="cok-eche-d">'+frDate(u.d)+' <b>'+(u.j<0?('retard '+(-u.j)+' j'):(u.j===0?'aujourd’hui':(u.j+' j')))+'</b></span></div>'; }).join('')||'<div class="svc-note-min">Aucune échéance active.</div>';
+    var cards='<div class="cok-grid">'
+      +'<button class="cok-card" onclick="svcGo(\'abo\')"><div class="cok-card-h">🔁 Revenu récurrent</div><div class="cok-card-v">'+eur(mr.mrr)+' <span>/ mois</span></div><div class="cok-card-s">'+eur(mr.mrr*12)+' / an · '+mr.nb+' abonnement'+(mr.nb>1?'s':'')+' actif'+(mr.nb>1?'s':'')+'</div></button>'
+      +'<button class="cok-card" onclick="svcGo(\'marge\')"><div class="cok-card-h">💰 Rentabilité sous-traitance</div><div class="cok-card-v">'+eur(mg.ben)+'</div><div class="cok-card-s">bénéfice net simulé · marge moyenne '+mg.marge.toFixed(0)+' %</div></button>'
+      +'<button class="cok-card" onclick="svcGo(\'catalogue\')"><div class="cok-card-h">🧾 Offres au catalogue</div><div class="cok-card-v">'+ct.n+'</div><div class="cok-card-s">prestations · tarif moyen '+eur(ct.moy)+'</div></button>'
+      +'<button class="cok-card cok-card-eche" onclick="svcGo(\'echeancier\')"><div class="cok-card-h">📅 Prochaines échéances</div>'+echeHTML+'</button>'
+      +'</div>';
+    return '<div class="svc-sub"><button class="btn btn-ghost svc-back" onclick="svcGo(\'\')">‹ Services</button>'
+      +'<h2 class="svc-h2">📊 Tableau de bord dirigeant</h2>'
+      +'<p class="svc-lead">Vue de pilotage réunissant vos indicateurs clés : trésorerie et résultat du mois (saisis), revenu récurrent, rentabilité des prestations sous-traitées et prochaines obligations. Chaque carte ouvre le module détaillé.</p>'
+      +kpis+obj+cards
+      +'<div class="cok-2col">'+pilot+'</div>'
+      +'<p class="svc-note-min">Le résultat du mois = CA − charges (saisie manuelle, isolée de la comptabilité). Le MRR, la rentabilité, le catalogue et les échéances sont repris automatiquement des autres services.</p></div>';
+  }
+
   /* ---------- HUB des services ---------- */
   function hub(){
     var cards=SERVICES.map(function(s){ return '<button class="svc-tile" onclick="svcGo(\''+s.id+'\')"><div class="svc-tile-ic">'+s.ico+'</div><div class="svc-tile-b"><div class="svc-tile-t">'+E(s.t)+'</div><div class="svc-tile-d">'+E(s.d)+'</div></div></button>'; }).join('');
-    var soon=['Coffre-fort & portail client','Signature électronique des documents','Tableau de bord dirigeant','Veille réglementaire annuelle']
+    var soon=['Coffre-fort & portail client','Signature électronique des documents','Veille réglementaire annuelle']
       .map(function(x){ return '<div class="svc-soon">'+E(x)+' <span class="svc-soon-b">à venir</span></div>'; }).join('');
     return '<div class="svc-hub"><p class="svc-lead">Modules de services vendables aux clients — indépendants de l’activité opérationnelle du cabinet.</p>'
       +'<div class="svc-grid">'+cards+'</div>'
       +'<div class="svc-soon-h">Prochains services</div><div class="svc-soon-grid">'+soon+'</div></div>';
   }
   window.svcGo=function(view){ window.__svcView=view||''; try{ if(typeof go==='function') go('services'); else { S().page='services'; render(); } }catch(e){ try{S().page='services';render();}catch(_){} } };
-  function pageServices(){ if(window.__svcView==='echeancier')return echeView(); if(window.__svcView==='simulateurs')return simuView(); if(window.__svcView==='catalogue')return catView(); if(window.__svcView==='marge')return margeView(); if(window.__svcView==='abo')return aboView(); return hub(); }
+  function pageServices(){ if(window.__svcView==='echeancier')return echeView(); if(window.__svcView==='simulateurs')return simuView(); if(window.__svcView==='catalogue')return catView(); if(window.__svcView==='marge')return margeView(); if(window.__svcView==='abo')return aboView(); if(window.__svcView==='cockpit')return cockpitView(); return hub(); }
   window.pageServices=pageServices;
 
   /* ---------- Enregistrement PAGE + nav (pattern Agenda, additif) ---------- */
@@ -23139,7 +23188,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       try{buildNav();}catch(e){} try{document.body.dataset.page='services';}catch(e){}
       var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='services';}):null;
       try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Services';}catch(e){}
-      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':(window.__svcView==='simulateurs'?'Simulateurs de conseil':(window.__svcView==='catalogue'?'Offres & tarifs':(window.__svcView==='marge'?'Marge & bénéfices':(window.__svcView==='abo'?'Abonnements & revenu récurrent':((p&&p.sub)||'')))));}catch(e){}
+      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':(window.__svcView==='simulateurs'?'Simulateurs de conseil':(window.__svcView==='catalogue'?'Offres & tarifs':(window.__svcView==='marge'?'Marge & bénéfices':(window.__svcView==='abo'?'Abonnements & revenu récurrent':(window.__svcView==='cockpit'?'Tableau de bord dirigeant':((p&&p.sub)||''))))));}catch(e){}
       var V=document.getElementById('view'); if(V)V.innerHTML=pageServices();
       return;
     }
@@ -23201,6 +23250,12 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'#view .svc-mg-t .mg-n{width:100%!important;min-width:150px}#view .svc-mg-t .mg-num{width:96px!important;text-align:right;font-variant-numeric:tabular-nums}#view .svc-mg-t .mg-marge{width:74px!important}'
     +'#view .svc-mg-t select.mg-sel{background:#0b1119!important;border:1px solid #26364a!important;color:#e7edf5!important;border-radius:7px!important;padding:6px 8px!important;font-size:12.5px!important;display:inline-block!important;width:auto!important;margin:0!important}#view .svc-mg-t .abo-off{max-width:220px}'
     +'#view .svc-mg-t tr.abo-st-suspendu{opacity:.6}#view .svc-mg-t tr.abo-st-resilie{opacity:.42}#view .svc-mg-t tr.abo-st-resilie .mg-strong{color:#8aa0b8!important}'
+    +'.cok-obj{margin:0 0 14px}.cok-bar{height:12px;background:#0b1119;border:1px solid #26364a;border-radius:8px;overflow:hidden;margin:4px 0 8px}.cok-bar-in{height:100%;background:linear-gradient(90deg,#1e90ff,#5bbf8a);border-radius:8px;transition:width .2s}.cok-obj-lbl{font-size:12.5px;color:#9fb6d0}'
+    +'.cok-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:14px}'
+    +'.cok-card{text-align:left;background:linear-gradient(180deg,#12161d,#0e1218);border:1px solid #26303c;border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .12s}.cok-card:hover{border-color:#2f8fff}'
+    +'.cok-card-h{font-size:12px;color:#9fb6d0;margin-bottom:6px}.cok-card-v{font-size:22px;font-weight:800;color:#e7edf5}.cok-card-v span{font-size:12px;color:#8aa0b8;font-weight:400}.cok-card-s{font-size:11.5px;color:#8aa0b8;margin-top:3px}'
+    +'.cok-card-eche .cok-card-h{margin-bottom:8px}.cok-eche-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)}.cok-eche-l{color:#c7d6e8}.cok-eche-d{color:#9fb6d0;white-space:nowrap}.cok-eche-row.soon .cok-eche-d b{color:#f0c040}.cok-eche-row.late .cok-eche-d b{color:#ff8f9a}'
+    +'.cok-form{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}@media(max-width:640px){.cok-form{grid-template-columns:1fr}.cok-grid{grid-template-columns:1fr}}'
     document.head.appendChild(st2); } }catch(e){}
 })();
 </script>
