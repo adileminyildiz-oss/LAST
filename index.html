@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=382;
+var LAST_VER=383;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3942,20 +3942,24 @@ window.demMessagerieView=function(){
      var nAtt=(typeof demAttFew==='function')?demAttFew(d):0;
      var sla=(typeof demSlaBadge==='function')?demSlaBadge(d):'';
      var ctx=(typeof demContexte==='function')?demContexte(d):'';
-     var canal=window.demEstSite(d)?'🌐 aemconseil.eu':esc(d.canal||'E-mail');
-     var stCls=d.lu?'lu':'nouv'; var stLbl=d.lu?esc(d.statut||'Lu'):'Nouveau';
+     var cleanUrl=function(v){return (''+(v==null?'':v)).replace(/^\s*https?:\/\//i,'').replace(/^www\./i,'').replace(/\/+\s*$/,'').trim();};
+     var canalRaw=window.demEstSite(d)?'aemconseil.eu':cleanUrl(d.canal||'E-mail');
+     var canal=window.demEstSite(d)?'🌐 aemconseil.eu':esc(canalRaw);
+     var stCls='nouv',stLbl='Nouveau';
+     if(d.decision==='acceptee'){stCls='ok';stLbl='Accepté';}
+     else if(d.decision==='refusee'){stCls='no';stLbl='Refusé';}
+     else if(d.rdvDemande){stCls='rdv';stLbl='RDV proposé';}
+     else if(d.lu){stCls='lu';stLbl=esc(d.statut||'Lu');}
      var open=(state.demOpen[d.id])?' open':'';
-     var cells=f.filter(function(x){return !x.long;}).map(function(x){return '<div class="dem-cell"><div class="dem-cl">'+esc(x.label)+'</div><div class="dem-cv">'+esc(x.value||'—')+'</div></div>';}).join('');
-     var meta='<div class="dem-cell"><div class="dem-cl">E-mail</div><div class="dem-cv">'+esc((d.clientEmail&&!/formsubmit/i.test(d.clientEmail))?d.clientEmail:'—')+'</div></div>'
-       +'<div class="dem-cell"><div class="dem-cl">Téléphone</div><div class="dem-cv">'+esc(d.clientTel||'—')+'</div></div>'
-       +'<div class="dem-cell"><div class="dem-cl">Canal</div><div class="dem-cv">'+canal+'</div></div>'
-       +'<div class="dem-cell"><div class="dem-cl">Reçu le</div><div class="dem-cv">'+esc(mailDateHeure(d))+'</div></div>'
-       +(nAtt?('<div class="dem-cell"><div class="dem-cl">Pièces jointes</div><div class="dem-cv">📎 '+nAtt+'</div></div>'):'')
-       +(u?('<div class="dem-cell"><div class="dem-cl">Assigné à</div><div class="dem-cv">'+esc(u.nom||u.prenom||'')+'</div></div>'):'');
+     var email=(d.clientEmail&&!/formsubmit/i.test(d.clientEmail))?d.clientEmail:'';
+     var cell=function(label,val){val=(''+(val==null?'':val)).trim();if(!val||val==='—')return '';return '<div class="dem-cell"><div class="dem-cl">'+esc(label)+'</div><div class="dem-cv">'+esc(val)+'</div></div>';};
+     var isUrlKey=function(k){return /site|website|\burl\b|web/i.test(k||'');};
+     var cells=f.filter(function(x){return !x.long;}).map(function(x){return cell(x.label, isUrlKey(x.key)?cleanUrl(x.value):x.value);}).join('');
+     var meta=cell('E-mail',email)+cell('Téléphone',d.clientTel)+cell('Canal',canalRaw)+cell('Reçu le',mailDateHeure(d))+(nAtt?cell('Pièces jointes','📎 '+nAtt):'')+(u?cell('Assigné à',(u.nom||u.prenom||'')):'');
      return '<div class="dem-erow'+open+(d.lu?'':' unread')+'" data-id="'+d.id+'">'
        +'<div class="dem-ehead" onclick="demRowToggle(\''+d.id+'\')">'
          +'<span class="dem-echev">▸</span><span class="dem-edot"></span>'
-         +'<span class="dem-ecol dem-col-code"><span class="dem-ecode">'+(serie?esc(serie):'—')+'</span></span>'
+         +'<span class="dem-ecol dem-col-code">'+(serie?('<span class="dem-ecode">'+esc(serie)+'</span>'):'')+'</span>'
          +'<span class="dem-ecol dem-col-name"><span class="dem-ename">'+esc(demBestName(d))+'</span></span>'
          +'<span class="dem-ecol dem-col-canal">'+canal+'</span>'
          +'<span class="dem-ecol dem-col-obj"><span class="tag blue">'+esc(IA.objet(d))+'</span></span>'
@@ -3967,9 +3971,13 @@ window.demMessagerieView=function(){
          +'<div class="dem-egrid">'+cells+meta+'</div>'
          +(apercu?('<div class="dem-eprev"><div class="dem-cl">Message reçu</div><div class="dem-eprev-t">'+esc(apercu)+((mailDemande(d)||d.message||'').length>600?'…':'')+'</div></div>'):'')
          +(ctx?('<div class="dem-ectx">'+esc(ctx)+'</div>'):'')
-         +'<div class="dem-eacts"><button class="btn btn-sm dem-imp-btn dem-imp-pri" onclick="demMsgOuvrir(\''+d.id+'\')">Ouvrir la demande</button>'
+         +'<div class="dem-eacts">'
+           +'<button class="btn btn-sm dem-imp-btn dem-imp-pri" onclick="event.stopPropagation();demMsgOuvrir(\''+d.id+'\')">Ouvrir la demande</button>'
            +(d.lu?'':'<button class="btn btn-sm dem-imp-btn" onclick="event.stopPropagation();demMarquerLu(\''+d.id+'\');render()">✓ Marquer lu</button>')
-           +'</div>'
+           +'<button class="btn btn-sm dem-imp-btn dem-act-ok" onclick="event.stopPropagation();demAccepter(\''+d.id+'\')">✓ Accepter</button>'
+           +'<button class="btn btn-sm dem-imp-btn dem-act-no" onclick="event.stopPropagation();demRefuser(\''+d.id+'\')">✕ Refuser</button>'
+           +'<button class="btn btn-sm dem-imp-btn dem-act-rdv" onclick="event.stopPropagation();demRdv(\''+d.id+'\')">📅 Demande de rendez-vous</button>'
+         +'</div>'
        +'</div>'
      +'</div>';
    }).join('')+'</div>';
@@ -19494,11 +19502,10 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <script id="dem-view-trim">(function(){
 /* Vue d une demande : retrait des 3 blocs du bas + actions essentielles (Accepter / Refuser / Assigner) compactes dans la barre du haut. */
 function stripBlock(h,cls){var i=h.indexOf('<div class="'+cls);if(i<0)return h;var re=/<div\b|<\/div>/g;re.lastIndex=i;var depth=0,m;while((m=re.exec(h))){if(m[0]==='</div>'){depth--;if(depth===0)return h.slice(0,i)+h.slice(re.lastIndex);}else depth++;}return h;}
-function barActions(id){var d=null;try{d=(DB.demandes||[]).find(function(x){return x.id===id;});}catch(e){}
-var opts='<option value="">— Assigner —</option>';try{(DB.users||[]).forEach(function(u){opts+='<option value="'+u.id+'"'+((d&&d.assigneA===u.id)?' selected':'')+'>'+esc(u.nom)+(u.role==='admin'?' (admin)':'')+'</option>';});}catch(e){}
-return '<span class="dem-bar-acts">'+'<button class="btn btn-sm btn-pri" onclick="demAccepter(\''+id+'\')">✓ Accepter</button>'+'<button class="btn btn-sm" onclick="demRefuser(\''+id+'\')">✕ Refuser</button>'+'<select id="dm-assign" class="dem-bar-assign" title="Assigner à un collaborateur" onchange="assignDemande(\''+id+'\')">'+opts+'</select>'+'</span>';}
-if(typeof window.demVueDetail==='function'){var _dv=window.demVueDetail;window.demVueDetail=function(id){var h=_dv(id);try{h=stripBlock(h,'dem-view-cards');if(h&&h.indexOf('<span class="dem-nav">')>=0)h=h.replace('<span class="dem-nav">',barActions(id)+'<span class="dem-nav">');}catch(e){}return h;};}
-try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createElement('style');st.id='dem-bar-acts-css';st.textContent='.dem-bar-acts{display:inline-flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}.dem-bar-acts .btn{white-space:nowrap}.dem-bar-assign{font:inherit;font-size:12px;background:#111114;color:#eef0f4;border:1px solid #34343a;border-radius:8px;padding:6px 9px;cursor:pointer;max-width:200px}.dem-bar-assign:hover{border-color:#45454d}';document.head.appendChild(st);}}catch(e){}
+/* Accepter / Refuser en bas à droite de la demande ouverte ; bouton « Assigner » retiré. */
+function barBottom(id){return '<div class="dem-bottom-acts"><button class="btn btn-pri" onclick="demAccepter(\''+id+'\')">✓ Accepter</button><button class="btn dem-refuse" onclick="demRefuser(\''+id+'\')">✕ Refuser</button></div>';}
+if(typeof window.demVueDetail==='function'){var _dv=window.demVueDetail;window.demVueDetail=function(id){var h=_dv(id);try{h=stripBlock(h,'dem-view-cards');h=h+barBottom(id);}catch(e){}return h;};}
+try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createElement('style');st.id='dem-bar-acts-css';st.textContent='.dem-bottom-acts{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin:18px 0 4px}.dem-bottom-acts .btn{white-space:nowrap}.dem-refuse{color:#e78e75}';document.head.appendChild(st);}}catch(e){}
 })();</script>
 <script id="analyse-pipeline-mod">(function(){
   /* Pipeline « Analyse & auto-remplissage » (Piste B) — orchestre les briques existantes :
@@ -20510,6 +20517,13 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       else { state.demOpen[id]=1; if(row)row.classList.add('open'); }
     }catch(e){}
   };
+  function demFind(id){ try{ return (DB.demandes||[]).filter(function(x){return x.id===id;})[0]; }catch(e){ return null; } }
+  /* demAccepter / demRefuser existent déjà (logique complète : prise en charge, mail d'excuse) — on ne les remplace pas. */
+  window.demRdv=function(id){ var d=demFind(id); if(!d)return; d.rdvDemande=true; if(!d.decision)d.statut='Rendez-vous proposé'; d.lu=true; try{save();}catch(e){}
+    var mail=(d.clientEmail&&!/formsubmit/i.test(d.clientEmail))?d.clientEmail:'';
+    if(mail){ try{ var subj=encodeURIComponent('Proposition de rendez-vous — AEM CONSEIL'); var body=encodeURIComponent('Bonjour '+((d.clientNom||'').trim())+',\n\nSuite à votre demande, nous vous proposons un rendez-vous afin d\'échanger sur votre projet.\n\nPourriez-vous m\'indiquer vos disponibilités ?\n\nBien cordialement,\nAEM CONSEIL'); window.open('mailto:'+mail+'?subject='+subj+'&body='+body,'_blank'); }catch(e){} }
+    try{render();}catch(e){} try{if(typeof toast==='function')toast(mail?'E-mail de rendez-vous ouvert.':'Rendez-vous proposé (aucun e-mail client renseigné).');}catch(e){}
+  };
   try{ if(!document.getElementById('dem-recept-css')){ var st=document.createElement('style'); st.id='dem-recept-css';
     st.textContent=[
       '.dem-elist{display:flex;flex-direction:column}',
@@ -20533,6 +20547,12 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       '.dem-st{font-size:11px;font-weight:700;border-radius:20px;padding:2px 9px;white-space:nowrap}',
       '.dem-st-nouv{background:#12233a;color:#7fb8ff;border:1px solid #274a72}',
       '.dem-st-lu{background:#171a20;color:#9aa3b2;border:1px solid #2a2e37}',
+      '.dem-st-ok{background:#0e2a1b;color:#7fd0a3;border:1px solid #2c6b4e}',
+      '.dem-st-no{background:#2a1512;color:#e78e75;border:1px solid #6a3324}',
+      '.dem-st-rdv{background:#2a2412;color:#e0c07a;border:1px solid #5a4d22}',
+      '.dem-act-ok{color:#7fd0a3!important;border-color:#2c6b4e!important}',
+      '.dem-act-no{color:#e78e75!important;border-color:#6a3324!important}',
+      '.dem-act-rdv{color:#8fbcff!important;border-color:#2c4a72!important}',
       '.dem-edate{font-size:11.5px;color:#8b93a1;white-space:nowrap}',
       '.dem-eatt{font-size:11px;color:#e0c07a}',
       '.dem-eopen{font-size:12px;font-weight:600;color:#5ab0ff;background:none;border:0;cursor:pointer;white-space:nowrap;padding:2px}',
@@ -20545,7 +20565,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       '.dem-cv{font-size:13px;color:#e6e9ef;word-break:break-word}',
       '.dem-eprev{margin:4px 0 10px}.dem-eprev-t{font-size:13px;line-height:1.5;color:#c2c8d2;background:#12161d;border:1px solid #23262d;border-radius:9px;padding:10px 12px;white-space:pre-wrap}',
       '.dem-ectx{font-size:12px;color:#9aa3b2;margin-bottom:10px}',
-      '.dem-eacts{display:flex;gap:8px;flex-wrap:wrap}',
+      '.dem-eacts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px}',
       '@media(max-width:900px){.dem-ehead{grid-template-columns:16px 10px 1fr auto;grid-auto-rows:auto;gap:6px 8px}.dem-col-canal,.dem-col-obj,.dem-col-st{grid-column:3/5}.dem-col-date{grid-column:3}.dem-col-open{grid-column:4}.dem-ehdr{display:none}.dem-edetail{padding-left:18px}}'
     ].join(''); document.head.appendChild(st); } }catch(e){}
 })();
