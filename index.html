@@ -632,7 +632,28 @@ function seed(){
   return {users:U,services:S,clients:C,demandes:D,dossiers:DOS,devis:[],factures:[],fournisseurs:[],
     params:{cabinet:'AEM CONSEIL'}, seq:{dossier:2603,factVente:1,factAchat:1}};
 }
-function load(){try{const r=localStorage.getItem(KEY);DB=r?JSON.parse(r):seed();}catch(e){DB=seed();}}
+/* Retire les dossiers de DÉMONSTRATION restés intacts (DOS-2601 / DOS-2602) — uniquement pour un dossier
+   jamais utilisé (aucun questionnaire, document, historique ni demande liée). Migration unique. */
+function migrateCleanDemoDossiers(){
+  if(!DB||!DB.dossiers)return;
+  DB.params=DB.params||{};
+  if(DB.params._demoDossiersRemoved)return;
+  var demoRefs={'DOS-2601':1,'DOS-2602':1};
+  var before=DB.dossiers.length;
+  DB.dossiers=DB.dossiers.filter(function(d){
+    var isDemo=(d&&(d.id==='do-1'||d.id==='do-2')&&demoRefs[d.ref]);
+    if(!isDemo)return true;
+    var utilise=!!d.intake||!!d.numeroDossier||(d.docs&&Object.keys(d.docs).length>0)||(d.historique&&d.historique.length>0)||(DB.demandes||[]).some(function(x){return x.dossierId===d.id;});
+    return utilise; /* on garde s'il a servi, on retire s'il est resté vide (démo) */
+  });
+  DB.params._demoDossiersRemoved=true;
+  if(before!==DB.dossiers.length){try{save();}catch(e){}}
+}
+function load(){
+  var fromLS=false;
+  try{const r=localStorage.getItem(KEY);if(r){DB=JSON.parse(r);fromLS=true;}else DB=seed();}catch(e){DB=seed();fromLS=false;}
+  if(fromLS){try{migrateCleanDemoDossiers();}catch(e){}}
+}
 let saveT=null;
 function save(){
   try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}
@@ -3130,7 +3151,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=389;
+var LAST_VER=390;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
