@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=379;
+var LAST_VER=380;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14453,6 +14453,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     ['fi-save','fi-save-doc'].forEach(function(idb){ var btn=document.getElementById(idb); if(btn){ btn.disabled=!ok; btn.classList.toggle('is-disabled',!ok); btn.title=why; } });
     try{ var c=document.getElementById('fi-coherence'); if(c&&window.formCohInner){ c.innerHTML=window.formCohInner(); c.classList.toggle('has-bad',inc.length>0); } }catch(_e){}
     try{ var dp=document.getElementById('fi-doublon'); if(dp&&window.formDoublonHTML){ dp.innerHTML=window.formDoublonHTML(); } }catch(_e){}
+    try{ var rl=document.getElementById('fi-reco-live'); if(rl&&window.formRecoSummaryHTML){ rl.innerHTML=window.formRecoSummaryHTML(); } }catch(_e){}
   }catch(e){} };
   window.formMasqueDate=function(el,path){var d=(el.value||'').replace(/\D/g,'').slice(0,8);var out=d;if(d.length>4)out=d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4);else if(d.length>2)out=d.slice(0,2)+'/'+d.slice(2);el.value=out;window.formSet(path,out);};
 
@@ -14737,11 +14738,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<button class="btn'+(okAll?'':' is-disabled')+'" id="fi-save"'+dis+' onclick="formCreerDossier(false)">Enregistrer le dossier</button>'
       +'<button class="btn btn-pri'+(okAll?'':' is-disabled')+'" id="fi-save-doc"'+dis+' onclick="formCreerDossier(true)">Enregistrer &amp; ouvrir les documents</button>'
       +'</div></div></div></div>';
-    /* Recommandation fiscale & juridique (en bas de page) — d'après le profil du dirigeant */
-    var recoBar='<div class="card fi-card fi-reco-card"><div class="card-b fi-reco-b">'
-      +'<div class="fi-reco-txt"><b>Recommandation fiscale &amp; juridique</b><div class="hint" style="margin-top:2px">À réaliser <b>pendant ou après le rendez-vous</b> : d\'après le mode de vie et les objectifs du dirigeant, présente au client la structure la plus avantageuse — forme de société, régime fiscal, statut social et statuts flexibles adaptés.</div></div>'
-      +'<div class="fi-reco-btns"><button class="btn btn-pri" onclick="formRecoOuvrir()">⚖️ Analyse fiscaliste</button></div>'
-      +'</div></div>';
+    /* Conclusion « conseil fiscal » (en bas de page) : meilleur choix pour le gérant, mis à jour en direct */
+    var recoBar='<div class="card fi-card fi-reco-card"><div class="card-b"><div id="fi-reco-live">'+(window.formRecoSummaryHTML?window.formRecoSummaryHTML():'')+'</div></div></div>';
     return '<div class="fi-wrap" oninput="formUpdateGate()" onchange="formUpdateGate()">'+resume+head+soc+dir+profil+titres+dates+assoc+depot+ben+apports+conj+notes+contact+coherence+recoBar+actions+'</div>';
   }
   window.pageFormulaire=pageFormulaire;
@@ -14984,6 +14982,21 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<div class="fr-card fr-vig"><div class="fr-card-t">Points de vigilance</div>'+li(r.vigilance)+'</div>'
       +'</div>';
   };
+  /* Conclusion « conseil fiscal » : le MEILLEUR CHOIX pour le gérant, affiché en bas du formulaire (live) */
+  window.formRecoSummaryHTML=function(){
+    var r; try{ r=window.formReco(); }catch(e){ return ''; }
+    var pr=((recoGet('profil.objectif')||'')||(recoGet('profil.vision')||'')||(recoGet('profil.entourage')&&recoGet('profil.entourage')!=='seul')||recoNum(recoGet('profil.nbSalaries'))||recoNum(recoGet('profil.caPrev')));
+    var note=pr?'':'<div class="frs-note">Renseignez le <b>profil du dirigeant</b> (mode de vie, objectifs, saisie libre) pour affiner ce conseil.</div>';
+    var reason=(r.why&&r.why.length)?esc(r.why[0]):'';
+    return '<div class="frs">'
+      +'<div class="frs-h"><span class="frs-badge">Conseil fiscal</span><span class="frs-k">Meilleur choix pour le gérant</span></div>'
+      +'<div class="frs-main"><b class="frs-forme">'+esc(r.forme)+'</b><span class="frs-syn">'+esc(r.synthese)+'</span></div>'
+      +(reason?('<div class="frs-why">'+reason+'</div>'):'')
+      +'<div class="frs-chips"><span class="frs-chip">Forme : '+esc(r.forme)+'</span><span class="frs-chip">Régime : '+esc(r.regime)+'</span><span class="frs-chip">Social : '+esc(r.social)+'</span></div>'
+      +note
+      +'<div class="frs-actions"><button class="btn btn-pri" type="button" onclick="formRecoOuvrir()">⚖️ Voir l\'analyse fiscaliste complète</button></div>'
+      +'</div>';
+  };
   window.frToggle=function(el){ try{ el.classList.toggle('open'); }catch(e){} };
   window.formRecoOuvrir=function(){
     if(typeof openModal!=='function')return;
@@ -14994,6 +15007,18 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     _rst.textContent=[
       '.fi-reco-b{display:flex;align-items:center;gap:14px;flex-wrap:wrap}',
       '.fi-reco-txt{flex:1;min-width:240px}',
+      '.frs{display:flex;flex-direction:column;gap:8px}',
+      '.frs-h{display:flex;align-items:center;gap:10px}',
+      '.frs-badge{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#0a0b0d;background:linear-gradient(135deg,#cfe0ff,#8fb6ff);border-radius:5px;padding:2px 8px}',
+      '.frs-k{font-size:12px;font-weight:700;color:#aab2c0}',
+      '.frs-main{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}',
+      '.frs-forme{font-size:26px;font-weight:800;color:#fff;line-height:1}',
+      '.frs-syn{font-family:ui-monospace,monospace;font-size:13px;color:#9fb0c8}',
+      '.frs-why{font-size:12.5px;line-height:1.5;color:#c2c8d2}',
+      '.frs-chips{display:flex;gap:8px;flex-wrap:wrap}',
+      '.frs-chip{font-size:11.5px;font-weight:600;color:#cbd5ff;background:#141824;border:1px solid #26304a;border-radius:20px;padding:3px 10px}',
+      '.frs-note{font-size:12px;color:#9aa3b2;background:#12141a;border:1px dashed #2a2e37;border-radius:8px;padding:8px 10px}',
+      '.frs-actions{margin-top:2px}',
       '.fr-wrap{display:flex;flex-direction:column;gap:14px}',
       '.fr-verdict{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 16px;border:1px solid #23262d;border-radius:12px;background:#111317}',
       '.fr-verdict-k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8b93a1}',
@@ -15045,7 +15070,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var inc=(window.formCoherence?window.formCoherence():[]).filter(function(x){return !x.ok;});
     if(inc.length){ if(typeof openModal==='function')window.formControleModal(inc,'incoherence'); else if(typeof toast==='function')toast('Contrôle non validé — '+inc.length+' incohérence(s). Documents non générés.'); if(typeof formUpdateGate==='function')formUpdateGate(); return; }
     if(typeof toast==='function')toast('Contrôles validés — génération des documents');
+    var _conseil=null; try{ if(window.formReco){ var c=window.formReco(); _conseil={forme:c.forme,regime:c.regime,social:c.social,synthese:c.synthese,ts:Date.now()}; } }catch(e){}
     window.formDoCreate(ouvrirDocs);
+    /* Qualifie le dossier créé comme un conseil fiscal (meilleur choix pour le gérant) */
+    try{ var _d=(DB.dossiers||[]).filter(function(x){return x.id===(typeof state!=='undefined'?state.espaceDossier:'');})[0]; if(_d&&_conseil){ _d.conseilFiscal=_conseil; if(typeof save==='function')save(); } }catch(e){}
   };
   /* Fenêtre « Contrôle non validé » : liste ce qui empêche la génération (bloquant, sans contournement). */
   window.formControleModal=function(items,kind){
