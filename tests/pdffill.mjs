@@ -176,6 +176,32 @@ const r = await page.evaluate(async () => {
     if (window.__svcSaveStore) { const o2 = window.__svcStore(); delete o2.veille; window.__svcSaveStore(o2); }
   } catch (e) { out.veille = { ok: false, err: '' + e }; }
 
+  // 10) Service « Coffre-fort & portail client » — registre, partage, fichier joint
+  out.coffre = { ok: false };
+  try {
+    if (window.__svcSaveStore) { const o = window.__svcStore(); delete o.coffre; window.__svcSaveStore(o); }
+    try { localStorage.removeItem('last-coffre-files'); } catch (e) {}
+    window.svcGo('coffre');
+    const V = document.getElementById('view');
+    const hasView = !!(V && V.querySelector('table.svc-mg-t'));
+    window.svcCofAdd();
+    window.svcCofSet(0, 'client', 'SARL Dupont'); window.svcCofSet(0, 'nom', 'K-bis 2026'); window.svcCofSet(0, 'cat', 'K-bis');
+    const meta = (() => { const s = window.__svcStore().coffre.items[0]; return s.client === 'SARL Dupont' && s.nom === 'K-bis 2026' && s.cat === 'K-bis'; })();
+    const cb = document.querySelector('#view .cof-share input'); if (cb) { cb.checked = true; window.svcCofShare(0, cb); }
+    const shared = window.__svcStore().coffre.items[0].shared === true;
+    // fichier joint simulé : store + item lié
+    localStorage.setItem('last-coffre-files', JSON.stringify({ cf1: { name: 'bilan.pdf', type: 'application/pdf', data: 'data:application/pdf;base64,JVBERi0=' } }));
+    const s2 = window.__svcStore().coffre; s2.items.unshift({ id: 'cf1', client: 'SAS Martin', nom: 'bilan.pdf', cat: 'Bilan / liasse', date: '2026-05-15', shared: false, fileId: 'cf1', ftype: 'application/pdf', fsize: 120000 });
+    window.__svcSaveStore(Object.assign(window.__svcStore(), { coffre: s2 }));
+    window.svcGo('coffre');
+    const fileBtns = document.querySelectorAll('#view .cof-fbtn').length >= 2;
+    window.svcCofDel(0); // supprime le fichier lié
+    const cascade = Object.keys(JSON.parse(localStorage.getItem('last-coffre-files') || '{}')).length === 0;
+    out.coffre = { ok: hasView, meta, shared, file: fileBtns, cascade };
+    if (window.__svcSaveStore) { const o2 = window.__svcStore(); delete o2.coffre; window.__svcSaveStore(o2); }
+    try { localStorage.removeItem('last-coffre-files'); } catch (e) {}
+  } catch (e) { out.coffre = { ok: false, err: '' + e }; }
+
   return out;
 });
 
@@ -214,6 +240,9 @@ check('tableau de bord : prochaines échéances listées', r.cockpit.eche);
 check('veille réglementaire : millésimes 2024/2025/2026', r.veille.ok && r.veille.years);
 check('veille réglementaire : filtrage par millésime', r.veille.filter);
 check('veille réglementaire : statut + ajout par année', r.veille.pill && r.veille.add);
+check('coffre-fort : registre + édition des métadonnées', r.coffre.ok && r.coffre.meta);
+check('coffre-fort : partage au portail client', r.coffre.shared);
+check('coffre-fort : fichier joint (consulter/télécharger) + suppression en cascade', r.coffre.file && r.coffre.cascade);
 check('aucun pageerror', perr.length === 0);
 
 const ok = results.filter(x => x.ok).length, tot = results.length;
