@@ -85,6 +85,31 @@ const r = await page.evaluate(async () => {
     noOverwrite: (dov.data.p1 && dov.data.p1.desEntre_raison) === 'DEJA',
     noClient: !(dn.data.p1 && dn.data.p1.desEntre_raison)
   };
+  // 6) Service « Marge & bénéfices » — calcul de rentabilité prestataire
+  out.marge = { ok: false };
+  try {
+    if (window.__svcSaveStore) { const o = window.__svcStore(); delete o.marge; window.__svcSaveStore(o); }
+    window.svcGo('marge');
+    const V = document.getElementById('view');
+    const tab = V && V.querySelector('table.svc-mg-t');
+    const norm = s => parseFloat(('' + (s || '')).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
+    const g = id => (document.getElementById(id) || {}).textContent || '';
+    // ligne 0 par défaut : coût 150, marge 60, TVA 20 → prix 375 / TTC 450 / TVA à payer 45 / prestataire 180 / bénéfice 225
+    const prix = norm(g('mg-prix-0')), ttc = norm(g('mg-ttc-0')), tvp = norm(g('mg-tvp-0')), prest = norm(g('mg-prest-0')), ben = norm(g('mg-ben-0'));
+    const identity = Math.abs((ttc - tvp - prest) - ben) < 0.02; // encaissement net = bénéfice
+    // édition en direct : coût 200 / marge 50 → prix 400 / bénéfice 200
+    window.svcMgSet(0, 'cout', '200'); window.svcMgSet(0, 'marge', '50');
+    const prixAfter = norm(g('mg-prix-0')), benAfter = norm(g('mg-ben-0'));
+    out.marge = {
+      ok: !!tab,
+      table: (tab ? getComputedStyle(V.querySelector('.svc-mg-t tbody tr')).display : '') === 'table-row',
+      calc: Math.abs(prix - 375) < 0.01 && Math.abs(ttc - 450) < 0.01 && Math.abs(tvp - 45) < 0.01 && Math.abs(prest - 180) < 0.01 && Math.abs(ben - 225) < 0.01,
+      identity,
+      live: Math.abs(prixAfter - 400) < 0.01 && Math.abs(benAfter - 200) < 0.01
+    };
+    if (window.__svcSaveStore) { const o2 = window.__svcStore(); delete o2.marge; window.__svcSaveStore(o2); }
+  } catch (e) { out.marge = { ok: false, err: '' + e }; }
+
   return out;
 });
 
@@ -109,6 +134,10 @@ check('auto-remplissage : contrat BTP 2e partie laissée vide', r.fill.btpSecond
 check('auto-remplissage : modèle calibré par nom de champ', r.fill.calByKey);
 check('auto-remplissage : champ déjà saisi non écrasé', r.fill.noOverwrite);
 check('auto-remplissage : rien sans client sélectionné', r.fill.noClient);
+check('service Marge : table rendue en ligne', r.marge.ok && r.marge.table);
+check('service Marge : calculs exacts (prix/TTC/TVA/prestataire/bénéfice)', r.marge.calc);
+check('service Marge : encaissement net = bénéfice (identité TVA neutre)', r.marge.identity);
+check('service Marge : recalcul en direct', r.marge.live);
 check('aucun pageerror', perr.length === 0);
 
 const ok = results.filter(x => x.ok).length, tot = results.length;

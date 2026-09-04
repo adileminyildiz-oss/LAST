@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=447;
+var LAST_VER=448;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22824,6 +22824,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   if(window.__svcInit) return; window.__svcInit=1;
   function S(){ try{ return (typeof state!=='undefined'&&state)?state:(window.state||{}); }catch(e){ return window.state||{}; } }
   function E(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  var SVCX='<svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8"/></svg>';
   function store(){ try{ return JSON.parse(localStorage.getItem('last-svc')||'{}')||{}; }catch(e){ return {}; } }
   function save(o){ try{ localStorage.setItem('last-svc',JSON.stringify(o)); }catch(e){} }
   window.__svcStore=store; window.__svcSaveStore=save;
@@ -22831,7 +22832,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   /* ---------- Catalogue des services (cartes du hub) ---------- */
   var SERVICES=[
     {id:'echeancier',ico:'📅',t:'Échéancier fiscal & social',d:'Calendrier des obligations (TVA, DSN, acomptes IS, CFE, AG…) avec rappels automatiques. Vendable en abonnement.'},
-    {id:'simulateurs',ico:'🧮',t:'Simulateurs',d:'Coût d’embauche, impôt sur les sociétés, salaire vs dividendes. Outils de conseil & aimant à prospects.'}
+    {id:'simulateurs',ico:'🧮',t:'Simulateurs',d:'Coût d’embauche, impôt sur les sociétés, salaire vs dividendes. Outils de conseil & aimant à prospects.'},
+    {id:'catalogue',ico:'🧾',t:'Offres & tarifs',d:'Grille des prestations vendables (création, modifs, paie, conseil, abonnements) éditable et imprimable — à remettre aux clients.'},
+    {id:'marge',ico:'💰',t:'Marge & bénéfices',d:'Prestation sous-traitée : coût prestataire + marge cible → paiement client TTC, TVA à payer, montant versé au prestataire et bénéfice net. Optimisez une marge élevée.'}
   ];
 
   /* ================= SERVICE 1 : ÉCHÉANCIER FISCAL & SOCIAL ================= */
@@ -22937,6 +22940,113 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<div class="card svc-card"><h2>Résultat</h2><div id="svc-sim-res">'+simuRes(tab)+'</div></div></div></div>';
   }
 
+
+  /* ================= SERVICE 3 : CATALOGUE OFFRES & TARIFS ================= */
+  var CAT_DEF=[
+    {g:'Création d’entreprise',items:[['Création SASU / EURL',390,'à l’acte'],['Création SAS / SARL (multi-associés)',590,'à l’acte'],['Reprise / transformation',450,'à l’acte']]},
+    {g:'Formalités modificatives',items:[['Transfert de siège social',180,'à l’acte'],['Changement de dirigeant',200,'à l’acte'],['Augmentation de capital',350,'à l’acte'],['Changement d’objet / dénomination',200,'à l’acte'],['Cession de parts / actions',300,'à l’acte'],['Dissolution / liquidation',450,'à l’acte']]},
+    {g:'Social & paie',items:[['Bulletin de paie',20,'/ bulletin'],['DSN mensuelle',15,'/ mois'],['Contrat de travail (CDI / CDD)',90,'à l’acte'],['Rupture conventionnelle',250,'à l’acte']]},
+    {g:'Comptabilité & fiscal',items:[['Déclaration de TVA',40,'/ déclaration'],['Bilan + liasse fiscale',900,'/ an'],['Secrétariat juridique annuel (AGO)',250,'/ an']]},
+    {g:'Conseil',items:[['Business plan / prévisionnel',500,'à l’acte'],['Optimisation rémunération dirigeant',300,'à l’acte'],['Rendez-vous conseil',120,'/ heure']]},
+    {g:'Abonnements (récurrent)',items:[['Espace client + coffre-fort',29,'/ mois'],['Échéancier & alertes',19,'/ mois'],['Pack documents self-service',15,'/ mois']]}
+  ];
+  function catState(){ var o=store(); if(!o.cat){ o.cat={groups:CAT_DEF.map(function(g){return {g:g.g,items:g.items.map(function(it){return {n:it[0],p:it[1],u:it[2]};})};})}; save(o); } return o.cat; }
+  function catSave(st){ var o=store(); o.cat=st; save(o); }
+  window.svcCatSet=function(gi,ii,f,v){ var st=catState(); try{ st.groups[gi].items[ii][f]=(f==='p')?num(v):v; catSave(st); if(f==='p'){ var el=document.querySelector('.svc-cat-tot'); } }catch(e){} };
+  window.svcCatDel=function(gi,ii){ var st=catState(); try{ st.groups[gi].items.splice(ii,1); catSave(st); render(); }catch(e){} };
+  window.svcCatAdd=function(gi){ var st=catState(); try{ st.groups[gi].items.push({n:'Nouvelle prestation',p:0,u:'à l’acte'}); catSave(st); render(); }catch(e){} };
+  window.svcCatReset=function(){ function go(){ var o=store(); delete o.cat; save(o); render(); if(typeof toast==='function')toast('Catalogue réinitialisé'); } if(typeof uiConfirm==='function')uiConfirm('Réinitialiser le catalogue aux valeurs par défaut ?',go,{okLabel:'Réinitialiser'}); else go(); };
+  function catDocHTML(){ var st=catState(); var cab=''; try{ cab=(window.__svcCabName&&window.__svcCabName())||'AEM CONSEIL'; }catch(e){ cab='AEM CONSEIL'; }
+    var rows=st.groups.map(function(g){ return '<tr class="cat-g"><td colspan="3">'+E(g.g)+'</td></tr>'+g.items.map(function(it){ return '<tr><td>'+E(it.n)+'</td><td class="r">'+eur(it.p)+'</td><td class="u">'+E(it.u)+'</td></tr>'; }).join(''); }).join('');
+    return '<div class="doc-gen"><div class="dg-page"><h1 style="text-align:center">Grille tarifaire des prestations</h1>'
+      +'<p style="text-align:center;color:#555">'+E(cab)+' · établie le '+frDate(new Date())+' · tarifs HT indicatifs</p>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px" border="0">'
+      +'<thead><tr style="border-bottom:2px solid #111"><th style="text-align:left;padding:6px">Prestation</th><th style="text-align:right;padding:6px">Tarif</th><th style="text-align:left;padding:6px">Unité</th></tr></thead><tbody>'+rows+'</tbody></table>'
+      +'<p style="font-size:10.5px;color:#666;margin-top:16px">Tarifs indicatifs hors taxes, hors débours et frais de greffe. Devis personnalisé sur demande.</p></div></div>';
+  }
+  window.svcCatPrint=function(){ var w=window.open('','_blank'); if(!w){ if(typeof toast==='function')toast('Autorisez les fenêtres pop-up pour l’impression.'); return; }
+    var css='@page{size:A4;margin:16mm}body{font-family:Georgia,serif;color:#111}.cat-g td{background:#eef2f7;font-weight:700;padding:7px 6px;border-top:1px solid #ccd}.r{text-align:right}td{padding:5px 6px;border-bottom:1px solid #eee}.u{color:#555;font-size:11px}h1{font-size:18px}';
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Grille tarifaire</title><style>'+css+'</style></head><body>'+catDocHTML()+'</body></html>'); w.document.close(); setTimeout(function(){ try{w.focus();w.print();}catch(e){} },300);
+  };
+  function catView(){ var st=catState();
+    var body=st.groups.map(function(g,gi){ var rows=g.items.map(function(it,ii){
+      return '<div class="svc-cat-row"><input class="svc-cat-n" value="'+E(it.n)+'" oninput="svcCatSet('+gi+','+ii+',\'n\',this.value)">'
+        +'<div class="svc-cat-pw"><input class="svc-cat-p" value="'+E(it.p)+'" inputmode="decimal" oninput="svcCatSet('+gi+','+ii+',\'p\',this.value)"><span>€</span></div>'
+        +'<input class="svc-cat-u" value="'+E(it.u)+'" oninput="svcCatSet('+gi+','+ii+',\'u\',this.value)">'
+        +'<button class="svc-cat-x" title="Retirer" aria-label="Retirer" onclick="svcCatDel('+gi+','+ii+')">'+SVCX+'</button></div>';
+    }).join('');
+      return '<div class="svc-cat-grp"><div class="svc-cat-gh">'+E(g.g)+'</div>'+rows+'<button class="btn btn-sm btn-ghost svc-cat-add" onclick="svcCatAdd('+gi+')">+ Ajouter une prestation</button></div>';
+    }).join('');
+    return '<div class="svc-sub"><button class="btn btn-ghost svc-back" onclick="svcGo(\'\')">‹ Services</button>'
+      +'<h2 class="svc-h2">🧾 Offres & tarifs</h2>'
+      +'<p class="svc-lead">Grille des prestations vendables — éditable. Imprimez-la pour la remettre aux clients ou la publier sur aemconseil.eu. Tarifs indicatifs HT.</p>'
+      +'<div class="svc-cat-act"><button class="btn btn-pri" onclick="svcCatPrint()">🖨 Imprimer / PDF</button><button class="btn btn-ghost" onclick="svcCatReset()">↺ Réinitialiser</button></div>'
+      +'<div class="card svc-card">'+body+'</div></div>';
+  }
+
+  /* ================= SERVICE 4 : MARGE & BÉNÉFICES (prestations sous-traitées) ================= */
+  var MARGE_DEF=[
+    {n:'Création SASU (sous-traitée)',cout:150,marge:60},
+    {n:'Bilan + liasse fiscale',cout:350,marge:62},
+    {n:'Paie externalisée (mensuel)',cout:8,marge:60}
+  ];
+  function marge(){ var o=store(); if(!o.marge){ o.marge={tva:(window.barGet?window.barGet('fisc.tva20'):20)||20,lignes:MARGE_DEF.map(function(l){return {n:l.n,cout:l.cout,marge:l.marge};})}; save(o); } if(o.marge.tva==null)o.marge.tva=20; return o.marge; }
+  function margeSave(st){ var o=store(); o.marge=st; save(o); }
+  function mgCalc(l,tva){ var cout=(+l.cout||0), m=Math.max(0,Math.min(99.9,+l.marge||0)), t=(+tva||0)/100;
+    var prix=(m>=100)?cout:(cout/(1-m/100)); var ben=prix-cout;
+    return { cout:cout, marge:m, prixHT:prix, clientTTC:prix*(1+t), tvaColl:prix*t, tvaDed:cout*t, tvaPay:prix*t-cout*t, prestTTC:cout*(1+t), benefice:ben, margePct:(prix>0?ben/prix*100:0) };
+  }
+  window.svcMgTva=function(v){ var st=marge(); st.tva=num(v); margeSave(st); render(); };
+  window.svcMgSet=function(i,f,v){ var st=marge(); var l=st.lignes[i]; if(!l)return; l[f]=(f==='n')?v:num(v); margeSave(st); if(f!=='n')svcMgRefresh(); };
+  window.svcMgAdd=function(){ var st=marge(); st.lignes.push({n:'Nouvelle prestation',cout:0,marge:60}); margeSave(st); render(); };
+  window.svcMgDel=function(i){ var st=marge(); st.lignes.splice(i,1); margeSave(st); render(); };
+  window.svcMgReset=function(){ function go(){ var o=store(); delete o.marge; save(o); render(); if(typeof toast==='function')toast('Simulateur de marge réinitialisé'); } if(typeof uiConfirm==='function')uiConfirm('Réinitialiser le simulateur de marge ?',go,{okLabel:'Réinitialiser'}); else go(); };
+  window.svcMgRefresh=function(){ var st=marge(); var tot={ttc:0,tvaPay:0,prest:0,ben:0,prixHT:0};
+    st.lignes.forEach(function(l,i){ var c=mgCalc(l,st.tva); tot.ttc+=c.clientTTC; tot.tvaPay+=c.tvaPay; tot.prest+=c.prestTTC; tot.ben+=c.benefice; tot.prixHT+=c.prixHT;
+      function put(id,v){ var el=document.getElementById(id); if(el)el.textContent=v; }
+      put('mg-prix-'+i,eur(c.prixHT)); put('mg-ttc-'+i,eur(c.clientTTC)); put('mg-tvp-'+i,eur(c.tvaPay)); put('mg-prest-'+i,eur(c.prestTTC)); put('mg-ben-'+i,eur(c.benefice)); put('mg-mp-'+i,c.margePct.toFixed(0)+' %');
+    });
+    var mm=tot.prixHT>0?(tot.ben/tot.prixHT*100):0;
+    function putS(id,v){ var el=document.getElementById(id); if(el)el.textContent=v; }
+    putS('mg-s-ttc',eur(tot.ttc)); putS('mg-s-tvp',eur(tot.tvaPay)); putS('mg-s-prest',eur(tot.prest)); putS('mg-s-ben',eur(tot.ben)); putS('mg-s-mp',mm.toFixed(0)+' %');
+  };
+  function margeView(){ var st=marge();
+    var rows=st.lignes.map(function(l,i){ var c=mgCalc(l,st.tva);
+      return '<tr>'
+        +'<td><input class="mg-in mg-n" value="'+E(l.n)+'" oninput="svcMgSet('+i+',\'n\',this.value)"></td>'
+        +'<td class="r"><input class="mg-in mg-num" inputmode="decimal" value="'+E(l.cout)+'" oninput="svcMgSet('+i+',\'cout\',this.value)"></td>'
+        +'<td class="r"><input class="mg-in mg-num mg-marge" inputmode="decimal" value="'+E(l.marge)+'" oninput="svcMgSet('+i+',\'marge\',this.value)"></td>'
+        +'<td class="r mg-c" id="mg-prix-'+i+'">'+eur(c.prixHT)+'</td>'
+        +'<td class="r mg-c mg-strong" id="mg-ttc-'+i+'">'+eur(c.clientTTC)+'</td>'
+        +'<td class="r mg-c" id="mg-tvp-'+i+'">'+eur(c.tvaPay)+'</td>'
+        +'<td class="r mg-c" id="mg-prest-'+i+'">'+eur(c.prestTTC)+'</td>'
+        +'<td class="r mg-c mg-ben" id="mg-ben-'+i+'">'+eur(c.benefice)+'</td>'
+        +'<td class="r mg-c mg-mp" id="mg-mp-'+i+'">'+c.margePct.toFixed(0)+' %</td>'
+        +'<td class="r"><button class="svc-cat-x" title="Retirer" aria-label="Retirer" onclick="svcMgDel('+i+')">'+SVCX+'</button></td>'
+        +'</tr>';
+    }).join('');
+    var tot={ttc:0,tvaPay:0,prest:0,ben:0,prixHT:0}; st.lignes.forEach(function(l){ var c=mgCalc(l,st.tva); tot.ttc+=c.clientTTC; tot.tvaPay+=c.tvaPay; tot.prest+=c.prestTTC; tot.ben+=c.benefice; tot.prixHT+=c.prixHT; });
+    var mm=tot.prixHT>0?(tot.ben/tot.prixHT*100):0;
+    var table='<div class="svc-mg-wrap"><table class="svc-mg-t"><thead><tr>'
+      +'<th style="text-align:left">Prestation</th><th>Coût prestataire HT</th><th>Marge %</th><th>Prix client HT</th><th>Paiement client TTC</th><th>TVA à payer</th><th>Versé prestataire TTC</th><th>Bénéfice</th><th>Marge</th><th></th>'
+      +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
+      +'<button class="btn btn-sm btn-ghost svc-cat-add" onclick="svcMgAdd()">+ Ajouter une prestation</button>';
+    var synth='<div class="svc-eche-kpis">'
+      +'<div class="svc-kpi"><div class="svc-kpi-v" id="mg-s-ttc">'+eur(tot.ttc)+'</div><div class="svc-kpi-l">Encaissé client (TTC)</div></div>'
+      +'<div class="svc-kpi"><div class="svc-kpi-v" id="mg-s-tvp">'+eur(tot.tvaPay)+'</div><div class="svc-kpi-l">TVA à reverser</div></div>'
+      +'<div class="svc-kpi"><div class="svc-kpi-v" id="mg-s-prest">'+eur(tot.prest)+'</div><div class="svc-kpi-l">Versé aux prestataires (TTC)</div></div>'
+      +'<div class="svc-kpi mg-kpi-ben"><div class="svc-kpi-v" id="mg-s-ben">'+eur(tot.ben)+'</div><div class="svc-kpi-l">Bénéfice net</div></div>'
+      +'<div class="svc-kpi"><div class="svc-kpi-v" id="mg-s-mp">'+mm.toFixed(0)+' %</div><div class="svc-kpi-l">Marge moyenne</div></div>'
+      +'</div>';
+    return '<div class="svc-sub"><button class="btn btn-ghost svc-back" onclick="svcGo(\'\')">‹ Services</button>'
+      +'<h2 class="svc-h2">💰 Marge & bénéfices</h2>'
+      +'<p class="svc-lead">Prestations <b>sous-traitées</b> : saisissez le <b>coût prestataire HT</b> et la <b>marge cible</b> (visez élevé). Le prix client, le paiement TTC, la <b>TVA à reverser</b> (collectée − déductible), le montant versé au prestataire et votre <b>bénéfice net</b> se calculent automatiquement.</p>'
+      +'<div class="svc-cat-act"><span class="mg-tva-lbl">TVA</span><input class="mg-in mg-num" style="width:70px" inputmode="decimal" value="'+E(st.tva)+'" onchange="svcMgTva(this.value)"><span class="mg-tva-lbl">%</span><button class="btn btn-ghost" onclick="svcMgReset()">↺ Réinitialiser</button></div>'
+      +synth
+      +'<div class="card svc-card">'+table+'</div>'
+      +'<p class="svc-note-min">Encaissement net = paiement client TTC − TVA à reverser − montant versé au prestataire = bénéfice HT (la TVA est neutre pour l’entreprise). Le prestataire est supposé assujetti à la TVA (TVA déductible sur son coût). Marge = taux de marque sur le prix de vente HT.</p></div>';
+  }
+
   /* ---------- HUB des services ---------- */
   function hub(){
     var cards=SERVICES.map(function(s){ return '<button class="svc-tile" onclick="svcGo(\''+s.id+'\')"><div class="svc-tile-ic">'+s.ico+'</div><div class="svc-tile-b"><div class="svc-tile-t">'+E(s.t)+'</div><div class="svc-tile-d">'+E(s.d)+'</div></div></button>'; }).join('');
@@ -22947,7 +23057,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<div class="svc-soon-h">Prochains services</div><div class="svc-soon-grid">'+soon+'</div></div>';
   }
   window.svcGo=function(view){ window.__svcView=view||''; try{ if(typeof go==='function') go('services'); else { S().page='services'; render(); } }catch(e){ try{S().page='services';render();}catch(_){} } };
-  function pageServices(){ if(window.__svcView==='echeancier')return echeView(); if(window.__svcView==='simulateurs')return simuView(); return hub(); }
+  function pageServices(){ if(window.__svcView==='echeancier')return echeView(); if(window.__svcView==='simulateurs')return simuView(); if(window.__svcView==='catalogue')return catView(); if(window.__svcView==='marge')return margeView(); return hub(); }
   window.pageServices=pageServices;
 
   /* ---------- Enregistrement PAGE + nav (pattern Agenda, additif) ---------- */
@@ -22970,7 +23080,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       try{buildNav();}catch(e){} try{document.body.dataset.page='services';}catch(e){}
       var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='services';}):null;
       try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Services';}catch(e){}
-      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':(window.__svcView==='simulateurs'?'Simulateurs de conseil':((p&&p.sub)||''));}catch(e){}
+      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':(window.__svcView==='simulateurs'?'Simulateurs de conseil':(window.__svcView==='catalogue'?'Offres & tarifs':(window.__svcView==='marge'?'Marge & bénéfices':((p&&p.sub)||''))));}catch(e){}
       var V=document.getElementById('view'); if(V)V.innerHTML=pageServices();
       return;
     }
@@ -23000,7 +23110,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.svc-eche-act{display:flex;align-items:center;gap:6px;flex:none}'
     +'.svc-eche-rap{width:48px;text-align:right;background:#0b1119;border:1px solid #26364a;color:#e7edf5;border-radius:6px;padding:4px 6px;font-size:12px}.svc-eche-rl{font-size:11px;color:#8aa0b8;margin-right:4px}'
     +'.svc-eche-row.late .svc-eche-meta b{color:#ff8f9a}.svc-eche-row.soon .svc-eche-meta b{color:#f0c040}.svc-eche-row.off{opacity:.5}'
-    +'.svc-eche-row.late{box-shadow:inset 3px 0 0 #e1342c}.svc-eche-row.soon{box-shadow:inset 3px 0 0 #c9a227}';
+    +'.svc-eche-row.late{box-shadow:inset 3px 0 0 #e1342c}.svc-eche-row.soon{box-shadow:inset 3px 0 0 #c9a227}'
     +'.svc-tabs{display:flex;gap:6px;margin:0 0 14px;flex-wrap:wrap}'
     +'.svc-tab{background:#12161d;border:1px solid #26303c;color:#c7d6e8;border-radius:9px;padding:8px 14px;cursor:pointer;font-size:13px}'
     +'.svc-tab.on{background:linear-gradient(#1e90ff,#0a64d6);color:#fff;border-color:#1e90ff;font-weight:600}'
@@ -23011,6 +23121,25 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.svc-res-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:13.5px}.svc-res-row span{color:#c7d6e8}'
     +'.svc-res-total{border-top:2px solid rgba(30,144,255,.4);border-bottom:none;margin-top:4px;padding-top:10px}.svc-res-total b{color:#5ab0ff;font-size:16px}'
     +'.svc-res-h,.svc-res-hint{font-size:12px;color:#9fb6d0;margin:2px 0 8px}.svc-note-min{font-size:11.5px;color:#8aa0b8;margin-top:10px;line-height:1.5}'
+    +'.svc-cat-act{display:flex;gap:8px;margin:6px 0 14px}'
+    +'.svc-cat-grp{margin-bottom:16px}.svc-cat-gh{font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;color:#5ab0ff;margin-bottom:8px}'
+    +'#view .svc-cat-row{display:grid!important;grid-template-columns:1fr auto 120px 34px;gap:8px;align-items:center;padding:4px 0}'
+    +'#view .svc-cat-row input{display:block;width:100%;box-sizing:border-box;margin:0}'
+    +'.svc-cat-n{flex:1;min-width:0;background:#0b1119;border:1px solid #26364a;color:#e7edf5;border-radius:7px;padding:7px 10px;font-size:13px}'
+    +'.svc-cat-pw{display:flex;align-items:center;gap:4px}#view .svc-cat-pw .svc-cat-p{width:86px!important;text-align:right;background:#0b1119;border:1px solid #26364a;color:#e7edf5;border-radius:7px;padding:7px 8px;font-size:13px;font-variant-numeric:tabular-nums}.svc-cat-pw span{color:#8aa0b8;flex:none}'
+    +'#view .svc-cat-u{width:100%!important;background:#0b1119;border:1px solid #26364a;color:#9fb6d0;border-radius:7px;padding:7px 8px;font-size:12px}'
+    +'.svc-cat-x{background:#2a1a1f;color:#ff8f9a;border:1px solid #52323a;border-radius:6px;width:32px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center}'
+    +'.svc-cat-add{margin-top:6px}'
+    +'.mg-tva-lbl{color:#9fb6d0;font-size:13px}.mg-kpi-ben{border-color:#2c6b4e;background:#0f1c16}.mg-kpi-ben .svc-kpi-v{color:#5bbf8a}'
+    +'.svc-mg-wrap{overflow-x:auto;margin:-4px 0 4px}'
+    +'#view table.svc-mg-t{width:100%;border-collapse:collapse;font-size:12.5px;min-width:820px}'
+    +'#view .svc-mg-t th{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#7f96b0;font-weight:700;text-align:right;padding:0 8px 8px;border-bottom:1px solid #26303c;white-space:nowrap}'
+    +'#view .svc-mg-t td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}'
+    +'#view .svc-mg-t td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}'
+    +'#view .svc-mg-t .mg-c{color:#c7d6e8}#view .svc-mg-t .mg-strong{color:#5ab0ff;font-weight:700}#view .svc-mg-t .mg-ben{color:#5bbf8a;font-weight:700}#view .svc-mg-t .mg-mp{color:#f0c040}'
+    +'#view .mg-in{background:#0b1119!important;border:1px solid #26364a!important;color:#e7edf5!important;border-radius:7px!important;padding:7px 9px!important;font-size:13px!important;box-sizing:border-box!important;display:inline-block!important;margin:0!important}'
+    +'#view .mg-in:focus{outline:none;border-color:#2f8fff!important}'
+    +'#view .svc-mg-t .mg-n{width:100%!important;min-width:150px}#view .svc-mg-t .mg-num{width:96px!important;text-align:right;font-variant-numeric:tabular-nums}#view .svc-mg-t .mg-marge{width:74px!important}'
     document.head.appendChild(st2); } }catch(e){}
 })();
 </script>
