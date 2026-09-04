@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=421;
+var LAST_VER=422;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -21915,10 +21915,55 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     w.document.close(); setTimeout(function(){try{w.focus();w.print();}catch(e){}},350);
   };
 
+  /* ===== Fiche de paie : même présentation (barre latérale + document), bulletin calculé en direct ===== */
+  var PAIE_SCHEMA=[
+    {g:'Employeur',f:[['soc','Société'],['adr','Adresse'],['cp','Code postal'],['ville','Ville'],['siret','Siret'],['naf','Code NAF']]},
+    {g:'Salarié',f:[['salciv','Civilité','sel',['M.','Mme']],['salnom','Nom & prénom'],['saladr','Adresse'],['salcp','Code postal'],['salville','Ville'],['matricule','Matricule'],['nosecu','N° de Sécurité sociale'],['entree','Entré(e) le','date'],['emploi','Emploi'],['coeff','Coefficient'],['niveau','Niveau'],['position','Position'],['echelon','Échelon'],['anciennete','Ancienneté']]},
+    {g:'Période',f:[['periode','Période (ex. Juillet 2026)'],['paiementle','Paiement le (JJ/MM/AA)'],['du','Du','date'],['au','Au','date'],['paiement','Mode de paiement','sel',['Chèque','Virement','Espèces']]]},
+    {g:'Congés payés (jours)',f:[['cpn1acq','CP N-1 — Acquis'],['cpn1pris','CP N-1 — Pris'],['cpn1solde','CP N-1 — Solde'],['cpnacq','CP N — Acquis'],['cpnpris','CP N — Pris'],['cpnsolde','CP N — Solde']]},
+    {g:'Rémunération',f:[['baseheures','Base (heures, ex. 151.67)'],['tauxhoraire','Taux horaire (€)']]},
+    {g:'Absences',f:[['abs1lib','Absence 1 — libellé'],['abs1h','Absence 1 — heures'],['abs2lib','Absence 2 — libellé'],['abs2h','Absence 2 — heures']]},
+    {g:'Éléments & impôt',f:[['navigolib','Remboursement transport — libellé'],['navigobase','Transport — base (€)'],['navigotaux','Transport — taux (%)'],['paspct','Taux prélèvement à la source (%)'],['coefalleg','Coef. allègement patronal (0-0.40)'],['convention','Convention collective','ta']]}
+  ];
+  function pfPaieField(k,lbl,typ,opts){
+    var d=(window.__pfDoc&&window.__pfDoc.data)||{},v=d[k]==null?'':d[k];
+    var oi=' oninput="pfPaieSet(\''+k+'\',this.value)" onchange="pfPaieSet(\''+k+'\',this.value)"';
+    var head='<label>'+E(lbl)+'</label>';
+    if(typ==='sel'){ var os=(opts||[]).map(function(o){return '<option'+(String(v)===String(o)?' selected':'')+'>'+E(o)+'</option>';}).join(''); return '<div class="pfp-row">'+head+'<select class="pfs-i pfs-sel" data-k="'+k+'"'+oi+'><option value=""></option>'+os+'</select></div>'; }
+    if(typ==='ta'){ return '<div class="pfp-row">'+head+'<textarea class="pfs-i pfs-ml" data-k="'+k+'" rows="2"'+oi+'>'+E(v)+'</textarea></div>'; }
+    if(typ==='date'){ return '<div class="pfp-row">'+head+'<input class="pfs-i pfs-text" type="date" max="9999-12-31" data-k="'+k+'" value="'+E(v)+'"'+oi+'></div>'; }
+    return '<div class="pfp-row">'+head+'<input class="pfs-i pfs-text" data-k="'+k+'" value="'+E(v)+'"'+oi+' autocomplete="off" spellcheck="false"></div>';
+  }
+  function pfPaieSideHTML(){
+    var grp=PAIE_SCHEMA.map(function(gr){
+      var rows=gr.f.map(function(f){return pfPaieField(f[0],f[1],f[2],f[3]);}).join('');
+      return '<div class="pfs-grp"><div class="pfs-gh">'+E(gr.g)+'</div>'+rows+'</div>';
+    }).join('');
+    return '<div class="pf-side"><div class="pf-side-h">Fiche de paie</div><div class="pf-side-sub">Renseignez les informations : le bulletin se calcule et se met à jour en direct à droite.</div>'+grp+'</div>';
+  }
+  window.pfPaieSet=function(k,v){ var doc=window.__pfDoc; if(!doc)return; doc.data=doc.data||{}; doc.data[k]=v; doc.updated=Date.now(); try{save();}catch(e){} var host=document.getElementById('pf-paie-doc'); if(host&&typeof window.paieDocInline==='function'){ try{ host.innerHTML=window.paieDocInline(doc.data); }catch(e){} } };
+  window.pfPaieOpen=function(doc){
+    window.__pfDoc=doc; window.__pfTpl='__paie'; doc.data=doc.data||{};
+    var ov=document.getElementById('pf-ov'); if(!ov){ ov=document.createElement('div'); ov.id='pf-ov'; document.body.appendChild(ov); }
+    ov.className='pf-ov show'+(document.body.classList.contains('dark')?' dark':''); document.body.style.overflow='hidden';
+    var bul=(typeof window.paieDocInline==='function')?window.paieDocInline(doc.data):'<p>Renseignez la rémunération.</p>';
+    var tb='<div class="pf-top"><div class="pf-title"><b>Fiche de paie</b><span>Bulletin de salaire clarifié · calcul automatique</span></div>'
+      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfPaiePrint()">Imprimer / PDF</button><button class="pf-x" onclick="pfClose()" title="Fermer">✕</button></div></div>';
+    ov.innerHTML=tb+'<div class="pf-body">'+pfPaieSideHTML()+'<div class="pf-scroll"><div id="pf-paie-doc" class="pf-paie-doc">'+bul+'</div></div></div>';
+  };
+  window.pfPaiePrint=function(){
+    var doc=window.__pfDoc; if(!doc||typeof window.paieDocInline!=='function')return;
+    var html=window.paieDocInline(doc.data||{});
+    var css='@page{size:A4;margin:8mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;font-family:Arial,Helvetica,sans-serif}';
+    var w=window.open('','_blank'); if(!w){ if(typeof toast==='function')toast('Autorisez les fenêtres pour imprimer.'); return; }
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Fiche de paie</title><style>'+css+'</style></head><body>'+html+'</body></html>');
+    w.document.close(); setTimeout(function(){try{w.focus();w.print();}catch(e){}},350);
+  };
+
   /* Intégration Éditions : « Bilan Prévisionnel » ouvre le remplissage sur document */
   function hook(){
-    try{ if(typeof window.edLibOpen==='function' && !window.edLibOpen.__pf){ var _o=window.edLibOpen; window.edLibOpen=function(id){ var d=(DB.editionsLibres||[]).find(function(x){return x.id===id;}); if(d&&d.k==='bilanprev'&&window.PF_TPL['bilan']){ try{ if(typeof state!=='undefined'&&state){state.edLibId='';state.edOpenType='';} }catch(e){} window.pdfFillOpen('bilan',d); return; } if(d&&d.k==='soustrait'&&window.PF_TPL['stbtp']){ try{ if(typeof state!=='undefined'&&state){state.edLibId='';state.edOpenType='';} }catch(e){} window.pdfFillOpen('stbtp',d); return; } return _o.apply(this,arguments); }; window.edLibOpen.__pf=1; } }catch(e){}
-    try{ if(typeof window.edLibNew==='function' && !window.edLibNew.__pf){ var _n=window.edLibNew; window.edLibNew=function(k,forme){ var r=_n.apply(this,arguments); try{ if(k==='bilanprev'){ var d=(DB.editionsLibres||[])[0]; if(d&&d.k==='bilanprev'){ try{ if(typeof state!=='undefined'&&state){state.edLibId='';state.edOpenType='';} }catch(e){} window.pdfFillOpen('bilan',d); } } else if(k==='soustrait'){ var d2=(DB.editionsLibres||[])[0]; if(d2&&d2.k==='soustrait'){ try{ if(typeof state!=='undefined'&&state){state.edLibId='';state.edOpenType='';} }catch(e){} window.pdfFillOpen('stbtp',d2); } } }catch(e){} return r; }; window.edLibNew.__pf=1; } }catch(e){}
+    try{ if(typeof window.edLibOpen==='function' && !window.edLibOpen.__pf){ var _o=window.edLibOpen; window.edLibOpen=function(id){ var d=(DB.editionsLibres||[]).find(function(x){return x.id===id;}); if(d&&d.k==='bilanprev'&&window.PF_TPL['bilan']){ try{ if(typeof state!=='undefined'&&state){state.edLibId='';state.edOpenType='';} }catch(e){} window.pdfFillOpen('bilan',d); return; } if(d&&d.k==='soustrait'&&window.PF_TPL['stbtp']){ try{ if(typeof state!=='undefined'&&state){state.edLibId='';state.edOpenType='';} }catch(e){} window.pdfFillOpen('stbtp',d); return; } if(d&&d.k==='fichepaie'){ try{ if(typeof state!=='undefined'&&state){state.edLibId='';state.edOpenType='';} }catch(e){} window.pfPaieOpen(d); return; } return _o.apply(this,arguments); }; window.edLibOpen.__pf=1; } }catch(e){}
+    try{ if(typeof window.edLibNew==='function' && !window.edLibNew.__pf){ var _n=window.edLibNew; window.edLibNew=function(k,forme){ var r=_n.apply(this,arguments); try{ if(k==='bilanprev'){ var d=(DB.editionsLibres||[])[0]; if(d&&d.k==='bilanprev'){ try{ if(typeof state!=='undefined'&&state){state.edLibId='';state.edOpenType='';} }catch(e){} window.pdfFillOpen('bilan',d); } } else if(k==='soustrait'){ var d2=(DB.editionsLibres||[])[0]; if(d2&&d2.k==='soustrait'){ try{ if(typeof state!=='undefined'&&state){state.edLibId='';state.edOpenType='';} }catch(e){} window.pdfFillOpen('stbtp',d2); } } else if(k==='fichepaie'){ var d3=(DB.editionsLibres||[])[0]; if(d3&&d3.k==='fichepaie'){ try{ if(typeof state!=='undefined'&&state){state.edLibId='';state.edOpenType='';} }catch(e){} window.pfPaieOpen(d3); } } }catch(e){} return r; }; window.edLibNew.__pf=1; } }catch(e){}
   }
   hook(); try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var x=_r.apply(this,arguments); try{hook();}catch(e){} return x; }; } }catch(e){}
 
@@ -21955,6 +22000,12 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     'html body .pf-ov textarea.pfs-ml{width:100%;box-sizing:border-box;background:#08080a!important;border:1px solid #2a2b31!important;color:#f3f5f9!important;-webkit-text-fill-color:#f3f5f9!important;border-radius:7px!important;padding:7px 8px!important;font:500 12px/1.35 inherit!important;text-align:left!important;outline:none;resize:vertical;min-height:54px}',
     'html body .pf-ov textarea.pfs-ml:focus{border-color:#4f9dff!important;box-shadow:0 0 0 2px rgba(79,157,255,.25)!important}',
     'html body .pf-ov textarea.pf-f{color:#111!important;-webkit-text-fill-color:#111!important;background:#fff!important}',
+    '.pfp-row{margin-bottom:7px}',
+    '.pfp-row label{display:block;font-size:11px;color:#c2c8d2;margin-bottom:3px}',
+    'html body .pf-ov .pfs-sel{width:100%;box-sizing:border-box;background:#08080a!important;border:1px solid #2a2b31!important;color:#f3f5f9!important;-webkit-text-fill-color:#f3f5f9!important;border-radius:7px!important;padding:7px 8px!important;font:500 12px/1 inherit!important;outline:none}',
+    'html body .pf-ov input[type=date].pfs-i{color-scheme:dark}',
+    '.pf-paie-doc{background:#fff;border-radius:3px;box-shadow:0 10px 40px rgba(0,0,0,.6);overflow:hidden}',
+    '.pf-paie-doc .edoc,.pf-paie-doc .pb-a4{margin:0 auto}',
     '.pfs-row-text{grid-template-columns:1fr!important;align-items:stretch}',
     '.pfs-row-text label{margin-bottom:4px}',
     '.pfs-row-auto label{color:#8b93a1;font-weight:700;font-size:11px}',
