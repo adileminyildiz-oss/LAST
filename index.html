@@ -3162,7 +3162,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=396;
+var LAST_VER=397;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3990,6 +3990,7 @@ window.demSelIds=function(){ state.demSel=state.demSel||{}; return Object.keys(s
 window.demSelToggle=function(id,on){ state.demSel=state.demSel||{}; if(on)state.demSel[id]=true; else delete state.demSel[id]; if(typeof render==='function')render(); };
 window.demSelAll=function(on){ state.demSel=state.demSel||{}; var ids=window.__demVisibleIds||[]; ids.forEach(function(id){ if(on)state.demSel[id]=true; else delete state.demSel[id]; }); if(typeof render==='function')render(); };
 window.demSelClear=function(){ state.demSel={}; if(typeof render==='function')render(); };
+window.demStar=function(id){ var d=(DB.demandes||[]).find(function(x){return x.id===id;}); if(!d)return; d.fav=!d.fav; if(typeof save==='function')save(); if(typeof render==='function')render(); };
 window.demSelSupprimer=function(){ var ids=window.demSelIds(); if(!ids.length)return;
   if(!confirm('Supprimer '+ids.length+' demande'+(ids.length>1?'s':'')+' ? Elles resteront récupérables dans la corbeille (30 jours).'))return;
   var n=0; ids.forEach(function(id){ var i=(DB.demandes||[]).findIndex(function(d){return d.id===id;}); if(i<0)return; var d=DB.demandes[i];
@@ -4025,74 +4026,41 @@ window.demMessagerieView=function(){
  var _allSel=list.length&&list.every(function(d){return state.demSel[d.id];});
  var box='';
  if(list.length){
-   var head='<div class="dem-erow dem-ehdr"><div class="dem-ehead">'
-     +'<span class="dem-ecol dem-col-sel"><input type="checkbox" class="dem-cb" title="Tout sélectionner" onclick="event.stopPropagation()" onchange="demSelAll(this.checked)"'+(_allSel?' checked':'')+'></span>'
-     +'<span class="dem-echev"></span><span class="dem-edot" style="visibility:hidden"></span>'
-     +'<span class="dem-ecol dem-col-code">N°</span>'
-     +'<span class="dem-ecol dem-col-name">Client</span>'
-     +'<span class="dem-ecol dem-col-canal">Canal</span>'
-     +'<span class="dem-ecol dem-col-obj">Objet</span>'
-     +'<span class="dem-ecol dem-col-st">Statut</span>'
-     +'<span class="dem-ecol dem-col-date">Reçu</span>'
-     +'<span class="dem-ecol dem-col-open"></span>'
-     +'</div></div>';
-   box='<div class="dem-elist">'+head+list.map(function(d){
-     var f=window.demFields(d);
-     var apercu=(mailDemande(d)||d.message||'').slice(0,600);
-     var u=userById(d.assigneA);
-     var serie=(typeof demSerie==='function')?demSerie(d):(d.code||'');
-     var nAtt=(typeof demAttFew==='function')?demAttFew(d):0;
-     var sla=(typeof window.demSlaMini==='function')?window.demSlaMini(d):'';
-     var ctx=(typeof demContexte==='function')?demContexte(d):'';
-     var cleanUrl=function(v){return (''+(v==null?'':v)).replace(/^\s*https?:\/\//i,'').replace(/^www\./i,'').replace(/\/+\s*$/,'').trim();};
-     var canalRaw=window.demEstSite(d)?'aemconseil.eu':cleanUrl(d.canal||'E-mail');
-     var canal=window.demEstSite(d)?'🌐 aemconseil.eu':esc(canalRaw);
-     var stCls='nouv',stLbl='Nouveau';
-     if(d.decision==='acceptee'){stCls='ok';stLbl='Accepté';}
-     else if(d.decision==='refusee'){stCls='no';stLbl='Refusé';}
-     else if(d.rdvDemande){stCls='rdv';stLbl='RDV proposé';}
-     else if(d.lu){stCls='lu';stLbl=esc(d.statut||'Lu');}
-     var open=(state.demOpen[d.id])?' open':'';
-     var email=(d.clientEmail&&!/formsubmit/i.test(d.clientEmail))?d.clientEmail:'';
-     var cell=function(label,val){val=(''+(val==null?'':val)).trim();if(!val||val==='—')return '';return '<div class="dem-cell"><div class="dem-cl">'+esc(label)+'</div><div class="dem-cv">'+esc(val)+'</div></div>';};
-     var isUrlKey=function(k){return /site|website|\burl\b|web/i.test(k||'');};
-     var cells=f.filter(function(x){return !x.long;}).map(function(x){return cell(x.label, isUrlKey(x.key)?cleanUrl(x.value):x.value);}).join('');
-     var meta=cell('E-mail',email)+cell('Téléphone',d.clientTel)+cell('Canal',canalRaw)+cell('Reçu le',mailDateHeure(d))+(nAtt?cell('Pièces jointes','📎 '+nAtt):'')+(u?cell('Assigné à',(u.nom||u.prenom||'')):'');
-     var selD=!!state.demSel[d.id];
-     return '<div class="dem-erow'+open+(d.lu?'':' unread')+(selD?' selected':'')+'" data-id="'+d.id+'">'
-       +'<div class="dem-ehead" onclick="demRowToggle(\''+d.id+'\')">'
-         +'<span class="dem-ecol dem-col-sel"><input type="checkbox" class="dem-cb" onclick="event.stopPropagation()" onchange="demSelToggle(\''+d.id+'\',this.checked)"'+(selD?' checked':'')+'></span>'
-         +'<span class="dem-echev">▸</span><span class="dem-edot"></span>'
-         +'<span class="dem-ecol dem-col-code">'+(serie?('<span class="dem-ecode">'+esc(serie)+'</span>'):'')+'</span>'
-         +'<span class="dem-ecol dem-col-name"><span class="dem-cdot" style="background:'+((typeof window.demCouleur==='function')?window.demCouleur(d):'#475569')+'"></span><span class="dem-ename">'+esc(demBestName(d))+'</span></span>'
-         +'<span class="dem-ecol dem-col-canal">'+canal+'</span>'
-         +'<span class="dem-ecol dem-col-obj"><span class="tag blue">'+esc(IA.objet(d))+'</span></span>'
-         +'<span class="dem-ecol dem-col-st"><span class="dem-st dem-st-'+stCls+'">'+stLbl+'</span>'+sla+'</span>'
-         +'<span class="dem-ecol dem-col-date">'+(nAtt?'<span class="dem-eatt">📎 '+nAtt+'</span>':'')+'<span class="dem-edate">'+esc(mailDateHeure(d))+'</span></span>'
-         +'<span class="dem-ecol dem-col-open"><button class="dem-eopen" onclick="event.stopPropagation();demMsgOuvrir(\''+d.id+'\')">Ouvrir ›</button></span>'
-       +'</div>'
-       +'<div class="dem-edetail">'
-         +'<div class="dem-egrid">'+cells+meta+'</div>'
-         +(apercu?('<div class="dem-eprev"><div class="dem-cl">Message reçu</div><div class="dem-eprev-t">'+esc(apercu)+((mailDemande(d)||d.message||'').length>600?'…':'')+'</div></div>'):'')
-         +(ctx?('<div class="dem-ectx">'+esc(ctx)+'</div>'):'')
-         +'<div class="dem-eacts">'
-           +'<button class="btn btn-sm dem-imp-btn dem-imp-pri" onclick="event.stopPropagation();demMsgOuvrir(\''+d.id+'\')">Ouvrir la demande</button>'
-           +(d.lu?'':'<button class="btn btn-sm dem-imp-btn" onclick="event.stopPropagation();demMarquerLu(\''+d.id+'\');render()">✓ Marquer lu</button>')
-           +'<button class="btn btn-sm dem-imp-btn dem-act-ok" onclick="event.stopPropagation();demAccepter(\''+d.id+'\')">✓ Accepter</button>'
-           +'<button class="btn btn-sm dem-imp-btn dem-act-no" onclick="event.stopPropagation();demRefuser(\''+d.id+'\')">✕ Refuser</button>'
-           +'<button class="btn btn-sm dem-imp-btn dem-act-rdv" onclick="event.stopPropagation();demRdv(\''+d.id+'\')">📅 Demande de rendez-vous</button>'
-         +'</div>'
-       +'</div>'
+   var head='<div class="gm-row gm-hdr">'
+     +'<span class="gm-cb"><input type="checkbox" title="Tout sélectionner" onclick="event.stopPropagation()" onchange="demSelAll(this.checked)"'+(_allSel?' checked':'')+'></span>'
+     +'<span class="gm-star"></span>'
+     +'<span class="gm-from">Expéditeur</span>'
+     +'<span class="gm-subj">Objet &amp; message</span>'
+     +'<span class="gm-att"></span>'
+     +'<span class="gm-time">Reçu</span>'
      +'</div>';
+   box='<div class="gm-list">'+head+list.map(function(d){
+     var nAtt=(typeof demAttFew==='function')?demAttFew(d):0;
+     var serie=(typeof demSerie==='function')?demSerie(d):(d.code||'');
+     var snip=(((typeof mailDemande==='function')?mailDemande(d):(d.message||''))||'').replace(/\s+/g,' ').trim();
+     if(snip==='—')snip='';
+     var subj=esc(IA.objet(d));
+     var selD=!!state.demSel[d.id];
+     var fav=!!d.fav;
+     var sla=(typeof window.demSlaMini==='function')?window.demSlaMini(d):'';
+     var couleur=(typeof window.demCouleur==='function')?window.demCouleur(d):'#475569';
+     return '<div class="gm-row'+(d.lu?'':' unread')+(selD?' sel':'')+'" data-id="'+d.id+'" onclick="demMsgOuvrir(\''+d.id+'\')">'
+       +'<span class="gm-cb" onclick="event.stopPropagation()"><input type="checkbox" onchange="demSelToggle(\''+d.id+'\',this.checked)"'+(selD?' checked':'')+'></span>'
+       +'<span class="gm-star'+(fav?' on':'')+'" title="Marquer comme suivi" onclick="event.stopPropagation();demStar(\''+d.id+'\')">'+(fav?'★':'☆')+'</span>'
+       +'<span class="gm-from"><span class="gm-fdot" style="background:'+couleur+'"></span><span class="gm-fname">'+esc(demBestName(d))+'</span></span>'
+       +'<span class="gm-subj"><b class="gm-subj-t">'+subj+'</b>'+(snip?('<span class="gm-snip"> — '+esc(snip)+'</span>'):'')+(serie?(' <span class="gm-code">'+esc(serie)+'</span>'):'')+'</span>'
+       +'<span class="gm-att">'+(nAtt?'📎':'')+'</span>'
+       +'<span class="gm-time">'+sla+'<span class="gm-t">'+esc((typeof mailDateHeure==='function')?mailDateHeure(d):(d.date||''))+'</span></span>'
+       +'</div>';
    }).join('')+'</div>';
- } else box='<div class="empty">Aucun message '+(canal==='site'?'du site ':(canal==='autres'?'hors site ':''))+'dans la boîte de réception.</div>';
+ } else box='<div class="gm-empty">Aucun message '+(canal==='site'?'du site ':(canal==='autres'?'hors site ':''))+'dans la boîte de réception.</div>';
  var horsBar=horsAll.length?('<div class="dem-hors"><span class="dem-hors-t">🧹 '+horsAll.length+' message'+(horsAll.length>1?'s':'')+' sans rapport avec vos services — '+(state.demHors?('affiché'+(horsAll.length>1?'s':'')):('écarté'+(horsAll.length>1?'s':'')+' automatiquement'))+'.</span><span class="dem-hors-acts"><button class="btn btn-sm dem-imp-btn" onclick="state.demHors='+(state.demHors?'false':'true')+';render()">'+(state.demHors?'Masquer':'Afficher')+'</button><button class="btn btn-sm dem-imp-btn dem-act-no" onclick="demSupprimerHorsService()">🗑 Supprimer</button></span></div>'):'';
  var _selN=window.demSelIds().length;
  var selBar=_selN?('<div class="dem-selbar"><span class="dem-selbar-t">✓ '+_selN+' demande'+(_selN>1?'s':'')+' sélectionnée'+(_selN>1?'s':'')+'</span><span class="dem-selbar-a"><button class="btn btn-sm dem-imp-btn dem-act-no" onclick="demSelSupprimer()">🗑 Supprimer la sélection</button><button class="btn btn-sm dem-imp-btn" onclick="demSelClear()">Tout désélectionner</button></span></div>'):'';
  return ((typeof demPosteBanner==='function')?demPosteBanner():'')
    +'<div class="dem-head"><div class="dem-head-row">'+canBar+acts+'</div><div class="dem-head-row">'+search+'</div></div>'
    +horsBar+selBar
-   +'<div class="card"><div class="card-b" style="padding:0">'+box+'</div></div>';
+   +'<div class="gm-wrap">'+box+'</div>';
 };
 window.pageDemandes=function(){
  if(state.demView){var dv=DB.demandes.find(function(x){return x.id===state.demView;});if(dv)return demVueDetail(state.demView);state.demView='';}
@@ -12313,7 +12281,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   'body.dark aside,body.dark aside#side,body.dark #side{background:transparent!important;background-image:none!important;border-right:1px solid #1c1c26!important;height:100vh!important;top:0!important;border-radius:0!important;padding-top:16px!important}',
   'body.dark aside#side .nav-btn,body.dark #side .brand-word,body.dark #side .brand-sub,body.dark #side .userchip b{color:#c2cbe0!important}',
   'body.dark aside#side .nav-lbl{color:#6f7690!important}',
-  'body.dark main{border-radius:0!important;overflow:hidden}',
+  'body.dark main{border-radius:0!important;overflow-x:hidden;overflow-y:auto}',
   /* Éditeur : le document (main.de-preview) défile indépendamment de la barre latérale */
   'body.dark main.de-preview{overflow:auto!important}',
   'body.dark .topbar{background:rgba(13,13,19,.86)!important;border-bottom:1px solid #1c1c26!important;border-radius:0!important}',
@@ -20759,7 +20727,34 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       '.dem-hors{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px;padding:9px 13px;border:1px dashed #3a3320;background:#16130c;border-radius:10px}',
       '.dem-hors-t{font-size:12.5px;color:#e0c489;flex:1;min-width:200px}',
       '.dem-hors-acts{display:flex;gap:8px;flex-wrap:wrap}',
-      '@media(max-width:900px){.dem-ehead{grid-template-columns:24px 16px 10px 1fr auto;grid-auto-rows:auto;gap:6px 8px}.dem-col-sel{grid-row:1;grid-column:1}.dem-col-canal,.dem-col-obj,.dem-col-st{grid-column:4/6}.dem-col-date{grid-column:4}.dem-col-open{grid-column:5}.dem-ehdr{display:none}.dem-edetail{padding-left:18px}}'
+      '@media(max-width:900px){.dem-ehead{grid-template-columns:24px 16px 10px 1fr auto;grid-auto-rows:auto;gap:6px 8px}.dem-col-sel{grid-row:1;grid-column:1}.dem-col-canal,.dem-col-obj,.dem-col-st{grid-column:4/6}.dem-col-date{grid-column:4}.dem-col-open{grid-column:5}.dem-ehdr{display:none}.dem-edetail{padding-left:18px}}',
+      /* ---- Boîte de réception façon Gmail — tout en noir ---- */
+      '.gm-wrap{max-height:calc(100dvh - 202px);overflow-y:auto;overflow-x:hidden;background:#000;border:1px solid #16171b;border-radius:12px;overscroll-behavior:contain}',
+      '.gm-wrap::-webkit-scrollbar{width:11px}.gm-wrap::-webkit-scrollbar-thumb{background:#26282e;border-radius:8px;border:3px solid #000}.gm-wrap::-webkit-scrollbar-track{background:#000}',
+      '.gm-list{display:flex;flex-direction:column;background:#000}',
+      '.gm-row{display:grid;grid-template-columns:38px 30px 188px 1fr 26px 120px;align-items:center;gap:10px;padding:0 14px;height:40px;border-bottom:1px solid #101116;cursor:pointer;background:#000;transition:background .1s;color:#9aa3b2;font-size:13px}',
+      '.gm-row:hover{background:#0e0f13}',
+      '.gm-row.sel{background:#0c1626}',
+      '.gm-hdr{position:sticky;top:0;z-index:2;height:34px;background:#0a0a0c;border-bottom:1px solid #1b1c21;color:#7d8493;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:800;cursor:default}',
+      '.gm-hdr:hover{background:#0a0a0c}',
+      '.gm-cb{display:flex;justify-content:center;align-items:center;overflow:visible}',
+      '.gm-cb input{width:16px;height:16px;margin:0;cursor:pointer;accent-color:#4f9dff}',
+      '.gm-star{text-align:center;color:#3a3f49;font-size:15px;cursor:pointer;user-select:none}',
+      '.gm-star.on{color:#e0b93a}.gm-star:hover{color:#9aa3b2}',
+      '.gm-from{display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden}',
+      '.gm-fdot{width:8px;height:8px;border-radius:50%;flex:none}',
+      '.gm-fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c2c8d2}',
+      '.gm-subj{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}',
+      '.gm-subj-t{color:#c9cfda;font-weight:600}',
+      '.gm-snip{color:#6b7280}',
+      '.gm-code{font:700 10px ui-monospace,monospace;color:#7d8493;border:1px solid #23262d;border-radius:4px;padding:0 5px;margin-left:4px}',
+      '.gm-att{text-align:center;color:#8b93a1;font-size:12px}',
+      '.gm-time{display:flex;align-items:center;justify-content:flex-end;gap:6px;color:#7d8493;font-size:11.5px;white-space:nowrap}',
+      '.gm-row.unread{background:#050506}',
+      '.gm-row.unread .gm-fname,.gm-row.unread .gm-subj-t{color:#fff;font-weight:700}',
+      '.gm-row.unread .gm-time{color:#c2c8d2}',
+      '.gm-empty{padding:40px;text-align:center;color:#6b7280;background:#000;border:1px solid #16171b;border-radius:12px}',
+      '@media(max-width:900px){.gm-row{grid-template-columns:34px 118px 1fr 66px}.gm-star,.gm-att{display:none}.gm-hdr .gm-star,.gm-hdr .gm-att{display:none}}'
     ].join(''); document.head.appendChild(st); } }catch(e){}
 })();
 </script>
@@ -20850,6 +20845,27 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   else window.addEventListener('DOMContentLoaded',function(){ setTimeout(bootRestore,120); });
   /* Filet de sécurité : ne jamais rester bloqué en mode démarrage */
   setTimeout(endBoot,4000);
+})();
+</script>
+
+<script id="gm-fit">
+/* Ajuste la hauteur de la boîte de réception (façon Gmail) pour qu'elle défile jusqu'en bas,
+   en tenant compte du zoom fixe (110%). */
+(function(){
+  function gmFit(){ try{
+    var w=document.querySelector('.gm-wrap'); if(!w)return;
+    var z=parseFloat(getComputedStyle(document.documentElement).zoom)||1;
+    var top=w.getBoundingClientRect().top;
+    var avail=window.innerHeight - top - 12;
+    var hcss=Math.floor(avail/z);
+    if(hcss<160)hcss=160;
+    w.style.maxHeight=hcss+'px';
+  }catch(e){} }
+  window.__gmFit=gmFit;
+  function hook(){ if(typeof window.render!=='function'){setTimeout(hook,200);return;} if(window.render.__gm)return;
+    var _r=window.render; var w=function(){ var o=_r.apply(this,arguments); try{ requestAnimationFrame(gmFit); setTimeout(gmFit,60); }catch(e){} return o; }; w.__gm=true; window.render=w; }
+  hook();
+  window.addEventListener('resize',function(){ setTimeout(gmFit,50); },{passive:true});
 })();
 </script>
 
