@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=411;
+var LAST_VER=412;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -5225,7 +5225,8 @@ window.modalDemandeView=function(id){
   window.espTraitementCard=function(d){
     var isModif=!!(d&&(d.formaliteNature==='modification'||d.modifKind||d.nature==='modification'));
     return '<div class="card esp-traitcard"><div class="card-h"><h2>Traitement</h2>'
-     +'<button class="tr-arch" title="Archiver le dossier" onclick="espArchiverDossier(\''+d.id+'\')">'+TR_IC.arch+'<span>Archiver</span></button></div><div class="card-b">'
+     +'<button class="tr-arch" title="Archiver le dossier (restaurable)" onclick="espArchiverDossier(\''+d.id+'\')">'+TR_IC.arch+'<span>Archiver</span></button>'
+     +'<button class="tr-del" title="Supprimer le dossier (il n\'apparaîtra plus)" onclick="espSupprimerDossier(\''+d.id+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6M10 11v6M14 11v6"/></svg><span>Supprimer</span></button></div><div class="card-b">'
      +'<button class="tr-primary" onclick="espEdOpen(\''+d.id+'\',\'statuts\')">'+TR_IC.ed+'<span>Éditer les documents</span></button>'
      +'<div class="tr-grid">'
      +'<button class="tr-b" onclick="espFicheTechnique(\''+d.id+'\')">'+TR_IC.fiche+'<span>Fiche technique</span></button>'
@@ -5641,6 +5642,23 @@ window.modalDemandeView=function(id){
     if(typeof render==='function')render();
   };
   window.espDesarchiver=function(id){var d=(DB.dossiers||[]).find(function(x){return x.id===id;});if(!d)return;d.archived=false;if(typeof save==='function')save();if(typeof render==='function')render();};
+  /* Suppression DIRECTE d'un dossier depuis Traitement : retiré définitivement de la liste (déposé en corbeille, restaurable 30 j) */
+  window.espSupprimerDossier=function(id){
+    var doFn=function(){
+      var i=(DB.dossiers||[]).findIndex(function(x){return x.id===id;}); if(i<0)return;
+      var item=DB.dossiers[i];
+      try{ if(typeof corbeilleAdd==='function')corbeilleAdd('dossier',(item.ref||item.denom||(typeof dossierClients==='function'?dossierClients(item):'')||'Dossier'),item); }catch(e){}
+      DB.dossiers.splice(i,1);
+      /* On délie la demande liée pour qu'elle ne recrée pas le dossier automatiquement */
+      try{ (DB.demandes||[]).forEach(function(dm){ if(dm&&(dm.dossierId===id||dm.id===item.demandeId)){ dm.dossierId=''; } }); }catch(e){}
+      if(state&&state.espaceDossier===id)state.espaceDossier=null;
+      if(typeof save==='function')save();
+      if(typeof toast==='function')toast('Dossier supprimé — il n\'apparaît plus (récupérable dans la corbeille 30 j).');
+      if(typeof render==='function')render();
+    };
+    if(typeof uiConfirm==='function')uiConfirm('Supprimer définitivement ce dossier de Traitement ?\nIl n\'apparaîtra plus dans la liste. Récupérable dans la corbeille (30 jours).',doFn,{okLabel:'Supprimer',danger:true,title:'Supprimer le dossier'});
+    else doFn();
+  };
   /* Rappel du mail reçu dans l'éditeur de documents (pour ne pas se tromper dans la formalité) */
   window.espEdMailRappel=function(d){
     var dm=(typeof espDemandeDe==='function')?espDemandeDe(d):null;if(!dm)return '';
@@ -6195,6 +6213,11 @@ window.modalDemandeView=function(id){
 .tr-arch{display:inline-flex;align-items:center;gap:5px;margin-left:auto;padding:5px 10px;font:600 11px/1 inherit;color:#9c6a5a;background:#fbf1ee;border:1px solid #ecd6cf;border-radius:20px;cursor:pointer;transition:background .12s,color .12s,border-color .12s}
 .tr-arch svg{width:13px;height:13px}
 .tr-arch:hover{background:#f6e2dc;color:#8a4f42;border-color:#e2c1b7}
+.tr-del{display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:5px 10px;font:600 11px/1 inherit;color:#c0433a;background:#fdeeed;border:1px solid #f2cdc9;border-radius:20px;cursor:pointer;transition:background .12s,color .12s,border-color .12s}
+.tr-del svg{width:13px;height:13px}
+.tr-del:hover{background:#fbe0dd;color:#a5322a;border-color:#eab5af}
+html body.dark .esp-shell .tr-del{background:#2a1416!important;background-image:none!important;border-color:#5a2a2c!important;color:#f4a3a0!important}
+html body.dark .esp-shell .tr-del:hover{background:#3a191c!important;border-color:#7a3336!important;color:#ffbdb9!important}
 .esp-traitcard .card-b{display:flex;flex-direction:column;gap:11px}
 .tr-primary{position:relative;display:flex;align-items:center;justify-content:center;gap:9px;width:100%;padding:12px 16px;font:600 13.5px/1 inherit;letter-spacing:.2px;color:#fff;border:0;border-radius:12px;cursor:pointer;background:linear-gradient(135deg,#7c6a4c 0%,#5f5238 100%);box-shadow:0 4px 14px rgba(80,64,40,.28),inset 0 1px 0 rgba(255,255,255,.18);transition:transform .14s,box-shadow .14s,filter .14s}
 .tr-primary:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(80,64,40,.36),inset 0 1px 0 rgba(255,255,255,.22);filter:brightness(1.05)}
