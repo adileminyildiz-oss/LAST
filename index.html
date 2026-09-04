@@ -3180,7 +3180,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=399;
+var LAST_VER=400;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14535,10 +14535,30 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   window.formType=function(v){FD().type=v;if(typeof render==='function')render();};
   window.formReset=function(){window.__formData=blank();window.__formFromDemande=null;if(typeof render==='function')render();if(typeof toast==='function')toast('Formulaire réinitialisé');window.scrollTo(0,0);};
   function formEstVide(){var o=FD();return !((o.societe&&o.societe.denomination)||(o.direction&&(o.direction.nom||o.direction.prenom))||(o.associes&&o.associes.length));}
-  function formDraft(){try{return DB.parametres&&DB.parametres.formDraft;}catch(e){return null;}}
-  window.formBrouillon=function(){try{DB.parametres=DB.parametres||{};DB.parametres.formDraft={data:JSON.parse(JSON.stringify(FD())),ts:Date.now()};if(typeof save==='function')save();if(typeof render==='function')render();if(typeof toast==='function')toast('Brouillon enregistré');}catch(e){if(typeof toast==='function')toast('Impossible d\'enregistrer le brouillon');}};
-  window.formReprendre=function(){var d=formDraft();if(d&&d.data){try{window.__formData=JSON.parse(JSON.stringify(d.data));}catch(e){window.__formData=d.data;}if(typeof render==='function')render();window.scrollTo(0,0);if(typeof toast==='function')toast('Brouillon repris');}};
-  window.formBrouillonSuppr=function(){try{if(DB.parametres)delete DB.parametres.formDraft;if(typeof save==='function')save();if(typeof render==='function')render();if(typeof toast==='function')toast('Brouillon supprimé');}catch(e){}};
+  /* Brouillons NOMMÉS (par nom du gérant ou de la société) — liste ouvrable, plusieurs brouillons */
+  function formDrafts(){ try{ DB.parametres=DB.parametres||{};
+    if(!Array.isArray(DB.parametres.formDrafts)){ DB.parametres.formDrafts=[];
+      if(DB.parametres.formDraft&&DB.parametres.formDraft.data){ DB.parametres.formDrafts.push({id:'dr-'+Date.now().toString(36),label:'Brouillon',data:DB.parametres.formDraft.data,ts:DB.parametres.formDraft.ts||Date.now()}); delete DB.parametres.formDraft; } }
+    return DB.parametres.formDrafts; }catch(e){ return []; } }
+  function formDraft(){ var l=formDrafts(); return l[0]||null; }
+  function formDraftLabel(){ var o=FD();
+    var s=((o.societe&&o.societe.denomination)||'').trim(); if(s)return s;
+    var g=((((o.direction&&o.direction.prenom)||'')+' '+((o.direction&&o.direction.nom)||''))).trim(); if(g)return g;
+    var c=((((o.contact&&o.contact.prenom)||'')+' '+((o.contact&&o.contact.nom)||''))).trim(); return c; }
+  window.formBrouillon=function(){ try{
+    var label=formDraftLabel();
+    if(!label){ if(typeof toast==='function')toast('Renseignez le nom du gérant ou de la société pour enregistrer le brouillon.'); return; }
+    var list=formDrafts(); var data=JSON.parse(JSON.stringify(FD()));
+    var ex=list.filter(function(x){return (x.label||'').toLowerCase()===label.toLowerCase();})[0];
+    if(ex){ ex.data=data; ex.ts=Date.now(); } else { list.unshift({id:'dr-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),label:label,data:data,ts:Date.now()}); }
+    if(typeof save==='function')save(); if(typeof render==='function')render(); if(typeof toast==='function')toast('Brouillon « '+label+' » enregistré');
+  }catch(e){ if(typeof toast==='function')toast('Impossible d\'enregistrer le brouillon'); } };
+  window.formReprendre=function(id){ var list=formDrafts(); var d=id?list.filter(function(x){return x.id===id;})[0]:list[0]; if(d&&d.data){ try{window.__formData=JSON.parse(JSON.stringify(d.data));}catch(e){window.__formData=d.data;} window.__formFromDemande=null; if(typeof render==='function')render(); window.scrollTo(0,0); if(typeof toast==='function')toast('Brouillon « '+(d.label||'')+' » repris'); } };
+  window.formBrouillonSuppr=function(id){ var list=formDrafts(); if(id){ var i=list.map(function(x){return x.id;}).indexOf(id); if(i>=0)list.splice(i,1); } else { list.length=0; } if(typeof save==='function')save(); if(typeof render==='function')render(); if(typeof toast==='function')toast('Brouillon supprimé'); };
+  window.formDraftsListHTML=function(){ var list=formDrafts(); if(!list.length)return '';
+    var rows=list.slice().sort(function(a,b){return (b.ts||0)-(a.ts||0);}).map(function(d){
+      return '<div class="fi-draft-row"><span class="fi-draft-nm">'+esc(d.label||'Brouillon')+'</span><span class="fi-draft-dt">'+(d.ts?esc(new Date(d.ts).toLocaleString('fr-FR')):'')+'</span><span class="fi-draft-a"><button class="btn btn-sm btn-pri" onclick="formReprendre(\''+d.id+'\')">Reprendre</button><button class="btn btn-sm btn-ghost" onclick="formBrouillonSuppr(\''+d.id+'\')">Supprimer</button></span></div>'; }).join('');
+    return '<details class="card fi-card fi-drafts"'+(formEstVide()?' open':'')+'><summary class="fi-drafts-sum">📝 Brouillons enregistrés ('+list.length+')</summary><div class="fi-drafts-b">'+rows+'</div></details>'; };
   /* Champs requis pour un dossier COMPLET (jusqu'au dépôt). Renvoie la liste des manques. */
   window.formManques=function(){ var o=FD();
     if(o.nature==='modification'){ var M=o.modif||{},S=M.societe||{},D=M.dates||{},G=M.signataire||{},N=M.nouveau||{}; var mm=[];
@@ -14689,13 +14709,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   function pageFormulaire(){
     var o=FD();var t=o.type||'sas';var fct=fonctionDefaut(t);
-    /* Bandeau « reprendre le brouillon » (si un brouillon existe et le formulaire est vide) */
-    var draft=formDraft();
-    var resume=(draft&&draft.data&&formEstVide())?('<div class="card fi-card fi-resume"><div class="card-b" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
-      +'<span>Un brouillon a été enregistré'+((draft.ts)?(' le '+new Date(draft.ts).toLocaleString('fr-FR')):'')+'.</span>'
-      +'<span style="margin-left:auto;display:flex;gap:8px"><button class="btn btn-sm btn-pri" onclick="formReprendre()">Reprendre le brouillon</button>'
-      +'<button class="btn btn-sm btn-ghost" onclick="formBrouillonSuppr()">Supprimer</button></span>'
-      +'</div></div>'):'';
+    /* Liste ouvrable des brouillons enregistrés (nommés par gérant / société) */
+    var resume=(window.formDraftsListHTML?window.formDraftsListHTML():'');
     /* Formalité */
     var nature=o.nature||'creation';
     var natSel='<div class="fi-nature"><button type="button" class="fi-nat'+(nature==='creation'?' on':'')+'" onclick="formNature(\'creation\')">Création de société</button>'
@@ -15674,6 +15689,16 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.fi-gate-x{flex:none;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#f0bcb6;width:20px;height:20px;border-radius:50%;line-height:1;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}',
     '.fi-gate-x:hover{background:rgba(255,255,255,.16)}',
     '@keyframes fiGateIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}',
+    '.fi-drafts{padding:0;overflow:hidden}',
+    '.fi-drafts-sum{cursor:pointer;padding:12px 16px;font-weight:700;font-size:13px;list-style:none;user-select:none}',
+    '.fi-drafts-sum::-webkit-details-marker{display:none}',
+    '.fi-drafts-sum::before{content:"▸";display:inline-block;margin-right:8px;transition:transform .15s;color:#8b93a1}',
+    '.fi-drafts[open] .fi-drafts-sum::before{transform:rotate(90deg)}',
+    '.fi-drafts-b{padding:0 12px 12px}',
+    '.fi-draft-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 11px;border:1px solid rgba(255,255,255,.08);border-radius:9px;margin-top:6px;background:rgba(255,255,255,.02)}',
+    '.fi-draft-nm{font-weight:700;font-size:13px;flex:1;min-width:120px}',
+    '.fi-draft-dt{font-size:11px;color:#8b93a1}',
+    '.fi-draft-a{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}',
     '.fi-actions .btn.is-disabled,.fi-actions .btn[disabled]{opacity:.4;cursor:not-allowed;filter:grayscale(.4)}',
     '.fi-siren{display:flex;gap:8px;align-items:center}.fi-siren input{flex:1}.fi-siren-btn{white-space:nowrap;flex:0 0 auto}',
     '.fi-nature{display:flex;gap:8px;margin:0 0 12px;flex-wrap:wrap}',
