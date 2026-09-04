@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=383;
+var LAST_VER=384;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -20568,6 +20568,41 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       '.dem-eacts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px}',
       '@media(max-width:900px){.dem-ehead{grid-template-columns:16px 10px 1fr auto;grid-auto-rows:auto;gap:6px 8px}.dem-col-canal,.dem-col-obj,.dem-col-st{grid-column:3/5}.dem-col-date{grid-column:3}.dem-col-open{grid-column:4}.dem-ehdr{display:none}.dem-edetail{padding-left:18px}}'
     ].join(''); document.head.appendChild(st); } }catch(e){}
+})();
+</script>
+<script id="no-autoscroll-mod">(function(){
+  /* Aucun défilement automatique (remontage) dans tout le logiciel : le défilement
+     reste manuel. On neutralise window.scrollTo et on préserve la position des
+     conteneurs internes à chaque rendu (barre latérale des dossiers, listes…). */
+  try{ window.scrollTo=function(){}; window.scroll=function(){}; }catch(e){}
+  function cls(el){ var c=(typeof el.className==='string'?el.className.trim():''); return c?c.replace(/\s+/g,' '):(el.tagName||'X'); }
+  try{ var _r=window.render;
+    if(typeof _r==='function'){
+      window.render=function(){
+        var saved=null; var cnt={};
+        try{
+          var all=document.querySelectorAll('*');
+          for(var i=0;i<all.length;i++){ var el=all[i];
+            var c=cls(el); var o=(cnt[c]=(cnt[c]||0)); cnt[c]++;
+            if(el.scrollTop>0||el.scrollLeft>0){ if(!saved)saved={}; saved[c+'#'+o]={t:el.scrollTop,l:el.scrollLeft}; }
+          }
+        }catch(e){}
+        var out=_r.apply(this,arguments);
+        if(saved){
+          try{
+            var restore=function(){
+              var a=document.querySelectorAll('*'); var cc={};
+              for(var j=0;j<a.length;j++){ var e2=a[j]; var c2=cls(e2); var o2=(cc[c2]=(cc[c2]||0)); cc[c2]++;
+                var v=saved[c2+'#'+o2]; if(v){ if(v.t)e2.scrollTop=v.t; if(v.l)e2.scrollLeft=v.l; }
+              }
+            };
+            restore(); requestAnimationFrame(restore); setTimeout(restore,0);
+          }catch(e){}
+        }
+        return out;
+      };
+    }
+  }catch(e){}
 })();
 </script>
 </body>
