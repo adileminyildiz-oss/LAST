@@ -2,7 +2,7 @@
 <html lang="fr" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#000000">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -3160,7 +3160,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=393;
+var LAST_VER=394;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -20821,6 +20821,41 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   else window.addEventListener('DOMContentLoaded',function(){ setTimeout(bootRestore,120); });
   /* Filet de sécurité : ne jamais rester bloqué en mode démarrage */
   setTimeout(endBoot,4000);
+})();
+</script>
+
+<script id="fixed-zoom">
+/* ===================================================================
+   ZOOM FIXE À 110% — NON MODIFIABLE (bureau)
+   - Affichage forcé à 110% (zoom:1.1) sur les écrans ≥ 821px.
+   - Blocage des raccourcis de zoom : Ctrl+molette, Ctrl +/-/0,
+     pincement tactile et gestes de zoom.
+   - Le zoom est ré-appliqué en continu (aucune modification possible).
+   =================================================================== */
+(function(){
+  var Z=1.10;
+  function isDesktop(){ try{ return (window.innerWidth||document.documentElement.clientWidth||0) >= 821; }catch(e){ return true; } }
+  function apply(){ try{
+    var el=document.documentElement;
+    if(isDesktop()){ if(el.style.zoom!==String(Z)) el.style.zoom=String(Z); }
+    else { if(el.style.zoom&&el.style.zoom!=='1'&&el.style.zoom!=='') el.style.zoom=''; } /* mobile : 100% (mise en page dédiée) */
+  }catch(e){} }
+  /* Style de secours (prime même si l'inline est retiré) */
+  try{ if(!document.getElementById('fixed-zoom-css')){ var st=document.createElement('style'); st.id='fixed-zoom-css';
+    st.textContent='@media(min-width:821px){html{zoom:1.1}}'; (document.head||document.documentElement).appendChild(st); } }catch(e){}
+  apply();
+  window.addEventListener('resize',apply,{passive:true});
+  setInterval(apply,1200);
+  /* Blocage Ctrl + molette (zoom navigateur au niveau page) */
+  window.addEventListener('wheel',function(e){ if(e.ctrlKey){ e.preventDefault(); } },{passive:false,capture:true});
+  /* Blocage Ctrl +/-/0 (et pavé numérique) */
+  window.addEventListener('keydown',function(e){
+    if((e.ctrlKey||e.metaKey)){ var k=e.key; if(k==='+'||k==='-'||k==='='||k==='0'||k==='Add'||k==='Subtract'||e.code==='NumpadAdd'||e.code==='NumpadSubtract'||e.code==='Numpad0'){ e.preventDefault(); apply(); } }
+  },{capture:true});
+  /* Blocage du pincement / gestes de zoom (tactile & trackpad Safari) */
+  ['gesturestart','gesturechange','gestureend'].forEach(function(ev){ document.addEventListener(ev,function(e){ e.preventDefault(); },{passive:false}); });
+  document.addEventListener('touchmove',function(e){ if(e.touches&&e.touches.length>1){ e.preventDefault(); } },{passive:false});
+  document.addEventListener('dblclick',function(e){ /* évite le zoom double-tap sur certains environnements */ },{passive:true});
 })();
 </script>
 </body>
