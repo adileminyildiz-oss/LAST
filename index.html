@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=454;
+var LAST_VER=455;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22963,7 +22963,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.svcCatDel=function(gi,ii){ var st=catState(); try{ st.groups[gi].items.splice(ii,1); catSave(st); render(); }catch(e){} };
   window.svcCatAdd=function(gi){ var st=catState(); try{ st.groups[gi].items.push({n:'Nouvelle prestation',p:0,u:'à l’acte'}); catSave(st); render(); }catch(e){} };
   window.svcCatReset=function(){ function go(){ var o=store(); delete o.cat; save(o); render(); if(typeof toast==='function')toast('Catalogue réinitialisé'); } if(typeof uiConfirm==='function')uiConfirm('Réinitialiser le catalogue aux valeurs par défaut ?',go,{okLabel:'Réinitialiser'}); else go(); };
-  function catDocHTML(){ var st=catState(); var cab=''; try{ cab=(window.__svcCabName&&window.__svcCabName())||'AEM CONSEIL'; }catch(e){ cab='AEM CONSEIL'; }
+  function catDocHTML(){ var st=catState(); var cab=''; try{ cab=cabName(); }catch(e){ cab='Mar’q'; }
     var rows=st.groups.map(function(g){ return '<tr class="cat-g"><td colspan="3">'+E(g.g)+'</td></tr>'+g.items.map(function(it){ return '<tr><td>'+E(it.n)+'</td><td class="r">'+eur(it.p)+'</td><td class="u">'+E(it.u)+'</td></tr>'; }).join(''); }).join('');
     return '<div class="doc-gen"><div class="dg-page"><h1 style="text-align:center">Grille tarifaire des prestations</h1>'
       +'<p style="text-align:center;color:#555">'+E(cab)+' · établie le '+frDate(new Date())+' · tarifs HT indicatifs</p>'
@@ -23273,11 +23273,17 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   }
 
   /* ---------- PORTAIL CLIENT (accès distant en lecture seule aux documents partagés) ---------- */
-  function portailState(){ var o=store(); if(!o.portail)o.portail={codes:{},cabinet:''}; return o.portail; }
+  function portailState(){ var o=store(); if(!o.portail)o.portail={codes:{},cabinet:'',tagline:'',accent:'bleu'}; if(o.portail.accent==null)o.portail.accent='bleu'; return o.portail; }
   function portailSave(ps){ var o=store(); o.portail=ps; save(o); }
+  function cabTagline(){ var ps=portailState(); return ps.tagline||'Votre espace comptable'; }
+  function accentVars(){ var ps=portailState(); if(ps.accent==='or')return {a:'#e8c977',a2:'#cfa646',ad:'#9a6f1a',t:'#241a06'}; return {a:'#5aa9f2',a2:'#2f8fff',ad:'#0a64d6',t:'#ffffff'}; }
+  var MARQ_TRI='<svg viewBox="0 0 14 32" width="10" height="22" aria-hidden="true" style="overflow:visible"><path d="M1 1 H13 L7 31 Z" fill="#4a9fe0"/></svg>';
+  function marqLogo(size){ return '<span class="marq-logo marq-'+(size||'lg')+'"><span class="marq-txt">Mar</span><span class="marq-ap">'+MARQ_TRI+'</span><span class="marq-txt">q</span></span>'; }
+  window.svcPortTagline=function(v){ var ps=portailState(); ps.tagline=v; portailSave(ps); };
+  window.svcPortAccent=function(v){ var ps=portailState(); ps.accent=(v==='bleu')?'bleu':'or'; portailSave(ps); render(); };
   function ckey(c){ return (''+(c||'')).trim().toLowerCase(); }
   function jq(s){ return (''+(s==null?'':s)).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
-  function cabName(){ var ps=portailState(); if(ps.cabinet)return ps.cabinet; try{ return (window.__svcCabName&&window.__svcCabName())||'AEM CONSEIL'; }catch(e){ return 'AEM CONSEIL'; } }
+  function cabName(){ var ps=portailState(); if(ps.cabinet)return ps.cabinet; return 'Mar’q'; }
   function cofClients(){ var st=coffreState(); var seen={},list=[]; st.items.forEach(function(it){ var k=ckey(it.client); if(!k)return; if(!seen[k]){ seen[k]=1; list.push((it.client||'').trim()); } }); return list.sort(function(a,b){return a.localeCompare(b,'fr',{sensitivity:'base'});}); }
   function genCode(){ var s='',a='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; for(var i=0;i<6;i++)s+=a.charAt(Math.floor(Math.random()*a.length)); return s; }
   function portailCode(client){ var ps=portailState(); var k=ckey(client); if(!ps.codes[k]){ ps.codes[k]=genCode(); portailSave(ps); } return ps.codes[k]; }
@@ -23295,9 +23301,12 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
         +'<td class="r"><div class="sig-acts"><button class="sig-act sig-act-b" onclick="svcPortPreview(\''+jq(c)+'\')">👁 Aperçu portail</button><button class="sig-act" onclick="svcPortLink(\''+jq(c)+'\')">🔗 Copier le lien</button><button class="sig-act" onclick="svcPortRegen(\''+jq(c)+'\')">↻ Nouveau code</button></div></td>'
         +'</tr>';
     }).join('')||'<tr><td colspan="4" style="padding:12px;color:#8aa0b8">Aucun client. Renseignez le champ « Client » sur vos documents pour créer un accès portail.</td></tr>';
-    return '<div class="card svc-card port-panel"><h2>Accès au portail client</h2>'
-      +'<p class="port-lead">Chaque client consulte <b>uniquement ses documents partagés</b> (case « Portail client » cochée) via le lien du portail + son code d’accès personnel, en lecture seule.</p>'
-      +'<div class="svc-f" style="max-width:440px"><label>Nom du cabinet affiché sur le portail</label><div class="svc-f-in"><input value="'+E(ps.cabinet||'')+'" placeholder="'+E(cabName())+'" oninput="svcPortCabinet(this.value)"><span></span></div></div>'
+    var accSel='<select class="mg-in mg-sel" onchange="svcPortAccent(this.value)"><option value="bleu"'+(ps.accent!=='or'?' selected':'')+'>Bleu (Mar’q)</option><option value="or"'+(ps.accent==='or'?' selected':'')+'>Or</option></select>';
+    return '<div class="card svc-card port-panel"><h2>Marque & accès du portail client</h2>'
+      +'<p class="port-lead">Personnalisez l’identité du portail (marque du cabinet) puis gérez les accès. Chaque client consulte <b>uniquement ses documents partagés</b> via le lien du portail + son code d’accès personnel, en lecture seule.</p>'
+      +'<div class="port-brandform"><div class="svc-f"><label>Nom du cabinet</label><div class="svc-f-in"><input value="'+E(ps.cabinet||'')+'" placeholder="'+E(cabName())+'" oninput="svcPortCabinet(this.value)"><span></span></div></div>'
+      +'<div class="svc-f"><label>Signature / accroche</label><div class="svc-f-in"><input value="'+E(ps.tagline||'')+'" placeholder="'+E(cabTagline())+'" oninput="svcPortTagline(this.value)"><span></span></div></div>'
+      +'<div class="svc-f"><label>Couleur de marque</label><div class="svc-f-in">'+accSel+'</div></div></div>'
       +'<div class="svc-mg-wrap"><table class="svc-mg-t"><thead><tr><th style="text-align:left">Client</th><th style="text-align:left">Partagé</th><th style="text-align:left">Code d’accès</th><th style="text-align:left">Accès</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
       +'</div>';
   }
@@ -23305,31 +23314,40 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.closePortail=function(){ var ov=document.getElementById('portail-ov'); if(ov&&ov.parentNode)ov.parentNode.removeChild(ov); try{ if(/[#&]portail/.test(location.hash))history.replaceState(null,'',location.pathname+location.search); }catch(e){} };
   window.svcPortFileView=function(fid){ var f=cofFiles()[fid]; if(!f){ if(typeof toast==='function')toast('Fichier indisponible.'); return; } var w=window.open('','_blank'); if(!w)return; w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+E(f.name)+'</title><style>html,body{margin:0;height:100%;background:#111}iframe{border:0;width:100%;height:100%}</style></head><body><iframe src="'+f.data+'"></iframe></body></html>'); w.document.close(); };
   window.svcPortFileDl=function(fid){ var f=cofFiles()[fid]; if(!f)return; var a=document.createElement('a'); a.href=f.data; a.download=f.name||'document'; document.body.appendChild(a); a.click(); document.body.removeChild(a); };
-  function portBrand(){ return '<div class="port-brand"><div class="port-logo">'+E(cabName())+'</div><div class="port-tag">Portail client sécurisé</div></div>'; }
+  function portBrand(mode){ var custom=cabName(); var isMarq=/^mar[’']?q$/i.test((custom||'').trim());
+    var lock=isMarq?marqLogo(mode==='sm'?'sm':'lg'):('<span class="port-logo">'+E(custom)+'</span>');
+    return '<div class="port-brand'+(mode==='sm'?' port-brand-sm':'')+'">'+lock
+      +(cabTagline()?('<div class="port-tag">'+E(cabTagline())+'</div>'):'')
+      +'</div>'; }
+  function portFoot(){ return '<div class="port-foot"><span>© '+new Date().getFullYear()+' '+E(cabName())+'</span><span class="port-foot-sep">·</span><span>Portail client sécurisé</span></div>'; }
   function portErr(msg){ var e=document.getElementById('port-err'); if(e){ e.textContent=msg; e.style.display='block'; } }
   window.svcPortLogin=function(){ var c=(document.getElementById('port-in-client')||{}).value||''; var code=((document.getElementById('port-in-code')||{}).value||'').trim().toUpperCase(); var real=portailState().codes[ckey(c)]; if(!real){ portErr('Client non reconnu. Vérifiez le nom saisi.'); return; } if(code!==real){ portErr('Code d’accès incorrect.'); return; } var ov=document.getElementById('portail-ov'); if(ov)portailRenderDocs(ov,c); };
-  function portailRenderLogin(ov, prefill){ ov.innerHTML='<div class="port-shell"><div class="port-card">'+portBrand()
-      +'<div class="port-login"><div class="port-h2">Connexion</div>'
-      +'<label class="port-lbl">Nom du client</label><input id="port-in-client" class="port-input" value="'+E(prefill||'')+'" placeholder="Votre société / nom">'
-      +'<label class="port-lbl">Code d’accès</label><input id="port-in-code" class="port-input" placeholder="6 caractères" maxlength="6" style="text-transform:uppercase">'
+  function portailRenderLogin(ov, prefill){ ov.innerHTML='<div class="port-shell port-shell-c"><div class="port-card">'
+      +'<div class="port-card-head">'+portBrand()+'</div>'
+      +'<div class="port-hair"></div>'
+      +'<div class="port-login"><div class="port-h2">Espace client</div><div class="port-h2-sub">Connectez-vous pour accéder à vos documents.</div>'
+      +'<label class="port-lbl">Nom du client</label><input id="port-in-client" class="port-input" value="'+E(prefill||'')+'" placeholder="Votre société / votre nom">'
+      +'<label class="port-lbl">Code d’accès</label><input id="port-in-code" class="port-input port-input-code" placeholder="• • • • • •" maxlength="6" autocomplete="off">'
       +'<div id="port-err" class="port-err"></div>'
-      +'<button class="port-btn" onclick="svcPortLogin()">Accéder à mes documents</button>'
-      +'<div class="port-note">Accès en lecture seule — communiqué par votre cabinet.</div>'
-      +'</div></div></div>';
+      +'<button class="port-btn" style="background:linear-gradient(150deg,var(--pa,#5aa9f2),var(--pad,#0a64d6))!important;color:var(--pat,#fff)!important;-webkit-text-fill-color:var(--pat,#fff)" onclick="svcPortLogin()">Accéder à mes documents</button>'
+      +'<div class="port-note">Accès en lecture seule — identifiants communiqués par votre cabinet.</div>'
+      +'</div></div>'+portFoot()+'</div>';
     var ci=document.getElementById('port-in-code'); if(ci)ci.addEventListener('keydown',function(e){ if(e.key==='Enter')svcPortLogin(); });
   }
+  var PORT_DOCICON='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>';
   function portailRenderDocs(ov, client){ var docs=clientSharedDocs(client);
     var cats={}; docs.forEach(function(d){ (cats[d.cat||'Divers']=cats[d.cat||'Divers']||[]).push(d); });
     var body=Object.keys(cats).map(function(cat){ var items=cats[cat].map(function(d){
-        return '<div class="port-doc"><div class="port-doc-i"><div class="port-doc-n">'+E(d.nom||'Document')+'</div><div class="port-doc-m">'+E(cat)+(d.date?(' · '+E(d.date)):'')+'</div></div>'
-          +'<div class="port-doc-a"><button class="port-fbtn" onclick="svcPortFileView(\''+jq(d.fileId)+'\')">👁 Consulter</button><button class="port-fbtn" onclick="svcPortFileDl(\''+jq(d.fileId)+'\')">⤓ Télécharger</button></div></div>';
+        return '<div class="port-doc"><div class="port-doc-ic">'+PORT_DOCICON+'</div><div class="port-doc-i"><div class="port-doc-n">'+E(d.nom||'Document')+'</div><div class="port-doc-m">'+E(cat)+(d.date?(' · '+E(d.date)):'')+'</div></div>'
+          +'<div class="port-doc-a"><button class="port-fbtn" onclick="svcPortFileView(\''+jq(d.fileId)+'\')">'+SVCEYE+'<span>Consulter</span></button><button class="port-fbtn port-fbtn-dl" onclick="svcPortFileDl(\''+jq(d.fileId)+'\')">'+SVCDL+'<span>Télécharger</span></button></div></div>';
       }).join('');
-      return '<div class="port-cat"><div class="port-cat-h">'+E(cat)+'</div>'+items+'</div>';
-    }).join('')||'<div class="port-empty">Aucun document partagé pour le moment. Votre cabinet vous en mettra à disposition ici.</div>';
-    ov.innerHTML='<div class="port-shell"><div class="port-top">'+portBrand()+'<div class="port-top-r"><span class="port-who">'+E(client)+'</span><button class="port-out" onclick="closePortail()">Quitter</button></div></div>'
-      +'<div class="port-docs-wrap"><div class="port-docs-h">Vos documents ('+docs.length+')</div>'+body+'</div></div>';
+      return '<div class="port-cat"><div class="port-cat-h">'+E(cat)+' <span class="port-cat-n">'+cats[cat].length+'</span></div>'+items+'</div>';
+    }).join('')||'<div class="port-empty">Aucun document partagé pour le moment. Votre cabinet mettra vos documents à disposition ici.</div>';
+    ov.innerHTML='<div class="port-shell"><div class="port-top">'+portBrand('sm')+'<div class="port-top-r"><span class="port-who">'+E(client)+'</span><button class="port-out" onclick="closePortail()">Se déconnecter</button></div></div>'
+      +'<div class="port-welcome"><div class="port-welcome-h">Bonjour, '+E(client)+'</div><div class="port-welcome-s">'+docs.length+' document'+(docs.length>1?'s':'')+' à votre disposition</div></div>'
+      +'<div class="port-docs-wrap">'+body+'</div>'+portFoot()+'</div>';
   }
-  window.openPortail=function(prefillClient, autoCode){ closePortail(); var ov=document.createElement('div'); ov.id='portail-ov'; ov.className='portail-ov'; document.body.appendChild(ov);
+  window.openPortail=function(prefillClient, autoCode){ closePortail(); var ov=document.createElement('div'); ov.id='portail-ov'; ov.className='portail-ov'; var av=accentVars(); try{ ov.style.setProperty('--pa',av.a); ov.style.setProperty('--pa2',av.a2); ov.style.setProperty('--pad',av.ad); ov.style.setProperty('--pat',av.t); }catch(e){} document.body.appendChild(ov);
     if(autoCode!==undefined && prefillClient){ portailRenderDocs(ov, prefillClient); } else { portailRenderLogin(ov, prefillClient||''); } };
   function portailHashCheck(){ try{ if(/[#&]portail\b/.test(location.hash||'')){ var m=(location.hash||'').match(/[#&]c=([^&]*)/); var c=m?decodeURIComponent(m[1]):''; openPortail(c); } }catch(e){} }
   try{ window.addEventListener('hashchange',portailHashCheck); if(document.readyState!=='loading')setTimeout(portailHashCheck,0); else document.addEventListener('DOMContentLoaded',portailHashCheck); }catch(e){}
@@ -23371,7 +23389,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     c.addEventListener('touchstart',down,{passive:false}); c.addEventListener('touchmove',move,{passive:false}); window.addEventListener('touchend',up);
   };
   window.svcSigCert=function(i){ var st=sig(); var it=st.items[i]; if(!it||it.statut!=='signe'){ if(typeof toast==='function')toast('Document non signé.'); return; }
-    var cab=''; try{ cab=(window.__svcCabName&&window.__svcCabName())||'AEM CONSEIL'; }catch(e){ cab='AEM CONSEIL'; }
+    var cab=''; try{ cab=cabName(); }catch(e){ cab='Mar’q'; }
     var w=window.open('','_blank'); if(!w){ if(typeof toast==='function')toast('Autorisez les fenêtres pop-up.'); return; }
     var html='<!doctype html><html><head><meta charset="utf-8"><title>Attestation de signature</title><style>@page{size:A4;margin:22mm}body{font-family:Georgia,serif;color:#111;line-height:1.55}h1{font-size:20px;text-align:center;margin-bottom:4px}.sub{text-align:center;color:#555;margin-bottom:26px}.row{margin:8px 0}.lbl{color:#555;display:inline-block;width:180px}.sig{margin-top:24px;border:1px solid #ccc;border-radius:8px;padding:10px;max-width:340px}.sig img{max-width:320px}.foot{margin-top:26px;font-size:11px;color:#777}</style></head><body>'
       +'<h1>Attestation de signature électronique</h1><div class="sub">'+E(cab)+'</div>'
@@ -23531,15 +23549,24 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.ve-pill.sig-ok{color:#5bbf8a;border-color:#2c6b4e;background:#0f1c16}.ve-pill.sig-soon{color:#f0c040;border-color:#6b5a1a;background:#1c1810}.ve-pill.sig-ko{color:#ff8f9a;border-color:#6b2a30;background:#1c1114}'
     +'.sig-acts{display:flex;gap:6px;flex-wrap:wrap}.sig-act{background:#0b1119;border:1px solid #26364a;color:#c7d6e8;border-radius:7px;padding:6px 11px;font-size:12px;cursor:pointer;white-space:nowrap}.sig-act:hover{border-color:#2f8fff}.sig-act-b{background:linear-gradient(#1e90ff,#0a64d6);color:#fff;border-color:#1e90ff;font-weight:600}'
     +'.sig-pad-ov{position:fixed;inset:0;background:rgba(4,8,14,.72);display:flex;align-items:center;justify-content:center;z-index:9999}.sig-pad-box{background:#12161d;border:1px solid #26303c;border-radius:14px;padding:18px;max-width:620px;width:92%}.sig-pad-h{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:15px;margin-bottom:4px}.sig-pad-x{background:#2a1a1f;color:#ff8f9a;border:1px solid #52323a;border-radius:6px;width:30px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center}.sig-pad-sub{font-size:12.5px;color:#9fb6d0;margin-bottom:10px}.sig-pad-c{width:100%;height:auto;background:#fff;border:1px solid #26364a;border-radius:8px;touch-action:none;cursor:crosshair;display:block}.sig-pad-act{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}'
-    +'.port-panel{margin-top:14px}.port-lead{font-size:12.5px;color:#9fb6d0;margin:0 0 12px;line-height:1.5}.port-code{background:#0b1119;border:1px solid #26364a;color:#5ab0ff;border-radius:6px;padding:3px 9px;font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.12em;font-size:13px;font-weight:700}'
-    +'.portail-ov{position:fixed;inset:0;z-index:2147483000;background:radial-gradient(1200px 800px at 70% -10%,#12325e,#070d18 60%);overflow:auto}'
-    +'.port-shell{min-height:100%;max-width:920px;margin:0 auto;padding:24px 20px 40px;box-sizing:border-box}'
-    +'.port-brand{display:flex;flex-direction:column;gap:2px}.port-logo{font-size:22px;font-weight:800;color:#eaf2ff;letter-spacing:.01em}.port-tag{font-size:12px;color:#8fb4e6}'
-    +'.port-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:16px;border-bottom:1px solid rgba(130,185,255,.18);margin-bottom:18px}.port-top-r{display:flex;align-items:center;gap:12px}.port-who{font-size:13px;color:#c7d6e8}.port-out{background:rgba(255,255,255,.06);border:1px solid #2a3a4e;color:#e7edf5;border-radius:9px;padding:8px 14px;cursor:pointer;font-size:13px}.port-out:hover{border-color:#2f8fff}'
-    +'.port-card{max-width:400px;margin:6vh auto 0;background:rgba(18,26,40,.86);border:1px solid #26364a;border-radius:16px;padding:26px 24px;backdrop-filter:blur(6px)}.port-login{margin-top:18px}.port-h2{font-size:16px;font-weight:700;color:#eaf2ff;margin-bottom:14px}.port-lbl{display:block;font-size:12px;color:#9fb6d0;margin:12px 0 5px}.port-input{width:100%;box-sizing:border-box;background:#0b1119;border:1px solid #26364a;color:#e7edf5;border-radius:9px;padding:11px 12px;font-size:15px}.port-input:focus{outline:none;border-color:#2f8fff}.port-err{display:none;color:#ff8f9a;font-size:12.5px;margin-top:10px}.port-btn{width:100%;margin-top:16px;background:linear-gradient(#1e90ff,#0a64d6);color:#fff;border:0;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer}.port-note{font-size:11.5px;color:#7f96b0;text-align:center;margin-top:12px}'
-    +'.port-docs-h{font-size:13px;color:#9fb6d0;margin-bottom:12px}.port-cat{margin-bottom:18px}.port-cat-h{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#5ab0ff;font-weight:700;margin-bottom:8px}'
-    +'.port-doc{display:flex;justify-content:space-between;align-items:center;gap:14px;background:rgba(18,26,40,.7);border:1px solid #24303f;border-radius:11px;padding:12px 15px;margin-bottom:8px}.port-doc-n{font-size:14px;color:#e7edf5;font-weight:600}.port-doc-m{font-size:11.5px;color:#8aa0b8;margin-top:2px}.port-doc-a{display:flex;gap:8px;flex-wrap:wrap}.port-fbtn{background:rgba(255,255,255,.05);border:1px solid #2a3a4e;color:#cfe0ff;border-radius:8px;padding:8px 12px;font-size:12.5px;cursor:pointer;white-space:nowrap}.port-fbtn:hover{border-color:#2f8fff}'
-    +'.port-empty{color:#9fb6d0;font-size:13.5px;padding:24px;text-align:center;border:1px dashed #2a3a4e;border-radius:12px}'
+    +'.port-brandform{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:0 16px;margin-bottom:14px}'
+    +'.port-panel{margin-top:14px}.port-lead{font-size:12.5px;color:#9fb6d0;margin:0 0 14px;line-height:1.5;max-width:780px}.port-code{background:#0b1119;border:1px solid #3a3320;color:#e7cf8f;border-radius:6px;padding:3px 10px;font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.14em;font-size:13px;font-weight:700}'
+    +'.portail-ov{position:fixed;inset:0;z-index:2147483000;overflow:auto;background:radial-gradient(900px 600px at 82% -8%,rgba(231,207,143,.10),transparent 60%),radial-gradient(1100px 800px at 15% 0%,#123059,#0a1526 55%,#070d18)}'
+    +'.port-shell{min-height:100%;max-width:960px;margin:0 auto;padding:26px 22px 30px;box-sizing:border-box;display:flex;flex-direction:column}.port-shell-c{justify-content:center;align-items:center}'
+    +'.port-mono{width:46px;height:46px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:Georgia,\"Times New Roman\",serif;font-weight:700;font-size:16px;letter-spacing:.03em;color:var(--pat,#241a06);background:linear-gradient(150deg,var(--pa,#e7cf8f),var(--pad,#a9791f));box-shadow:0 6px 18px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.45)}'
+    +'.port-brand{display:flex;flex-direction:column;gap:7px;align-items:center}.port-brand-sm{align-items:flex-start;gap:3px}.marq-logo{display:inline-flex;align-items:flex-start;font-family:\"Helvetica Neue\",Arial,\"Segoe UI\",sans-serif;font-weight:800;color:#f4f8fd;letter-spacing:-.015em;line-height:1}.marq-lg{font-size:44px}.marq-sm{font-size:27px}.marq-ap{display:inline-block;margin:0 .02em}.marq-ap svg{display:block;height:.58em;width:auto}.port-logo{font-family:\"Helvetica Neue\",Arial,sans-serif;font-size:22px;font-weight:800;color:#f2f6fc;letter-spacing:-.01em;line-height:1}.port-tag{font-size:11px;color:var(--pa,#5aa9f2);letter-spacing:.06em;text-transform:uppercase}.port-brand-sm .port-logo{font-size:18px}'
+    +'.port-card-head{display:flex;justify-content:center;margin-bottom:16px}.port-hair{height:1px;background:linear-gradient(90deg,transparent,var(--pa,#e7cf8f),transparent);opacity:.5;margin:0 0 18px}'
+    +'.port-card{width:100%;max-width:420px;margin:4vh 0 auto;background:linear-gradient(180deg,rgba(20,29,46,.92),rgba(12,19,32,.94));border:1px solid rgba(231,207,143,.18);border-radius:18px;padding:30px 28px 26px;box-shadow:0 30px 70px rgba(2,7,16,.6),inset 0 1px 0 rgba(255,255,255,.05);backdrop-filter:blur(8px)}'
+    +'.port-h2{font-family:Georgia,\"Times New Roman\",serif;font-size:19px;font-weight:700;color:#f2f6fc;text-align:center}.port-h2-sub{font-size:12.5px;color:#9fb6d0;text-align:center;margin:4px 0 18px}'
+    +'.port-lbl{display:block;font-size:11.5px;color:#9fb6d0;margin:12px 0 6px;letter-spacing:.02em}.port-input{width:100%;box-sizing:border-box;background:#0b1119;border:1px solid #263042;color:#eef3fa;border-radius:11px;padding:12px 13px;font-size:15px}.port-input:focus{outline:none;border-color:var(--pa,#e7cf8f);box-shadow:0 0 0 3px rgba(231,207,143,.14)}.port-input-code{text-transform:uppercase;letter-spacing:.42em;text-align:center;font-weight:700}'
+    +'.port-err{display:none;color:#ff9aa4;font-size:12.5px;margin-top:11px;text-align:center}.portail-ov .port-btn{width:100%!important;margin-top:18px;background:linear-gradient(150deg,var(--pa,#e8c977),var(--pad,#9a6f1a))!important;color:var(--pat,#241a06)!important;border:0!important;border-radius:12px!important;padding:13px!important;font-size:14px!important;font-weight:800!important;letter-spacing:.02em;cursor:pointer;box-shadow:0 10px 26px rgba(0,0,0,.32)!important;text-transform:none!important}.portail-ov .port-btn:hover{filter:brightness(1.06)}.port-note{font-size:11px;color:#7f96b0;text-align:center;margin-top:14px;line-height:1.5}'
+    +'.port-top{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-bottom:16px;border-bottom:1px solid rgba(231,207,143,.16);margin-bottom:22px}.port-top-r{display:flex;align-items:center;gap:14px}.port-who{font-size:13px;color:#dce7f4;font-weight:600}.portail-ov .port-out{background:rgba(255,255,255,.05)!important;border:1px solid rgba(231,207,143,.28)!important;color:#eef3fa!important;border-radius:10px!important;padding:9px 15px!important;cursor:pointer;font-size:12.5px!important;text-transform:none!important}.portail-ov .port-out:hover{border-color:var(--pa,#e8c977)!important}'
+    +'.port-welcome{margin-bottom:20px}.port-welcome-h{font-family:Georgia,\"Times New Roman\",serif;font-size:24px;color:#f4f8fd;font-weight:700}.port-welcome-s{font-size:13px;color:#9fb6d0;margin-top:3px}'
+    +'.port-cat{margin-bottom:22px}.port-cat-h{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--pa,#e7cf8f);font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}.port-cat-n{background:rgba(231,207,143,.14);color:var(--pa,#e7cf8f);border-radius:20px;padding:1px 8px;font-size:11px;letter-spacing:0}'
+    +'.port-doc{display:flex;align-items:center;gap:14px;background:linear-gradient(180deg,rgba(20,29,46,.7),rgba(13,20,33,.7));border:1px solid #1e2a3b;border-left:3px solid transparent;border-radius:13px;padding:13px 16px;margin-bottom:9px;transition:border-color .12s,transform .12s}.port-doc:hover{border-color:#2a3a4e;border-left-color:var(--pa,#e7cf8f);transform:translateX(2px)}.port-doc-ic{width:38px;height:38px;flex:none;border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--pa,#e7cf8f);background:rgba(231,207,143,.10);border:1px solid rgba(231,207,143,.20)}.port-doc-i{flex:1;min-width:0}.port-doc-n{font-size:14.5px;color:#eef3fa;font-weight:600}.port-doc-m{font-size:11.5px;color:#8aa0b8;margin-top:2px}'
+    +'.port-doc-a{display:flex;gap:8px;flex-wrap:wrap;flex:none}.portail-ov .port-fbtn{display:inline-flex!important;align-items:center;gap:6px;background:rgba(255,255,255,.04)!important;border:1px solid #2a3a4e!important;color:#cfe0ff!important;border-radius:9px!important;padding:8px 12px!important;font-size:12.5px!important;cursor:pointer;white-space:nowrap;text-transform:none!important;font-weight:600}.portail-ov .port-fbtn:hover{border-color:var(--pa,#e8c977)!important}.portail-ov .port-fbtn-dl{background:rgba(231,207,143,.13)!important;border-color:rgba(231,207,143,.32)!important;color:#f3e6c2!important}.port-fbtn svg{width:15px;height:15px;flex:none}'
+    +'.port-empty{color:#9fb6d0;font-size:13.5px;padding:30px;text-align:center;border:1px dashed rgba(231,207,143,.25);border-radius:14px}'
+    +'.port-foot{margin-top:auto;padding-top:20px;border-top:1px solid rgba(231,207,143,.12);text-align:center;font-size:11px;color:#7089a3;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}.port-foot-sep{opacity:.5}'
     document.head.appendChild(st2); } }catch(e){}
 })();
 </script>
