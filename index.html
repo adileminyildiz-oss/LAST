@@ -3180,7 +3180,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=398;
+var LAST_VER=399;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14589,6 +14589,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
         +'<button type="button" class="btn btn-sm btn-ghost" onclick="state.espaceDossier=\''+d.id+'\';go(\'espace\')">Ouvrir</button></div>'; }).join('');
     return '<div class="fi-dup"><b>⚠ Dossier'+(ds.length>1?'s':'')+' déjà existant'+(ds.length>1?'s':'')+' pour cette société</b>'
       +'<div class="fi-dup-note">Une dénomination ou un SIREN identique existe déjà — vérifiez avant de créer un doublon.</div>'+rows+'</div>'; };
+  /* Rappel « À compléter » : masqué par défaut, révélé 45 s après l'ouverture du formulaire
+     si encore incomplet (pas en continu), et fermable via une croix. */
+  window.__fiGate=window.__fiGate||{dismissed:false,revealed:false,t:0};
+  window.formGateInner=function(ok,txt){ var e=(typeof esc==='function')?esc:function(s){return ''+s;}; return '<span class="fi-gate-t">'+e(txt)+'</span>'+(ok?'':'<button type="button" class="fi-gate-x" title="Masquer ce rappel" onclick="formGateDismiss(event)">✕</button>'); };
+  window.formGateDismiss=function(ev){ try{if(ev&&ev.stopPropagation)ev.stopPropagation();}catch(e){} window.__fiGate.dismissed=true; window.__fiGate.revealed=false; try{clearTimeout(window.__fiGate.t);}catch(e){} var g=document.getElementById('fi-gate'); if(g)g.classList.remove('reveal'); };
+  window.formGateReveal=function(){ if(window.__fiGate.dismissed)return; var g=document.getElementById('fi-gate'); if(g&&g.classList.contains('ko')){ window.__fiGate.revealed=true; g.classList.add('reveal'); } };
+  window.formGateArm=function(){ try{clearTimeout(window.__fiGate.t);}catch(e){} window.__fiGate.dismissed=false; window.__fiGate.revealed=false; var g=document.getElementById('fi-gate'); if(g)g.classList.remove('reveal'); window.__fiGate.t=setTimeout(window.formGateReveal,45000); };
   window.formUpdateGate=function(){ try{
     var m=window.formManques?window.formManques():[];
     var inc=(window.formCoherence?window.formCoherence():[]).filter(function(x){return !x.ok;});
@@ -14597,7 +14604,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(m.length){ txt='À compléter avant de générer ('+m.length+') : '+m.join(', '); why='Complétez : '+m.join(', '); }
     else if(inc.length){ txt='Incohérences à corriger ('+inc.length+') : '+inc.map(function(x){return x.label;}).join(', '); why='Corrigez les incohérences avant de générer : '+inc.map(function(x){return x.label;}).join(', '); }
     else { txt='✓ Dossier complet et cohérent — documents prêts à générer.'; why=''; }
-    var g=document.getElementById('fi-gate'); if(g){ g.className='fi-gate '+(ok?'ok':'ko'); g.textContent=txt; }
+    var g=document.getElementById('fi-gate'); if(g){ g.className='fi-gate '+(ok?'ok':'ko'); if(!ok && window.__fiGate.revealed && !window.__fiGate.dismissed)g.classList.add('reveal'); g.innerHTML=window.formGateInner(ok,txt); }
     ['fi-save','fi-save-doc'].forEach(function(idb){ var btn=document.getElementById(idb); if(btn){ btn.disabled=!ok; btn.classList.toggle('is-disabled',!ok); btn.title=why; } });
     try{ var c=document.getElementById('fi-coherence'); if(c&&window.formCohInner){ c.innerHTML=window.formCohInner(); c.classList.toggle('has-bad',inc.length>0); } }catch(_e){}
     try{ var dp=document.getElementById('fi-doublon'); if(dp&&window.formDoublonHTML){ dp.innerHTML=window.formDoublonHTML(); } }catch(_e){}
@@ -14762,7 +14769,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
         '<textarea rows="3" oninput="formSet(\'extra.notes\',this.value)" placeholder="Remarques, particularités…">'+esc(get('extra.notes'))+'</textarea>');
       var contactM=grp('Contact',r2('Email',fI('contact.email'),'Téléphone',fI('contact.tel')));
       var mqM=window.formManques?window.formManques():[]; var okM=mqM.length===0; var disM=okM?'':' disabled';
-      var gateM='<div id="fi-gate" class="fi-gate '+(okM?'ok':'ko')+'">'+(okM?'✓ Modification complète — documents prêts à générer.':('À compléter avant de générer ('+mqM.length+') : '+esc(mqM.join(', '))))+'</div>';
+      var gateMtxt=okM?'✓ Modification complète — documents prêts à générer.':('À compléter avant de générer ('+mqM.length+') : '+mqM.join(', '));
+      var gateM='<div id="fi-gate" class="fi-gate '+(okM?'ok':'ko')+'">'+window.formGateInner(okM,gateMtxt)+'</div>';
       var actM='<div class="fi-actions"><div class="fi-actions-col">'+gateM+'<div class="fi-actions-in">'
         +'<button class="btn btn-ghost" onclick="formReset()">Réinitialiser</button>'
         +'<button class="btn btn-ghost" onclick="formBrouillon()">Brouillon</button>'
@@ -14880,7 +14888,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var inc0=(window.formCoherence?window.formCoherence():[]).filter(function(x){return !x.ok;});
     var okAll=mq.length===0&&inc0.length===0; var dis=okAll?'':' disabled';
     var gateTxt=mq.length?('À compléter avant de générer ('+mq.length+') : '+esc(mq.join(', '))):(inc0.length?('Incohérences à corriger ('+inc0.length+') : '+esc(inc0.map(function(x){return x.label;}).join(', '))):'✓ Dossier complet et cohérent — documents prêts à générer.');
-    var gate='<div id="fi-gate" class="fi-gate '+(okAll?'ok':'ko')+'">'+gateTxt+'</div>';
+    var gate='<div id="fi-gate" class="fi-gate '+(okAll?'ok':'ko')+'">'+window.formGateInner(okAll,gateTxt)+'</div>';
     var actions='<div class="fi-actions"><div class="fi-actions-col">'+gate+'<div class="fi-actions-in">'
       +'<button class="btn btn-ghost" onclick="formReset()">Réinitialiser</button>'
       +'<button class="btn btn-ghost" onclick="formBrouillon()">Brouillon</button>'
@@ -14893,6 +14901,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     return '<div class="fi-wrap" oninput="formUpdateGate()" onchange="formUpdateGate()">'+resume+head+soc+dir+profil+titres+dates+assoc+depot+ben+apports+conj+notes+contact+coherence+recoBar+actions+'</div>';
   }
   window.pageFormulaire=pageFormulaire;
+  /* Arme le minuteur de 45 s à l'affichage du formulaire (rappel « À compléter » non permanent) */
+  (function(){ if(window.__fiGateRenderHook)return; window.__fiGateRenderHook=true;
+    if(typeof window.render==='function'){ var _r=window.render; window.render=function(){ var o=_r.apply(this,arguments); try{ if(window.state&&state.page==='formulaire'&&document.getElementById('fi-gate')){ if(window.__fiGate.__page!=='formulaire'){ window.__fiGate.__page='formulaire'; window.formGateArm(); } } else if(window.state){ window.__fiGate.__page=state.page; try{clearTimeout(window.__fiGate.t);}catch(e){} } }catch(e){} return o; }; }
+  })();
 
   /* ===== Recommandation fiscale & juridique d'après le profil du dirigeant =====
      Lit les données du formulaire (mode de vie, objectifs) et recommande la forme
@@ -15654,6 +15666,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '.fi-gate{font-size:12px;font-weight:600;line-height:1.4;padding:7px 12px;border-radius:9px;border:1px solid #2a2a2e}',
     '.fi-gate.ok{background:rgba(38,86,52,.30);color:#c3e8d1;border-color:rgba(84,150,104,.55)}',
     '.fi-gate.ko{background:rgba(120,42,42,.24);color:#f0bcb6;border-color:rgba(170,74,74,.5)}',
+    /* Rappel « À compléter » : masqué par défaut, révélé (après 45 s ou incohérence) via .reveal */
+    '.fi-gate.ko{display:none}',
+    '.fi-gate.ko.reveal{display:flex;align-items:flex-start;gap:10px;position:relative;animation:fiGateIn .25s ease}',
+    '.fi-gate.ok{display:block}',
+    '.fi-gate .fi-gate-t{flex:1;min-width:0}',
+    '.fi-gate-x{flex:none;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#f0bcb6;width:20px;height:20px;border-radius:50%;line-height:1;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}',
+    '.fi-gate-x:hover{background:rgba(255,255,255,.16)}',
+    '@keyframes fiGateIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}',
     '.fi-actions .btn.is-disabled,.fi-actions .btn[disabled]{opacity:.4;cursor:not-allowed;filter:grayscale(.4)}',
     '.fi-siren{display:flex;gap:8px;align-items:center}.fi-siren input{flex:1}.fi-siren-btn{white-space:nowrap;flex:0 0 auto}',
     '.fi-nature{display:flex;gap:8px;margin:0 0 12px;flex-wrap:wrap}',
