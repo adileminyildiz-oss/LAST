@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=445;
+var LAST_VER=446;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22814,6 +22814,142 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.bar-in:focus{outline:none;border-color:#2f8fff}.bar-custom .bar-in{border-color:#2f8fff;background:#0e1b2c}'
     +'.bar-u{font-size:12px;color:#8aa0b8;width:40px}.bar-act{margin-top:6px}';
     document.head.appendChild(st); } }catch(e){}
+})();
+</script>
+<script id="mod-services">
+/* ===== ESPACE « SERVICES CLIENTS » — modules vendables, 100% isolés de l'opérationnel =====
+   N'altère aucune page/donnée existante : nouvelle entrée de nav + wrap render/buildNav (pattern Agenda),
+   stockage propre localStorage 'last-svc' (jamais mêlé au DB opérationnel). */
+(function(){
+  if(window.__svcInit) return; window.__svcInit=1;
+  function S(){ try{ return (typeof state!=='undefined'&&state)?state:(window.state||{}); }catch(e){ return window.state||{}; } }
+  function E(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function store(){ try{ return JSON.parse(localStorage.getItem('last-svc')||'{}')||{}; }catch(e){ return {}; } }
+  function save(o){ try{ localStorage.setItem('last-svc',JSON.stringify(o)); }catch(e){} }
+  window.__svcStore=store; window.__svcSaveStore=save;
+
+  /* ---------- Catalogue des services (cartes du hub) ---------- */
+  var SERVICES=[
+    {id:'echeancier',ico:'📅',t:'Échéancier fiscal & social',d:'Calendrier des obligations (TVA, DSN, acomptes IS, CFE, AG…) avec rappels automatiques. Vendable en abonnement.'}
+  ];
+
+  /* ================= SERVICE 1 : ÉCHÉANCIER FISCAL & SOCIAL ================= */
+  var ECHE_DEF=[
+    {id:'tva',lbl:'Déclaration de TVA (CA3)',peri:'mensuel',day:24,note:'Réel normal — mensuel'},
+    {id:'dsn',lbl:'DSN mensuelle',peri:'mensuel',day:15,note:'Paie du mois précédent'},
+    {id:'is1',lbl:'Acompte IS — 1er',peri:'annuel',md:'03-15'},
+    {id:'is2',lbl:'Acompte IS — 2e',peri:'annuel',md:'06-15'},
+    {id:'is3',lbl:'Acompte IS — 3e',peri:'annuel',md:'09-15'},
+    {id:'is4',lbl:'Acompte IS — 4e',peri:'annuel',md:'12-15'},
+    {id:'liasse',lbl:'Liasse fiscale / solde IS',peri:'annuel',md:'05-15',note:'Clôture au 31/12'},
+    {id:'cfe',lbl:'CFE — solde',peri:'annuel',md:'12-15'},
+    {id:'ago',lbl:'AG d’approbation des comptes',peri:'annuel',md:'06-30',note:'Dans les 6 mois de la clôture'}
+  ];
+  function echeState(){ var o=store(); if(!o.eche){ o.eche={items:ECHE_DEF.map(function(e){return {id:e.id,lbl:e.lbl,peri:e.peri,day:e.day||null,md:e.md||null,note:e.note||'',actif:true,rappel:7,dernier:''};}),init:1}; save(o); } return o.eche; }
+  function echeSave(st){ var o=store(); o.eche=st; save(o); }
+  function pad(n){ return (n<10?'0':'')+n; }
+  function todayISO(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+  function nextDate(e){ var t=new Date(); t.setHours(0,0,0,0);
+    if(e.peri==='mensuel'){ var day=+e.day||15; var d=new Date(t.getFullYear(),t.getMonth(),day); if(d<t) d=new Date(t.getFullYear(),t.getMonth()+1,day); return d; }
+    var mm=(e.md||'01-01').split('-'); var d2=new Date(t.getFullYear(),(+mm[0])-1,+mm[1]); if(d2<t) d2=new Date(t.getFullYear()+1,(+mm[0])-1,+mm[1]); return d2;
+  }
+  function frDate(d){ return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(); }
+  function daysBetween(d){ var t=new Date(); t.setHours(0,0,0,0); return Math.round((d-t)/86400000); }
+  window.svcEcheToggle=function(id){ var st=echeState(); var e=st.items.find(function(x){return x.id===id;}); if(e){ e.actif=!e.actif; echeSave(st); render(); } };
+  window.svcEcheDone=function(id){ var st=echeState(); var e=st.items.find(function(x){return x.id===id;}); if(e){ e.dernier=todayISO(); echeSave(st); if(typeof toast==='function')toast('« '+e.lbl+' » marqué fait le '+frDate(new Date())); render(); } };
+  window.svcEcheField=function(id,f,v){ var st=echeState(); var e=st.items.find(function(x){return x.id===id;}); if(e){ e[f]=v; echeSave(st); } };
+  function echeView(){
+    var st=echeState();
+    var rows=st.items.map(function(e){ var nd=nextDate(e); var dj=daysBetween(nd); var cls=(!e.actif)?'off':(dj<0?'late':(dj<=(+e.rappel||7)?'soon':'ok'));
+      var etat=(!e.actif)?'désactivé':(dj<0?('en retard de '+(-dj)+' j'):(dj===0?'aujourd’hui':('dans '+dj+' j')));
+      var fait=e.dernier?('<span class="svc-eche-done">✓ fait le '+frDate(new Date(e.dernier))+'</span>'):'';
+      return '<div class="svc-eche-row '+cls+'">'
+        +'<label class="svc-eche-on"><input type="checkbox" '+(e.actif?'checked':'')+' onchange="svcEcheToggle(\''+e.id+'\')"></label>'
+        +'<div class="svc-eche-main"><div class="svc-eche-lbl">'+E(e.lbl)+(e.note?(' <span class="svc-eche-note">'+E(e.note)+'</span>'):'')+'</div>'
+        +'<div class="svc-eche-meta">'+(e.peri==='mensuel'?('Mensuel · le '+(e.day||15)):'Annuel')+' · prochaine échéance <b>'+frDate(nd)+'</b> ('+etat+') '+fait+'</div></div>'
+        +'<div class="svc-eche-act"><input class="svc-eche-rap" type="number" min="0" value="'+(e.rappel||7)+'" title="Rappel (jours avant)" onchange="svcEcheField(\''+e.id+'\',\'rappel\',this.value)"><span class="svc-eche-rl">j</span>'
+        +'<button class="btn btn-sm btn-ghost" onclick="svcEcheDone(\''+e.id+'\')">Marquer fait</button></div>'
+        +'</div>';
+    }).join('');
+    var upcoming=st.items.filter(function(e){return e.actif;}).map(function(e){return {e:e,d:nextDate(e),j:daysBetween(nextDate(e))};}).sort(function(a,b){return a.d-b.d;});
+    var alertes=upcoming.filter(function(u){return u.j<=(+u.e.rappel||7);});
+    var kpi='<div class="svc-eche-kpis">'
+      +'<div class="svc-kpi"><div class="svc-kpi-v">'+upcoming.length+'</div><div class="svc-kpi-l">échéances suivies</div></div>'
+      +'<div class="svc-kpi '+(alertes.length?'warn':'')+'"><div class="svc-kpi-v">'+alertes.length+'</div><div class="svc-kpi-l">à traiter bientôt / en retard</div></div>'
+      +(upcoming[0]?('<div class="svc-kpi"><div class="svc-kpi-v">'+frDate(upcoming[0].d)+'</div><div class="svc-kpi-l">prochaine ('+E(upcoming[0].e.lbl)+')</div></div>'):'')
+      +'</div>';
+    return '<div class="svc-sub"><button class="btn btn-ghost svc-back" onclick="svcGo(\'\')">‹ Services</button>'
+      +'<h2 class="svc-h2">📅 Échéancier fiscal & social</h2>'
+      +'<p class="svc-lead">Suivi des obligations déclaratives et de leurs rappels. Configurez par client et vendez ce suivi en abonnement. Dates indicatives — à adapter au régime réel du dossier.</p>'
+      +kpi
+      +'<div class="card svc-card"><h2>Obligations suivies</h2>'+rows+'</div></div>';
+  }
+
+  /* ---------- HUB des services ---------- */
+  function hub(){
+    var cards=SERVICES.map(function(s){ return '<button class="svc-tile" onclick="svcGo(\''+s.id+'\')"><div class="svc-tile-ic">'+s.ico+'</div><div class="svc-tile-b"><div class="svc-tile-t">'+E(s.t)+'</div><div class="svc-tile-d">'+E(s.d)+'</div></div></button>'; }).join('');
+    var soon=['Simulateurs (coût d’embauche, rémunération dirigeant, IS)','Facturation en ligne (abonnement client)','Coffre-fort & portail client','Signature électronique des documents','Tableau de bord dirigeant','Veille réglementaire annuelle']
+      .map(function(x){ return '<div class="svc-soon">'+E(x)+' <span class="svc-soon-b">à venir</span></div>'; }).join('');
+    return '<div class="svc-hub"><p class="svc-lead">Modules de services vendables aux clients — indépendants de l’activité opérationnelle du cabinet.</p>'
+      +'<div class="svc-grid">'+cards+'</div>'
+      +'<div class="svc-soon-h">Prochains services</div><div class="svc-soon-grid">'+soon+'</div></div>';
+  }
+  window.svcGo=function(view){ window.__svcView=view||''; try{ if(typeof go==='function') go('services'); else { S().page='services'; render(); } }catch(e){ try{S().page='services';render();}catch(_){} } };
+  function pageServices(){ return (window.__svcView==='echeancier')?echeView():hub(); }
+  window.pageServices=pageServices;
+
+  /* ---------- Enregistrement PAGE + nav (pattern Agenda, additif) ---------- */
+  try{ if(typeof PAGES!=='undefined' && !PAGES.some(function(p){return p.id==='services';})){
+    var iP=PAGES.findIndex(function(p){return p.id==='params';});
+    var entry={id:'services',lbl:'Services',ic:'svc',sub:'Services clients — offres & suivi'};
+    if(iP>=0)PAGES.splice(iP,0,entry);else PAGES.push(entry);
+  } }catch(e){}
+  try{ if(typeof IC!=='undefined' && !IC.svc){ IC.svc='<path d="M12 2l2.4 5 5.6.6-4 4 1.2 5.4L12 19l-5.2 2 1.2-5.4-4-4 5.6-.6z"/>'; } }catch(e){}
+  function injectBtn(){ var nav=document.getElementById('nav'); if(!nav)return; if(nav.querySelector('[data-svcbtn]'))return;
+    var ref=nav.querySelector('button.nav-btn[onclick*="params"]');
+    var on=(S().page==='services')?' on':''; var ico=(typeof svg==='function'&&typeof IC!=='undefined'&&IC.svc)?svg(IC.svc):'';
+    var b=document.createElement('button'); b.className='nav-btn'+on; b.setAttribute('data-svcbtn','1'); b.setAttribute('onclick',"go('services')");
+    b.innerHTML=ico+'<span class="nav-btn-lbl">Services</span>';
+    if(ref&&ref.parentNode)ref.parentNode.insertBefore(b,ref);else nav.appendChild(b);
+  }
+  try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){ var r=_bn.apply(this,arguments); try{injectBtn();}catch(e){} return r; }; } }catch(e){}
+  try{ var _rd=window.render; if(typeof _rd==='function'){ window.render=function(){
+    if(S().page==='services'){
+      try{buildNav();}catch(e){} try{document.body.dataset.page='services';}catch(e){}
+      var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='services';}):null;
+      try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Services';}catch(e){}
+      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':((p&&p.sub)||'');}catch(e){}
+      var V=document.getElementById('view'); if(V)V.innerHTML=pageServices();
+      return;
+    }
+    return _rd.apply(this,arguments);
+  }; } }catch(e){}
+
+  /* ---------- Styles (isolés, scopés .svc-*) ---------- */
+  try{ if(!document.getElementById('svc-css')){ var st2=document.createElement('style'); st2.id='svc-css'; st2.textContent=
+    '.svc-lead{color:#9fb6d0;font-size:13.5px;line-height:1.5;margin:2px 0 16px;max-width:820px}'
+    +'.svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}'
+    +'.svc-tile{display:flex;gap:14px;align-items:flex-start;text-align:left;background:linear-gradient(180deg,#12161d,#0e1218);border:1px solid #26303c;border-radius:14px;padding:16px;cursor:pointer;transition:border-color .12s}'
+    +'.svc-tile:hover{border-color:#2f8fff}'
+    +'.svc-tile-ic{font-size:26px;line-height:1;flex:none}'
+    +'.svc-tile-t{font-weight:700;font-size:15px;margin-bottom:4px}'
+    +'.svc-tile-d{font-size:12.5px;color:#9fb6d0;line-height:1.45}'
+    +'.svc-soon-h{margin:22px 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#7f96b0;font-weight:700}'
+    +'.svc-soon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}'
+    +'.svc-soon{background:#0e141c;border:1px dashed #2a3a4e;border-radius:10px;padding:11px 13px;font-size:13px;color:#c7d6e8;display:flex;align-items:center;justify-content:space-between;gap:8px}'
+    +'.svc-soon-b{font-size:10.5px;color:#8aa0b8;border:1px solid #2a3a4e;border-radius:20px;padding:2px 8px;flex:none}'
+    +'.svc-back{margin-bottom:8px}.svc-h2{margin:2px 0 4px}'
+    +'.svc-eche-kpis{display:flex;gap:12px;flex-wrap:wrap;margin:6px 0 16px}'
+    +'.svc-kpi{background:#12161d;border:1px solid #26303c;border-radius:12px;padding:12px 16px;min-width:150px}'
+    +'.svc-kpi.warn{border-color:#c9a227}.svc-kpi-v{font-size:20px;font-weight:800}.svc-kpi.warn .svc-kpi-v{color:#f0c040}.svc-kpi-l{font-size:11.5px;color:#9fb6d0;margin-top:2px}'
+    +'.svc-eche-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)}'
+    +'.svc-eche-main{flex:1;min-width:0}.svc-eche-lbl{font-weight:600;font-size:13.5px}.svc-eche-note{font-weight:400;color:#8aa0b8;font-size:11.5px}'
+    +'.svc-eche-meta{font-size:12px;color:#9fb6d0;margin-top:2px}.svc-eche-done{color:#5bbf8a;margin-left:6px}'
+    +'.svc-eche-act{display:flex;align-items:center;gap:6px;flex:none}'
+    +'.svc-eche-rap{width:48px;text-align:right;background:#0b1119;border:1px solid #26364a;color:#e7edf5;border-radius:6px;padding:4px 6px;font-size:12px}.svc-eche-rl{font-size:11px;color:#8aa0b8;margin-right:4px}'
+    +'.svc-eche-row.late .svc-eche-meta b{color:#ff8f9a}.svc-eche-row.soon .svc-eche-meta b{color:#f0c040}.svc-eche-row.off{opacity:.5}'
+    +'.svc-eche-row.late{box-shadow:inset 3px 0 0 #e1342c}.svc-eche-row.soon{box-shadow:inset 3px 0 0 #c9a227}';
+    document.head.appendChild(st2); } }catch(e){}
 })();
 </script>
 </body>
