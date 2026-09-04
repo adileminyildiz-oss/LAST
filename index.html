@@ -3160,7 +3160,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=394;
+var LAST_VER=395;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3983,8 +3983,20 @@ window.demMsgOuvrir=function(id){window.demMarquerLu(id);state.demMode='traiteme
 window.demToutLu=function(){var n=0;DB.demandes.forEach(function(d){if(!d.archived&&!d.lu){d.lu=true;n++;}});if(typeof save==='function')save();render();if(typeof toast==='function')toast(n?(n+' message(s) marqué(s) comme lu(s)'):'Aucun message non lu');};
 window.demNonLus=function(){return DB.demandes.filter(function(d){return !d.archived&&!d.lu;}).length;};
 /* Vue MESSAGERIE : boîte de réception façon mail, avec les informations du formulaire du site */
+/* Sélection & suppression des demandes (liste de réception) */
+window.demSelIds=function(){ state.demSel=state.demSel||{}; return Object.keys(state.demSel).filter(function(id){return state.demSel[id]&&(DB.demandes||[]).some(function(d){return d.id===id&&!d.archived;});}); };
+window.demSelToggle=function(id,on){ state.demSel=state.demSel||{}; if(on)state.demSel[id]=true; else delete state.demSel[id]; if(typeof render==='function')render(); };
+window.demSelAll=function(on){ state.demSel=state.demSel||{}; var ids=window.__demVisibleIds||[]; ids.forEach(function(id){ if(on)state.demSel[id]=true; else delete state.demSel[id]; }); if(typeof render==='function')render(); };
+window.demSelClear=function(){ state.demSel={}; if(typeof render==='function')render(); };
+window.demSelSupprimer=function(){ var ids=window.demSelIds(); if(!ids.length)return;
+  if(!confirm('Supprimer '+ids.length+' demande'+(ids.length>1?'s':'')+' ? Elles resteront récupérables dans la corbeille (30 jours).'))return;
+  var n=0; ids.forEach(function(id){ var i=(DB.demandes||[]).findIndex(function(d){return d.id===id;}); if(i<0)return; var d=DB.demandes[i];
+    try{ if(typeof corbeilleAdd==='function')corbeilleAdd('demande',(typeof demBestName==='function'?demBestName(d):(d.clientNom||'Demande')),d); }catch(e){}
+    DB.demandes.splice(i,1); delete state.demSel[id]; n++; });
+  if(typeof save==='function')save(); if(typeof render==='function')render(); if(typeof toast==='function')toast(n+' demande'+(n>1?'s':'')+' supprimée'+(n>1?'s':'')+' — récupérable dans la corbeille'); };
 window.demMessagerieView=function(){
  try{ if(typeof window.demReintegrerService==='function')window.demReintegrerService(); }catch(e){}
+ state.demSel=state.demSel||{};
  var q=(state.q||'').toLowerCase();
  var vis=DB.demandes.filter(function(d){return !d.archived;});
  if(typeof demMineFilter==='function')vis=demMineFilter(vis);
@@ -4007,9 +4019,12 @@ window.demMessagerieView=function(){
    +'<button class="btn btn-sm dem-imp-btn" onclick="demSyncConfig()">⚙ Configurer</button></div>';
  var search='<div class="dem-search">'+svg(IC.inbox)+'<input value="'+esc(state.q||'')+'" oninput="state.q=this.value.toLowerCase();render()" placeholder="Rechercher un expéditeur, une information…"></div>';
  state.demOpen=state.demOpen||{};
+ window.__demVisibleIds=list.map(function(d){return d.id;});
+ var _allSel=list.length&&list.every(function(d){return state.demSel[d.id];});
  var box='';
  if(list.length){
    var head='<div class="dem-erow dem-ehdr"><div class="dem-ehead">'
+     +'<span class="dem-ecol dem-col-sel"><input type="checkbox" class="dem-cb" title="Tout sélectionner" onclick="event.stopPropagation()" onchange="demSelAll(this.checked)"'+(_allSel?' checked':'')+'></span>'
      +'<span class="dem-echev"></span><span class="dem-edot" style="visibility:hidden"></span>'
      +'<span class="dem-ecol dem-col-code">N°</span>'
      +'<span class="dem-ecol dem-col-name">Client</span>'
@@ -4041,8 +4056,10 @@ window.demMessagerieView=function(){
      var isUrlKey=function(k){return /site|website|\burl\b|web/i.test(k||'');};
      var cells=f.filter(function(x){return !x.long;}).map(function(x){return cell(x.label, isUrlKey(x.key)?cleanUrl(x.value):x.value);}).join('');
      var meta=cell('E-mail',email)+cell('Téléphone',d.clientTel)+cell('Canal',canalRaw)+cell('Reçu le',mailDateHeure(d))+(nAtt?cell('Pièces jointes','📎 '+nAtt):'')+(u?cell('Assigné à',(u.nom||u.prenom||'')):'');
-     return '<div class="dem-erow'+open+(d.lu?'':' unread')+'" data-id="'+d.id+'">'
+     var selD=!!state.demSel[d.id];
+     return '<div class="dem-erow'+open+(d.lu?'':' unread')+(selD?' selected':'')+'" data-id="'+d.id+'">'
        +'<div class="dem-ehead" onclick="demRowToggle(\''+d.id+'\')">'
+         +'<span class="dem-ecol dem-col-sel"><input type="checkbox" class="dem-cb" onclick="event.stopPropagation()" onchange="demSelToggle(\''+d.id+'\',this.checked)"'+(selD?' checked':'')+'></span>'
          +'<span class="dem-echev">▸</span><span class="dem-edot"></span>'
          +'<span class="dem-ecol dem-col-code">'+(serie?('<span class="dem-ecode">'+esc(serie)+'</span>'):'')+'</span>'
          +'<span class="dem-ecol dem-col-name"><span class="dem-cdot" style="background:'+((typeof window.demCouleur==='function')?window.demCouleur(d):'#475569')+'"></span><span class="dem-ename">'+esc(demBestName(d))+'</span></span>'
@@ -4068,9 +4085,11 @@ window.demMessagerieView=function(){
    }).join('')+'</div>';
  } else box='<div class="empty">Aucun message '+(canal==='site'?'du site ':(canal==='autres'?'hors site ':''))+'dans la boîte de réception.</div>';
  var horsBar=horsAll.length?('<div class="dem-hors"><span class="dem-hors-t">🧹 '+horsAll.length+' message'+(horsAll.length>1?'s':'')+' sans rapport avec vos services — '+(state.demHors?('affiché'+(horsAll.length>1?'s':'')):('écarté'+(horsAll.length>1?'s':'')+' automatiquement'))+'.</span><span class="dem-hors-acts"><button class="btn btn-sm dem-imp-btn" onclick="state.demHors='+(state.demHors?'false':'true')+';render()">'+(state.demHors?'Masquer':'Afficher')+'</button><button class="btn btn-sm dem-imp-btn dem-act-no" onclick="demSupprimerHorsService()">🗑 Supprimer</button></span></div>'):'';
+ var _selN=window.demSelIds().length;
+ var selBar=_selN?('<div class="dem-selbar"><span class="dem-selbar-t">✓ '+_selN+' demande'+(_selN>1?'s':'')+' sélectionnée'+(_selN>1?'s':'')+'</span><span class="dem-selbar-a"><button class="btn btn-sm dem-imp-btn dem-act-no" onclick="demSelSupprimer()">🗑 Supprimer la sélection</button><button class="btn btn-sm dem-imp-btn" onclick="demSelClear()">Tout désélectionner</button></span></div>'):'';
  return ((typeof demPosteBanner==='function')?demPosteBanner():'')
    +'<div class="dem-head"><div class="dem-head-row">'+canBar+acts+'</div><div class="dem-head-row">'+search+'</div></div>'
-   +horsBar
+   +horsBar+selBar
    +'<div class="card"><div class="card-b" style="padding:0">'+box+'</div></div>';
 };
 window.pageDemandes=function(){
@@ -7128,6 +7147,7 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
 .cb-tag.devis{background:#fff5e6;color:#b45309;border-color:#f2ddb4}
 .cb-tag.client{background:#f3eeff;color:#6b4fd8;border-color:#e0d6ff}
 .cb-tag.fournisseur{background:#fdeef1;color:#c2405a;border-color:#f4cdd6}
+.cb-tag.demande{background:#eaf1ff;color:#3a63c8;border-color:#d3e0fb}
 .cb-actions{margin-left:auto;display:flex;gap:6px}
 .cb-empty{font-size:12px;color:var(--ink-3);padding:8px 2px}
 </style>
@@ -7139,8 +7159,8 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
    =================================================================== */
 (function(){
   var MAXDAYS=30, CAP=150;
-  var MAP={client:'clients',dossier:'dossiers',facture:'factures',devis:'devis',fournisseur:'fournisseurs',prestation:'services',collaborateur:'users'};
-  var TL={client:'Client',dossier:'Dossier',facture:'Facture',devis:'Devis',fournisseur:'Fournisseur',prestation:'Prestation',collaborateur:'Collaborateur'};
+  var MAP={client:'clients',dossier:'dossiers',facture:'factures',devis:'devis',fournisseur:'fournisseurs',prestation:'services',collaborateur:'users',demande:'demandes'};
+  var TL={client:'Client',dossier:'Dossier',facture:'Facture',devis:'Devis',fournisseur:'Fournisseur',prestation:'Prestation',collaborateur:'Collaborateur',demande:'Demande'};
   function ensure(){ if(typeof DB==='undefined'||!DB) return null; if(!Array.isArray(DB.corbeille))DB.corbeille=[]; return DB.corbeille; }
   function purgeOld(){ var c=ensure(); if(!c)return; var cut=Date.now()-MAXDAYS*86400000;
     for(var i=c.length-1;i>=0;i--){ if(!c[i]||c[i].ts<cut) c.splice(i,1); }
@@ -20691,8 +20711,15 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       '.dem-ehdr{position:sticky;top:0;z-index:2;background:#0f1319;border-bottom:1px solid #23262d}',
       '.dem-ehdr .dem-ehead{cursor:default;padding:9px 16px}',
       '.dem-ehdr .dem-ecol{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#8b93a1;font-weight:800}',
-      '.dem-ehead{display:grid;grid-template-columns:16px 12px 64px minmax(150px,1.5fr) 118px minmax(150px,1.1fr) 140px 128px 84px;align-items:center;gap:14px;padding:11px 16px;cursor:pointer;transition:background .12s}',
+      '.dem-ehead{display:grid;grid-template-columns:26px 16px 12px 64px minmax(150px,1.5fr) 118px minmax(150px,1.1fr) 140px 128px 84px;align-items:center;gap:14px;padding:11px 16px;cursor:pointer;transition:background .12s}',
       '.dem-erow:not(.dem-ehdr) .dem-ehead:hover{background:#141821}',
+      '.dem-col-sel{justify-content:center;overflow:visible}',
+      '.dem-cb{width:16px;height:16px;flex:none;margin:0;cursor:pointer;accent-color:#4f9dff}',
+      '.dem-erow.selected .dem-ehead{background:rgba(79,157,255,.10)}',
+      '.dem-erow.selected{box-shadow:inset 3px 0 0 #4f9dff}',
+      '.dem-selbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px;padding:9px 14px;border:1px solid #2c4a72;background:#0e1a2c;border-radius:10px}',
+      '.dem-selbar-t{font-size:12.5px;font-weight:700;color:#8fbcff;flex:1;min-width:160px}',
+      '.dem-selbar-a{display:flex;gap:8px;flex-wrap:wrap}',
       '.dem-echev{color:#8b93a1;font-size:11px;transition:transform .15s;text-align:center}',
       '.dem-erow.open .dem-echev{transform:rotate(90deg);color:#cbd5ff}',
       '.dem-edot{width:9px;height:9px;border-radius:50%;background:#3a3f49;justify-self:center}',
@@ -20730,7 +20757,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       '.dem-hors{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px;padding:9px 13px;border:1px dashed #3a3320;background:#16130c;border-radius:10px}',
       '.dem-hors-t{font-size:12.5px;color:#e0c489;flex:1;min-width:200px}',
       '.dem-hors-acts{display:flex;gap:8px;flex-wrap:wrap}',
-      '@media(max-width:900px){.dem-ehead{grid-template-columns:16px 10px 1fr auto;grid-auto-rows:auto;gap:6px 8px}.dem-col-canal,.dem-col-obj,.dem-col-st{grid-column:3/5}.dem-col-date{grid-column:3}.dem-col-open{grid-column:4}.dem-ehdr{display:none}.dem-edetail{padding-left:18px}}'
+      '@media(max-width:900px){.dem-ehead{grid-template-columns:24px 16px 10px 1fr auto;grid-auto-rows:auto;gap:6px 8px}.dem-col-sel{grid-row:1;grid-column:1}.dem-col-canal,.dem-col-obj,.dem-col-st{grid-column:4/6}.dem-col-date{grid-column:4}.dem-col-open{grid-column:5}.dem-ehdr{display:none}.dem-edetail{padding-left:18px}}'
     ].join(''); document.head.appendChild(st); } }catch(e){}
 })();
 </script>
