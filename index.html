@@ -583,6 +583,8 @@ const svg=(p,cls)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
    DB + seed
    ================================================================= */
 let DB=null;
+/* Permet aux scripts additifs (persistance IndexedDB) de remplacer la base courante référencée par l'app. */
+window.__applyDB=function(o){ if(o&&typeof o==='object'){ DB=o; } };
 function seed(){
   const U=[
     {id:'u-admin',nom:'Admin',role:'admin',couleur:'#3a3227'},
@@ -651,12 +653,19 @@ function migrateCleanDemoDossiers(){
 }
 function load(){
   var fromLS=false;
-  try{const r=localStorage.getItem(KEY);if(r){DB=JSON.parse(r);fromLS=true;}else DB=seed();}catch(e){DB=seed();fromLS=false;}
+  try{const r=localStorage.getItem(KEY);if(r){DB=JSON.parse(r);fromLS=true;}else{DB=seed();window.__lastFreshSeed=true;}}catch(e){DB=seed();fromLS=false;window.__lastFreshSeed=true;}
   if(fromLS){try{migrateCleanDemoDossiers();}catch(e){}}
 }
 let saveT=null;
 function save(){
-  try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}
+  var _json=null; try{_json=JSON.stringify(DB);}catch(e){_json=null;}
+  var lsOk=false;
+  if(_json!=null){ try{localStorage.setItem(KEY,_json);lsOk=true;}catch(e){ try{localStorage.removeItem(KEY);}catch(_){} } }
+  try{localStorage.setItem(KEY+'-ts',String(Date.now()));}catch(_){}
+  /* Miroir IndexedDB (stockage étendu) : protège contre la saturation du stockage local (~5 Mo)
+     lorsque des pièces jointes volumineuses sont enregistrées → plus de perte silencieuse. */
+  try{ if(_json!=null && typeof window.idbSaveDB==='function') window.idbSaveDB(_json); }catch(e){}
+  if(!lsOk){ window.__lastQuotaExceeded=true; if(!window.__lastQuotaWarned){ window.__lastQuotaWarned=true; try{if(typeof toast==='function')toast('Stockage local saturé — vos données sont conservées (stockage étendu). Exportez une sauvegarde par sécurité.');}catch(_){} } }
   const t=document.getElementById('saveind-t');
   if(t){t.textContent='Enregistré · '+new Date().toLocaleTimeString('fr-FR');
     const s=document.getElementById('saveind');s.style.opacity='1';clearTimeout(saveT);saveT=setTimeout(()=>s.style.opacity='.6',1400);}
@@ -3145,13 +3154,13 @@ function lastGateRender(stage,data){
 +'#pwa-install .pwa-tx b{font-size:13px}#pwa-install .pwa-tx span{font-size:11px;color:#cbbfa9}'
 +'#pwa-install .pwa-btn{background:#e9dcc0;color:#3f372b;border:none;border-radius:8px;padding:8px 15px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;flex:none}'
 +'#pwa-install .pwa-x{background:none;border:none;color:#cbbfa9;font-size:16px;cursor:pointer;padding:2px 4px;flex:none}';document.head.appendChild(s);})();
-if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').then(function(reg){
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(function(reg){
   try{reg.update();}catch(e){}
   // Un nouveau service worker détecté → l'activer tout de suite (app + site à jour ensemble)
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=392;
+var LAST_VER=393;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3159,8 +3168,9 @@ function lastCheckUpdate(){
   try{ if(!navigator.onLine)return; }catch(e){}
   fetch('version.json?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
     if(j&&+j.version>LAST_VER&&!window.__lastReloaded){ window.__lastReloaded=true; try{if(typeof toast==='function')toast('Nouvelle version — mise à jour…');}catch(e){}
-      if('serviceWorker' in navigator){navigator.serviceWorker.getRegistration().then(function(reg){try{reg&&reg.update();}catch(e){}}).finally(function(){setTimeout(function(){location.reload(true);},400);}); }
-      else { setTimeout(function(){location.reload(true);},400); }
+      var _purge=function(){ try{ if(window.caches&&caches.keys) return caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));}); }catch(e){} return Promise.resolve(); };
+      if('serviceWorker' in navigator){navigator.serviceWorker.getRegistration().then(function(reg){try{reg&&reg.update();}catch(e){}}).finally(function(){_purge().finally(function(){setTimeout(function(){location.reload(true);},400);});}); }
+      else { _purge().finally(function(){setTimeout(function(){location.reload(true);},400);}); }
     }
   }).catch(function(){});
   if('serviceWorker' in navigator){navigator.serviceWorker.getRegistration().then(function(reg){try{reg&&reg.update();}catch(e){}});}
@@ -3950,10 +3960,23 @@ window.demInfosCard=function(d){
 };
 window.demEstSite=function(d){return /formulaire du site|site aem|aemconseil|formsubmit|formulaire/i.test(d&&d.canal||'');};
 /* Pertinence : la demande porte-t-elle une intention liée aux services de Mar'q (cabinet) ? */
-window.demBestText=function(d){ var parts=[]; try{parts.push((typeof IA!=='undefined'&&IA.objet)?IA.objet(d):'');}catch(e){} parts.push((d&&d.serviceSouhaite)||'',(d&&d.message)||''); try{parts.push((typeof mailDemande==='function')?mailDemande(d):'');}catch(e){} try{(window.demFields(d)||[]).forEach(function(x){parts.push((x.label||'')+' '+(x.value||''));});}catch(e){} return parts.join(' ').toLowerCase(); };
-window.demServiceNoise=/newsletter|unsubscribe|se d[ée]sinscrire|d[ée]sabonn|mailing list|no.?reply@|someone just submitted your form|easy form endpoints|black friday|offre sp[ée]ciale|promotion|promo code|casino|crypto|bitcoin|\bviagra\b|\bloan\b|r[ée]f[ée]rencement naturel|backlink|seo ranking/i;
-window.demServiceKw=/cr[ée]ation|cr[ée]er|soci[ée]t[ée]|entreprise|\bsas\b|\bsasu\b|\bsarl\b|\beurl\b|\bsci\b|holding|auto.?entrepreneur|micro.?entreprise|immatricul|kbis|statuts|si[èe]ge social|d[ée]nomination|g[ée]rant|capital social|cession de (parts|d.?actions)|dissolution|liquidation|radiation|transfert de si[èe]ge|modification statutaire|comptab|bilan|liasse|\btva\b|formalit[ée]|greffe|inpi|\brcs\b|urssaf|domiciliation|associ[ée]|constitu|d[ée]p[oô]t de capital|annonce l[ée]gale|dossier de cr[ée]ation|lancer (mon|une|son)|monter (ma|une|mon)|devis|rendez.?vous/i;
-window.demServicePertinent=function(d){ try{ var t=window.demBestText(d); if(window.demServiceNoise.test(t))return false; if(window.demServiceKw.test(t))return true; return true; }catch(e){ return true; } };
+window.demBestText=function(d){ var parts=[]; try{parts.push((typeof IA!=='undefined'&&IA.objet)?IA.objet(d):'');}catch(e){} var msg=(d&&d.message)||''; try{ if(typeof demStripBoilerplate==='function')msg=demStripBoilerplate(msg); }catch(e){} parts.push((d&&d.serviceSouhaite)||'',msg); try{parts.push((typeof mailDemande==='function')?mailDemande(d):'');}catch(e){} try{(window.demFields(d)||[]).forEach(function(x){parts.push((x.label||'')+' '+(x.value||''));});}catch(e){} return parts.join(' ').toLowerCase(); };
+/* Bruit = uniquement les VRAIS mails hors-service (newsletters, pub, SEO, spam). JAMAIS le texte automatique
+   FormSubmit (« someone just submitted your form », « easy form endpoints »), présent dans TOUS les mails du site. */
+window.demServiceNoise=/newsletter|unsubscribe|se d[ée]sinscrire|d[ée]sabonn|mailing list|black friday|offre sp[ée]ciale|promo(tion| code)|code promo|casino|crypto|bitcoin|\bviagra\b|\bloan\b|pr[êe]t rapide|r[ée]f[ée]rencement (naturel|google)|backlink|seo ranking|augmentez vos ventes|boostez votre|gagnez de l.argent/i;
+/* Services du cabinet — inclut explicitement : demandes de DOCUMENT / téléchargement de ressource,
+   demandes d'OUVERTURE / création, rappels & assistance, devis, questions/renseignements. */
+window.demServiceKw=/cr[ée]ation|cr[ée]er|ouvrir|ouverture|monter (ma|une|mon|sa)|lancer (mon|une|son|ma)|soci[ée]t[ée]|entreprise|\bsas\b|\bsasu\b|\bsarl\b|\beurl\b|\bsci\b|holding|auto.?entrepreneur|micro.?entreprise|immatricul|kbis|statuts|si[èe]ge social|d[ée]nomination|g[ée]rant|capital social|cession de (parts|d.?actions)|dissolution|liquidation|radiation|transfert de si[èe]ge|modification statutaire|comptab|bilan|liasse|\btva\b|formalit[ée]|greffe|inpi|\brcs\b|urssaf|domiciliation|associ[ée]|constitu|d[ée]p[oô]t de capital|annonce l[ée]gale|dossier|devis|prix|tarif|rendez.?vous|rappel|assistant|renseignement|information|question|document|t[ée]l[ée]chargement|ressource|mod[èe]le|facture|tr[ée]sorerie|attestation/i;
+window.demServicePertinent=function(d){ try{
+  /* Toujours conserver : demande issue du questionnaire du site, ou déjà rattachée/traitée. */
+  if(d&&(d.intake||d.dossierId||d.decision))return true;
+  var t=window.demBestText(d);
+  if(window.demServiceKw.test(t))return true;      /* service reconnu → on garde */
+  if(window.demServiceNoise.test(t))return false;  /* vrai bruit → de côté */
+  return true;                                     /* dans le doute → on garde */
+}catch(e){ return true; } };
+/* Réintègre les mails précédemment mis « hors-service » à tort (ex. document / création / rappel). */
+window.demReintegrerService=function(){ try{ var n=0; (DB.demandes||[]).forEach(function(d){ if(d&&d.archived&&d.archiveRaison==='hors-service'&&window.demServicePertinent(d)){ d.archived=false; delete d.archiveRaison; n++; } }); if(n){ if(typeof save==='function')save(); } return n; }catch(e){ return 0; } };
 window.demSupprimerHorsService=function(){ try{ var n=0; (DB.demandes||[]).forEach(function(d){ if(!d.archived&&!window.demServicePertinent(d)){ d.archived=true; d.archiveRaison='hors-service'; n++; } }); if(typeof save==='function')save(); if(typeof render==='function')render(); if(typeof toast==='function')toast(n?(n+' message(s) sans rapport supprimé(s) de la boîte'):'Aucun message à supprimer'); }catch(e){} };
 window.demMarquerLu=function(id){var d=DB.demandes.find(function(x){return x.id===id;});if(d&&!d.lu){d.lu=true;if(typeof save==='function')save();}};
 window.demMsgOuvrir=function(id){window.demMarquerLu(id);state.demMode='traitement';if(typeof demOuvrirVue==='function')demOuvrirVue(id);else{state.demView=id;render();}};
@@ -3961,6 +3984,7 @@ window.demToutLu=function(){var n=0;DB.demandes.forEach(function(d){if(!d.archiv
 window.demNonLus=function(){return DB.demandes.filter(function(d){return !d.archived&&!d.lu;}).length;};
 /* Vue MESSAGERIE : boîte de réception façon mail, avec les informations du formulaire du site */
 window.demMessagerieView=function(){
+ try{ if(typeof window.demReintegrerService==='function')window.demReintegrerService(); }catch(e){}
  var q=(state.q||'').toLowerCase();
  var vis=DB.demandes.filter(function(d){return !d.archived;});
  if(typeof demMineFilter==='function')vis=demMineFilter(vis);
@@ -20743,6 +20767,60 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       };
     }
   }catch(e){}
+})();
+</script>
+
+<script id="idb-persist">
+/* ===================================================================
+   PERSISTANCE ÉTENDUE (IndexedDB) — miroir de la base au-delà des ~5 Mo
+   du stockage local. Protège contre la perte silencieuse de données
+   quand des pièces jointes volumineuses saturent localStorage.
+   =================================================================== */
+(function(){
+  var DBNAME='last-store', STORE='kv', KID='db';
+  /* Tant que le démarrage n'a pas décidé de restaurer ou non, on n'écrase PAS la copie IndexedDB
+     (sinon un save() de démarrage réécrirait un seed par-dessus les vraies données). */
+  window.__idbBooting=true;
+  function openIDB(){ return new Promise(function(res,rej){ try{ var rq=indexedDB.open(DBNAME,1);
+    rq.onupgradeneeded=function(){ try{ rq.result.createObjectStore(STORE); }catch(e){} };
+    rq.onsuccess=function(){ res(rq.result); }; rq.onerror=function(){ rej(rq.error); }; }catch(e){ rej(e); } }); }
+  function idbPut(val){ return openIDB().then(function(db){ return new Promise(function(res,rej){ try{ var tx=db.transaction(STORE,'readwrite'); tx.objectStore(STORE).put(val,KID); tx.oncomplete=function(){res(true);}; tx.onerror=function(){rej(tx.error);}; }catch(e){ rej(e); } }); }); }
+  function idbGet(){ return openIDB().then(function(db){ return new Promise(function(res,rej){ try{ var tx=db.transaction(STORE,'readonly'); var rq=tx.objectStore(STORE).get(KID); rq.onsuccess=function(){res(rq.result);}; rq.onerror=function(){rej(rq.error);}; }catch(e){ rej(e); } }); }); }
+
+  var pend=null, tmr=0;
+  window.idbSaveDB=function(json){ if(window.__idbBooting)return; pend=json; if(tmr)return; tmr=setTimeout(function(){ tmr=0; var j=pend; pend=null; if(j==null)return;
+    idbPut({data:j,ts:Date.now()}).catch(function(){}); },600); };
+
+  function endBoot(){ if(!window.__idbBooting)return; window.__idbBooting=false; try{ if(typeof window.save==='function' && window.DB) window.idbSaveDB(JSON.stringify(window.DB)); }catch(e){} }
+
+  function bootRestore(){
+    try{
+      idbGet().then(function(rec){
+        try{
+          if(!rec||!rec.data){ return; }
+          var lsRaw=null; try{lsRaw=localStorage.getItem('last-db-v1');}catch(e){}
+          var lsTs=0; try{lsTs=parseInt(localStorage.getItem('last-db-v1-ts')||'0',10)||0;}catch(e){}
+          var idbTs=rec.ts||0;
+          /* Restaure si : la base a été (re)semée à ce démarrage (stockage local perdu / saturation),
+             OU si le stockage local est vide, OU si la copie IndexedDB est nettement plus récente. */
+          var besoin=(!!window.__lastFreshSeed)||(!lsRaw)||(idbTs>lsTs+1500);
+          if(!besoin) return;
+          var parsed; try{parsed=JSON.parse(rec.data);}catch(e){return;}
+          if(!parsed||typeof parsed!=='object') return;
+          if(typeof window.__applyDB==='function')window.__applyDB(parsed); else window.DB=parsed;
+          window.__lastFreshSeed=false; window.__idbBooting=false;
+          try{ if(typeof migrateCleanDemoDossiers==='function')migrateCleanDemoDossiers(); }catch(e){}
+          try{ if(typeof save==='function')save(); else { localStorage.setItem('last-db-v1',rec.data); localStorage.setItem('last-db-v1-ts',String(idbTs)); } }catch(e){}
+          try{ if(typeof render==='function')render(); }catch(e){}
+          try{ if(typeof toast==='function')toast('Données restaurées depuis le stockage étendu.'); }catch(e){}
+        } finally { endBoot(); }
+      }).catch(function(){ endBoot(); });
+    }catch(e){ endBoot(); }
+  }
+  if(document.readyState==='complete'||document.readyState==='interactive') setTimeout(bootRestore,120);
+  else window.addEventListener('DOMContentLoaded',function(){ setTimeout(bootRestore,120); });
+  /* Filet de sécurité : ne jamais rester bloqué en mode démarrage */
+  setTimeout(endBoot,4000);
 })();
 </script>
 </body>
