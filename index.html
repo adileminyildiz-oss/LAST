@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=444;
+var LAST_VER=445;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -13465,7 +13465,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function soustraitanceDocHTML(d){var st=stData(d),soc=nomD(d),c=(typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};
     var don=E(soc)+(c.adresse?(', '+E(c.adresse)):'')+((c.cp||c.ville)?(' '+E(c.cp||'')+' '+E(c.ville||'')):'')+(c.siren||c.siret?(', SIREN/SIRET '+E(c.siren||c.siret)):'');
     var sst=E(st.stNom||'……………')+(st.stForme?(' ('+E(st.stForme)+')'):'')+(st.stAdresse?(', '+E(st.stAdresse)):'')+(st.stSiret?(', SIRET '+E(st.stSiret)):'');
-    var mnt=pf0(st.montant),tva=st.tva==='autoliq'?0:mnt*0.2,ttc=mnt+tva;
+    var _tvx=(window.barGet?window.barGet('fisc.tva20'):20);var mnt=pf0(st.montant),tva=st.tva==='autoliq'?0:mnt*_tvx/100,ttc=mnt+tva;
     var tampon=st.tampon?cachetHTML({tampon:st.tampon}):'';
     var art=function(n,t,txt){return '<div class="ct-art"><b>Article '+n+' — '+E(t)+'</b><p>'+txt+'</p></div>';};
     return '<div class="doc-gen"><div class="dg-page ct-doc">'
@@ -13475,7 +13475,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<p><b>ET le sous-traitant :</b> '+sst+(st.stRep?(', représenté par '+E(st.stRep)):'')+',</p><p>ci-après « le Sous-traitant », d’autre part.</p></div>'
       +art(1,'Objet',E(st.objet||'…………………')+'. Le Sous-traitant s’engage à réaliser ces prestations conformément aux règles de l’art'+(st.lieu?(', sur le lieu suivant : '+E(st.lieu)):'')+'.')
       +art(2,'Durée',(st.dateDebut||st.dateFin)?('Le présent contrat prend effet le '+E(st.dateDebut||'…')+' et s’achève le '+E(st.dateFin||'…')+'.'):'Le présent contrat est conclu pour la durée d’exécution des prestations définies à l’article 1.')
-      +art(3,'Prix & TVA','Le montant du marché est fixé à <b>'+eu2(mnt)+' HT</b>'+(st.tva==='autoliq'?' — <b>Autoliquidation de la TVA</b> par le Donneur d’ordre (art. 283-2 nonies du CGI) : le Sous-traitant facture HT, sans TVA, avec la mention « Autoliquidation ».':(' — TVA 20 % : '+eu2(tva)+', soit '+eu2(ttc)+' TTC.'))+' Les prix sont fermes sauf avenant écrit.')
+      +art(3,'Prix & TVA','Le montant du marché est fixé à <b>'+eu2(mnt)+' HT</b>'+(st.tva==='autoliq'?' — <b>Autoliquidation de la TVA</b> par le Donneur d’ordre (art. 283-2 nonies du CGI) : le Sous-traitant facture HT, sans TVA, avec la mention « Autoliquidation ».':(' — TVA '+(window.barGet?window.barGet("fisc.tva20"):20)+' % : '+eu2(tva)+', soit '+eu2(ttc)+' TTC.'))+' Les prix sont fermes sauf avenant écrit.')
       +art(4,'Modalités de paiement','Les factures sont réglées à <b>'+pf0(st.delai)+' jours</b>. '+(st.penalites?('Pénalités de retard : '+E(st.penalites)+'.'):'Des pénalités de retard sont applicables de plein droit en cas de retard de paiement (taux légal + indemnité forfaitaire de 40 €).'))
       +art(5,'Obligations du Sous-traitant','Le Sous-traitant exécute les prestations sous sa responsabilité, avec du personnel qualifié et déclaré, dans le respect des délais et de la réglementation applicable (travail, sécurité, environnement).')
       +(st.assurance?art(6,'Assurance & responsabilité','Le Sous-traitant justifie d’une assurance de responsabilité civile professionnelle'+(/BTP|travaux|construction/i.test(actNorm(st.objet))?' et, le cas échéant, d’une garantie décennale':'')+' en cours de validité, et en remet l’attestation avant tout commencement d’exécution.'):'')
