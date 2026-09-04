@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=441;
+var LAST_VER=442;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22650,5 +22650,90 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
 })();
 </script>
 
+<script id="mod-clientfill">
+/* ===== Auto-remplissage des documents remplissables depuis la fiche client sélectionnée (Éditions) ===== */
+(function(){
+  if(window.__clientfillInit) return; window.__clientfillInit=1;
+  function norm(s){ try{ return (''+(s==null?'':s)).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }catch(e){ return (''+(s==null?'':s)).toLowerCase(); } }
+  function pfClientData(){
+    try{
+      var id=window.__edClientSel; if(!id||typeof window.clientById!=='function') return null;
+      var c=window.clientById(id); if(!c) return null;
+      var denom=((c.denomination||'').trim())||((''+(c.nom||'')+' '+(c.prenom||'')).trim());
+      var dirig=((c.president||'').trim())||((''+(c.prenom||'')+' '+(c.nom||'')).trim());
+      var d={ raison:denom, forme:c.forme||'', capital:(c.capital!=null&&c.capital!==''?(''+c.capital):''),
+        siret:c.siret||'', siren:c.siren||'', tva:c.tvaIntra||'',
+        adresse:(c.adresse||c.siege||''), cp:c.cp||'', ville:c.ville||'',
+        ape:c.codeAPE||'', dirigeant:dirig, email:c.email||'', tel:c.tel||'',
+        nom:c.nom||'', prenom:c.prenom||'', _label:denom };
+      return d;
+    }catch(e){ return null; }
+  }
+  window.pfClientData=pfClientData;
+  function semantic(key){ var k=norm(key);
+    if(/siret/.test(k)) return 'siret';
+    if(/siren/.test(k)) return 'siren';
+    if(/(tva|intracom)/.test(k)) return 'tva';
+    if(/(^|[_-])cp([_-]|$)|codepostal|code[_-]?postal/.test(k)) return 'cp';
+    if(/(ville|commune)/.test(k)) return 'ville';
+    if(/(\bape\b|\bnaf\b|code[_-]?ape|code[_-]?naf|codeape|codenaf)/.test(k)) return 'ape';
+    if(/capital/.test(k)) return 'capital';
+    if(/(forme[_-]?jur|formejuridique|(^|[_-])forme([_-]|$)|statut[_-]?jur)/.test(k)) return 'forme';
+    if(/(adresse|siege|domicil)/.test(k)) return 'adresse';
+    if(/(raison|denom|societe|entreprise|nomsoc|nom[_-]?soc)/.test(k)) return 'raison';
+    if(/(represent|dirigeant|gerant|mandataire|president|signataire|qualite)/.test(k)) return 'dirigeant';
+    if(/(courriel|e[_-]?mail|(^|[_-])mail([_-]|$)|email)/.test(k)) return 'email';
+    if(/(telephone|(^|[_-])tel([_-]|$)|portable|phone|gsm)/.test(k)) return 'tel';
+    if(/prenom/.test(k)) return 'prenom';
+    if(/(^|[_-])nom([_-]|$)/.test(k)) return 'nom';
+    return null;
+  }
+  window.pfClientPrefill=function(doc,tplName){
+    try{
+      if(!doc) return 0; var c=pfClientData(); if(!c) return 0;
+      doc.data=doc.data||{}; var filled=0;
+      /* Fiche de paie : bloc employeur */
+      if(tplName==='paie' || doc.k==='fichepaie'){
+        var emp=doc.data.emp;
+        if(!emp || !(''+(emp.nom||'')).trim()){
+          doc.data.emp={nom:c.raison,adr:c.adresse,cp:c.cp,ville:c.ville,siret:c.siret,naf:c.ape};
+          filled=6;
+        }
+        return filled;
+      }
+      /* Documents remplissables sur PDF (bilan, contrats, modèles calibrés) */
+      var tpl=window.PF_TPL&&window.PF_TPL[tplName]; if(!tpl||!tpl.pages) return 0;
+      var val={raison:c.raison,forme:c.forme,capital:c.capital,siret:c.siret,siren:c.siren,tva:c.tva,adresse:c.adresse,cp:c.cp,ville:c.ville,ape:c.ape,dirigeant:c.dirigeant,email:c.email,tel:c.tel,nom:c.nom,prenom:c.prenom};
+      var usedFirst={};
+      tpl.pages.forEach(function(pg){ var pk=pg.key||'p1'; var store=doc.data[pk]=doc.data[pk]||{};
+        (pg.fields||[]).forEach(function(f){ var key=f[0], o=f[5]||{}; if(o&&o.cb) return;
+          var sem=semantic(key); if(!sem) return; var v=val[sem]; if(v==null||v==='') return;
+          if(usedFirst[sem]) return;                          /* 1re occurrence par attribut → évite de remplir 2 parties */
+          if(store[key]!=null && (''+store[key]).trim()!==''){ usedFirst[sem]=true; return; } /* déjà saisi : ne pas écraser */
+          store[key]=v; usedFirst[sem]=true; filled++;
+        });
+      });
+      return filled;
+    }catch(e){ return 0; }
+  };
+  function wrapOpen(name,tplFromArgs){
+    var o=window[name]; if(typeof o!=='function'||o.__cf) return;
+    window[name]=function(){
+      try{ var doc=(name==='pdfFillOpen')?arguments[1]:arguments[0]; var tpl=tplFromArgs.apply(null,arguments);
+        if(doc){ var n=window.pfClientPrefill(doc,tpl); if(n){ try{ if(typeof save==='function')save(); }catch(e){} try{ var c=pfClientData(); if(c&&typeof toast==='function') toast('Champs pré-remplis pour '+(c._label||'le client')); }catch(e){} } }
+      }catch(e){}
+      return o.apply(this,arguments);
+    };
+    window[name].__cf=true;
+  }
+  function install(){
+    wrapOpen('pdfFillOpen', function(tplId,doc){ return tplId; });
+    wrapOpen('pfPaieExactOpen', function(doc){ return 'paie'; });
+  }
+  install();
+  /* filet : si les fonctions sont (re)définies plus tard, retenter */
+  var tries=0; var iv=setInterval(function(){ tries++; install(); if(tries>20||( (window.pdfFillOpen&&window.pdfFillOpen.__cf)&&(window.pfPaieExactOpen&&window.pfPaieExactOpen.__cf) )) clearInterval(iv); }, 300);
+})();
+</script>
 </body>
 </html>
