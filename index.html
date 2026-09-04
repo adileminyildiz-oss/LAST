@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=442;
+var LAST_VER=443;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22094,7 +22094,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   var MOISN=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
   /* Paramètres réglementaires (calibrés sur le bulletin ; modifiables via la barre latérale) */
-  var PARAM={ smic:12.31, pmss:3100.65, csgBase:98.25 };
+  var PARAM={ get smic(){ return window.barGet?window.barGet('paie.smic'):12.31; }, get pmss(){ return window.barGet?window.barGet('paie.pmss'):3100.65; }, get csgBase(){ return window.barGet?window.barGet('paie.csgBase'):98.25; } };
   // Cotisations : base = 'brut' | 'plaf' (plafonnée) | 'csg' ; sal/pat en % ; imp=false -> non déductible du net imposable
   function COTIS(){ return [
     {code:'santeMal', grp:'SANTÉ',            lib:'Sécurité sociale - Maladie Maternité', base:'brut', sal:0,    pat:7.00},
@@ -22733,6 +22733,83 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   install();
   /* filet : si les fonctions sont (re)définies plus tard, retenter */
   var tries=0; var iv=setInterval(function(){ tries++; install(); if(tries>20||( (window.pdfFillOpen&&window.pdfFillOpen.__cf)&&(window.pfPaieExactOpen&&window.pfPaieExactOpen.__cf) )) clearInterval(iv); }, 300);
+})();
+</script>
+<script id="mod-baremes">
+/* ===== Barèmes & règles — millésime 2026 : source unique éditable, alimente les documents ===== */
+(function(){
+  if(window.__baremesInit) return; window.__baremesInit=1;
+  var MILLESIME=2026;
+  /* Valeurs 2026 pré-remplies — À VÉRIFIER auprès des sources officielles (URSSAF / impots.gouv.fr / service-public.fr) */
+  var GROUPS=[
+    {g:'Paie — cotisations & plafonds', items:[
+      ['paie.smic','SMIC horaire brut (€)',11.88,'€/h'],
+      ['paie.smicMensuel','SMIC mensuel brut 35 h (€)',1801.80,'€'],
+      ['paie.pmss','Plafond mensuel Sécurité sociale (€)',3925,'€'],
+      ['paie.pass','Plafond annuel Sécurité sociale (€)',47100,'€'],
+      ['paie.csgBase','Base CSG/CRDS (% du brut)',98.25,'%'],
+      ['paie.csgDed','CSG déductible (%)',6.80,'%'],
+      ['paie.csgNd','CSG/CRDS non déductible (%)',2.90,'%']
+    ]},
+    {g:'Fiscalité — IS & TVA', items:[
+      ['fisc.isReduit','Impôt sociétés — taux réduit (%)',15,'%'],
+      ['fisc.isSeuil','IS — seuil du taux réduit (€ de bénéfice)',42500,'€'],
+      ['fisc.isNormal','Impôt sociétés — taux normal (%)',25,'%'],
+      ['fisc.tva20','TVA taux normal (%)',20,'%'],
+      ['fisc.tva10','TVA taux intermédiaire (%)',10,'%'],
+      ['fisc.tva55','TVA taux réduit (%)',5.5,'%'],
+      ['fisc.tva21','TVA taux particulier (%)',2.1,'%']
+    ]},
+    {g:'Seuils — franchise en base de TVA & micro', items:[
+      ['seuil.franchiseServices','Franchise en base — prestations de services (€)',37500,'€'],
+      ['seuil.franchiseVentes','Franchise en base — ventes de marchandises (€)',85000,'€'],
+      ['seuil.microBNC','Micro-BNC — plafond de recettes (€)',77700,'€'],
+      ['seuil.microBIC','Micro-BIC ventes — plafond (€)',188700,'€']
+    ]}
+  ];
+  var DEF={}; GROUPS.forEach(function(gr){ gr.items.forEach(function(it){ DEF[it[0]]=it[2]; }); });
+  function store(){ try{ return JSON.parse(localStorage.getItem('last-baremes')||'{}')||{}; }catch(e){ return {}; } }
+  function saveStore(o){ try{ localStorage.setItem('last-baremes',JSON.stringify(o)); }catch(e){} }
+  window.barGet=function(key){ var s=store(); var v=(s&&s[key]!=null&&s[key]!=='')?s[key]:DEF[key]; var n=parseFloat((''+v).replace(',','.')); return isNaN(n)?(DEF[key]||0):n; };
+  window.barGetRaw=function(key){ var s=store(); return (s&&s[key]!=null)?s[key]:DEF[key]; };
+  window.baremeMillesime=function(){ return MILLESIME; };
+  window.barSet=function(key,val){ var s=store(); if(val==null||(''+val).trim()===''){ delete s[key]; } else { s[key]=(''+val).trim(); } saveStore(s); var b=document.querySelector('.bar-badge'); if(b)b.textContent=Object.keys(store()).length? (Object.keys(store()).length+' valeur(s) personnalisée(s)') : 'valeurs 2026 par défaut'; };
+  window.barReset=function(){ if(typeof uiConfirm==='function'){ uiConfirm('Réinitialiser tous les barèmes aux valeurs 2026 par défaut ?',function(){ saveStore({}); if(typeof render==='function')render(); if(typeof toast==='function')toast('Barèmes réinitialisés (valeurs 2026 par défaut)'); },{okLabel:'Réinitialiser'}); } else { saveStore({}); if(typeof render==='function')render(); } };
+  function esc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function baremesCard(){
+    var nOv=Object.keys(store()).length;
+    var body=GROUPS.map(function(gr){
+      var rows=gr.items.map(function(it){
+        var key=it[0],lbl=it[1],unit=it[3]||'';
+        var val=window.barGetRaw(key); var custom=(store()[key]!=null);
+        return '<div class="bar-row'+(custom?' bar-custom':'')+'"><label class="bar-l">'+esc(lbl)+'</label>'
+          +'<div class="bar-in-wrap"><input class="bar-in" value="'+esc(val)+'" inputmode="decimal" oninput="barSet(\''+key+'\',this.value)"><span class="bar-u">'+esc(unit)+'</span></div></div>';
+      }).join('');
+      return '<div class="bar-grp"><div class="bar-gh">'+esc(gr.g)+'</div>'+rows+'</div>';
+    }).join('');
+    return '<div class="card bar-card"><h2>⚖️ Barèmes &amp; règles — millésime '+MILLESIME+' <span class="bar-badge">'+(nOv?(nOv+' valeur(s) personnalisée(s)'):'valeurs 2026 par défaut')+'</span></h2>'
+      +'<div class="bar-note">⚠ Valeurs <b>pré-remplies pour '+MILLESIME+'</b> — à vérifier auprès des sources officielles (URSSAF, impots.gouv.fr, service-public.fr). Elles alimentent les documents (fiche de paie, fiscalité…). Modifiez une valeur pour l’ajuster ; elle est enregistrée et appliquée partout.</div>'
+      +body
+      +'<div class="bar-act"><button class="btn btn-ghost" onclick="barReset()">↺ Réinitialiser aux valeurs '+MILLESIME+'</button></div>'
+      +'</div>';
+  }
+  window.baremesCard=baremesCard;
+  /* Greffe dans la page Paramètres */
+  try{ var _pp=window.pageParams; if(typeof _pp==='function' && !_pp.__bar){ window.pageParams=function(){ var h=_pp.apply(this,arguments); try{ if(typeof h==='string' && h.indexOf('bar-card')<0){ h += baremesCard(); } }catch(e){} return h; }; window.pageParams.__bar=1; } }catch(e){}
+  /* Styles */
+  try{ if(!document.getElementById('bar-css')){ var st=document.createElement('style'); st.id='bar-css'; st.textContent=
+    '.bar-card .bar-badge{font-size:11px;font-weight:600;background:rgba(30,144,255,.15);color:#5ab0ff;border:1px solid rgba(30,144,255,.4);border-radius:20px;padding:2px 10px;margin-left:8px;vertical-align:middle}'
+    +'.bar-note{font-size:12.5px;line-height:1.5;background:rgba(255,193,7,.08);border:1px solid rgba(255,193,7,.3);border-radius:8px;padding:10px 12px;margin:6px 0 14px;color:#c9a227}'
+    +'.bar-grp{margin-bottom:14px}.bar-gh{font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;color:#5ab0ff;margin-bottom:8px}'
+    +'.bar-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)}'
+    +'.bar-l{font-size:13px;flex:1;min-width:0}'
+    +'.bar-in-wrap{display:flex;align-items:center;gap:6px;flex:none}'
+    +'.bar-in{width:120px;text-align:right;background:#0b1119;border:1px solid #26364a;color:#e7edf5;border-radius:7px;padding:6px 9px;font-size:13px;font-variant-numeric:tabular-nums}'
+    +'.bar-in:focus{outline:none;border-color:#2f8fff}'
+    +'.bar-custom .bar-in{border-color:#2f8fff;background:#0e1b2c}'
+    +'.bar-u{font-size:12px;color:#8aa0b8;width:32px}'
+    +'.bar-act{margin-top:6px}';
+    document.head.appendChild(st); } }catch(e){}
 })();
 </script>
 </body>
