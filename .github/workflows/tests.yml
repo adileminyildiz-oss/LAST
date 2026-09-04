@@ -1,0 +1,48 @@
+name: tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Vérification de la syntaxe des scripts inline
+        run: |
+          node -e '
+          const fs=require("fs");
+          const s=fs.readFileSync("index.html","utf8");
+          const re=/<script(\s[^>]*)?>([\s\S]*?)<\/script>/g;
+          let m,n=0,bad=0;
+          while((m=re.exec(s))){ if(m[1]&&/src=/.test(m[1]))continue; n++; try{new Function(m[2]);}catch(e){bad++;console.log("BAD script #"+n+": "+e.message);} }
+          console.log("scripts "+n+" · erreurs "+bad);
+          process.exit(bad?1:0);'
+
+      - name: Cohérence de version (badge / sw.js / version.json)
+        run: |
+          node -e '
+          const fs=require("fs");
+          const ver=(fs.readFileSync("index.html","utf8").match(/var LAST_VER=(\d+)/)||[])[1];
+          const cache=(fs.readFileSync("sw.js","utf8").match(/last-v(\d+)/)||[])[1];
+          const vj=JSON.parse(fs.readFileSync("version.json","utf8")).version;
+          console.log("badge="+ver+" sw="+cache+" version.json="+vj);
+          const ok = ver && cache===ver && String(vj)===String(ver);
+          process.exit(ok?0:1);'
+
+      - name: Installation de Playwright (Chromium)
+        run: npm i -D playwright && npx playwright install --with-deps chromium
+
+      - name: Suite de non-régression
+        run: node tests/regression.mjs
+
+      - name: Documents remplissables (docs + fiche de paie exacte + calibration + auto-remplissage)
+        run: node tests/pdffill.mjs
