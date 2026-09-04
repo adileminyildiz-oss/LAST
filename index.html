@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=419;
+var LAST_VER=420;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -21777,7 +21777,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     document.body.style.overflow='hidden';
     pfRender();
   };
-  window.pfClose=function(){ var ov=document.getElementById('pf-ov'); if(ov)ov.classList.remove('show'); document.body.style.overflow=''; try{save();}catch(e){} if(typeof render==='function')render(); };
+  window.pfClose=function(){ var ov=document.getElementById('pf-ov'); if(ov)ov.classList.remove('show'); document.body.style.overflow=''; try{save();}catch(e){} try{ if(typeof state!=='undefined'&&state){ state.edLibId=''; state.edOpenType=''; } }catch(e){} if(typeof render==='function')render(); };
   window.pfNav=function(d){ var tpl=curTpl(); window.__pfPage=Math.max(0,Math.min(tpl.pages.length-1,(window.__pfPage||0)+d)); pfRender(); };
   window.pfSet=function(k,v){ var doc=window.__pfDoc,D=docData(doc),key=pageKey(window.__pfPage||0); D[key]=D[key]||{}; D[key][k]=v; if(doc)doc.updated=Date.now(); try{save();}catch(e){} };
   window.pfClearPage=function(){
@@ -21806,6 +21806,16 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     if(!pg.calc||!ov)return;
     Object.keys(pg.calc).forEach(function(ck){ ov.querySelectorAll('[data-k="'+ck+'"]').forEach(function(el){ var nv=store[ck]||''; if(el.value!==nv)el.value=nv; }); });
   }
+  /* Automatisations de saisie (page de garde) : forme abrégée → forme en toutes lettres ; Du → Au (1 an) */
+  var PF_FORMES={SARL:'SOCIETE A RESPONSABILITE LIMITEE',EURL:'ENTREPRISE UNIPERSONNELLE A RESPONSABILITE LIMITEE',SAS:'SOCIETE PAR ACTIONS SIMPLIFIEE',SASU:'SOCIETE PAR ACTIONS SIMPLIFIEE UNIPERSONNELLE',SA:'SOCIETE ANONYME',SNC:'SOCIETE EN NOM COLLECTIF',SCI:'SOCIETE CIVILE IMMOBILIERE',SCM:'SOCIETE CIVILE DE MOYENS',SC:'SOCIETE CIVILE',SELARL:"SOCIETE D'EXERCICE LIBERAL A RESPONSABILITE LIMITEE",SELAS:"SOCIETE D'EXERCICE LIBERAL PAR ACTIONS SIMPLIFIEE",SCP:'SOCIETE CIVILE PROFESSIONNELLE',GIE:"GROUPEMENT D'INTERET ECONOMIQUE",SCA:'SOCIETE EN COMMANDITE PAR ACTIONS'};
+  function pfNormForme(v){ return (''+(v||'')).toUpperCase().replace(/[^A-Z]/g,''); }
+  function pfPeriodeAu(v){ var m=(''+(v||'')).trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/); if(!m)return ''; var d=+m[1],mo=+m[2],y=+m[3]; if(mo<1||mo>12||d<1||d>31)return ''; var end=new Date(y+1,mo-1,d); if(isNaN(end.getTime()))return ''; end.setDate(end.getDate()-1); var p=function(n){return (n<10?'0':'')+n;}; return p(end.getDate())+'/'+p(end.getMonth()+1)+'/'+end.getFullYear(); }
+  function pfCoverAuto(k,v){
+    try{
+      if(k==='forme_abbr'){ var full=PF_FORMES[pfNormForme(v)]; if(full) pfEdit('forme_full',full,null); }
+      else if(k==='periode_du'){ var au=pfPeriodeAu(v); if(au) pfEdit('periode_au',au,null); }
+    }catch(e){}
+  }
   /* Édition à deux sens : donnée + champ jumeau (document ↔ barre latérale) + recalcul des totaux, sans re-render */
   window.pfEdit=function(k,v,src){
     pfSet(k,v);
@@ -21813,6 +21823,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     try{ if(ov)ov.querySelectorAll('[data-k="'+k+'"]').forEach(function(el){ if(el!==src && el.value!==v) el.value=v; }); }catch(e){}
     var pg=curTpl().pages[window.__pfPage||0];
     if(pg.calc && !pfIsComputed(pg,k)){ var store=pfStore(); pfRecalc(pg,store); try{save();}catch(e){} pfSyncComputed(); }
+    if(pg.key==='cover' && (k==='forme_abbr'||k==='periode_du')) pfCoverAuto(k,v);
   };
   /* Mise au format français quand on quitte une case saisie manuellement */
   window.pfBlur=function(k){
@@ -21896,8 +21907,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
 
   /* Intégration Éditions : « Bilan Prévisionnel » ouvre le remplissage sur document */
   function hook(){
-    try{ if(typeof window.edLibOpen==='function' && !window.edLibOpen.__pf){ var _o=window.edLibOpen; window.edLibOpen=function(id){ var d=(DB.editionsLibres||[]).find(function(x){return x.id===id;}); if(d&&d.k==='bilanprev'&&window.PF_TPL['bilan']){ window.pdfFillOpen('bilan',d); return; } return _o.apply(this,arguments); }; window.edLibOpen.__pf=1; } }catch(e){}
-    try{ if(typeof window.edLibNew==='function' && !window.edLibNew.__pf){ var _n=window.edLibNew; window.edLibNew=function(k,forme){ var r=_n.apply(this,arguments); try{ if(k==='bilanprev'){ var d=(DB.editionsLibres||[])[0]; if(d&&d.k==='bilanprev'){ window.pdfFillOpen('bilan',d); } } }catch(e){} return r; }; window.edLibNew.__pf=1; } }catch(e){}
+    try{ if(typeof window.edLibOpen==='function' && !window.edLibOpen.__pf){ var _o=window.edLibOpen; window.edLibOpen=function(id){ var d=(DB.editionsLibres||[]).find(function(x){return x.id===id;}); if(d&&d.k==='bilanprev'&&window.PF_TPL['bilan']){ try{ if(typeof state!=='undefined'&&state){state.edLibId='';state.edOpenType='';} }catch(e){} window.pdfFillOpen('bilan',d); return; } return _o.apply(this,arguments); }; window.edLibOpen.__pf=1; } }catch(e){}
+    try{ if(typeof window.edLibNew==='function' && !window.edLibNew.__pf){ var _n=window.edLibNew; window.edLibNew=function(k,forme){ var r=_n.apply(this,arguments); try{ if(k==='bilanprev'){ var d=(DB.editionsLibres||[])[0]; if(d&&d.k==='bilanprev'){ try{ if(typeof state!=='undefined'&&state){state.edLibId='';state.edOpenType='';} }catch(e){} window.pdfFillOpen('bilan',d); } } }catch(e){} return r; }; window.edLibNew.__pf=1; } }catch(e){}
   }
   hook(); try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var x=_r.apply(this,arguments); try{hook();}catch(e){} return x; }; } }catch(e){}
 
