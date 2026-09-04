@@ -3103,7 +3103,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=385;
+var LAST_VER=386;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3897,6 +3897,12 @@ window.demInfosCard=function(d){
  return '<div class="card"><div class="card-h"><h2>Informations transmises par le client</h2><span class="sub" style="margin-left:auto">Formulaire du site · aemconseil.eu</span></div><div class="card-b"><div class="dinf">'+rows+'</div></div></div>';
 };
 window.demEstSite=function(d){return /formulaire du site|site aem|aemconseil|formsubmit|formulaire/i.test(d&&d.canal||'');};
+/* Pertinence : la demande porte-t-elle une intention liée aux services de Mar'q (cabinet) ? */
+window.demBestText=function(d){ var parts=[]; try{parts.push((typeof IA!=='undefined'&&IA.objet)?IA.objet(d):'');}catch(e){} parts.push((d&&d.serviceSouhaite)||'',(d&&d.message)||''); try{parts.push((typeof mailDemande==='function')?mailDemande(d):'');}catch(e){} try{(window.demFields(d)||[]).forEach(function(x){parts.push((x.label||'')+' '+(x.value||''));});}catch(e){} return parts.join(' ').toLowerCase(); };
+window.demServiceNoise=/newsletter|unsubscribe|se d[ée]sinscrire|d[ée]sabonn|mailing list|no.?reply@|someone just submitted your form|easy form endpoints|black friday|offre sp[ée]ciale|promotion|promo code|casino|crypto|bitcoin|\bviagra\b|\bloan\b|r[ée]f[ée]rencement naturel|backlink|seo ranking/i;
+window.demServiceKw=/cr[ée]ation|cr[ée]er|soci[ée]t[ée]|entreprise|\bsas\b|\bsasu\b|\bsarl\b|\beurl\b|\bsci\b|holding|auto.?entrepreneur|micro.?entreprise|immatricul|kbis|statuts|si[èe]ge social|d[ée]nomination|g[ée]rant|capital social|cession de (parts|d.?actions)|dissolution|liquidation|radiation|transfert de si[èe]ge|modification statutaire|comptab|bilan|liasse|\btva\b|formalit[ée]|greffe|inpi|\brcs\b|urssaf|domiciliation|associ[ée]|constitu|d[ée]p[oô]t de capital|annonce l[ée]gale|dossier de cr[ée]ation|lancer (mon|une|son)|monter (ma|une|mon)|devis|rendez.?vous/i;
+window.demServicePertinent=function(d){ try{ var t=window.demBestText(d); if(window.demServiceNoise.test(t))return false; if(window.demServiceKw.test(t))return true; return true; }catch(e){ return true; } };
+window.demSupprimerHorsService=function(){ try{ var n=0; (DB.demandes||[]).forEach(function(d){ if(!d.archived&&!window.demServicePertinent(d)){ d.archived=true; d.archiveRaison='hors-service'; n++; } }); if(typeof save==='function')save(); if(typeof render==='function')render(); if(typeof toast==='function')toast(n?(n+' message(s) sans rapport supprimé(s) de la boîte'):'Aucun message à supprimer'); }catch(e){} };
 window.demMarquerLu=function(id){var d=DB.demandes.find(function(x){return x.id===id;});if(d&&!d.lu){d.lu=true;if(typeof save==='function')save();}};
 window.demMsgOuvrir=function(id){window.demMarquerLu(id);state.demMode='traitement';if(typeof demOuvrirVue==='function')demOuvrirVue(id);else{state.demView=id;render();}};
 window.demToutLu=function(){var n=0;DB.demandes.forEach(function(d){if(!d.archived&&!d.lu){d.lu=true;n++;}});if(typeof save==='function')save();render();if(typeof toast==='function')toast(n?(n+' message(s) marqué(s) comme lu(s)'):'Aucun message non lu');};
@@ -3906,6 +3912,8 @@ window.demMessagerieView=function(){
  var q=(state.q||'').toLowerCase();
  var vis=DB.demandes.filter(function(d){return !d.archived;});
  if(typeof demMineFilter==='function')vis=demMineFilter(vis);
+ var horsAll=vis.filter(function(d){return !window.demServicePertinent(d);});
+ if(!state.demHors) vis=vis.filter(function(d){return window.demServicePertinent(d);});
  var canal=state.demCanal||'tous';
  var cnt={tous:vis.length,site:vis.filter(window.demEstSite).length,autres:vis.filter(function(d){return !window.demEstSite(d);}).length};
  var list=vis.filter(function(d){return canal==='tous'||(canal==='site'?window.demEstSite(d):!window.demEstSite(d));});
@@ -3983,8 +3991,10 @@ window.demMessagerieView=function(){
      +'</div>';
    }).join('')+'</div>';
  } else box='<div class="empty">Aucun message '+(canal==='site'?'du site ':(canal==='autres'?'hors site ':''))+'dans la boîte de réception.</div>';
+ var horsBar=horsAll.length?('<div class="dem-hors"><span class="dem-hors-t">🧹 '+horsAll.length+' message'+(horsAll.length>1?'s':'')+' sans rapport avec vos services — '+(state.demHors?('affiché'+(horsAll.length>1?'s':'')):('écarté'+(horsAll.length>1?'s':'')+' automatiquement'))+'.</span><span class="dem-hors-acts"><button class="btn btn-sm dem-imp-btn" onclick="state.demHors='+(state.demHors?'false':'true')+';render()">'+(state.demHors?'Masquer':'Afficher')+'</button><button class="btn btn-sm dem-imp-btn dem-act-no" onclick="demSupprimerHorsService()">🗑 Supprimer</button></span></div>'):'';
  return ((typeof demPosteBanner==='function')?demPosteBanner():'')
    +'<div class="dem-head"><div class="dem-head-row">'+canBar+acts+'</div><div class="dem-head-row">'+search+'</div></div>'
+   +horsBar
    +'<div class="card"><div class="card-b" style="padding:0">'+box+'</div></div>';
 };
 window.pageDemandes=function(){
@@ -20582,6 +20592,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       '.dem-eprev{margin:4px 0 10px}.dem-eprev-t{font-size:13px;line-height:1.5;color:#c2c8d2;background:#12161d;border:1px solid #23262d;border-radius:9px;padding:10px 12px;white-space:pre-wrap}',
       '.dem-ectx{font-size:12px;color:#9aa3b2;margin-bottom:10px}',
       '.dem-eacts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px}',
+      '.dem-hors{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px;padding:9px 13px;border:1px dashed #3a3320;background:#16130c;border-radius:10px}',
+      '.dem-hors-t{font-size:12.5px;color:#e0c489;flex:1;min-width:200px}',
+      '.dem-hors-acts{display:flex;gap:8px;flex-wrap:wrap}',
       '@media(max-width:900px){.dem-ehead{grid-template-columns:16px 10px 1fr auto;grid-auto-rows:auto;gap:6px 8px}.dem-col-canal,.dem-col-obj,.dem-col-st{grid-column:3/5}.dem-col-date{grid-column:3}.dem-col-open{grid-column:4}.dem-ehdr{display:none}.dem-edetail{padding-left:18px}}'
     ].join(''); document.head.appendChild(st); } }catch(e){}
 })();
