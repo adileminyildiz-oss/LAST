@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=378;
+var LAST_VER=379;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14883,14 +14883,31 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var D=function(d,p,a){return {d:d,p:p,alts:(a&&a.length?a:null)};};
     var soc=best==='SAS'||best==='SASU', tns=(social.indexOf('TNS')>=0), N=P.nbSalaries||0;
     var estSociete=(best!=='EI');
-    /* alternatives de forme (on exclut la forme retenue) */
-    var FA={SAS:'SAS — grande souplesse statutaire, dirigeant assimilé salarié, idéale pour accueillir des investisseurs.',SASU:'SASU — SAS à associé unique (dirigeant seul).',SARL:'SARL — cadre légal protecteur ; gérant majoritaire = TNS (charges réduites).',EURL:'EURL — SARL unipersonnelle, IR par défaut (option IS possible).',SCI:'SCI — détention et location d\'immobilier (objet civil), IR ou IS.',EI:'EI — sans société, patrimoine séparé de plein droit, régime micro possible.'};
+    /* alternatives de forme + COMBINAISON avec les autres modalités (fiscal · social · charges) */
+    var FA={
+      SAS:'SAS — souplesse statutaire, idéale pour des investisseurs. Combinaison : IS (option IR 5 ans) · président ASSIMILÉ SALARIÉ · charges ~70-80 % · dividendes PFU 30 % · statuts sur mesure.',
+      SASU:'SASU — SAS à associé unique. Combinaison : IS · président assimilé salarié · charges ~70-80 % · dividendes PFU 30 % · associé unique.',
+      SARL:'SARL — cadre légal protecteur. Combinaison : IS (option IR 5 ans) · gérant MAJORITAIRE = TNS (charges ~40-45 %) / minoritaire = assimilé salarié · dividendes du majoritaire > 10 % du capital cotisés.',
+      EURL:'EURL — SARL unipersonnelle. Combinaison : IR par défaut (option IS) · gérant TNS · charges ~40-45 % · protection à compléter · associé unique.',
+      SCI:'SCI — détention/location immobilière (objet civil). Combinaison : IR (option IS IRRÉVERSIBLE) · gérance non affiliée · transmission facilitée par parts (démembrement).',
+      EI:'EI — sans société. Combinaison : IR / micro possible · TNS · patrimoine séparé de plein droit · pas de personne morale · formalités allégées.'
+    };
     var formeAlts=Object.keys(FA).filter(function(k){return k!==best;}).map(function(k){return FA[k];});
-    formeAlts.push('SA — grande structure / accès au marché (capital 37 000 €, conseil d\'administration).');
-    var regimeAlts=[(regime==='IS'?'':'✓ ')+'IR — transparence fiscale : le résultat est imposé chez les associés (défaut EURL/SCI ; option temporaire 5 ans pour SAS/SARL).',(regime==='IR'?'':'✓ ')+'IS — imposition au niveau de la société (15 %/25 %), dividendes en PFU.'];
-    var tvaAlts=['Franchise en base — aucune TVA facturée ni récupérée (sous les seuils).','Réel simplifié — déclaration annuelle (CA12) + acomptes semestriels.','Réel normal — déclaration mensuelle, récupération immédiate de la TVA.'];
-    var socialAlts=['Assimilé salarié (SAS/SASU, gérant minoritaire de SARL) — protection du régime général, charges ~70-80 %.','TNS / SSI (EURL, gérant majoritaire de SARL, EI) — cotisations ~40-45 %, protection à compléter.'];
-    var remunAlts=['Salaire régulier — déductible de l\'IS, ouvre des droits sociaux, charges élevées.','Dividendes — pas de cotisations (assimilé salarié), PFU 30 %, mais pas de droits sociaux.','Mixte — salaire (couverture) + dividendes (optimisation), à doser.'];
+    formeAlts.push('SA — grande structure / accès au marché. Combinaison : IS · président assimilé salarié · capital 37 000 € · conseil d\'administration · CAC souvent requis.');
+    var regimeAlts=[
+      'IR — transparence fiscale. Combinaison : résultat imposé directement chez les associés · PAS de PFU ni d\'arbitrage rémunération/dividendes · déficits imputables (selon régime) · par défaut en EURL/SCI (option 5 ans en SAS/SARL).',
+      'IS — imposition à la société (15 % / 25 %). Combinaison : rémunération du dirigeant déductible · dividendes en PFU 30 % · capitalisation possible · compatible SAS/SASU/SARL/EURL.'
+    ];
+    var tvaAlts=['Franchise en base — aucune TVA facturée ni récupérée (sous les seuils). Combinaison : pas de récupération de TVA sur les achats · facturation HT.','Réel simplifié — déclaration annuelle (CA12) + acomptes. Combinaison : récupération de la TVA · comptabilité TVA allégée.','Réel normal — déclaration mensuelle. Combinaison : récupération immédiate · adapté aux gros investissements / crédits de TVA.'];
+    var socialAlts=[
+      'Assimilé salarié — Combinaison : SAS/SASU (ou gérant MINORITAIRE de SARL) · régime général · charges ~70-80 % · protection forte (hors chômage) · dividendes non cotisés.',
+      'TNS / SSI — Combinaison : EURL, gérant MAJORITAIRE de SARL, ou EI · charges ~40-45 % · cotisations minimales même sans rémunération · protection à compléter · dividendes > 10 % du capital cotisés (à l\'IS).'
+    ];
+    var remunAlts=[
+      'Salaire régulier — Combinaison : charges sociales sur le salaire · déductible de l\'IS · ouvre des droits (retraite, indemnités journalières).',
+      'Dividendes — Combinaison : aucune cotisation (dirigeant assimilé salarié) · PFU 30 % · MAIS aucun droit social généré · nécessite un bénéfice distribuable après IS.',
+      'Mixte — Combinaison : salaire (couverture + droits) + dividendes (optimisation) · à calibrer selon les besoins de trésorerie du dirigeant.'
+    ];
     var domicilAlts=['Local commercial — bail commercial dédié.','Société de domiciliation — adresse prestigieuse, courrier géré.','Domicile du dirigeant — gratuit, sous conditions (durée, règlement de copropriété).','Pépinière / coworking — services mutualisés, souplesse.'];
     var cacAlts=['Non requis sous les seuils (bilan 4 M€, CA 8 M€, 50 salariés).','Nomination volontaire possible (crédibilité, sécurisation).','Obligatoire si 2 des 3 seuils sont dépassés.'];
     /* Juridique — forme, statuts, responsabilité */
@@ -14950,7 +14967,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var ded=(r.deductions&&r.deductions.length)?('<div class="fr-card fr-ded"><div class="fr-card-t">Déduit de votre saisie libre (vision du projet)</div>'+li(r.deductions)+'</div>'):'';
     var decision=function(it){
       var hasAlt=it.alts&&it.alts.length;
-      var alts=hasAlt?('<div class="fr-alts"><div class="fr-alts-t">Autres choix possibles</div><ul class="fr-ul">'+it.alts.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>'):'';
+      var alts=hasAlt?('<div class="fr-alts"><div class="fr-alts-t">Autres choix — et leurs combinaisons</div><ul class="fr-ul fr-ul-comb">'+it.alts.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>'):'';
       return '<div class="fr-dec'+(hasAlt?' fr-dec-clk':'')+'"'+(hasAlt?' onclick="frToggle(this)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();frToggle(this);}" tabindex="0" role="button"':'')+'>'
         +'<div class="fr-dec-d">'+esc(it.d)+(hasAlt?'<span class="fr-caret">▸</span>':'')+'</div>'
         +'<div class="fr-dec-p"><span class="fr-why">Pourquoi</span> '+esc(it.p)+'</div>'
@@ -14961,7 +14978,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     return '<div class="fr-wrap">'
       +'<div class="fr-verdict"><span class="fr-verdict-k">Structure recommandée</span><b class="fr-forme">'+esc(r.forme)+'</b>'
       +'<span class="fr-synth">'+esc(r.synthese)+'</span></div>'
-      +'<div class="fr-intro">Analyse complète — <b>juridique, fiscal, social, gestion &amp; administration</b>. Chaque décision est justifiée. 👉 <b>Cliquez sur une décision</b> (marquée ▸) pour voir les <b>autres choix possibles</b>. Si le client valide l\'ensemble, la structure est prête à être montée.</div>'
+      +'<div class="fr-intro">Analyse complète — <b>juridique, fiscal, social, gestion &amp; administration</b>. Chaque décision est justifiée. 👉 <b>Cliquez sur une décision</b> (marquée ▸) pour voir les <b>autres choix</b> et, pour chacun, sa <b>combinaison</b> avec les autres modalités (régime fiscal · statut social · charges). Si le client valide l\'ensemble, la structure est prête à être montée.</div>'
       +ded
       +doms
       +'<div class="fr-card fr-vig"><div class="fr-card-t">Points de vigilance</div>'+li(r.vigilance)+'</div>'
