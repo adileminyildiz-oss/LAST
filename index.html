@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=450;
+var LAST_VER=451;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22836,7 +22836,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     {id:'catalogue',ico:'🧾',t:'Offres & tarifs',d:'Grille des prestations vendables (création, modifs, paie, conseil, abonnements) éditable et imprimable — à remettre aux clients.'},
     {id:'marge',ico:'💰',t:'Marge & bénéfices',d:'Prestation sous-traitée : coût prestataire + marge cible → paiement client TTC, TVA à payer, montant versé au prestataire et bénéfice net. Optimisez une marge élevée.'},
     {id:'abo',ico:'🔁',t:'Abonnements & revenu récurrent',d:'Suivi des clients abonnés (espace client, échéancier, packs…) : revenu mensuel récurrent (MRR), annuel (ARR), panier moyen et projection. Facturation en ligne récurrente.'},
-    {id:'cockpit',ico:'📊',t:'Tableau de bord dirigeant',d:'Cockpit de pilotage : trésorerie, CA & résultat du mois, revenu récurrent, rentabilité et prochaines échéances réunis en une vue. Objectif de CA suivi.'}
+    {id:'cockpit',ico:'📊',t:'Tableau de bord dirigeant',d:'Cockpit de pilotage : trésorerie, CA & résultat du mois, revenu récurrent, rentabilité et prochaines échéances réunis en une vue. Objectif de CA suivi.'},
+    {id:'veille',ico:'🔔',t:'Veille réglementaire',d:'Changements de lois et de règles par millésime (paie, fiscal, social, juridique) avec date d’effet et statut. Éditable, à remettre aux clients.'}
   ];
 
   /* ================= SERVICE 1 : ÉCHÉANCIER FISCAL & SOCIAL ================= */
@@ -23155,17 +23156,72 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<p class="svc-note-min">Le résultat du mois = CA − charges (saisie manuelle, isolée de la comptabilité). Le MRR, la rentabilité, le catalogue et les échéances sont repris automatiquement des autres services.</p></div>';
   }
 
+  /* ================= SERVICE 7 : VEILLE RÉGLEMENTAIRE ================= */
+  var VEILLE_DEF=[
+    {year:2024,dom:'Paie',titre:'Revalorisation du SMIC',detail:'Nouveau SMIC horaire — voir le millésime dans Paramètres → Barèmes.',date:'2024-01-01'},
+    {year:2024,dom:'Fiscal',titre:'Facturation électronique — report du calendrier',detail:'Entrée en vigueur progressive décalée ; suivre les textes officiels.',date:''},
+    {year:2025,dom:'Paie',titre:'Revalorisation du SMIC',detail:'SMIC horaire revalorisé au 1er janvier.',date:'2025-01-01'},
+    {year:2025,dom:'Fiscal',titre:'Franchise en base de TVA — seuils',detail:'Seuils de franchise en base à vérifier pour l’exercice.',date:'2025-01-01'},
+    {year:2025,dom:'Social',titre:'Plafond mensuel de la Sécurité sociale',detail:'Nouveau PMSS — à répercuter dans la paie.',date:'2025-01-01'},
+    {year:2026,dom:'Fiscal',titre:'Facturation électronique B2B — réception',detail:'Obligation de réception des factures électroniques (calendrier à confirmer).',date:'2026-09-01'},
+    {year:2026,dom:'Paie',titre:'Barèmes de cotisations & SMIC',detail:'Nouveaux barèmes — mettre à jour le millésime 2026.',date:'2026-01-01'}
+  ];
+  var VE_DOM=['Paie','Fiscal','Social','Juridique','Autre'];
+  function veille(){ var o=store(); if(!o.veille){ o.veille={items:VEILLE_DEF.map(function(v){return {year:v.year,dom:v.dom,titre:v.titre,detail:v.detail,date:v.date};})}; save(o); } return o.veille; }
+  function veilleSave(st){ var o=store(); o.veille=st; save(o); }
+  function veParseD(s){ if(!s)return null; var m=(''+s).match(/^(\d{4})-(\d{2})-(\d{2})$/); if(m)return new Date(+m[1],+m[2]-1,+m[3]); var m2=(''+s).match(/^(\d{2})\/(\d{2})\/(\d{4})$/); if(m2)return new Date(+m2[3],+m2[2]-1,+m2[1]); return null; }
+  function veStatut(s){ var d=veParseD(s); if(!d)return {t:'—',c:''}; var t=new Date();t.setHours(0,0,0,0); return d>t?{t:'À venir',c:'ve-soon'}:{t:'En vigueur',c:'ve-ok'}; }
+  function veYears(){ var st=veille(); var ys={}; st.items.forEach(function(x){ ys[+x.year||0]=1; }); [2024,2025,2026].forEach(function(y){ys[y]=1;}); try{ if(window.baremeMillesime)ys[+window.baremeMillesime()]=1; }catch(e){} ys[new Date().getFullYear()]=1; return Object.keys(ys).map(Number).filter(function(y){return y>0;}).sort(); }
+  function veYearActive(){ var ys=veYears(); var w=+window.__veilleYear||0; if(ys.indexOf(w)>=0)return w; var bm=0; try{ if(window.baremeMillesime)bm=+window.baremeMillesime(); }catch(e){} return ys.indexOf(bm)>=0?bm:ys[ys.length-1]; }
+  window.svcVeYear=function(y){ window.__veilleYear=+y; render(); };
+  window.svcVeSet=function(i,f,v){ var st=veille(); var it=st.items[i]; if(!it)return; it[f]=(f==='year')?(+v||it.year):v; veilleSave(st); if(f==='date'||f==='year')render(); };
+  window.svcVeAdd=function(){ var st=veille(); st.items.push({year:veYearActive(),dom:'Fiscal',titre:'Nouveau changement',detail:'',date:''}); veilleSave(st); render(); };
+  window.svcVeDel=function(i){ var st=veille(); st.items.splice(i,1); veilleSave(st); render(); };
+  window.svcVeReset=function(){ function go(){ var o=store(); delete o.veille; save(o); render(); if(typeof toast==='function')toast('Veille réglementaire réinitialisée'); } if(typeof uiConfirm==='function')uiConfirm('Réinitialiser la veille réglementaire aux valeurs par défaut ?',go,{okLabel:'Réinitialiser'}); else go(); };
+  function veilleView(){ var st=veille(); var ya=veYearActive();
+    var tabs=veYears().map(function(y){ return '<button class="svc-tab'+(y===ya?' on':'')+'" onclick="svcVeYear('+y+')">'+y+'</button>'; }).join('');
+    var idx=st.items.map(function(it,i){return {it:it,i:i};}).filter(function(o){return (+o.it.year||0)===ya;});
+    var rows=idx.map(function(o){ var it=o.it,i=o.i; var sv=veStatut(it.date);
+      var domOpts=VE_DOM.concat(VE_DOM.indexOf(it.dom)<0&&it.dom?[it.dom]:[]).map(function(d){return '<option '+(d===it.dom?'selected':'')+'>'+E(d)+'</option>';}).join('');
+      return '<tr>'
+        +'<td><select class="mg-in mg-sel" onchange="svcVeSet('+i+',\'dom\',this.value)">'+domOpts+'</select></td>'
+        +'<td><input class="mg-in mg-n" value="'+E(it.titre)+'" oninput="svcVeSet('+i+',\'titre\',this.value)"></td>'
+        +'<td><input class="mg-in mg-n" value="'+E(it.detail)+'" oninput="svcVeSet('+i+',\'detail\',this.value)"></td>'
+        +'<td><input class="mg-in mg-num" style="width:110px" placeholder="AAAA-MM-JJ" value="'+E(it.date)+'" onchange="svcVeSet('+i+',\'date\',this.value)"></td>'
+        +'<td><span class="ve-pill '+sv.c+'">'+E(sv.t)+'</span></td>'
+        +'<td class="r"><button class="svc-cat-x" title="Retirer" aria-label="Retirer" onclick="svcVeDel('+i+')">'+SVCX+'</button></td>'
+        +'</tr>';
+    }).join('')||'<tr><td colspan="6" style="padding:14px;color:#8aa0b8">Aucun changement pour '+ya+'. Ajoutez-en un ci-dessous.</td></tr>';
+    var nb=idx.length, avenir=idx.filter(function(o){return veStatut(o.it.date).c==='ve-soon';}).length;
+    var kpi='<div class="svc-eche-kpis">'
+      +'<div class="svc-kpi"><div class="svc-kpi-v">'+nb+'</div><div class="svc-kpi-l">changements — millésime '+ya+'</div></div>'
+      +'<div class="svc-kpi '+(avenir?'warn':'')+'"><div class="svc-kpi-v">'+avenir+'</div><div class="svc-kpi-l">à venir / à appliquer</div></div>'
+      +'</div>';
+    var table='<div class="svc-mg-wrap"><table class="svc-mg-t"><thead><tr>'
+      +'<th style="text-align:left">Domaine</th><th style="text-align:left">Changement</th><th style="text-align:left">Détail</th><th style="text-align:left">Date d’effet</th><th style="text-align:left">Statut</th><th></th>'
+      +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
+      +'<button class="btn btn-sm btn-ghost svc-cat-add" onclick="svcVeAdd()">+ Ajouter un changement ('+ya+')</button>';
+    return '<div class="svc-sub"><button class="btn btn-ghost svc-back" onclick="svcGo(\'\')">‹ Services</button>'
+      +'<h2 class="svc-h2">🔔 Veille réglementaire</h2>'
+      +'<p class="svc-lead">Suivi des changements de lois et de règles par <b>millésime</b> (paie, fiscal, social, juridique), avec date d’effet et statut. Le millésime est aligné sur celui des <b>Barèmes</b> (Paramètres). Éditable — à diffuser à vos clients en note d’information.</p>'
+      +'<div class="svc-tabs">'+tabs+'</div>'
+      +'<div class="svc-cat-act"><button class="btn btn-ghost" onclick="svcVeReset()">↺ Réinitialiser</button></div>'
+      +kpi
+      +'<div class="card svc-card">'+table+'</div>'
+      +'<p class="svc-note-min">Informations <b>indicatives</b> à vérifier auprès des sources officielles (service-public.fr, impots.gouv.fr, urssaf.fr, legifrance.gouv.fr). Statut calculé à partir de la date d’effet.</p></div>';
+  }
+
   /* ---------- HUB des services ---------- */
   function hub(){
     var cards=SERVICES.map(function(s){ return '<button class="svc-tile" onclick="svcGo(\''+s.id+'\')"><div class="svc-tile-ic">'+s.ico+'</div><div class="svc-tile-b"><div class="svc-tile-t">'+E(s.t)+'</div><div class="svc-tile-d">'+E(s.d)+'</div></div></button>'; }).join('');
-    var soon=['Coffre-fort & portail client','Signature électronique des documents','Veille réglementaire annuelle']
+    var soon=['Coffre-fort & portail client','Signature électronique des documents']
       .map(function(x){ return '<div class="svc-soon">'+E(x)+' <span class="svc-soon-b">à venir</span></div>'; }).join('');
     return '<div class="svc-hub"><p class="svc-lead">Modules de services vendables aux clients — indépendants de l’activité opérationnelle du cabinet.</p>'
       +'<div class="svc-grid">'+cards+'</div>'
       +'<div class="svc-soon-h">Prochains services</div><div class="svc-soon-grid">'+soon+'</div></div>';
   }
   window.svcGo=function(view){ window.__svcView=view||''; try{ if(typeof go==='function') go('services'); else { S().page='services'; render(); } }catch(e){ try{S().page='services';render();}catch(_){} } };
-  function pageServices(){ if(window.__svcView==='echeancier')return echeView(); if(window.__svcView==='simulateurs')return simuView(); if(window.__svcView==='catalogue')return catView(); if(window.__svcView==='marge')return margeView(); if(window.__svcView==='abo')return aboView(); if(window.__svcView==='cockpit')return cockpitView(); return hub(); }
+  function pageServices(){ if(window.__svcView==='echeancier')return echeView(); if(window.__svcView==='simulateurs')return simuView(); if(window.__svcView==='catalogue')return catView(); if(window.__svcView==='marge')return margeView(); if(window.__svcView==='abo')return aboView(); if(window.__svcView==='cockpit')return cockpitView(); if(window.__svcView==='veille')return veilleView(); return hub(); }
   window.pageServices=pageServices;
 
   /* ---------- Enregistrement PAGE + nav (pattern Agenda, additif) ---------- */
@@ -23188,7 +23244,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       try{buildNav();}catch(e){} try{document.body.dataset.page='services';}catch(e){}
       var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='services';}):null;
       try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Services';}catch(e){}
-      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':(window.__svcView==='simulateurs'?'Simulateurs de conseil':(window.__svcView==='catalogue'?'Offres & tarifs':(window.__svcView==='marge'?'Marge & bénéfices':(window.__svcView==='abo'?'Abonnements & revenu récurrent':(window.__svcView==='cockpit'?'Tableau de bord dirigeant':((p&&p.sub)||''))))));}catch(e){}
+      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':(window.__svcView==='simulateurs'?'Simulateurs de conseil':(window.__svcView==='catalogue'?'Offres & tarifs':(window.__svcView==='marge'?'Marge & bénéfices':(window.__svcView==='abo'?'Abonnements & revenu récurrent':(window.__svcView==='cockpit'?'Tableau de bord dirigeant':(window.__svcView==='veille'?'Veille réglementaire':((p&&p.sub)||'')))))));}catch(e){}
       var V=document.getElementById('view'); if(V)V.innerHTML=pageServices();
       return;
     }
@@ -23256,6 +23312,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.cok-card-h{font-size:12px;color:#9fb6d0;margin-bottom:6px}.cok-card-v{font-size:22px;font-weight:800;color:#e7edf5}.cok-card-v span{font-size:12px;color:#8aa0b8;font-weight:400}.cok-card-s{font-size:11.5px;color:#8aa0b8;margin-top:3px}'
     +'.cok-card-eche .cok-card-h{margin-bottom:8px}.cok-eche-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)}.cok-eche-l{color:#c7d6e8}.cok-eche-d{color:#9fb6d0;white-space:nowrap}.cok-eche-row.soon .cok-eche-d b{color:#f0c040}.cok-eche-row.late .cok-eche-d b{color:#ff8f9a}'
     +'.cok-form{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}@media(max-width:640px){.cok-form{grid-template-columns:1fr}.cok-grid{grid-template-columns:1fr}}'
+    +'.ve-pill{font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid #2a3a4e;color:#9fb6d0;white-space:nowrap}.ve-pill.ve-ok{color:#5bbf8a;border-color:#2c6b4e;background:#0f1c16}.ve-pill.ve-soon{color:#f0c040;border-color:#6b5a1a;background:#1c1810}'
     document.head.appendChild(st2); } }catch(e){}
 })();
 </script>

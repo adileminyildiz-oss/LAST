@@ -152,6 +152,30 @@ const r = await page.evaluate(async () => {
     if (window.__svcSaveStore) { const o2 = window.__svcStore(); delete o2.cockpit; delete o2.abo; delete o2.marge; window.__svcSaveStore(o2); }
   } catch (e) { out.cockpit = { ok: false, err: '' + e }; }
 
+  // 9) Service « Veille réglementaire » — millésimes + filtrage + édition
+  out.veille = { ok: false };
+  try {
+    if (window.__svcSaveStore) { const o = window.__svcStore(); delete o.veille; window.__svcSaveStore(o); }
+    window.svcVeYear(2026); window.svcGo('veille');
+    const V = document.getElementById('view');
+    const tabs = [].slice.call(V.querySelectorAll('.svc-tabs .svc-tab')).map(t => t.textContent);
+    const r26 = V.querySelectorAll('.svc-mg-t tbody tr').length;
+    window.svcVeYear(2025);
+    const r25 = document.querySelectorAll('#view .svc-mg-t tbody tr').length;
+    window.svcVeYear(2026);
+    const before = window.__svcStore().veille.items.filter(x => +x.year === 2026).length;
+    window.svcVeAdd();
+    const after = window.__svcStore().veille.items.filter(x => +x.year === 2026).length;
+    out.veille = {
+      ok: !!V.querySelector('table.svc-mg-t') && !!V.querySelector('.svc-tabs'),
+      years: tabs.indexOf('2024') >= 0 && tabs.indexOf('2025') >= 0 && tabs.indexOf('2026') >= 0,
+      filter: r26 === 2 && r25 === 3,          // 2026 → 2 items, 2025 → 3 items
+      pill: !!document.querySelector('#view .ve-pill'),
+      add: after === before + 1
+    };
+    if (window.__svcSaveStore) { const o2 = window.__svcStore(); delete o2.veille; window.__svcSaveStore(o2); }
+  } catch (e) { out.veille = { ok: false, err: '' + e }; }
+
   return out;
 });
 
@@ -187,6 +211,9 @@ check('tableau de bord : KPIs rendus', r.cockpit.ok);
 check('tableau de bord : MRR repris du service Abonnements', r.cockpit.aggMrr);
 check('tableau de bord : résultat du mois (CA − charges) + objectif', r.cockpit.result && r.cockpit.objective);
 check('tableau de bord : prochaines échéances listées', r.cockpit.eche);
+check('veille réglementaire : millésimes 2024/2025/2026', r.veille.ok && r.veille.years);
+check('veille réglementaire : filtrage par millésime', r.veille.filter);
+check('veille réglementaire : statut + ajout par année', r.veille.pill && r.veille.add);
 check('aucun pageerror', perr.length === 0);
 
 const ok = results.filter(x => x.ok).length, tot = results.length;
