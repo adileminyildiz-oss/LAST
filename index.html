@@ -3151,7 +3151,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=390;
+var LAST_VER=391;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3794,7 +3794,11 @@ function demQLien(id){var d=DB.demandes.find(function(x){return x.id===id;});var
  var link=demFormBase()+'?type='+encodeURIComponent(k);var prenom=(d&&d.clientNom||'').split(/\s+/)[0]||'';
  var suj=document.getElementById('ml-sujet');if(suj)suj.value='Votre formulaire à compléter — AEM CONSEIL';
  var ta=document.getElementById('ml-corps');if(ta)ta.value='Bonjour'+(prenom?(' '+prenom):'')+',\n\nPour ouvrir votre dossier, merci de compléter notre formulaire en ligne (quelques minutes) :\n'+link+'\n\nUne fois votre formulaire envoyé, nous préparons vos documents et revenons vers vous.\n\nBien à vous,\nL\'équipe AEM CONSEIL';}
-function demSaisieInterne(){var opts=FORM_TYPES.map(function(x){return '<option value="'+x.k+'">'+esc(x.label)+'</option>';}).join('');
+/* Conception d'un dossier → passe désormais par le module Formulaire (saisie complète des infos client),
+   pour un flux unique : Formulaire → validation → apparition dans Traitement. */
+function demSaisieInterne(){ if(typeof go==='function'){go('formulaire');} else {state.page='formulaire';if(typeof render==='function')render();} }
+/* Ancienne saisie rapide (modale) — conservée mais non utilisée (le Formulaire complet est le point d'entrée). */
+function demSaisieRapide(){var opts=FORM_TYPES.map(function(x){return '<option value="'+x.k+'">'+esc(x.label)+'</option>';}).join('');
  openModal('➕ Saisir un dossier (formulaire interne)',
   '<div class="hint" style="margin-bottom:8px">Remplis le formulaire pour créer un dossier pré-rempli (ex. demande reçue par téléphone ou en rendez-vous).</div>'
   +'<label>Type de formalité</label><select id="si-type" onchange="demSaisieFields()">'+opts+'</select>'
