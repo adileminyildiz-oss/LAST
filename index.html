@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=452;
+var LAST_VER=453;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -22838,7 +22838,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     {id:'abo',ico:'🔁',t:'Abonnements & revenu récurrent',d:'Suivi des clients abonnés (espace client, échéancier, packs…) : revenu mensuel récurrent (MRR), annuel (ARR), panier moyen et projection. Facturation en ligne récurrente.'},
     {id:'cockpit',ico:'📊',t:'Tableau de bord dirigeant',d:'Cockpit de pilotage : trésorerie, CA & résultat du mois, revenu récurrent, rentabilité et prochaines échéances réunis en une vue. Objectif de CA suivi.'},
     {id:'veille',ico:'🔔',t:'Veille réglementaire',d:'Changements de lois et de règles par millésime (paie, fiscal, social, juridique) avec date d’effet et statut. Éditable, à remettre aux clients.'},
-    {id:'coffre',ico:'🔒',t:'Coffre-fort & portail client',d:'Rangez les documents par client (statuts, K-bis, bilans, contrats, paie…). Consultation, téléchargement et partage au portail client. Facturable en abonnement.'}
+    {id:'coffre',ico:'🔒',t:'Coffre-fort & portail client',d:'Rangez les documents par client (statuts, K-bis, bilans, contrats, paie…). Consultation, téléchargement et partage au portail client. Facturable en abonnement.'},
+    {id:'signature',ico:'✍️',t:'Signature électronique',d:'Circuit de signature des documents : envoi, suivi des statuts, signature manuscrite à l’écran et attestation horodatée. Signez devis, contrats et lettres de mission.'}
   ];
 
   /* ================= SERVICE 1 : ÉCHÉANCIER FISCAL & SOCIAL ================= */
@@ -23268,17 +23269,108 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<p class="svc-note-min">Les fichiers sont stockés <b>localement sur cet appareil</b> (isolés de la comptabilité), taille maximale 1,5 Mo par fichier. Pour un vrai portail client hébergé (accès distant sécurisé), prévoir un stockage serveur — ce module en fournit la structure et l’organisation.</p></div>';
   }
 
+  /* ================= SERVICE 9 : SIGNATURE ÉLECTRONIQUE ================= */
+  var SIG_DEF=[
+    {id:'s1',doc:'Lettre de mission 2026',signataire:'SARL Dupont',email:'contact@dupont.fr',statut:'envoye',dateEnvoi:'',dateSig:'',signature:''},
+    {id:'s2',doc:'Devis création SASU',signataire:'M. Bernard',email:'bernard@mail.fr',statut:'brouillon',dateEnvoi:'',dateSig:'',signature:''}
+  ];
+  var SIG_ST={brouillon:{t:'Brouillon',c:''},envoye:{t:'Envoyé',c:'sig-soon'},vu:{t:'Vu',c:'sig-soon'},signe:{t:'Signé',c:'sig-ok'},refuse:{t:'Refusé',c:'sig-ko'}};
+  function sig(){ var o=store(); if(!o.signature){ o.signature={items:SIG_DEF.map(function(s){return Object.assign({},s);})}; save(o); } return o.signature; }
+  function sigSave(st){ var o=store(); o.signature=st; save(o); }
+  function nowFr(){ var d=new Date(); return frDate(d)+' '+pad(d.getHours())+':'+pad(d.getMinutes()); }
+  window.svcSigSet=function(i,f,v){ var st=sig(); var it=st.items[i]; if(!it)return; it[f]=v; sigSave(st); };
+  window.svcSigAdd=function(){ var st=sig(); st.items.unshift({id:'s'+Date.now(),doc:'Nouveau document',signataire:'',email:'',statut:'brouillon',dateEnvoi:'',dateSig:'',signature:''}); sigSave(st); render(); };
+  window.svcSigDel=function(i){ var st=sig(); st.items.splice(i,1); sigSave(st); render(); };
+  window.svcSigSend=function(i){ var st=sig(); var it=st.items[i]; if(!it)return; it.statut='envoye'; it.dateEnvoi=nowFr(); sigSave(st); render(); if(typeof toast==='function')toast('Document envoyé pour signature.'); };
+  window.svcSigRefuse=function(i){ var st=sig(); var it=st.items[i]; if(!it)return; it.statut='refuse'; sigSave(st); render(); };
+  window.svcSigReopen=function(i){ var st=sig(); var it=st.items[i]; if(!it)return; it.statut='brouillon'; it.signature=''; it.dateSig=''; sigSave(st); render(); };
+  window.svcSigReset=function(){ function go(){ var o=store(); delete o.signature; save(o); render(); if(typeof toast==='function')toast('Signatures réinitialisées'); } if(typeof uiConfirm==='function')uiConfirm('Réinitialiser le circuit de signature ?',go,{okLabel:'Réinitialiser'}); else go(); };
+  window.svcSigPadClear=function(){ var c=window.__sigPadCanvas,ctx=window.__sigPadCtx; if(!c||!ctx)return; ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height); window.__sigDrawn=false; };
+  window.svcSigPadClose=function(){ var ov=document.getElementById('sig-pad-ov'); if(ov&&ov.parentNode)ov.parentNode.removeChild(ov); window.__sigPadCanvas=null; window.__sigPadCtx=null; };
+  window.svcSigPadValidate=function(i){ if(!window.__sigDrawn){ if(typeof toast==='function')toast('Dessinez la signature dans le cadre.'); return; } var data=window.__sigPadCanvas?window.__sigPadCanvas.toDataURL('image/png'):''; var st=sig(); var it=st.items[i]; if(it){ it.signature=data; it.statut='signe'; it.dateSig=nowFr(); sigSave(st); } svcSigPadClose(); render(); if(typeof toast==='function')toast('Document signé.'); };
+  window.svcSigSign=function(i){ var st=sig(); var it=st.items[i]; if(!it)return; svcSigPadClose();
+    var ov=document.createElement('div'); ov.id='sig-pad-ov'; ov.className='sig-pad-ov';
+    ov.innerHTML='<div class="sig-pad-box"><div class="sig-pad-h"><span>Signature — '+E(it.doc)+'</span><button class="sig-pad-x" title="Fermer" aria-label="Fermer" onclick="svcSigPadClose()">'+SVCX+'</button></div>'
+      +'<div class="sig-pad-sub">Signataire : <b>'+E(it.signataire||'—')+'</b> · signez dans le cadre ci-dessous.</div>'
+      +'<canvas id="sig-pad-c" class="sig-pad-c" width="560" height="200"></canvas>'
+      +'<div class="sig-pad-act"><button class="btn btn-ghost" onclick="svcSigPadClear()">Effacer</button><button class="btn btn-ghost" onclick="svcSigPadClose()">Annuler</button><button class="btn btn-pri" onclick="svcSigPadValidate('+i+')">Valider la signature</button></div></div>';
+    document.body.appendChild(ov);
+    var c=document.getElementById('sig-pad-c'); var ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height); ctx.strokeStyle='#0a2a4a'; ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.lineCap='round';
+    window.__sigPadCanvas=c; window.__sigPadCtx=ctx; window.__sigDrawn=false;
+    var drawing=false,px=0,py=0;
+    function pos(e){ var r=c.getBoundingClientRect(); var x=(e.touches?e.touches[0].clientX:e.clientX)-r.left; var y=(e.touches?e.touches[0].clientY:e.clientY)-r.top; return [x*(c.width/r.width),y*(c.height/r.height)]; }
+    function down(e){ drawing=true; var p=pos(e); px=p[0]; py=p[1]; if(e.cancelable)e.preventDefault(); }
+    function move(e){ if(!drawing)return; var p=pos(e); ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(p[0],p[1]); ctx.stroke(); px=p[0]; py=p[1]; window.__sigDrawn=true; if(e.cancelable)e.preventDefault(); }
+    function up(){ drawing=false; }
+    c.addEventListener('mousedown',down); c.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+    c.addEventListener('touchstart',down,{passive:false}); c.addEventListener('touchmove',move,{passive:false}); window.addEventListener('touchend',up);
+  };
+  window.svcSigCert=function(i){ var st=sig(); var it=st.items[i]; if(!it||it.statut!=='signe'){ if(typeof toast==='function')toast('Document non signé.'); return; }
+    var cab=''; try{ cab=(window.__svcCabName&&window.__svcCabName())||'AEM CONSEIL'; }catch(e){ cab='AEM CONSEIL'; }
+    var w=window.open('','_blank'); if(!w){ if(typeof toast==='function')toast('Autorisez les fenêtres pop-up.'); return; }
+    var html='<!doctype html><html><head><meta charset="utf-8"><title>Attestation de signature</title><style>@page{size:A4;margin:22mm}body{font-family:Georgia,serif;color:#111;line-height:1.55}h1{font-size:20px;text-align:center;margin-bottom:4px}.sub{text-align:center;color:#555;margin-bottom:26px}.row{margin:8px 0}.lbl{color:#555;display:inline-block;width:180px}.sig{margin-top:24px;border:1px solid #ccc;border-radius:8px;padding:10px;max-width:340px}.sig img{max-width:320px}.foot{margin-top:26px;font-size:11px;color:#777}</style></head><body>'
+      +'<h1>Attestation de signature électronique</h1><div class="sub">'+E(cab)+'</div>'
+      +'<div class="row"><span class="lbl">Document</span><b>'+E(it.doc)+'</b></div>'
+      +'<div class="row"><span class="lbl">Signataire</span>'+E(it.signataire||'—')+'</div>'
+      +'<div class="row"><span class="lbl">E-mail</span>'+E(it.email||'—')+'</div>'
+      +'<div class="row"><span class="lbl">Envoyé le</span>'+E(it.dateEnvoi||'—')+'</div>'
+      +'<div class="row"><span class="lbl">Signé le</span><b>'+E(it.dateSig||'—')+'</b></div>'
+      +'<div class="sig"><div style="font-size:11px;color:#555;margin-bottom:6px">Signature manuscrite</div>'+(it.signature?('<img src="'+it.signature+'">'):'—')+'</div>'
+      +'<div class="foot">Signature électronique simple, apposée à l’écran et horodatée. Ce module assure le suivi et la preuve d’apposition ; pour une signature électronique qualifiée (eIDAS), recourir à un prestataire de confiance.</div>'
+      +'</body></html>';
+    w.document.write(html); w.document.close(); };
+  function sigActions(it,i){ var s=it.statut;
+    if(s==='brouillon')return '<button class="sig-act sig-act-b" onclick="svcSigSend('+i+')">Envoyer</button>';
+    if(s==='envoye'||s==='vu')return '<button class="sig-act sig-act-b" onclick="svcSigSign('+i+')">Signer</button><button class="sig-act" onclick="svcSigRefuse('+i+')">Refuser</button>';
+    if(s==='signe')return '<button class="sig-act sig-act-b" onclick="svcSigCert('+i+')">👁 Attestation</button>';
+    if(s==='refuse')return '<button class="sig-act" onclick="svcSigReopen('+i+')">Réactiver</button>';
+    return '';
+  }
+  function signatureView(){ var st=sig();
+    var rows=st.items.map(function(it,i){ var sv=SIG_ST[it.statut]||SIG_ST.brouillon;
+      return '<tr>'
+        +'<td><input class="mg-in mg-n" value="'+E(it.doc)+'" oninput="svcSigSet('+i+',\'doc\',this.value)"></td>'
+        +'<td><input class="mg-in mg-n" value="'+E(it.signataire)+'" placeholder="Signataire" oninput="svcSigSet('+i+',\'signataire\',this.value)"></td>'
+        +'<td><input class="mg-in mg-n" value="'+E(it.email)+'" placeholder="E-mail" oninput="svcSigSet('+i+',\'email\',this.value)"></td>'
+        +'<td><span class="ve-pill '+sv.c+'">'+E(sv.t)+'</span></td>'
+        +'<td class="mg-c" style="font-size:11.5px;white-space:nowrap">'+(it.dateSig?('signé '+E(it.dateSig)):(it.dateEnvoi?('envoyé '+E(it.dateEnvoi)):'—'))+'</td>'
+        +'<td><div class="sig-acts">'+sigActions(it,i)+'</div></td>'
+        +'<td class="r"><button class="svc-cat-x" title="Retirer" aria-label="Retirer" onclick="svcSigDel('+i+')">'+SVCX+'</button></td>'
+        +'</tr>';
+    }).join('')||'<tr><td colspan="7" style="padding:14px;color:#8aa0b8">Aucun document. Ajoutez-en un ci-dessous.</td></tr>';
+    var nb=st.items.length, aSigner=st.items.filter(function(x){return x.statut==='envoye'||x.statut==='vu';}).length, signes=st.items.filter(function(x){return x.statut==='signe';}).length;
+    var taux=nb>0?Math.round(signes/nb*100):0;
+    var kpi='<div class="svc-eche-kpis">'
+      +'<div class="svc-kpi '+(aSigner?'warn':'')+'"><div class="svc-kpi-v">'+aSigner+'</div><div class="svc-kpi-l">en attente de signature</div></div>'
+      +'<div class="svc-kpi mg-kpi-ben"><div class="svc-kpi-v">'+signes+'</div><div class="svc-kpi-l">signés</div></div>'
+      +'<div class="svc-kpi"><div class="svc-kpi-v">'+taux+' %</div><div class="svc-kpi-l">taux de signature</div></div>'
+      +'</div>';
+    var table='<div class="svc-mg-wrap"><table class="svc-mg-t"><thead><tr>'
+      +'<th style="text-align:left">Document</th><th style="text-align:left">Signataire</th><th style="text-align:left">E-mail</th><th style="text-align:left">Statut</th><th style="text-align:left">Suivi</th><th style="text-align:left">Actions</th><th></th>'
+      +'</tr></thead><tbody>'+rows+'</tbody></table></div>'
+      +'<button class="btn btn-sm btn-ghost svc-cat-add" onclick="svcSigAdd()">+ Ajouter un document à signer</button>';
+    return '<div class="svc-sub"><button class="btn btn-ghost svc-back" onclick="svcGo(\'\')">‹ Services</button>'
+      +'<h2 class="svc-h2">✍️ Signature électronique</h2>'
+      +'<p class="svc-lead">Circuit de signature de vos documents (devis, contrats, lettres de mission) : <b>envoi</b>, suivi des statuts, <b>signature manuscrite à l’écran</b> et <b>attestation horodatée</b> imprimable. Signature électronique simple.</p>'
+      +'<div class="svc-cat-act"><button class="btn btn-ghost" onclick="svcSigReset()">↺ Réinitialiser</button></div>'
+      +kpi
+      +'<div class="card svc-card">'+table+'</div>'
+      +'<p class="svc-note-min">Signature électronique <b>simple</b> (apposition à l’écran + horodatage + attestation). Assure le suivi et la preuve d’apposition ; pour une signature <b>qualifiée eIDAS</b> (valeur probante renforcée), recourir à un prestataire de confiance certifié.</p></div>';
+  }
+
   /* ---------- HUB des services ---------- */
   function hub(){
     var cards=SERVICES.map(function(s){ return '<button class="svc-tile" onclick="svcGo(\''+s.id+'\')"><div class="svc-tile-ic">'+s.ico+'</div><div class="svc-tile-b"><div class="svc-tile-t">'+E(s.t)+'</div><div class="svc-tile-d">'+E(s.d)+'</div></div></button>'; }).join('');
-    var soon=['Signature électronique des documents']
-      .map(function(x){ return '<div class="svc-soon">'+E(x)+' <span class="svc-soon-b">à venir</span></div>'; }).join('');
+    var SOON=[];
+    var soon=SOON.map(function(x){ return '<div class="svc-soon">'+E(x)+' <span class="svc-soon-b">à venir</span></div>'; }).join('');
+    var soonBlock=SOON.length?('<div class="svc-soon-h">Prochains services</div><div class="svc-soon-grid">'+soon+'</div>')
+      :'<div class="svc-soon-h">Suite de services opérationnelle</div><div class="svc-soon-grid"><div class="svc-soon">'+SERVICES.length+' modules disponibles · 100 % isolés de l’activité opérationnelle <span class="svc-soon-b">✓ complet</span></div></div>';
     return '<div class="svc-hub"><p class="svc-lead">Modules de services vendables aux clients — indépendants de l’activité opérationnelle du cabinet.</p>'
       +'<div class="svc-grid">'+cards+'</div>'
-      +'<div class="svc-soon-h">Prochains services</div><div class="svc-soon-grid">'+soon+'</div></div>';
+      +soonBlock+'</div>';
   }
   window.svcGo=function(view){ window.__svcView=view||''; try{ if(typeof go==='function') go('services'); else { S().page='services'; render(); } }catch(e){ try{S().page='services';render();}catch(_){} } };
-  function pageServices(){ if(window.__svcView==='echeancier')return echeView(); if(window.__svcView==='simulateurs')return simuView(); if(window.__svcView==='catalogue')return catView(); if(window.__svcView==='marge')return margeView(); if(window.__svcView==='abo')return aboView(); if(window.__svcView==='cockpit')return cockpitView(); if(window.__svcView==='veille')return veilleView(); if(window.__svcView==='coffre')return coffreView(); return hub(); }
+  function pageServices(){ if(window.__svcView==='echeancier')return echeView(); if(window.__svcView==='simulateurs')return simuView(); if(window.__svcView==='catalogue')return catView(); if(window.__svcView==='marge')return margeView(); if(window.__svcView==='abo')return aboView(); if(window.__svcView==='cockpit')return cockpitView(); if(window.__svcView==='veille')return veilleView(); if(window.__svcView==='coffre')return coffreView(); if(window.__svcView==='signature')return signatureView(); return hub(); }
   window.pageServices=pageServices;
 
   /* ---------- Enregistrement PAGE + nav (pattern Agenda, additif) ---------- */
@@ -23301,7 +23393,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       try{buildNav();}catch(e){} try{document.body.dataset.page='services';}catch(e){}
       var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='services';}):null;
       try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Services';}catch(e){}
-      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':(window.__svcView==='simulateurs'?'Simulateurs de conseil':(window.__svcView==='catalogue'?'Offres & tarifs':(window.__svcView==='marge'?'Marge & bénéfices':(window.__svcView==='abo'?'Abonnements & revenu récurrent':(window.__svcView==='cockpit'?'Tableau de bord dirigeant':(window.__svcView==='veille'?'Veille réglementaire':(window.__svcView==='coffre'?'Coffre-fort & portail client':((p&&p.sub)||''))))))));}catch(e){}
+      try{document.getElementById('psub').textContent=(window.__svcView==='echeancier')?'Échéancier fiscal & social':(window.__svcView==='simulateurs'?'Simulateurs de conseil':(window.__svcView==='catalogue'?'Offres & tarifs':(window.__svcView==='marge'?'Marge & bénéfices':(window.__svcView==='abo'?'Abonnements & revenu récurrent':(window.__svcView==='cockpit'?'Tableau de bord dirigeant':(window.__svcView==='veille'?'Veille réglementaire':(window.__svcView==='coffre'?'Coffre-fort & portail client':(window.__svcView==='signature'?'Signature électronique':((p&&p.sub)||'')))))))));}catch(e){}
       var V=document.getElementById('view'); if(V)V.innerHTML=pageServices();
       return;
     }
@@ -23371,6 +23463,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.cok-form{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}@media(max-width:640px){.cok-form{grid-template-columns:1fr}.cok-grid{grid-template-columns:1fr}}'
     +'.ve-pill{font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid #2a3a4e;color:#9fb6d0;white-space:nowrap}.ve-pill.ve-ok{color:#5bbf8a;border-color:#2c6b4e;background:#0f1c16}.ve-pill.ve-soon{color:#f0c040;border-color:#6b5a1a;background:#1c1810}'
     +'.cof-fa{display:flex;align-items:center;gap:6px}.cof-fbtn{background:#0b1119;border:1px solid #26364a;color:#5ab0ff;border-radius:6px;width:30px;height:28px;cursor:pointer;font-size:14px}.cof-fbtn:hover{border-color:#2f8fff}.cof-fsz{font-size:11px;color:#8aa0b8;white-space:nowrap}.cof-nofile{font-size:11.5px;color:#6b7f96}.cof-share input{width:16px;height:16px;accent-color:#1e90ff;cursor:pointer}'
+    +'.ve-pill.sig-ok{color:#5bbf8a;border-color:#2c6b4e;background:#0f1c16}.ve-pill.sig-soon{color:#f0c040;border-color:#6b5a1a;background:#1c1810}.ve-pill.sig-ko{color:#ff8f9a;border-color:#6b2a30;background:#1c1114}'
+    +'.sig-acts{display:flex;gap:6px;flex-wrap:wrap}.sig-act{background:#0b1119;border:1px solid #26364a;color:#c7d6e8;border-radius:7px;padding:6px 11px;font-size:12px;cursor:pointer;white-space:nowrap}.sig-act:hover{border-color:#2f8fff}.sig-act-b{background:linear-gradient(#1e90ff,#0a64d6);color:#fff;border-color:#1e90ff;font-weight:600}'
+    +'.sig-pad-ov{position:fixed;inset:0;background:rgba(4,8,14,.72);display:flex;align-items:center;justify-content:center;z-index:9999}.sig-pad-box{background:#12161d;border:1px solid #26303c;border-radius:14px;padding:18px;max-width:620px;width:92%}.sig-pad-h{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:15px;margin-bottom:4px}.sig-pad-x{background:#2a1a1f;color:#ff8f9a;border:1px solid #52323a;border-radius:6px;width:30px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center}.sig-pad-sub{font-size:12.5px;color:#9fb6d0;margin-bottom:10px}.sig-pad-c{width:100%;height:auto;background:#fff;border:1px solid #26364a;border-radius:8px;touch-action:none;cursor:crosshair;display:block}.sig-pad-act{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}'
     document.head.appendChild(st2); } }catch(e){}
 })();
 </script>

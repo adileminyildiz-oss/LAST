@@ -202,6 +202,26 @@ const r = await page.evaluate(async () => {
     try { localStorage.removeItem('last-coffre-files'); } catch (e) {}
   } catch (e) { out.coffre = { ok: false, err: '' + e }; }
 
+  // 11) Service « Signature électronique » — circuit + pad de signature
+  out.sign = { ok: false };
+  try {
+    if (window.__svcSaveStore) { const o = window.__svcStore(); delete o.signature; window.__svcSaveStore(o); }
+    window.svcGo('signature');
+    const V = document.getElementById('view');
+    const hasView = !!(V && V.querySelector('table.svc-mg-t'));
+    window.svcSigSend(1); // brouillon → envoyé
+    const sent = window.__svcStore().signature.items[1].statut === 'envoye' && !!window.__svcStore().signature.items[1].dateEnvoi;
+    window.svcSigSign(0);
+    const padOpen = !!document.getElementById('sig-pad-ov');
+    window.__sigDrawn = true; window.svcSigPadValidate(0);
+    const it0 = window.__svcStore().signature.items[0];
+    const signed = it0.statut === 'signe' && !!it0.dateSig && /^data:image\/png/.test(it0.signature || '') && !document.getElementById('sig-pad-ov');
+    window.svcSigRefuse(1); const refused = window.__svcStore().signature.items[1].statut === 'refuse';
+    window.svcSigReopen(1); const reopened = window.__svcStore().signature.items[1].statut === 'brouillon';
+    out.sign = { ok: hasView, sent, pad: padOpen, signed, cycle: refused && reopened };
+    if (window.__svcSaveStore) { const o2 = window.__svcStore(); delete o2.signature; window.__svcSaveStore(o2); }
+  } catch (e) { out.sign = { ok: false, err: '' + e }; }
+
   return out;
 });
 
@@ -243,6 +263,9 @@ check('veille réglementaire : statut + ajout par année', r.veille.pill && r.ve
 check('coffre-fort : registre + édition des métadonnées', r.coffre.ok && r.coffre.meta);
 check('coffre-fort : partage au portail client', r.coffre.shared);
 check('coffre-fort : fichier joint (consulter/télécharger) + suppression en cascade', r.coffre.file && r.coffre.cascade);
+check('signature électronique : circuit (envoi) + pad de signature', r.sign.ok && r.sign.sent && r.sign.pad);
+check('signature électronique : document signé (PNG horodaté)', r.sign.signed);
+check('signature électronique : refus / réactivation', r.sign.cycle);
 check('aucun pageerror', perr.length === 0);
 
 const ok = results.filter(x => x.ok).length, tot = results.length;
