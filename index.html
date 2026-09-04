@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=406;
+var LAST_VER=407;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -21477,33 +21477,13 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     return '<div class="paie-wrap"><div class="paie-left">'+form+'</div><div class="paie-right">'+preview+'</div></div>';
   };
 
-  /* ---- PAGES + nav ---- */
-  try{ if(typeof PAGES!=='undefined' && !PAGES.some(function(p){return p.id==='paie';})){
-    var iAg=PAGES.findIndex(function(p){return p.id==='agenda';}); if(iAg<0)iAg=PAGES.findIndex(function(p){return p.id==='editions';});
-    var entry={id:'paie',lbl:'Fiches de paie',ic:'payslip',sub:'Bulletins de salaire · aperçu A4 en direct'};
-    if(iAg>=0)PAGES.splice(iAg+1,0,entry);else PAGES.push(entry);
-  } }catch(e){}
-  try{ if(typeof IC!=='undefined' && !IC.payslip){ IC.payslip='<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>'; } }catch(e){}
-  function injectPaieBtn(){
-    var nav=document.getElementById('nav');if(!nav)return; if(nav.querySelector('[data-paiebtn]'))return;
-    var after=nav.querySelector('[data-agbtn]')||nav.querySelector('button.nav-btn[onclick*="editions"]');
-    var on=(state2().page==='paie')?' on':''; var ico=(typeof svg==='function'&&typeof IC!=='undefined'&&IC.payslip)?svg(IC.payslip):'';
-    var b=document.createElement('button'); b.className='nav-btn'+on; b.setAttribute('data-paiebtn','1'); b.setAttribute('onclick',"go('paie')");
-    b.innerHTML=ico+'<span class="nav-btn-lbl">Fiches de paie</span>';
-    if(after&&after.parentNode)after.parentNode.insertBefore(b,after.nextSibling);else nav.appendChild(b);
-  }
-  try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){var r=_bn.apply(this,arguments);try{injectPaieBtn();}catch(e){}return r;}; } }catch(e){}
-  try{ var _rd=window.render; if(typeof _rd==='function'){ window.render=function(){
-    if(state2().page==='paie'){
-      try{buildNav();}catch(e){} try{document.body.dataset.page='paie';}catch(e){}
-      var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='paie';}):null;
-      try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Fiches de paie';}catch(e){}
-      try{document.getElementById('psub').textContent=(p&&p.sub)||'';}catch(e){}
-      var V=document.getElementById('view'); if(V)V.innerHTML=pagePaie();
-      return;
-    }
-    return _rd.apply(this,arguments);
-  }; } }catch(e){}
+  /* ---- Module dédié RETIRÉ à la demande : la Fiche de paie vit uniquement dans Éditions ----
+     Le calcul (calc/COTIS_DEF) et le rendu du bulletin (window.paieDocInline) restent exposés
+     ci-dessus car le document « Fiche de paie » du module Éditions s'en sert. Aucune entrée de
+     navigation, aucune route « paie » : purge d'une éventuelle entrée héritée. */
+  try{ if(typeof PAGES!=='undefined'){ for(var _i=PAGES.length-1;_i>=0;_i--){ if(PAGES[_i]&&PAGES[_i].id==='paie')PAGES.splice(_i,1); } } }catch(e){}
+  try{ var _pb=document.querySelector('[data-paiebtn]'); if(_pb&&_pb.parentNode)_pb.parentNode.removeChild(_pb); }catch(e){}
+  try{ if(typeof state!=='undefined'&&state.page==='paie'){ state.page='editions'; } }catch(e){}
 
   var PAIE_PRINT_CSS='.pb-doc{max-width:180mm;margin:0 auto}.pb-head{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:10px}.pb-title{text-align:right;font-weight:800;font-size:15px}.pb-title span{display:block;font-weight:600;font-size:12px;color:#555}.pb-sal{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;margin-bottom:10px;font-size:12px}.pb-k{display:inline-block;min-width:64px;color:#666;font-size:10px;text-transform:uppercase}.pb-t{width:100%;border-collapse:collapse;font-size:11px}.pb-t th{background:#f0f0f0;border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:10px}.pb-t th:first-child{text-align:left}.pb-t td{border:1px solid #ddd;padding:3px 6px}.pb-l{text-align:left}.pb-n{text-align:right;white-space:nowrap}.pb-brut td{background:#fafafa}.pb-tot{margin-top:10px;border:1px solid #ccc;border-radius:6px;padding:8px 10px}.pb-tr{display:flex;justify-content:space-between;padding:2px 0;font-size:12px}.pb-net{border-top:2px solid #111;margin-top:4px;padding-top:6px;font-size:15px;font-weight:800}.pb-foot{margin-top:10px;font-size:11px}.pb-mention{color:#888;font-size:9px;margin-top:6px}';
   window.PAIE_PRINT_CSS_REF=PAIE_PRINT_CSS;
