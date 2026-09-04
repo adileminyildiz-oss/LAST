@@ -1789,10 +1789,10 @@ function saveDossier(id,newref){
     statut:stat,createdAt:today(),historique:[{d:today(),t:'Dossier créé'}]});DB.seq.dossier++;}
   save();closeModal();toast('Dossier enregistré');render();
 }
-function delDossier(id){if(!confirm('Supprimer ce dossier ?'))return;var i=DB.dossiers.findIndex(x=>x.id===id);if(i<0)return;var item=DB.dossiers[i];
+function delDossier(id){uiConfirm('Supprimer ce dossier ?',function(){var i=DB.dossiers.findIndex(x=>x.id===id);if(i<0)return;var item=DB.dossiers[i];
   DB.dossiers.splice(i,1);if(window.corbeilleAdd)corbeilleAdd('dossier',item.ref||item.denom||item.clientNom||'Dossier',item);var dm=DB.demandes.find(x=>x.dossierId===id);var dmId=dm?dm.id:null;if(dm)dm.dossierId='';
   save();closeModal();
-  toastUndo('Dossier supprimé',function(){DB.dossiers.splice(Math.min(i,DB.dossiers.length),0,item);if(dmId){var dd=DB.demandes.find(x=>x.id===dmId);if(dd)dd.dossierId=item.id;}save();render();toast('Suppression annulée');});render();}
+  toastUndo('Dossier supprimé',function(){DB.dossiers.splice(Math.min(i,DB.dossiers.length),0,item);if(dmId){var dd=DB.demandes.find(x=>x.id===dmId);if(dd)dd.dossierId=item.id;}save();render();toast('Suppression annulée');});render();},{okLabel:'Supprimer'});}
 
 /* ---------- SERVICES ---------- */
 function prestationsBloc(){
@@ -1829,8 +1829,8 @@ function saveService(id){
   if(id)Object.assign(DB.services.find(x=>x.id===id),obj);else DB.services.push({id:uid('svc'),...obj});
   save();closeModal();toast('Service enregistré');render();
 }
-function delService(id){if(!confirm('Supprimer ce service ?'))return;var i=DB.services.findIndex(s=>s.id===id);if(i<0)return;var item=DB.services[i];DB.services.splice(i,1);save();closeModal();
-  toastUndo('Service supprimé',function(){DB.services.splice(Math.min(i,DB.services.length),0,item);save();render();toast('Suppression annulée');});render();}
+function delService(id){uiConfirm('Supprimer ce service ?',function(){var i=DB.services.findIndex(s=>s.id===id);if(i<0)return;var item=DB.services[i];DB.services.splice(i,1);save();closeModal();
+  toastUndo('Service supprimé',function(){DB.services.splice(Math.min(i,DB.services.length),0,item);save();render();toast('Suppression annulée');});render();},{okLabel:'Supprimer'});}
 
 /* ---------- MARGE (aperçu) ---------- */
 function setLangue(v){
@@ -1855,7 +1855,7 @@ function pageParams(){
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-sm btn-pri" onclick="exportDB()">Sauvegarder (exporter)</button>
         <button class="btn btn-sm btn-ghost" onclick="document.getElementById('imp').click()">Importer</button>
-        <button class="btn btn-sm btn-danger" onclick="if(confirm('Réinitialiser toutes les données de démonstration ?')){localStorage.removeItem(KEY);location.reload();}">Réinitialiser</button>
+        <button class="btn btn-sm btn-danger" onclick="uiConfirm('Réinitialiser toutes les données de démonstration ?',function(){localStorage.removeItem(KEY);location.reload();},{okLabel:'Réinitialiser'})">Réinitialiser</button>
       </div><input type="file" id="imp" accept="application/json" style="display:none" onchange="importDB(this)">
       <div class="section-t">Compte & session</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1899,9 +1899,10 @@ function rgpdPurgeSensibles(){
   (DB.dossiers||[]).forEach(function(d){if(d.archived||/cl[ôo]tur/i.test(d.statut||''))targets.push(d);});
   var count=0;targets.forEach(function(e){var docs=e.docs||{};Object.keys(docs).forEach(function(k){(docs[k]||[]).forEach(function(f){if(f&&f.dataUrl)count++;});});});
   if(!count)return toast('Aucune pièce à purger dans les dossiers finalisés / archivés.');
-  if(!confirm('Purger définitivement '+count+' fichier(s) sensible(s) des dossiers finalisés / archivés ?\n\nLe suivi « reçu » est conservé ; seuls les fichiers sont supprimés (minimisation RGPD). Action irréversible.'))return;
-  targets.forEach(function(e){var docs=e.docs||{};Object.keys(docs).forEach(function(k){(docs[k]||[]).forEach(function(f){if(f&&f.dataUrl){f.dataUrl='';f.purged=true;f.purgedTs=Date.now();}});});});
-  save();toast(count+' pièce(s) sensible(s) purgée(s).');render();
+  uiConfirm('Purger définitivement '+count+' fichier(s) sensible(s) des dossiers finalisés / archivés ?\n\nLe suivi « reçu » est conservé ; seuls les fichiers sont supprimés (minimisation RGPD). Action irréversible.',function(){
+    targets.forEach(function(e){var docs=e.docs||{};Object.keys(docs).forEach(function(k){(docs[k]||[]).forEach(function(f){if(f&&f.dataUrl){f.dataUrl='';f.purged=true;f.purgedTs=Date.now();}});});});
+    save();toast(count+' pièce(s) sensible(s) purgée(s).');render();
+  },{okLabel:'Purger'});
 }
 function rgpdCabinet(){return (DB.params&&DB.params.cabinet)||'AEM CONSEIL';}
 function rgpdRegistreTxt(){var cab=rgpdCabinet();var m=rgpdMois();
@@ -1938,7 +1939,7 @@ function modalUser(){openModal('Nouveau collaborateur',`<label>Nom</label><input
   `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-pri" onclick="saveUser()">Ajouter</button>`);}
 function saveUser(){const n=document.getElementById('u-nom').value.trim();if(!n)return toast('Nom requis');
   DB.users.push({id:uid('u'),nom:n,role:'collab',couleur:document.getElementById('u-col').value});save();closeModal();toast('Collaborateur ajouté');render();}
-function delUser(id){if(!confirm('Retirer ce collaborateur ?'))return;DB.users=DB.users.filter(u=>u.id!==id);save();render();}
+function delUser(id){uiConfirm('Retirer ce collaborateur ?',function(){DB.users=DB.users.filter(u=>u.id!==id);save();render();},{okLabel:'Retirer'});}
 
 /* ---------- FACTURATION (Client / Fournisseur) ---------- */
 const ESP_PIECES=[
@@ -2278,7 +2279,7 @@ function espStatutsEdit(id){
   ov.innerHTML=html;ov.classList.add('show');
 }
 function espStatutsSave(id){var d=espDoss().find(function(x){return x.id===id;});var el=document.getElementById('esp-st-edit');if(!d||!el)return;d.statutsCustom=el.innerHTML;save();toast('Modèle de statuts enregistré');espStatutsClose();render();}
-function espStatutsReset(id){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;if(!confirm('Réinitialiser le modèle de statuts (revenir au modèle standard généré depuis les données) ?'))return;delete d.statutsCustom;save();toast('Modèle réinitialisé');var el=document.getElementById('esp-st-edit');if(el){el.innerHTML=statutsSasHTML(d);}else{render();}}
+function espStatutsReset(id){var d=espDoss().find(function(x){return x.id===id;});if(!d)return;uiConfirm('Réinitialiser le modèle de statuts (revenir au modèle standard généré depuis les données) ?',function(){delete d.statutsCustom;save();toast('Modèle réinitialisé');var el=document.getElementById('esp-st-edit');if(el){el.innerHTML=statutsSasHTML(d);}else{render();}},{okLabel:'Réinitialiser',danger:false});}
 function espStatutsClose(){var ov=document.getElementById('esp-statuts');if(ov)ov.classList.remove('show');}
 function espStatutsPrint(){var el=document.getElementById('esp-st-edit');if(!el)return;if(typeof FactureVente!=='undefined'&&FactureVente.injectCSS)FactureVente.injectCSS();var pa=document.getElementById('fv-printarea');if(!pa){pa=document.createElement('div');pa.id='fv-printarea';document.body.appendChild(pa);}pa.innerHTML='<div class="doc-gen">'+el.innerHTML+'</div>';setTimeout(function(){window.print();},120);}
 function espPieceState(d,k){d.pieces=d.pieces||{};return d.pieces[k]||{recu:false};}
@@ -2833,7 +2834,7 @@ function societeSave(){DB.societe=DB.societe||{};var g=function(x){var e=documen
   save();toast('Société enregistrée');render();
 }
 function svcMatchDemande(txt){txt=(''+(txt||'')).toLowerCase();var best=null;(DB.services||[]).forEach(function(s){var nom=(''+s.nom).toLowerCase();if(txt&&(txt.indexOf(nom.slice(0,10))>=0||nom.split(/\s+/).some(function(w){return w.length>4&&txt.indexOf(w)>=0;})))best=best||s;});if(!best&&/cr[ée]a|sas|sarl|soci[ée]t[ée]|entreprise/.test(txt))best=(DB.services||[])[0];return best;}
-function yc(msg,ok){if(typeof confirm==='function'){if(confirm(msg))ok();}else ok();}
+function yc(msg,ok){if(typeof uiConfirm==='function')uiConfirm(msg,ok);else ok();}
 
 /* ---------- Modèles d'e-mails paramétrables ---------- */
 function mailCabinet(){return (DB.params&&DB.params.cabinet)||'AEM CONSEIL';}
@@ -2863,6 +2864,22 @@ function openModal(t,b,f){document.getElementById('ov-t').innerHTML=t;document.g
   document.getElementById('ov-f').innerHTML=f||'';document.getElementById('ov').classList.add('show');
   try{if(window.matchMedia&&window.matchMedia('(min-width:861px)').matches){setTimeout(function(){var box=document.getElementById('ov-b');if(!box)return;var el=box.querySelector('input:not([type=hidden]):not([readonly]):not([type=file]), select, textarea');if(el&&!el.closest('.doc-gen,.inv,.fv-view-scroll,.st-doc'))el.focus();},40);}}catch(e){}}
 function closeModal(){document.getElementById('ov').classList.remove('show');}
+/* Confirmation stylée (même modèle que les messages système) — remplace le confirm() natif du navigateur */
+function uiConfirm(msg,onYes,opts){
+  opts=opts||{};
+  var okLabel=opts.okLabel||'Confirmer';
+  var danger=(opts.danger!==false);
+  var title=opts.title||'Confirmation';
+  var e=(typeof esc==='function')?esc:function(s){return (''+s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+  var body='<div class="uicfm-msg">'+e(msg).replace(/\n/g,'<br>')+'</div>';
+  var footer='<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>'
+    +'<button class="btn '+(danger?'btn-danger':'btn-pri')+'" id="uicfm-ok">'+e(okLabel)+'</button>';
+  openModal(title,body,footer);
+  var okb=document.getElementById('uicfm-ok');
+  if(okb)okb.onclick=function(){ closeModal(); try{ if(typeof onYes==='function')onYes(); }catch(err){} };
+}
+window.uiConfirm=uiConfirm;
+if(!document.getElementById('uicfm-css')){var _uic=document.createElement('style');_uic.id='uicfm-css';_uic.textContent='.uicfm-msg{font-size:13.5px;line-height:1.6;color:var(--ink,#e6e9ef)}';document.head.appendChild(_uic);}
 function darkOn(){return false;}
 function darkApply(){try{document.body.classList.remove('dark');localStorage.removeItem('last-dark');}catch(e){}}
 function darkToggle(on){darkApply();}
@@ -3060,9 +3077,10 @@ async function lastGateEnrollVerify(ev){if(ev&&ev.preventDefault)ev.preventDefau
 }
 function lastGateAnchorDone(){_authGranted();}
 function lastLogout(){
-  if(!window.confirm('Se déconnecter de Mar’q ?'))return;
-  try{localStorage.removeItem('last-gate-ok');localStorage.removeItem('last-role');localStorage.removeItem('last-user');}catch(e){}
-  location.reload();
+  uiConfirm('Se déconnecter de Mar’q ?',function(){
+    try{localStorage.removeItem('last-gate-ok');localStorage.removeItem('last-role');localStorage.removeItem('last-user');}catch(e){}
+    location.reload();
+  },{okLabel:'Se déconnecter',danger:false});
 }
 function lastGate(){
   var ok=false;try{ok=localStorage.getItem('last-gate-ok')==='1';}catch(e){}
@@ -3162,7 +3180,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=397;
+var LAST_VER=398;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -3992,11 +4010,15 @@ window.demSelAll=function(on){ state.demSel=state.demSel||{}; var ids=window.__d
 window.demSelClear=function(){ state.demSel={}; if(typeof render==='function')render(); };
 window.demStar=function(id){ var d=(DB.demandes||[]).find(function(x){return x.id===id;}); if(!d)return; d.fav=!d.fav; if(typeof save==='function')save(); if(typeof render==='function')render(); };
 window.demSelSupprimer=function(){ var ids=window.demSelIds(); if(!ids.length)return;
-  if(!confirm('Supprimer '+ids.length+' demande'+(ids.length>1?'s':'')+' ? Elles resteront récupérables dans la corbeille (30 jours).'))return;
-  var n=0; ids.forEach(function(id){ var i=(DB.demandes||[]).findIndex(function(d){return d.id===id;}); if(i<0)return; var d=DB.demandes[i];
-    try{ if(typeof corbeilleAdd==='function')corbeilleAdd('demande',(typeof demBestName==='function'?demBestName(d):(d.clientNom||'Demande')),d); }catch(e){}
-    DB.demandes.splice(i,1); delete state.demSel[id]; n++; });
-  if(typeof save==='function')save(); if(typeof render==='function')render(); if(typeof toast==='function')toast(n+' demande'+(n>1?'s':'')+' supprimée'+(n>1?'s':'')+' — récupérable dans la corbeille'); };
+  uiConfirm('Supprimer '+ids.length+' demande'+(ids.length>1?'s':'')+' ?\nLe(s) dossier(s) lié(s) dans Traitement seront aussi supprimés. Tout reste récupérable dans la corbeille (30 jours).',function(){
+    var n=0,nd=0; ids.forEach(function(id){ var i=(DB.demandes||[]).findIndex(function(d){return d.id===id;}); if(i<0)return; var d=DB.demandes[i];
+      try{ (DB.dossiers||[]).slice().forEach(function(dos){ if(dos&&(dos.demandeId===id||(d.dossierId&&dos.id===d.dossierId))){ try{ if(typeof corbeilleAdd==='function')corbeilleAdd('dossier',(dos.ref||'Dossier'),dos); }catch(e){} DB.dossiers=DB.dossiers.filter(function(x){return x.id!==dos.id;}); nd++; } }); }catch(e){}
+      try{ if(typeof corbeilleAdd==='function')corbeilleAdd('demande',(typeof demBestName==='function'?demBestName(d):(d.clientNom||'Demande')),d); }catch(e){}
+      DB.demandes.splice(i,1); delete state.demSel[id]; n++; });
+    if(typeof save==='function')save(); if(typeof render==='function')render();
+    if(typeof toast==='function')toast(n+' demande'+(n>1?'s':'')+' supprimée'+(n>1?'s':'')+(nd?(' + '+nd+' dossier'+(nd>1?'s':'')+' lié'+(nd>1?'s':'')):'')+' — récupérable dans la corbeille');
+  },{okLabel:'Supprimer',danger:true,title:(ids.length>1?'Supprimer les demandes':'Supprimer la demande')});
+};
 window.demMessagerieView=function(){
  try{ if(typeof window.demReintegrerService==='function')window.demReintegrerService(); }catch(e){}
  state.demSel=state.demSel||{};
@@ -4440,9 +4462,10 @@ window.modalDemandeView=function(id){
   };
   window.espStatutsReset=function(id){
     var d=espDoss().find(function(x){return x.id===id;});if(!d)return;
-    if(!confirm('Réinitialiser le modèle de statuts (revenir au modèle choisi généré depuis les données) ?'))return;
-    delete d.statutsCustom;save();toast('Modèle réinitialisé');
-    var el=document.getElementById('esp-st-edit');if(el){el.innerHTML=window.espDocRender(d,'statuts');}else{render();}
+    uiConfirm('Réinitialiser le modèle de statuts (revenir au modèle choisi généré depuis les données) ?',function(){
+      delete d.statutsCustom;save();toast('Modèle réinitialisé');
+      var el=document.getElementById('esp-st-edit');if(el){el.innerHTML=window.espDocRender(d,'statuts');}else{render();}
+    },{okLabel:'Réinitialiser',danger:false});
   };
 })();
 </script>
@@ -6748,19 +6771,19 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
     if(!gen.length){ if(typeof toast==='function')toast('Aucun document généré. Cliquez « Tout générer ».'); return; }
     if(gen.length<docs.length){ if(typeof toast==='function')toast('Générez tous les documents avant le téléchargement.'); return; }
     var f=folder(d), notAppr=gen.filter(function(dc){return f.approved[dc.k]!==true;});
+    var proceed=function(){
+      var cli=(typeof dossierClients==='function'?dossierClients(d):'')||d.ref||'dossier';
+      var files=gen.map(function(dc){ var inner=''; try{ inner=espDocHTML(d,dc); }catch(e){ inner='<p>Document indisponible.</p>'; }
+        return {name:safe(dc.l)+'.html', data:'<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>'+E(dc.l)+'</title>'+DOC_CSS+'</head><body><div class="doc-gen">'+inner+'</div></body></html>'}; });
+      var idx='<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Dossier '+E(cli)+'</title>'+DOC_CSS+'</head><body><div class="doc-gen"><h2>Dossier de documents — '+E(cli)+'</h2><p>Réf. '+E(d.ref||d.numeroDossier||'')+' · établi le '+E((new Date()).toLocaleDateString('fr-FR'))+' · documents vérifiés et approuvés.</p><ol>'+gen.map(function(dc){return '<li><a href="'+safe(dc.l)+'.html">'+E(dc.l)+'</a></li>';}).join('')+'</ol></div></body></html>';
+      files.push({name:'index.html',data:idx});
+      try{ var blob=new Blob([zip(files)],{type:'application/zip'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Dossier-'+safe(cli)+'.zip'; document.body.appendChild(a); a.click(); setTimeout(function(){try{URL.revokeObjectURL(a.href);a.remove();}catch(e){}},1500);
+        if(typeof toast==='function')toast('Dossier téléchargé — '+files.length+' fichier(s)'); }catch(e){ if(typeof toast==='function')toast('Téléchargement impossible.'); }
+      if(typeof render==='function')render();
+    };
     if(notAppr.length){
-      var ok=window.confirm('Vérification requise avant téléchargement.\n\n'+notAppr.length+' document(s) non approuvé(s) :\n- '+notAppr.map(function(dc){return dc.l;}).join('\n- ')+'\n\nLe vérificateur approuve-t-il ces documents et lance-t-il le téléchargement ?');
-      if(!ok) return;
-      notAppr.forEach(function(dc){ f.approved[dc.k]=true; }); if(typeof save==='function')save();
-    }
-    var cli=(typeof dossierClients==='function'?dossierClients(d):'')||d.ref||'dossier';
-    var files=gen.map(function(dc){ var inner=''; try{ inner=espDocHTML(d,dc); }catch(e){ inner='<p>Document indisponible.</p>'; }
-      return {name:safe(dc.l)+'.html', data:'<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>'+E(dc.l)+'</title>'+DOC_CSS+'</head><body><div class="doc-gen">'+inner+'</div></body></html>'}; });
-    var idx='<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Dossier '+E(cli)+'</title>'+DOC_CSS+'</head><body><div class="doc-gen"><h2>Dossier de documents — '+E(cli)+'</h2><p>Réf. '+E(d.ref||d.numeroDossier||'')+' · établi le '+E((new Date()).toLocaleDateString('fr-FR'))+' · documents vérifiés et approuvés.</p><ol>'+gen.map(function(dc){return '<li><a href="'+safe(dc.l)+'.html">'+E(dc.l)+'</a></li>';}).join('')+'</ol></div></body></html>';
-    files.push({name:'index.html',data:idx});
-    try{ var blob=new Blob([zip(files)],{type:'application/zip'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Dossier-'+safe(cli)+'.zip'; document.body.appendChild(a); a.click(); setTimeout(function(){try{URL.revokeObjectURL(a.href);a.remove();}catch(e){}},1500);
-      if(typeof toast==='function')toast('Dossier téléchargé — '+files.length+' fichier(s)'); }catch(e){ if(typeof toast==='function')toast('Téléchargement impossible.'); }
-    if(typeof render==='function')render();
+      uiConfirm('Vérification requise avant téléchargement.\n\n'+notAppr.length+' document(s) non approuvé(s) :\n- '+notAppr.map(function(dc){return dc.l;}).join('\n- ')+'\n\nLe vérificateur approuve-t-il ces documents et lance-t-il le téléchargement ?',function(){ notAppr.forEach(function(dc){ f.approved[dc.k]=true; }); if(typeof save==='function')save(); proceed(); },{okLabel:'Approuver & télécharger',danger:false});
+    } else { proceed(); }
   };
 
   window.docFolderCard=function(d){ if(!d||typeof ESP_DOCS==='undefined')return '';
@@ -7049,13 +7072,14 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
   function restore(ts){
     getOne(ts).then(function(rec){ if(!rec) return;
       var when=relTime(ts);
-      if(!confirm('Restaurer la sauvegarde du '+new Date(ts).toLocaleString('fr-FR')+' ('+when+') ?\n\nL\'état actuel sera d\'abord sauvegardé automatiquement, puis remplacé.')) return;
+      uiConfirm('Restaurer la sauvegarde du '+new Date(ts).toLocaleString('fr-FR')+' ('+when+') ?\n\nL\'état actuel sera d\'abord sauvegardé automatiquement, puis remplacé.',function(){
       snapshot('avant-restauration').then(function(){
         try{ DB=JSON.parse(rec.data); }catch(e){ if(typeof toast==='function')toast('Sauvegarde illisible'); return; }
         lastHash=null; try{window.save&&window.save();}catch(e){}
         if(typeof toast==='function')toast('Sauvegarde restaurée');
         if(typeof render==='function')render();
       });
+      },{okLabel:'Restaurer',danger:false});
     });
   }
   function snapshotNow(){ snapshot('manuel').then(function(ok){ if(typeof toast==='function')toast(ok?'Sauvegarde créée':'Aucune modification à sauvegarder'); }); }
@@ -7147,11 +7171,9 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
     c.splice(i,1); try{save();}catch(e){}
     if(typeof toast==='function')toast(exists?'Déjà présent — retiré de la corbeille':(TL[rec.type]||'Élément')+' restauré'); if(typeof render==='function')render(); }
   function purge(cid){ var c=ensure(); if(!c)return; var i=c.findIndex(function(x){return x.cid===cid;}); if(i<0)return;
-    if(!confirm('Supprimer définitivement cet élément ? Cette action est irréversible.'))return;
-    c.splice(i,1); try{save();}catch(e){} if(typeof toast==='function')toast('Supprimé définitivement'); if(typeof render==='function')render(); }
+    uiConfirm('Supprimer définitivement cet élément ? Cette action est irréversible.',function(){ var c2=ensure(); var j=c2?c2.findIndex(function(x){return x.cid===cid;}):-1; if(j<0)return; c2.splice(j,1); try{save();}catch(e){} if(typeof toast==='function')toast('Supprimé définitivement'); if(typeof render==='function')render(); },{okLabel:'Supprimer'}); }
   function vider(){ var c=ensure(); if(!c||!c.length)return;
-    if(!confirm('Vider la corbeille ('+c.length+' élément'+(c.length>1?'s':'')+') ? Irréversible.'))return;
-    c.length=0; try{save();}catch(e){} if(typeof toast==='function')toast('Corbeille vidée'); if(typeof render==='function')render(); }
+    uiConfirm('Vider la corbeille ('+c.length+' élément'+(c.length>1?'s':'')+') ? Irréversible.',function(){ var c2=ensure(); if(!c2)return; c2.length=0; try{save();}catch(e){} if(typeof toast==='function')toast('Corbeille vidée'); if(typeof render==='function')render(); },{okLabel:'Vider'}); }
   function relTime(ts){var s=Math.floor((Date.now()-ts)/1000);
     if(s<50)return "à l'instant"; if(s<3600)return 'il y a '+Math.floor(s/60)+' min';
     if(s<86400)return 'il y a '+Math.floor(s/3600)+' h'; var d=Math.floor(s/86400); return 'il y a '+d+' jour'+(d>1?'s':''); }
@@ -11952,11 +11974,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   window.configImportFile=function(input){
     var f=input&&input.files&&input.files[0];if(!f)return;
-    if(typeof confirm==='function'&&!confirm('Importer cette configuration ? Les paramètres actuels (pièces, étapes, numérotation, messages, modèles, délais) seront remplacés. Les données des dossiers ne sont pas touchées.')){input.value='';return;}
-    var r=new FileReader();
-    r.onload=function(e){var res=window.configImport(e.target.result);
-      if(res&&res.ok){ if(typeof toast==='function')toast('Configuration importée ('+res.applied.length+' réglage(s))'); if(typeof render==='function')render(); }};
-    r.readAsText(f);input.value='';
+    var doImport=function(){
+      var r=new FileReader();
+      r.onload=function(e){var res=window.configImport(e.target.result);
+        if(res&&res.ok){ if(typeof toast==='function')toast('Configuration importée ('+res.applied.length+' réglage(s))'); if(typeof render==='function')render(); }};
+      r.readAsText(f);input.value='';
+    };
+    uiConfirm('Importer cette configuration ? Les paramètres actuels (pièces, étapes, numérotation, messages, modèles, délais) seront remplacés. Les données des dossiers ne sont pas touchées.',doImport,{okLabel:'Importer',danger:false});
   };
 
   window.configIOCard=function(){
@@ -15680,7 +15704,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   /* K-bis du client (déposé une fois la société immatriculée) */
   window.clientKbisUpload=function(id,input){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); var c=d&&dosClient(d); if(!c){ if(typeof toast==='function')toast('Client introuvable.'); return; } var f=input&&input.files&&input.files[0]; if(!f)return; var r=new FileReader(); r.onload=function(ev){ c.kbis={name:f.name,type:f.type||'application/octet-stream',dataUrl:''+ev.target.result,ts:Date.now()}; c.kbisRecu=true; c.immatricule=true; if(!c.dateImmat&&typeof today==='function')c.dateImmat=today(); if(typeof save==='function')save(); if(typeof render==='function')render(); if(typeof toast==='function')toast('K-bis ajouté au client'); }; r.readAsDataURL(f); input.value=''; };
   window.clientKbisVoir=function(id){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); var c=d&&dosClient(d); if(!c||!c.kbis)return; var f=c.kbis; var isImg=/^image\//.test(f.type||'')||/\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name||''); var isPdf=/pdf/i.test(f.type||'')||/\.pdf$/i.test(f.name||''); var inner=isImg?('<img src="'+f.dataUrl+'" alt="'+E(f.name)+'" style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:8px">'):isPdf?('<iframe src="'+f.dataUrl+'" style="width:100%;height:70vh;border:0;background:#fff;border-radius:8px"></iframe>'):'<div class="hint">Aperçu indisponible pour ce type de fichier.</div>'; if(typeof openModal==='function')openModal('K-bis — '+E(c.denomination||''),inner,'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><a class="btn btn-pri" href="'+f.dataUrl+'" download="'+E(f.name)+'">Télécharger</a>'); };
-  window.clientKbisSuppr=function(id){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); var c=d&&dosClient(d); if(!c||!c.kbis)return; if(typeof confirm==='function'&&!confirm('Retirer le K-bis de ce client ?'))return; delete c.kbis; c.kbisRecu=false; if(typeof save==='function')save(); if(typeof render==='function')render(); };
+  window.clientKbisSuppr=function(id){ var d=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).find(function(x){return x.id===id;}); var c=d&&dosClient(d); if(!c||!c.kbis)return; uiConfirm('Retirer le K-bis de ce client ?',function(){ delete c.kbis; c.kbisRecu=false; if(typeof save==='function')save(); if(typeof render==='function')render(); },{okLabel:'Retirer'}); };
   /* Registre des clients (sociétés immatriculées) — greffé sur la page Traitement. */
   window.clientsImmatriculesCard=function(){
     var ds=(typeof espDoss==='function'?espDoss():(DB.dossiers||[])).filter(function(d){return d.inpiSuivi&&d.inpiSuivi.statut==='immatricule';});
@@ -15854,7 +15878,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d; dm.piecesRecues=dm.piecesRecues||{}; dm.piecesRecues['statutsSig']=true;
       d.historique=d.historique||[]; d.historique.unshift({d:s.signeLe,t:'Statuts signés reçus'}); if(typeof save==='function')save(); if(typeof render==='function')render(); if(typeof toast==='function')toast('Statuts signés ajoutés'); }; r.readAsDataURL(f); input.value=''; };
   window.statutsSignesVoir=function(id){ var d=dget(id); var s=d&&d.signature; if(!s||!s.file)return; var f=s.file; var isImg=/^image\//.test(f.type||'')||/\.(png|jpe?g|webp|gif)$/i.test(f.name||''); var isPdf=/pdf/i.test(f.type||'')||/\.pdf$/i.test(f.name||''); var inner=isImg?('<img src="'+f.dataUrl+'" style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:8px">'):isPdf?('<iframe src="'+f.dataUrl+'" style="width:100%;height:70vh;border:0;background:#fff;border-radius:8px"></iframe>'):'<div class="hint">Aperçu indisponible.</div>'; if(typeof openModal==='function')openModal('Statuts signés — '+E(socName(d)),inner,'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><a class="btn btn-pri" href="'+f.dataUrl+'" download="'+E(f.name)+'">Télécharger</a>'); };
-  window.statutsSignesSuppr=function(id){ var d=dget(id); var s=d&&d.signature; if(!s||!s.file)return; if(typeof confirm==='function'&&!confirm('Retirer les statuts signés ?'))return; s.file=null; s.signeLe=''; var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d; if(dm.piecesRecues)delete dm.piecesRecues['statutsSig']; if(typeof save==='function')save(); if(typeof render==='function')render(); };
+  window.statutsSignesSuppr=function(id){ var d=dget(id); var s=d&&d.signature; if(!s||!s.file)return; uiConfirm('Retirer les statuts signés ?',function(){ s.file=null; s.signeLe=''; var dm=(typeof espDemandeDe==='function'&&espDemandeDe(d))||d; if(dm.piecesRecues)delete dm.piecesRecues['statutsSig']; if(typeof save==='function')save(); if(typeof render==='function')render(); },{okLabel:'Retirer'}); };
   /* ---- Carte « Finalisation & remise » (surface à étapes) ---- */
   var FIN_IC={
     bundle:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l3 3v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v3h3"/><path d="M9 12h6M9 16h4"/></svg>',
@@ -17586,7 +17610,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   };
   window.edLibOpen=function(id){state.edLibId=id;render();};
   window.edLibClose=function(){state.edLibId='';render();};
-  window.edLibDel=function(id){ if(typeof confirm==='function'&&!confirm('Supprimer ce document ?'))return; DB.editionsLibres=(DB.editionsLibres||[]).filter(function(x){return x.id!==id;}); if(state.edLibId===id)state.edLibId=''; save();render(); };
+  window.edLibDel=function(id){ uiConfirm('Supprimer ce document ?',function(){ DB.editionsLibres=(DB.editionsLibres||[]).filter(function(x){return x.id!==id;}); if(state.edLibId===id)state.edLibId=''; save();render(); },{okLabel:'Supprimer'}); };
   window.edLibRename=function(id,v){var d=(DB.editionsLibres||[]).filter(function(x){return x.id===id;})[0];if(d){d.titre=v;d.titreAuto=false;d.updated=Date.now();save();}};
   function edDoc(id){return (DB.editionsLibres||[]).filter(function(x){return x.id===id;})[0];}
   var _edT=null;
@@ -20114,7 +20138,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     box.innerHTML='<div class="cmn-head">Fusion suggérée'+(cands.length>1?(' · '+cands.length):'')+'</div>'+items;
   };
   window.cliSel=function(id){state.cliSel=id;render();};
-  window.cliDel=function(id){var c=clientById(id);if(!c)return;if(typeof confirm==='function'&&!confirm('Supprimer définitivement ce client ?'))return;DB.clients=DB.clients.filter(function(x){return x.id!==id;});if(state.cliSel===id)state.cliSel=(DB.clients[0]||{}).id||null;save();render();};
+  window.cliDel=function(id){var c=clientById(id);if(!c)return;uiConfirm('Supprimer définitivement ce client ?',function(){DB.clients=DB.clients.filter(function(x){return x.id!==id;});if(state.cliSel===id)state.cliSel=(DB.clients[0]||{}).id||null;save();render();},{okLabel:'Supprimer'});};
   window.cliSet=function(id,key,val){var c=clientById(id);if(!c)return;if(key==='activites'){c.activites=(''+val).split(',').map(function(s){return s.trim();}).filter(Boolean);}else{c[key]=val;}save();var lbl=document.getElementById('cli-name-'+id);if(lbl)lbl.textContent=cliName(c);};
   window.cliDV=function(id,key,val){var c=clientById(id);if(!c)return;c.docVars=c.docVars||{};c.docVars[key]=val;save();};
   window.cliAssocSet=function(id,i,key,val){var c=clientById(id);if(!c)return;c.associes=c.associes||[];if(!c.associes[i])c.associes[i]={};c.associes[i][key]=val;save();};
@@ -20576,7 +20600,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     r.onload=function(){ store().unshift({id:(has('uid')?uid('fp'):'fp'+Date.now()),fournisseur:'',objet:'',montant:'',date:(has('today')?today():''),fichierNom:f.name,fichierData:r.result,ts:Date.now()}); save(); if(has('toast'))toast('Facture prestataire ajoutée'); render(); }; r.readAsDataURL(f); };
   window.fpSimuler=function(){ store().unshift({id:(has('uid')?uid('fp'):'fp'+Date.now()),fournisseur:'Journal d\'annonces légales',objet:'Publication annonce légale',montant:'',date:(has('today')?today():''),fichierNom:'facture-annonce-legale.pdf',fichierData:'data:application/pdf;base64,JVBERi0xLjQK',ts:Date.now(),recuMail:true}); save(); if(has('toast'))toast('📥 Facture prestataire reçue par e-mail'); render(); };
   window.fpSet=function(id,k,v){ var e=store().filter(function(x){return x.id===id;})[0]; if(!e)return; e[k]=v; save(); };
-  window.fpDel=function(id){ if(has('confirm')&&!confirm('Supprimer cette facture ?'))return; if(typeof DB!=='undefined')DB.facturesPrestataires=store().filter(function(x){return x.id!==id;}); save(); render(); };
+  window.fpDel=function(id){ uiConfirm('Supprimer cette facture ?',function(){ if(typeof DB!=='undefined')DB.facturesPrestataires=store().filter(function(x){return x.id!==id;}); save(); render(); },{okLabel:'Supprimer'}); };
   window.fpVoir=function(id){ var e=store().filter(function(x){return x.id===id;})[0]; if(!e||!e.fichierData)return; try{var w=window.open();if(w)w.document.write('<iframe src="'+e.fichierData+'" style="border:0;width:100vw;height:100vh"></iframe>');}catch(err){} };
   window.fpDl=function(id){ var e=store().filter(function(x){return x.id===id;})[0]; if(!e||!e.fichierData)return; var a=document.createElement('a'); a.href=e.fichierData; a.download=e.fichierNom||'facture'; a.click(); };
 
