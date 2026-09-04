@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=405;
+var LAST_VER=406;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -16942,6 +16942,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     {k:'contrat',l:'Contrat de travail',g:'Ressources humaines'},
     {k:'cdi',l:'Contrat de travail (CDI)',g:'Ressources humaines'},
     {k:'cdd',l:'Contrat de travail (CDD)',g:'Ressources humaines'},
+    {k:'fichepaie',l:'Fiche de paie',g:'Ressources humaines'},
     {k:'certif',l:'Certificat de travail',g:'Ressources humaines'},
     {k:'renouv',l:"Renouvellement de période d'essai",g:'Ressources humaines'},
     {k:'courrenouv',l:"Courrier renouvellement période d'essai",g:'Ressources humaines'},
@@ -17010,6 +17011,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   var SALARIE=[['salciv','Civilité'],['salnom','Nom & prénom'],['saladr','Adresse'],['salcp','Code postal'],['salville','Ville'],['salnat','Nationalité'],['salss','N° de Sécurité sociale']];
   var ED_SCHEMA={
     statuts:CONSTIT_SCHEMA,souscripteurs:CONSTIT_SCHEMA,pouvoir:CONSTIT_SCHEMA,dnc:CONSTIT_SCHEMA,
+    fichepaie:[{g:'Employeur',f:[['denomination','Dénomination'],['adresse','Adresse'],['cp','Code postal'],['ville','Ville'],['siret','SIRET'],['ape','Code APE/NAF']]},{g:'Salarié',f:[['salarie','Nom & prénom'],['nss','N° de Sécurité sociale'],['poste','Poste'],['statut','Statut','sel',['Non cadre','Cadre']],['entree','Date d\'entrée','date']]},{g:'Rémunération',f:[['periode','Période (AAAA-MM)'],['brut','Salaire brut mensuel (€)'],['primes','Primes non soumises (€)'],['primesLib','Libellé de la prime'],['tauxPAS','Taux de prélèvement à la source (%)']]}],
     cdi:[{g:'Employeur',f:[['denomination','Dénomination'],['adresse','Adresse du siège'],['cp','Code postal'],['ville','Ville'],['rcsVille','Ville du RCS'],['siret','SIRET'],['ape','Code APE/NAF'],['urssaf','URSSAF (région)'],['numurssaf','N° URSSAF'],['representant','Représentant légal (enseigne/gérant)']]},{g:'Salarié',f:[['salciv','Civilité'],['salnom','Nom & prénom'],['saladr','Adresse'],['salcp','Code postal'],['salville','Ville']]},{g:'Contrat',f:[['poste','Poste'],['statut','Statut (Cadre/Non cadre)'],['datedebut','Date de début','date'],['fonctions','Fonctions'],['convention','Convention collective'],['essai','Période d\'essai (ex. 2 mois)'],['lieu','Lieu de travail'],['dureehebdo','Durée hebdomadaire (h)'],['horaires','Horaires (ex. 8h-12h et 13h-16h)'],['salaire','Salaire mensuel net (€)'],['salairelettres','Salaire en toutes lettres'],['jourpaie','Jour de paie (ex. 1er)'],['preavis','Préavis (ex. 2 mois)'],['nonconcur','Clause de non-concurrence','ta'],['ville','Ville de signature'],['date','Date de signature','date']]}],
     cdd:[{g:'Employeur',f:[['denomination','Dénomination'],['adresse','Adresse du siège'],['cp','Code postal'],['ville','Ville'],['rcsVille','Ville du RCS'],['siret','SIRET'],['ape','Code APE/NAF'],['urssaf','URSSAF (région)'],['numurssaf','N° URSSAF'],['representant','Représentant légal'],['qualite','Qualité (Gérant…)']]},{g:'Salarié',f:[['salciv','Civilité'],['salnom','Nom & prénom'],['saladr','Adresse'],['salcp','Code postal'],['salville','Ville'],['salnaiss','Date de naissance','date'],['sallieu','Lieu de naissance'],['salnat','Nationalité'],['salss','N° de Sécurité sociale']]},{g:'Contrat',f:[['poste','Poste'],['statut','Statut'],['datedebut','Date de début','date'],['datefin','Date de fin','date'],['motif','Motif du recours au CDD','ta'],['fonctions','Fonctions'],['convention','Convention collective'],['essai','Période d\'essai (ex. 14 jours)'],['lieu','Lieu de travail'],['dureehebdo','Durée hebdomadaire (h)'],['horaires','Horaires'],['salaire','Salaire mensuel (€)'],['salairelettres','Salaire en toutes lettres'],['jourpaie','Jour de paie'],['ville','Ville de signature'],['date','Date de signature','date']]}],
     certif:[{g:'Employeur',f:[['denomination','Dénomination'],['adresse','Adresse'],['cp','Code postal'],['ville','Ville'],['ape','Code APE/NAF'],['siret','SIRET']]},{g:'Salarié',f:[['salciv','Civilité'],['salnom','Nom & prénom'],['saladr','Adresse'],['salcp','Code postal'],['salville','Ville']]},{g:'Emploi',f:[['entree','Date d\'entrée','date'],['sortie','Date de sortie','date'],['emploi','Emploi occupé'],['statut','Statut'],['signataire','Signataire'],['qualite','Qualité du signataire'],['villesig','Ville de signature'],['datesig','Date','date']]}],
@@ -17637,7 +17639,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     D=D||{};
     if(k==='statuts')return edStatutsCover(D)+edSyntheticFill(k,D);
     if(k==='souscripteurs'||k==='pouvoir'||k==='dnc')return edSyntheticFill(k,D);
-    var M={cdi:edTplCDI,cdd:edTplCDD,certif:edTplCertif,renouv:edTplRenouv,courrenouv:edTplCourRenouv,convoc:edTplConvoc,soustrait:edTplSoustrait,etatlieux:edTplEtatLieux,pv:edTplPV,decharge:edTplDecharge,cesactions:edTplCesActions,cesparts:edTplCesParts,cesparts_u:edTplCesPartsU,attca:edTplAttCA,bilanprev:edTplBilanPrev,contratdomicil:edTplContratDomicil,attestdomicil:edTplAttestDomicil,decladomicile:edTplDeclaDomicile,depotcapital:edTplDepotCapital,attparution:edTplAttParution,rbe:edTplRBE,dissol:edTplDissolution,liquid:edTplLiquidation,pvapprob:edTplApprob,optionis:edTplOptionIS,lettremission:edTplLettreMission,mandat:edTplMandat,atthono:edTplAttHono,stc:edTplSTC,attemp:edTplAttEmployeur,rupture:edTplRupture,augcapital:edTplAugCapital,redcapital:edTplRedCapital,pvdenom:edTplPvDenom,pvobjet:edTplPvObjet,pvsiege:edTplPvSiege,pvnomdir:edTplPvNomDir,convocag:edTplConvocAG,promesse:edTplPromesse,avenant:edTplAvenant,attsalaire:edTplAttSalaire,attpresence:edTplAttPresence,licenciement:edTplLicenciement,registrepersonnel:edTplRegistre,attregul:edTplAttRegul,sommeil:edTplSommeil,reprise:edTplReprise,attnonact:edTplAttNonAct,optionreel:edTplOptionReel,honneur:edTplHonneur,procbancaire:edTplProcBancaire,miseendemeure:edTplMiseDemeure,relance:edTplRelance,resiliation:edTplResiliation,mandatsepa:edTplMandatSepa};
+    var M={fichepaie:function(D){return (typeof window.paieDocInline==='function')?window.paieDocInline(D):edDocWrap('<h1>Fiche de paie</h1><p>Renseignez la rémunération pour générer le bulletin.</p>');},cdi:edTplCDI,cdd:edTplCDD,certif:edTplCertif,renouv:edTplRenouv,courrenouv:edTplCourRenouv,convoc:edTplConvoc,soustrait:edTplSoustrait,etatlieux:edTplEtatLieux,pv:edTplPV,decharge:edTplDecharge,cesactions:edTplCesActions,cesparts:edTplCesParts,cesparts_u:edTplCesPartsU,attca:edTplAttCA,bilanprev:edTplBilanPrev,contratdomicil:edTplContratDomicil,attestdomicil:edTplAttestDomicil,decladomicile:edTplDeclaDomicile,depotcapital:edTplDepotCapital,attparution:edTplAttParution,rbe:edTplRBE,dissol:edTplDissolution,liquid:edTplLiquidation,pvapprob:edTplApprob,optionis:edTplOptionIS,lettremission:edTplLettreMission,mandat:edTplMandat,atthono:edTplAttHono,stc:edTplSTC,attemp:edTplAttEmployeur,rupture:edTplRupture,augcapital:edTplAugCapital,redcapital:edTplRedCapital,pvdenom:edTplPvDenom,pvobjet:edTplPvObjet,pvsiege:edTplPvSiege,pvnomdir:edTplPvNomDir,convocag:edTplConvocAG,promesse:edTplPromesse,avenant:edTplAvenant,attsalaire:edTplAttSalaire,attpresence:edTplAttPresence,licenciement:edTplLicenciement,registrepersonnel:edTplRegistre,attregul:edTplAttRegul,sommeil:edTplSommeil,reprise:edTplReprise,attnonact:edTplAttNonAct,optionreel:edTplOptionReel,honneur:edTplHonneur,procbancaire:edTplProcBancaire,miseendemeure:edTplMiseDemeure,relance:edTplRelance,resiliation:edTplResiliation,mandatsepa:edTplMandatSepa};
     if(M[k])return M[k](D);
     return edDocWrap('<h1>'+edE((EDLIB_TYPES.filter(function(t){return t.k===k;})[0]||{}).l||'Document')+'</h1><p>'+EDP+'</p>');
   }
@@ -21360,6 +21362,54 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'</div></div>';
   }
 
+  /* Bulletin auto-suffisant (styles en ligne) pour le module Éditions — rendu identique en aperçu et export Word/PDF */
+  window.paieCalc=calc; window.paieCOTIS_DEF=COTIS_DEF;
+  window.paieDocInline=function(D){
+    D=D||{};
+    var f={brut:(+D.brut)||0,primes:(+D.primes)||0,tauxPAS:(D.tauxPAS===''||D.tauxPAS==null)?3.6:(+D.tauxPAS),cotis:JSON.parse(JSON.stringify(COTIS_DEF))};
+    var r=calc(f);
+    var per=(''+(D.periode||'')); var pp=per.split('-'); var perLbl=(pp.length>1?(MOISN[+pp[1]-1]+' '+pp[0]):(per||'—'));
+    var empNom=D.denomination||'AEM CONSEIL';
+    var empAdr=[D.adresse,[(D.cp||''),(D.ville||'')].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
+    var empLine2=[(D.siret?'SIRET '+D.siret:''),(D.ape?'APE '+D.ape:'')].filter(Boolean).join(' · ');
+    var TXT='color:#111;-webkit-text-fill-color:#111';
+    var cell='border:1px solid #dcdcdc;padding:3px 7px;'+TXT;
+    var cR='text-align:right;white-space:nowrap;';
+    var th='background:#f0f0f0;border:1px solid #ccc;padding:5px 7px;font-size:10px;'+TXT;
+    var rows=r.lignes.map(function(l){
+      return '<tr>'
+        +'<td style="'+cell+'">'+E(l.lib)+'</td>'
+        +'<td style="'+cell+cR+'">'+num(l.base)+'</td>'
+        +'<td style="'+cell+cR+'">'+(l.txSal?num(l.txSal)+' %':'')+'</td>'
+        +'<td style="'+cell+cR+'">'+(l.mSal?('-'+num(l.mSal)):'')+'</td>'
+        +'<td style="'+cell+cR+'">'+(l.txPat?num(l.txPat)+' %':'')+'</td>'
+        +'<td style="'+cell+cR+'">'+(l.mPat?num(l.mPat):'')+'</td>'
+        +'</tr>';
+    }).join('');
+    var kv=function(k,v){return '<div style="font-size:12px;'+TXT+'"><span style="display:inline-block;min-width:66px;color:#777;-webkit-text-fill-color:#777;font-size:10px;text-transform:uppercase">'+E(k)+'</span> '+E(v||'—')+'</div>';};
+    var tr=function(lbl,val,strong){return '<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:'+(strong?'15px':'12.5px')+';'+(strong?'font-weight:800;border-top:2px solid #111;margin-top:5px;padding-top:7px;':'')+TXT+'"><span>'+E(lbl)+'</span><b style="'+TXT+'">'+E(val)+'</b></div>';};
+    return '<div class="pb-a4" style="background:#fff;'+TXT+';font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;padding:6mm 4mm">'
+      +'<div style="display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:12px">'
+      +'<div style="font-size:12px;line-height:1.5;'+TXT+'"><b style="font-size:15px;'+TXT+'">'+E(empNom)+'</b>'+(empAdr?'<br>'+E(empAdr):'')+(empLine2?'<br>'+E(empLine2):'')+'</div>'
+      +'<div style="text-align:right;font-weight:800;font-size:16px;'+TXT+'">BULLETIN DE PAIE<span style="display:block;font-weight:600;font-size:12px;color:#555;-webkit-text-fill-color:#555">'+E(perLbl)+'</span></div></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 18px;margin-bottom:12px">'
+      +kv('Salarié',D.salarie)+kv('Emploi',[(D.poste||''),(D.statut||'')].filter(Boolean).join(' · '))+kv('N° SS',D.nss)+kv('Entrée',D.entree)+'</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
+      +'<thead><tr><th style="'+th+'text-align:left">Rubrique</th><th style="'+th+cR+'">Base</th><th style="'+th+cR+'">Taux sal.</th><th style="'+th+cR+'">Part salariale</th><th style="'+th+cR+'">Taux pat.</th><th style="'+th+cR+'">Part patronale</th></tr></thead>'
+      +'<tbody><tr><td style="'+cell+'background:#fafafa"><b style="'+TXT+'">Salaire brut</b></td><td style="'+cell+'background:#fafafa"></td><td style="'+cell+'background:#fafafa"></td><td style="'+cell+'background:#fafafa"></td><td style="'+cell+'background:#fafafa"></td><td style="'+cell+cR+'background:#fafafa"><b style="'+TXT+'">'+num(r.brut)+'</b></td></tr>'
+      +rows
+      +(r.primes?('<tr><td style="'+cell+'">'+E(D.primesLib||'Prime')+' (non soumise)</td><td style="'+cell+'"></td><td style="'+cell+'"></td><td style="'+cell+cR+'">'+num(r.primes)+'</td><td style="'+cell+'"></td><td style="'+cell+'"></td></tr>'):'')
+      +'</tbody></table>'
+      +'<div style="margin-top:12px;border:1px solid #ccc;border-radius:6px;padding:9px 12px">'
+      +tr('Total des retenues salariales','-'+num(r.totSal)+' €')
+      +tr('Net imposable',num(r.netImposable)+' €')
+      +tr('Net à payer avant impôt',num(r.netAvantImpot)+' €')
+      +tr('Prélèvement à la source ('+num(f.tauxPAS)+' %)','-'+num(r.pas)+' €')
+      +tr('NET À PAYER',num(r.netAPayer)+' €',true)+'</div>'
+      +'<div style="margin-top:12px;font-size:11.5px;'+TXT+'">Coût total employeur : <b style="'+TXT+'">'+num(r.cout)+' €</b> (dont charges patronales '+num(r.totPat)+' €)</div>'
+      +'<div style="color:#999;-webkit-text-fill-color:#999;font-size:9.5px;margin-top:6px">Bulletin établi par '+E(empNom)+'. Montants indicatifs (barème simplifié) — à ajuster selon la convention collective applicable.</div>'
+      +'</div>';
+  };
   window.paieField=function(k,v){ var f=cur(); if(k==='brut'||k==='primes'||k==='tauxPAS')f[k]=v; else f[k]=v; paieRefresh(); };
   window.paieCotis=function(i,field,v){ var f=cur(); if(f.cotis[i]){ f.cotis[i][field]=(+v)||0; } paieRefresh(); };
   window.paieResetCotis=function(){ cur().cotis=JSON.parse(JSON.stringify(COTIS_DEF)); render(); };
