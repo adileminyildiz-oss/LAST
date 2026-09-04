@@ -3102,7 +3102,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=380;
+var LAST_VER=381;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -14657,6 +14657,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +r2('Régime matrimonial (si marié)',fSel('profil.matrimonial',[['','—'],['communaute','Communauté réduite aux acquêts'],['separation','Séparation de biens'],['universelle','Communauté universelle'],['participation','Participation aux acquêts']],get('profil.matrimonial')),'Personnes à charge',fI('profil.charge','0'))
       +r2('Horizon du projet',fSel('profil.horizon',[['court','Court terme (< 3 ans)'],['moyen','Moyen terme (3 à 8 ans)'],['long','Long terme (> 8 ans)']],get('profil.horizon')||'moyen'),'Patrimoine personnel à protéger',fSel('profil.patrimoine',[['non','Non'],['oui','Oui — biens personnels importants']],get('profil.patrimoine')||'non'))
       +r2('Flexibilité des statuts souhaitée',fSel('profil.flexibilite',[['standard','Standard — cadre légal simple'],['forte','Forte — statuts sur mesure, clauses spécifiques']],get('profil.flexibilite')||'standard'),'Tolérance au formalisme',fSel('profil.formalisme',[['souple','Souple — peu de formalités'],['cadre','Cadré — sécurité juridique']],get('profil.formalisme')||'souple'))
+      +r2('Résultat annuel prévisionnel — bénéfice avant impôt (€)',fI('profil.beneficePrev','ex. 50000'),'Investissements importants (récupération de TVA)',fSel('profil.tvaInvest',[['non','Non'],['oui','Oui — achats/matériel importants']],get('profil.tvaInvest')||'non'))
+      +r2('Activité réglementée (ordre, agrément)',fSel('profil.reglementee',[['non','Non'],['oui','Oui — profession réglementée']],get('profil.reglementee')||'non'),'Projet innovant / R&D',fSel('profil.innovation',[['non','Non'],['oui','Oui — recherche & développement']],get('profil.innovation')||'non'))
       +r1('Vision du projet & précisions libres (mots-clés ou phrases)',fT('profil.vision','Écrivez librement ce que souhaite le gérant : ex. « veut lever des fonds avec des investisseurs, protéger son patrimoine immobilier, se verser des dividendes, transmettre à ses enfants, démarrer seul en test »… — l\'analyse en déduit ses envies et l\'ajoute à la recommandation.'))
       +'<div class="hint" style="margin-top:6px">Ces éléments — <b>y compris la saisie libre</b> — alimentent la <b>recommandation fiscale &amp; juridique</b> en bas de page (forme de société, régime fiscal, statut social du dirigeant et clauses statutaires flexibles adaptées).</div>');
     /* Titres & montants */
@@ -14770,6 +14772,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       formalisme:recoGet('profil.formalisme')||'souple',
       nbSalaries:recoNum(recoGet('profil.nbSalaries')),
       chargesPatronales:recoGet('profil.chargesPatronales')||'moyen',
+      beneficePrev:recoNum(recoGet('profil.beneficePrev')),
+      tvaInvest:recoGet('profil.tvaInvest')||'non',
+      reglementee:recoGet('profil.reglementee')||'non',
+      innovation:recoGet('profil.innovation')||'non',
       regimeChoisi:((recoGet('societe.regime')||'')+'').toUpperCase()
     };
     var seul=(P.entourage==='seul')||(P.nbAssocies<=1&&P.entourage!=='plusieurs');
@@ -14919,7 +14925,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     dfis.push(D('Régime d\'imposition : '+regime, regimeWhy, regimeAlts));
     if(regime==='IS')dfis.push(D('Taux réduit d\'IS à 15 %', 'Bénéfice imposé à 15 % jusqu\'à 42 500 €, puis 25 %, si le capital est libéré et détenu à ≥ 75 % par des personnes physiques — avantageux pour une PME.', ['Taux réduit 15 % — jusqu\'à 42 500 € de bénéfice (conditions PME).','Taux normal 25 % — au-delà, ou si conditions non remplies.']));
     if(regime==='IS'&&(P.remun==='dividendes'||P.remun==='mixte'))dfis.push(D('Dividendes : PFU (flat tax) 30 %', 'Les dividendes distribués sont taxés au prélèvement forfaitaire unique de 30 % (12,8 % IR + 17,2 % prélèvements sociaux), sans cotisations sociales pour un dirigeant assimilé salarié.', ['PFU 30 % — forfaitaire, simple (12,8 % IR + 17,2 % PS).','Barème progressif de l\'IR — sur option globale, avec abattement de 40 % (intéressant si TMI faible).']));
-    dfis.push(D('TVA : '+((P.caPrev&&((P.activiteType==='commerciale'&&P.caPrev>85000)||(P.activiteType!=='commerciale'&&P.caPrev>37500)))?'régime réel (assujetti)':'franchise en base possible'), 'Sous les seuils (ventes ~85 000 €, services ~37 500 €), la franchise en base dispense de TVA. Au-delà, ou pour récupérer la TVA sur les achats/investissements, on opte pour le réel simplifié ou normal.', tvaAlts));
+    dfis.push(D('TVA : '+((P.tvaInvest==='oui')?'régime réel (récupération de TVA)':((P.caPrev&&((P.activiteType==='commerciale'&&P.caPrev>85000)||(P.activiteType!=='commerciale'&&P.caPrev>37500)))?'régime réel (assujetti)':'franchise en base possible')), (P.tvaInvest==='oui'?'Des investissements/achats importants sont prévus : opter pour le réel permet de RÉCUPÉRER la TVA sur ces dépenses (la franchise ne le permet pas). ':'')+'Sous les seuils (ventes ~85 000 €, services ~37 500 €), la franchise en base dispense de TVA. Au-delà, ou pour récupérer la TVA sur les achats/investissements, on opte pour le réel simplifié ou normal.', tvaAlts));
     dfis.push(D('CFE'+((P.caPrev&&P.caPrev>500000)?' et CVAE':''), 'La cotisation foncière des entreprises (CFE) est due dès la 2ᵉ année. '+((P.caPrev&&P.caPrev>500000)?'Au-delà de 500 000 € de CA, la CVAE s\'ajoute.':'La CVAE ne s\'applique qu\'au-delà de 500 000 € de CA.'), ['CFE — due dès la 2ᵉ année (exonération la 1ʳᵉ année).','CVAE — seulement au-delà de 500 000 € de CA (en voie de suppression progressive).','Exonérations de zone (ZFU, ZRR…) — selon l\'implantation.']));
     if(best==='EI'&&regime==='IR')dfis.push(D('Régime micro possible', 'Sous les seuils de CA, le régime micro (abattement forfaitaire) simplifie fortement l\'imposition et les obligations.', ['Micro — abattement forfaitaire, comptabilité ultra-simplifiée.','Réel — charges réelles déduites (intéressant si charges élevées).']));
     /* Social — dirigeant + salariés */
@@ -14951,11 +14957,49 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     }
     dges.push(D('Domiciliation du siège', 'Fixer l\'adresse du siège : local commercial, société de domiciliation, ou domicile du dirigeant (sous conditions) — pièce justificative requise à l\'immatriculation.', domicilAlts));
     dges.push(D('Formalités d\'immatriculation (INPI / Guichet unique)', 'Dépôt du dossier de création sur le Guichet unique (INPI) : statuts, annonce légale, dépôt de capital, pièces du dirigeant → obtention du SIREN/Kbis.'));
+    /* Chiffres clés — estimation à partir du bénéfice prévisionnel */
+    var money=function(n){ n=Math.round(n||0); try{ return n.toLocaleString('fr-FR')+' €'; }catch(e){ return n+' €'; } };
+    var dchi=[]; var benef=P.beneficePrev;
+    if(benef>0){
+      if(regime==='IS'||best==='SAS'||best==='SASU'||best==='SARL'){
+        var is15=Math.min(benef,42500)*0.15, is25=Math.max(0,benef-42500)*0.25, isTot=is15+is25, netIS=benef-isTot, divNet=netIS*0.70;
+        dchi.push(D('IS estimé : '+money(isTot), 'Sur '+money(benef)+' de bénéfice : 15 % jusqu\'à 42 500 € ('+money(is15)+')'+(is25>0?(' puis 25 % au-delà ('+money(is25)+')'):'')+'. Taux réduit sous conditions (capital libéré, détenu ≥ 75 % par des personnes physiques).'));
+        dchi.push(D('Résultat net après IS : '+money(netIS), 'Ce qui reste dans la société après impôt sur les sociétés — réinvestissable ou distribuable.'));
+        dchi.push(D('Dividende net estimé (distribution intégrale) : '+money(divNet), 'Après application du PFU de 30 % (12,8 % IR + 17,2 % prélèvements sociaux) sur '+money(netIS)+'. Sans cotisations sociales pour un dirigeant assimilé salarié.'));
+      } else {
+        dchi.push(D('Imposition à l\'IR : '+money(benef)+' ajoutés au revenu', 'En régime IR (transparence), le bénéfice s\'ajoute au revenu imposable des associés au barème progressif (selon la tranche marginale). Pas d\'IS ni de PFU.'));
+      }
+      dchi.push(D('CFE (estimation) : à partir de ~150-500 €/an', 'Cotisation minimale selon la commune et le CA (exonérée la 1ʳᵉ année). Montant précis fixé par la collectivité.'));
+    } else {
+      dchi.push(D('Renseignez le bénéfice prévisionnel', 'Indiquez le résultat annuel prévisionnel dans le profil pour estimer l\'IS, le net après impôt et le dividende net.'));
+    }
+    /* Aides & dispositifs */
+    var daid=[];
+    var debutAide=(P.autreActivite==='demandeur'||P.autreActivite==='etudiant'||P.horizon==='court');
+    daid.push(D('ACRE — exonération de début d\'activité', 'Exonération partielle des cotisations sociales la 1ʳᵉ année (sous conditions de revenu). '+(debutAide?'Vous semblez éligible — à demander dès la création.':'À vérifier selon la situation du dirigeant.')));
+    if(P.autreActivite==='demandeur')daid.push(D('ARE / ARCE (France Travail)', 'Maintien partiel de l\'allocation chômage (ARE) pendant le lancement, ou versement en capital (ARCE, 60 % des droits restants) pour financer le démarrage.'));
+    if(P.innovation==='oui'||/innov|r&d|recherche|deep.?tech|techno/.test((recoGet('profil.vision')||'').toLowerCase())){
+      daid.push(D('Statut Jeune Entreprise Innovante (JEI)', 'Exonérations de cotisations sociales patronales sur les personnels de R&D et avantages fiscaux, pour les entreprises de moins de 8 ans engageant des dépenses de recherche.'));
+      daid.push(D('Crédit d\'impôt recherche / innovation (CIR / CII)', 'Crédit d\'impôt sur les dépenses de R&D (CIR) ou d\'innovation (CII pour les PME) — restituable, il finance une partie des travaux.'));
+    }
+    daid.push(D('Exonérations de zone (ZFU-TE, ZRR, QPV, BER…)', 'Selon l\'implantation du siège, des exonérations d\'impôt et de charges peuvent s\'appliquer — à vérifier avec l\'adresse retenue.'));
+    if(P.reglementee==='oui')daid.push(D('Activité réglementée', 'Vérifier l\'inscription à un ordre / une chambre, les diplômes ou agréments requis, et l\'assurance professionnelle (RC pro) obligatoire.'));
+    /* Démarches & calendrier de création */
+    var ddem=[];
+    ddem.push(D('1. Rédaction des statuts', 'Statuts définitifs signés par les associés, intégrant toutes les décisions (forme, capital, gérance, clauses).'));
+    ddem.push(D('2. Dépôt du capital', 'Dépôt des apports en numéraire (banque, notaire ou Caisse des dépôts) → attestation de dépôt des fonds, exigée pour l\'immatriculation.'));
+    ddem.push(D('3. Annonce légale', 'Publication d\'un avis de constitution dans un journal habilité (JAL). Coût indicatif ~150-200 € selon le département et la forme.'));
+    ddem.push(D('4. Immatriculation — Guichet unique (INPI)', 'Dépôt en ligne du dossier complet → transmission au greffe / INSEE → SIREN, SIRET et Kbis délivrés sous ~1 à 4 semaines.'));
+    ddem.push(D('5. Déclaration des bénéficiaires effectifs (RBE)', 'Déclaration des personnes détenant > 25 %, au moment de l\'immatriculation.'));
+    ddem.push(D('Coût de création (indicatif)', 'Annonce légale ~150-200 € + greffe ~40 € (sociétés commerciales) + éventuels honoraires (rédaction, conseil). L\'EI est gratuite (hors éventuel accompagnement).'));
     var domaines=[
       {k:'juridique',t:'Juridique — société & statuts',items:djur},
       {k:'fiscal',t:'Fiscal',items:dfis},
       {k:'social',t:'Social — dirigeant & salariés',items:dsoc},
-      {k:'gestion',t:'Gestion & administration',items:dges}
+      {k:'chiffres',t:'Chiffres clés — estimation',items:dchi},
+      {k:'aides',t:'Aides & dispositifs',items:daid},
+      {k:'gestion',t:'Gestion & administration',items:dges},
+      {k:'demarches',t:'Démarches & calendrier de création',items:ddem}
     ];
     return {best:best,forme:FORME_LBL[best],regime:regime,regimeWhy:regimeWhy,social:social,socialWhy:socialWhy,statuts:statuts,why:why,vigilance:vig,deductions:deductions,domaines:domaines,scores:S,synthese:synthese,seul:seul};
   };
@@ -15036,7 +15080,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '.fr-intro{font-size:12.5px;line-height:1.5;color:#aab2c0;padding:10px 14px;border:1px dashed #2a2e37;border-radius:10px;background:#0f1115}',
       '.fr-dom{border:1px solid #23262d;border-radius:12px;background:#0f1115;padding:12px 14px}',
       '.fr-dom-t{font-size:13px;font-weight:800;color:#fff;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #23262d}',
-      '.fr-dom-juridique .fr-dom-t{color:#cbd5ff}.fr-dom-fiscal .fr-dom-t{color:#bfe6ff}.fr-dom-social .fr-dom-t{color:#c7f0d4}.fr-dom-gestion .fr-dom-t{color:#f0dcc0}',
+      '.fr-dom-juridique .fr-dom-t{color:#cbd5ff}.fr-dom-fiscal .fr-dom-t{color:#bfe6ff}.fr-dom-social .fr-dom-t{color:#c7f0d4}.fr-dom-gestion .fr-dom-t{color:#f0dcc0}.fr-dom-chiffres .fr-dom-t{color:#ffe0a3}.fr-dom-aides .fr-dom-t{color:#c3e8c9}.fr-dom-demarches .fr-dom-t{color:#e6cff0}',
       '.fr-dec{padding:8px 0;border-bottom:1px dashed #202329}.fr-dec:last-child{border-bottom:0}',
       '.fr-dec-d{font-size:13px;font-weight:700;color:#e6e9ef;margin-bottom:2px;display:flex;align-items:center;gap:6px}',
       '.fr-dec-p{font-size:12.5px;line-height:1.5;color:#b6bcc7}',
