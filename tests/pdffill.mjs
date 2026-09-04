@@ -222,6 +222,42 @@ const r = await page.evaluate(async () => {
     if (window.__svcSaveStore) { const o2 = window.__svcStore(); delete o2.signature; window.__svcSaveStore(o2); }
   } catch (e) { out.sign = { ok: false, err: '' + e }; }
 
+  // 12) Portail client — accès isolé en lecture seule aux documents partagés
+  out.portail = { ok: false };
+  try {
+    if (window.__svcSaveStore) { const o = window.__svcStore(); delete o.coffre; delete o.portail; window.__svcSaveStore(o); }
+    localStorage.setItem('last-coffre-files', JSON.stringify({ f1: { name: 'kbis.pdf', type: 'application/pdf', data: 'data:application/pdf;base64,JVBERi0=' }, f2: { name: 'bilan.pdf', type: 'application/pdf', data: 'data:application/pdf;base64,JVBERi0=' }, f3: { name: 'prive.pdf', type: 'application/pdf', data: 'data:application/pdf;base64,JVBERi0=' } }));
+    const o = window.__svcStore(); o.coffre = { items: [
+      { id: 'f1', client: 'SARL Dupont', nom: 'K-bis', cat: 'K-bis', date: '2026-06-01', shared: true, fileId: 'f1', fsize: 90000 },
+      { id: 'f2', client: 'SARL Dupont', nom: 'Bilan', cat: 'Bilan / liasse', date: '2026-05-15', shared: true, fileId: 'f2', fsize: 120000 },
+      { id: 'f3', client: 'SARL Dupont', nom: 'Note interne', cat: 'Divers', date: '2026-07-01', shared: false, fileId: 'f3', fsize: 10000 }
+    ] }; window.__svcSaveStore(o);
+    window.svcGo('coffre');
+    const V = document.getElementById('view');
+    const panel = !!V.querySelector('.port-panel') && !!V.querySelector('.port-code');
+    const code = (window.__svcStore().portail.codes['sarl dupont']) || '';
+    // aperçu pré-authentifié : 2 docs partagés, pas le privé, au-dessus de tout
+    window.svcPortPreview('SARL Dupont');
+    let ov = document.getElementById('portail-ov');
+    const preview = !!ov && ov.querySelectorAll('.port-doc').length === 2 && ov.innerHTML.indexOf('Note interne') < 0 && getComputedStyle(ov).zIndex === '2147483000';
+    window.closePortail();
+    // connexion : mauvais code refusé, bon code → documents
+    window.openPortail('SARL Dupont');
+    document.getElementById('port-in-code').value = 'WRONG1'; window.svcPortLogin();
+    const wrong = document.getElementById('port-err').style.display === 'block';
+    document.getElementById('port-in-code').value = code; window.svcPortLogin();
+    const loginDocs = document.getElementById('portail-ov').querySelectorAll('.port-doc').length === 2;
+    window.closePortail();
+    // ouverture par le hash #portail
+    location.hash = '#portail&c=' + encodeURIComponent('SARL Dupont');
+    window.dispatchEvent(new Event('hashchange'));
+    const hashOpen = !!document.getElementById('portail-ov') && (document.getElementById('port-in-client') || {}).value === 'SARL Dupont';
+    window.closePortail();
+    out.portail = { ok: panel, code: code.length === 6, preview, wrong, loginDocs, hash: hashOpen };
+    if (window.__svcSaveStore) { const o2 = window.__svcStore(); delete o2.coffre; delete o2.portail; window.__svcSaveStore(o2); }
+    try { localStorage.removeItem('last-coffre-files'); } catch (e) {}
+  } catch (e) { out.portail = { ok: false, err: '' + e }; }
+
   return out;
 });
 
@@ -266,6 +302,10 @@ check('coffre-fort : fichier joint (consulter/télécharger) + suppression en ca
 check('signature électronique : circuit (envoi) + pad de signature', r.sign.ok && r.sign.sent && r.sign.pad);
 check('signature électronique : document signé (PNG horodaté)', r.sign.signed);
 check('signature électronique : refus / réactivation', r.sign.cycle);
+check('portail client : panneau d’accès (code 6 caractères)', r.portail.ok && r.portail.code);
+check('portail client : aperçu = documents partagés seuls, au-dessus de tout', r.portail.preview);
+check('portail client : mauvais code refusé, bon code → documents', r.portail.wrong && r.portail.loginDocs);
+check('portail client : ouverture par le lien #portail (client pré-rempli)', r.portail.hash);
 check('aucun pageerror', perr.length === 0);
 
 const ok = results.filter(x => x.ok).length, tot = results.length;
