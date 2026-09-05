@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=484;
+var LAST_VER=485;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -24021,7 +24021,15 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var arr=Object.keys(map).map(function(k){return [k,map[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,4);
     return {arr:arr,total:n};
   }
-  var tile=function(inner,cls){ return '<div class="ckp-t '+(cls||'')+'">'+inner+'</div>'; };
+  var tile=function(inner,cls,nav){ var clk=nav?(' onclick="try{go(\''+nav+'\')}catch(e){}"'):''; return '<div class="ckp-t '+(cls||'')+(nav?' ck-clickable':'')+'"'+clk+'>'+inner+'</div>'; };
+  /* Demandes reçues sur les 6 derniers mois (mini-tendance) */
+  function demande6(){
+    var arr=[], now=new Date(), MOISC=['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
+    for(var i=5;i>=0;i--){ var d=new Date(now.getFullYear(),now.getMonth()-i,1); var ym=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); arr.push({ym:ym,label:MOISC[d.getMonth()],count:0}); }
+    var idx={}; arr.forEach(function(x,i){ idx[x.ym]=i; });
+    demAll().forEach(function(dm){ var k=(''+(dm.date||dm.createdAt||'')).slice(0,7); if(idx[k]!=null)arr[idx[k]].count++; });
+    return arr;
+  }
 
   window.pageCockpit=function(){
     var s=(typeof pilotageStats==='function')?pilotageStats():{total:dossAll().length,actions:0,attente:0,encours:0,complets:0,signes:0,deposes:0,clotures:0,ca:0,aTraiter:demAll().filter(function(d){return !d.dossierId;}).length,retard:0,aRelancer:0,taux:0,conformite:0,conformiteNb:0};
@@ -24052,7 +24060,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<div class="ckp-gtop"><span class="ckp-mut">Objectif '+money(objCA)+'</span><b>'+caPct+' %</b></div><div class="ckp-gauge"><i style="width:'+caPct+'%"></i></div>'
       +'<div class="ckp-row"><span>Clôturés</span><b>'+(s.clotures||0)+'</b></div>'
       +'<div class="ckp-row"><span>Déposés (GU)</span><b>'+(s.deposes||0)+'</b></div>'
-      +'<div class="ckp-row"><span>En retard</span><b>'+(s.retard||0)+'</b></div>','ck-ca');
+      +'<div class="ckp-row"><span>En retard</span><b>'+(s.retard||0)+'</b></div>','ck-ca','editions');
 
     function kt(v,l,ext,nav){ var clk=nav?(' onclick="try{go(\''+nav+'\')}catch(e){}"'):''; return '<div class="ckp-t ck-kpi'+(nav?' ck-clickable':'')+'"'+clk+'><div class="ckp-kv">'+v+'</div><div class="ckp-kl">'+l+'</div>'+(ext||'')+'</div>'; }
     var kDoss=kt(s.total,'Dossiers actifs','','espace');
@@ -24063,23 +24071,27 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var ringAuto=tile('<div class="ckp-ringwrap">'+ring(s.taux||0,(s.taux||0)+'%','Automatisation')+'</div>','ck-ring');
     var ringConf=tile('<div class="ckp-ringwrap">'+ring(s.conformite||0,(s.conformite||0),'Conformité')+'</div>','ck-ring');
 
-    var pipfun=tile('<div class="ckp-th">🎯 Pipeline & étapes<button class="ckp-lk" onclick="try{go(\'demandes\')}catch(e){}">Demandes →</button></div>'
+    var pipfun=tile('<div class="ckp-th">🎯 Pipeline & étapes<button class="ckp-lk" onclick="try{event.stopPropagation();go(\'demandes\')}catch(e){}">Demandes →</button></div>'
       +'<div class="ckp-mut" style="margin-bottom:9px">'+pipTot+' demande(s) non converties — priorisées par intention (IA)</div>'
       +[['🔥 Chaud',pip.chaud,'d1'],['🌤️ Tiède',pip.tiede,'d2'],['🧊 Froid',pip.froid,'d3']].map(function(x){var w=pipTot?Math.round(x[1]/pipTot*100):0;return '<div class="ckp-pip"><span class="ckp-pl">'+x[0]+'</span><span class="ckp-pb"><i class="'+x[2]+'" style="width:'+w+'%"></i></span><b>'+x[1]+'</b></div>';}).join('')
       +'<div class="ckp-sep"></div>'
-      +[['En attente pièces',s.attente||0],['En cours',s.encours||0],['Complets',s.complets||0],['Signés',s.signes||0],['Déposés',s.deposes||0],['Clôturés',s.clotures||0]].map(function(x){var w=s.total?Math.round(x[1]/s.total*100):0;return '<div class="ckp-frow"><span class="ckp-fl">'+x[0]+'</span><span class="ckp-fb"><i style="width:'+w+'%"></i></span><b>'+x[1]+'</b></div>';}).join(''),'ck-pipfun');
+      +[['En attente pièces',s.attente||0],['En cours',s.encours||0],['Complets',s.complets||0],['Signés',s.signes||0],['Déposés',s.deposes||0],['Clôturés',s.clotures||0]].map(function(x){var w=s.total?Math.round(x[1]/s.total*100):0;return '<div class="ckp-frow"><span class="ckp-fl">'+x[0]+'</span><span class="ckp-fb"><i style="width:'+w+'%"></i></span><b>'+x[1]+'</b></div>';}).join(''),'ck-pipfun','demandes');
 
     var rdvs=nextRdv();
-    var agTile=tile('<div class="ckp-th">📅 Prochains rendez-vous<button class="ckp-lk" onclick="try{go(\'agenda\')}catch(e){}">Agenda →</button></div>'
-      +(rdvs.length?rdvs.map(function(r){return '<div class="ckp-rdv"><div class="ckp-rd"><b>'+E(frShort(r.date))+'</b><span>'+E(r.heure||'—')+'</span></div><div class="ckp-ri"><b>'+E(r.clientNom||r.objet||'Rendez-vous')+'</b><span>'+E(r.objet||'')+'</span></div></div>';}).join(''):'<div class="ckp-empty">Aucun rendez-vous à venir.</div>'),'ck-ag');
+    var agTile=tile('<div class="ckp-th">📅 Prochains rendez-vous<button class="ckp-lk" onclick="try{event.stopPropagation();go(\'agenda\')}catch(e){}">Agenda →</button></div>'
+      +(rdvs.length?rdvs.map(function(r){return '<div class="ckp-rdv"><div class="ckp-rd"><b>'+E(frShort(r.date))+'</b><span>'+E(r.heure||'—')+'</span></div><div class="ckp-ri"><b>'+E(r.clientNom||r.objet||'Rendez-vous')+'</b><span>'+E(r.objet||'')+'</span></div></div>';}).join(''):'<div class="ckp-empty">Aucun rendez-vous à venir.</div>'),'ck-ag','agenda');
 
+    var d6=demande6(); var d6max=Math.max(1,Math.max.apply(null,d6.map(function(x){return x.count;})));
+    var spark='<div class="ckp-flabel" style="margin-top:12px">Demandes reçues · 6 mois</div><div class="ckp-spark">'
+      +d6.map(function(x){var h=x.count?Math.max(8,Math.round(x.count/d6max*100)):3;return '<div class="ckp-sp" title="'+x.label+' : '+x.count+'"><i style="height:'+h+'%"></i><span>'+x.label+'</span></div>';}).join('')+'</div>';
     var moisTile=tile('<div class="ckp-th">📈 Ce mois-ci</div>'
       +'<div class="ckp-row"><span>Demandes reçues</span><b>'+ms.demMois+'</b></div>'
       +'<div class="ckp-row"><span>Dossiers ouverts</span><b>'+ms.dosMois+'</b></div>'
-      +'<div class="ckp-gtop" style="margin-top:10px"><span class="ckp-mut">Taux de conversion</span><b>'+ms.conv+' %</b></div><div class="ckp-gauge"><i style="width:'+ms.conv+'%"></i></div>','ck-mois');
+      +'<div class="ckp-gtop" style="margin-top:10px"><span class="ckp-mut">Taux de conversion</span><b>'+ms.conv+' %</b></div><div class="ckp-gauge"><i style="width:'+ms.conv+'%"></i></div>'
+      +spark,'ck-mois','demandes');
 
     var formeTile=tile('<div class="ckp-th">🏛️ Formes juridiques</div>'
-      +(fd.total?fd.arr.map(function(x){var w=fd.total?Math.round(x[1]/fd.total*100):0;return '<div class="ckp-frow"><span class="ckp-fl2">'+E(x[0])+'</span><span class="ckp-fb"><i style="width:'+w+'%"></i></span><b>'+x[1]+'</b></div>';}).join(''):'<div class="ckp-empty">Aucun dossier.</div>'),'ck-forme');
+      +(fd.total?fd.arr.map(function(x){var w=fd.total?Math.round(x[1]/fd.total*100):0;return '<div class="ckp-frow"><span class="ckp-fl2">'+E(x[0])+'</span><span class="ckp-fb"><i style="width:'+w+'%"></i></span><b>'+x[1]+'</b></div>';}).join(''):'<div class="ckp-empty">Aucun dossier.</div>'),'ck-forme','espace');
 
     var portTile=tile('<div class="ckp-th">🛰️ Portail client</div>'
       +'<div class="ckp-mini">'
@@ -24087,7 +24099,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<div class="ckp-mc"><b>'+pd+'</b><span>Docs partagés</span></div>'
       +'<div class="ckp-mc"><b>'+pmsg+'</b><span>Messages</span></div>'
       +'<div class="ckp-mc"><b>'+psusp+'</b><span>Suspendus</span></div>'
-      +'</div>','ck-port');
+      +'</div>','ck-port','clients');
 
     var acts=activite();
     var actTile=tile('<div class="ckp-th">🕑 Activité récente</div>'
@@ -24230,7 +24242,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.ckp-mc{padding:9px 6px}.ckp-mc b{font-size:17px}.ckp-mc span{font-size:9.5px}',
     '.ckp-feed{padding:7px 0}.ckp-alert{padding:9px 11px;font-size:12px;margin-bottom:7px}',
     '.ckp-rbtn{padding:8px 10px;font-size:11.5px}.ckp-racc{gap:7px}',
-    '.ck-clickable{cursor:pointer;transition:border-color .12s,background .12s}.ck-clickable:hover{border-color:#3a3a42}.ckp-t.ck-clickable:hover{background:#101014}.ckp-feed.ck-clickable{margin:0 -14px;padding-left:14px;padding-right:14px;border-radius:8px}.ckp-feed.ck-clickable:hover{background:#141418}'
+    '.ck-clickable{cursor:pointer;transition:border-color .12s,background .12s}.ck-clickable:hover{border-color:#3a3a42}.ckp-t.ck-clickable:hover{background:#101014}.ckp-feed.ck-clickable{margin:0 -14px;padding-left:14px;padding-right:14px;border-radius:8px}.ckp-feed.ck-clickable:hover{background:#141418}',
+    '.ckp-spark{display:flex;align-items:flex-end;gap:6px;height:46px;margin-top:8px}.ckp-sp{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}.ckp-sp i{width:100%;background:#fff;border-radius:3px 3px 0 0;min-height:3px;transition:height .4s}.ckp-sp:hover i{background:#c9c9d0}.ckp-sp span{font-size:9px;color:#8a8a90;margin-top:4px}'
   ].join(''); document.head.appendChild(cs); } }catch(e){}
 })();</script>
 
