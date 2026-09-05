@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=476;
+var LAST_VER=477;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -20392,6 +20392,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<button class="cli-add clidoc-notify" onclick="cliNotify(\''+cidj+'\')">Prévenir le client</button>'
       +'<button class="cli-add" onclick="svcPortPreview(\''+nmj+'\')">Aperçu espace client</button>'
       +'<button class="cli-add" onclick="svcPortLink(\''+nmj+'\')">Copier le lien</button>'
+      +'<button class="cli-add clidoc-creds" onclick="svcPortCopyCreds(\''+nmj+'\')">Copier les identifiants</button>'
       +'<button class="cli-add" onclick="svcPortRegen(\''+nmj+'\')">Nouveau code</button>'
       +(function(){ var dis=(typeof window.cofPortDisabled==='function')?window.cofPortDisabled(name):false; return '<button class="cli-add '+(dis?'clidoc-restore':'clidoc-revoke')+'" onclick="svcPortSetActive(\''+nmj+'\','+(dis?'true':'false')+')">'+(dis?'Réactiver l’accès':'Suspendre l’accès')+'</button>'; })()
       +'</div>'
@@ -23413,6 +23414,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.svcPortRegen=function(client){ var ps=portailState(); ps.codes[ckey(client)]=genCode(); portailSave(ps); render(); if(typeof toast==='function')toast('Nouveau code généré.'); };
   window.svcPortCabinet=function(v){ var ps=portailState(); ps.cabinet=v; portailSave(ps); };
   window.svcPortLink=function(client){ var url=location.origin+location.pathname+'#portail'+(client?('&c='+encodeURIComponent(client)):''); try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(url); if(typeof toast==='function')toast('Lien du portail copié.'); } else throw 0; }catch(e){ if(typeof toast==='function')toast(url); } };
+  window.svcPortCopyCreds=function(client){ var code=portailCode(client); var url=location.origin+location.pathname+'#portail&c='+encodeURIComponent(client); var txt='Votre espace client — '+cabName()+'\nLien : '+url+'\nNom du client : '+client+'\nCode d\'acces : '+code+'\n(Acces en lecture seule — ce code vous est personnel.)'; try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){ if(typeof toast==='function')toast('Identifiants copies (nom + code + lien) — prets a coller.'); }).catch(function(){ if(typeof toast==='function')toast(txt); }); } else throw 0; }catch(e){ if(typeof toast==='function')toast(txt); } };
   window.svcPortPreview=function(client){ openPortail(client, portailCode(client)); };
   function portailPanel(){ var clients=cofClients(); var ps=portailState();
     var rows=clients.map(function(c){ var code=portailCode(c); var nb=clientSharedDocs(c).length;
