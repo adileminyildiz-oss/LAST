@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=466;
+var LAST_VER=467;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -23288,8 +23288,25 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   var COF_CAT=['Statuts','K-bis','Bilan / liasse','Contrats','Fiches de paie','Fiscal / TVA','Divers'];
   function coffreState(){ var o=store(); if(!o.coffre)o.coffre={items:[]}; return o.coffre; }
   function coffreSave(st){ var o=store(); o.coffre=st; save(o); }
-  function cofFiles(){ try{ return JSON.parse(localStorage.getItem('last-coffre-files')||'{}')||{}; }catch(e){ return {}; } }
-  function cofFilesSave(o){ try{ localStorage.setItem('last-coffre-files',JSON.stringify(o)); return true; }catch(e){ if(typeof toast==='function')toast('Stockage plein — fichier non enregistré.'); return false; } }
+  /* Fichiers du coffre : stockés en IndexedDB (grande capacité) avec cache mémoire
+     synchrone + miroir localStorage (rapide) tant qu'il tient. Lève la limite ~5 Mo. */
+  var COF_DB='marq-coffre', COF_STORE='kv', COF_KEY='files', COF_IDB=('indexedDB' in window), COF_MEM=null;
+  function cofIDBOpen(){ return new Promise(function(res,rej){ try{ var rq=indexedDB.open(COF_DB,1); rq.onupgradeneeded=function(){ try{ rq.result.createObjectStore(COF_STORE); }catch(e){} }; rq.onsuccess=function(){ res(rq.result); }; rq.onerror=function(){ rej(rq.error); }; }catch(e){ rej(e); } }); }
+  function cofIDBGet(){ return cofIDBOpen().then(function(db){ return new Promise(function(res,rej){ try{ var tx=db.transaction(COF_STORE,'readonly'); var rq=tx.objectStore(COF_STORE).get(COF_KEY); rq.onsuccess=function(){ res(rq.result||null); }; rq.onerror=function(){ rej(rq.error); }; }catch(e){ rej(e); } }); }); }
+  function cofIDBPut(map){ return cofIDBOpen().then(function(db){ return new Promise(function(res,rej){ try{ var tx=db.transaction(COF_STORE,'readwrite'); tx.objectStore(COF_STORE).put(map,COF_KEY); tx.oncomplete=function(){ res(true); }; tx.onerror=function(){ rej(tx.error); }; }catch(e){ rej(e); } }); }); }
+  function cofFiles(){ if(COF_MEM==null){ try{ COF_MEM=JSON.parse(localStorage.getItem('last-coffre-files')||'{}')||{}; }catch(e){ COF_MEM={}; } } return COF_MEM; }
+  function cofFilesSave(o){ COF_MEM=o||{};
+    var lsOK=false; try{ localStorage.setItem('last-coffre-files',JSON.stringify(COF_MEM)); lsOK=true; }catch(e){ try{ localStorage.removeItem('last-coffre-files'); }catch(_){} }
+    if(COF_IDB){ cofIDBPut(COF_MEM).catch(function(){ if(!lsOK&&typeof toast==='function')toast('Stockage plein — fichier non enregistré.'); }); return true; }
+    if(!lsOK){ if(typeof toast==='function')toast('Stockage plein — fichier non enregistré.'); return false; }
+    return true;
+  }
+  /* Hydratation au démarrage : IndexedDB prioritaire ; sinon migration depuis localStorage. */
+  (function cofHydrate(){ if(!COF_IDB)return; cofIDBGet().then(function(idb){
+    if(idb && typeof idb==='object' && Object.keys(idb).length){ COF_MEM=idb; }
+    else { var ls={}; try{ ls=JSON.parse(localStorage.getItem('last-coffre-files')||'{}')||{}; }catch(e){} if(Object.keys(ls).length){ COF_MEM=ls; cofIDBPut(ls).catch(function(){}); } }
+    try{ if(window.__svcView==='coffre' && typeof render==='function' && typeof state!=='undefined' && state.page==='services')render(); }catch(e){}
+  }).catch(function(){}); })();
   function cofSize(b){ if(!b)return '—'; if(b<1024)return b+' o'; if(b<1048576)return (b/1024).toFixed(0)+' Ko'; return (b/1048576).toFixed(1)+' Mo'; }
   function cofGuessCat(nom){ var n=(''+(nom||'')).toLowerCase(); if(/statut/.test(n))return 'Statuts'; if(/k-?bis|kbis/.test(n))return 'K-bis'; if(/bilan|liasse|r[ée]sultat/.test(n))return 'Bilan / liasse'; if(/contrat/.test(n))return 'Contrats'; if(/paie|bulletin|salaire/.test(n))return 'Fiches de paie'; if(/tva|fiscal|imp[oô]t|liasse/.test(n))return 'Fiscal / TVA'; return 'Divers'; }
   function _cofAddFiles(fileList, client, done){ var arr=Array.prototype.slice.call(fileList||[]); if(!arr.length){ if(done)done(0); return; }
@@ -23308,6 +23325,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.cofAddFilesFor=function(client,fileList){ _cofAddFiles(fileList, client||''); };
   window.cofItemsForClient=function(client){ var k=ckey(client); var st=coffreState(); var out=[]; st.items.forEach(function(it,i){ if(ckey(it.client)===k)out.push({it:it,i:i}); }); return out; };
   window.cofSizeFmt=function(b){ return cofSize(b); };
+  window.cofFilesGet=function(){ return cofFiles(); };
   window.cofClientCode=function(client){ return portailCode(client); };
   window.cofCatOptions=function(cat){ return COF_CAT.concat(COF_CAT.indexOf(cat)<0&&cat?[cat]:[]).map(function(c){return '<option '+(c===cat?'selected':'')+'>'+E(c)+'</option>';}).join(''); };
   window.svcCofAdd=function(){ var st=coffreState(); st.items.unshift({id:'e'+Date.now(),client:'',nom:'Document',cat:'Divers',date:todayISO(),shared:false,fileId:'',ftype:'',fsize:0}); coffreSave(st); render(); };
@@ -23318,7 +23336,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var w=window.open('','_blank'); if(!w){ if(typeof toast==='function')toast('Autorisez les fenêtres pop-up.'); return; }
     w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+E(f.name)+'</title><style>html,body{margin:0;height:100%;background:#111}iframe{border:0;width:100%;height:100%}</style></head><body><iframe src="'+f.data+'"></iframe></body></html>'); w.document.close(); };
   window.svcCofDl=function(i){ var st=coffreState(); var it=st.items[i]; if(!it||!it.fileId)return; var files=cofFiles(); var f=files[it.fileId]; if(!f)return; var a=document.createElement('a'); a.href=f.data; a.download=f.name||'document'; document.body.appendChild(a); a.click(); document.body.removeChild(a); };
-  window.svcCofReset=function(){ function go(){ var o=store(); delete o.coffre; save(o); try{ localStorage.removeItem('last-coffre-files'); }catch(e){} render(); if(typeof toast==='function')toast('Coffre-fort vidé'); } if(typeof uiConfirm==='function')uiConfirm('Vider le coffre-fort (documents et fichiers) ?',go,{okLabel:'Vider',danger:true}); else go(); };
+  window.svcCofReset=function(){ function go(){ var o=store(); delete o.coffre; save(o); try{ cofFilesSave({}); }catch(e){} try{ localStorage.removeItem('last-coffre-files'); }catch(e){} render(); if(typeof toast==='function')toast('Coffre-fort vidé'); } if(typeof uiConfirm==='function')uiConfirm('Vider le coffre-fort (documents et fichiers) ?',go,{okLabel:'Vider',danger:true}); else go(); };
   window.svcCofRefresh=function(){ var st=coffreState(); var nb=st.items.length, part=0, tot=0; st.items.forEach(function(it){ if(it.shared)part++; tot+=(+it.fsize||0); });
     function putS(id,v){ var el=document.getElementById(id); if(el)el.textContent=v; }
     putS('cof-s-nb',nb); putS('cof-s-part',part); putS('cof-s-size',cofSize(tot));
