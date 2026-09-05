@@ -508,7 +508,7 @@ aside .nav-btn:hover{color:#000}
 
 <div class="app">
   <aside id="side">
-    <div class="brand">
+    <div class="brand" onclick="try{go('cockpit')}catch(e){}" style="cursor:pointer" title="Retour au tableau de bord" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();try{go('cockpit')}catch(e){}}">
       <span class="brand-logo" aria-label="Mar’q"></span>
       <small class="brand-sub">Logiciel Interne</small>
     </div>
@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=478;
+var LAST_VER=479;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -23922,6 +23922,246 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   }
   function greffe(){ try{ var _pp=window.pageParams; if(typeof _pp==='function' && !_pp.__bkp){ window.pageParams=function(){ var h=_pp.apply(this,arguments); try{ if(typeof h==='string')h+=sauvegardeCard(); }catch(e){} return h; }; window.pageParams.__bkp=1; } }catch(e){} }
   greffe();
+})();</script>
+
+<script id="cockpit-dash-mod">
+/* ===== Tableau de bord — module de référence (cockpit dense) ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function money(n){ n=+n||0; try{ if(typeof eur==='function')return eur(n); }catch(e){} return n.toLocaleString('fr-FR')+' €'; }
+  function state2(){ return (typeof state!=='undefined')?state:(window.state||{}); }
+  function svc(){ try{ return JSON.parse(localStorage.getItem('last-svc')||'{}'); }catch(e){ return {}; } }
+  function coffreItems(){ var s=svc(); return (s.coffre&&Array.isArray(s.coffre.items))?s.coffre.items:[]; }
+  function portail(){ var s=svc(); var p=s.portail||{}; p.codes=p.codes||{}; p.disabled=p.disabled||{}; p.messages=p.messages||{}; return p; }
+  function rdvAll(){ try{ return (DB&&DB.parametres&&Array.isArray(DB.parametres.rdv))?DB.parametres.rdv:[]; }catch(e){ return []; } }
+  function dossAll(){ try{ return (DB.dossiers||[]).filter(function(d){return !d.archived;}); }catch(e){ return []; } }
+  function demAll(){ try{ return (DB.demandes||[]).filter(function(d){return !d.archived;}); }catch(e){ return []; } }
+  function tiso(){ var d=new Date(); function p(n){return (n<10?'0':'')+n;} return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
+  function frShort(iso){ if(!iso)return ''; var q=(''+iso).split('T')[0].split('-'); if(q.length<3)return iso; return q[2]+'/'+q[1]; }
+  function ck(name){ return (''+(name||'')).trim().toLowerCase(); }
+
+  /* Clients distincts (coffre + fiches clients) */
+  function clientsDistincts(){
+    var seen={}, n=0;
+    coffreItems().forEach(function(it){ var k=ck(it.client); if(k&&!seen[k]){ seen[k]=1; n++; } });
+    try{ (DB.clients||[]).forEach(function(c){ var nm=((c.prenom||'')+' '+(c.nom||'')).trim()||c.nom||''; var k=ck(nm); if(k&&!seen[k]){ seen[k]=1; n++; } }); }catch(e){}
+    return n;
+  }
+
+  /* Pipeline commercial : niveau des demandes non liées à un dossier */
+  function pipeline(){
+    var r={chaud:0,tiede:0,froid:0};
+    demAll().forEach(function(d){ if(d.dossierId)return; var niv='';
+      try{ if(typeof IA!=='undefined'&&IA.qualify){ niv=(IA.qualify(d)||{}).niveau||''; } }catch(e){}
+      if(niv==='chaud')r.chaud++; else if(niv==='tiède'||niv==='tiede')r.tiede++; else r.froid++;
+    });
+    return r;
+  }
+
+  /* Agenda — prochains rendez-vous (5) */
+  function nextRdv(){
+    var ti=tiso();
+    return rdvAll().filter(function(r){ return r.date>=ti && r.statut!=='annule'; })
+      .sort(function(a,b){ return (a.date+ (a.heure||'')).localeCompare(b.date+(b.heure||'')); }).slice(0,5);
+  }
+
+  /* Activité récente : dernières demandes + dossiers */
+  function activite(){
+    var items=[];
+    demAll().forEach(function(d){ items.push({t:'demande', label:(d.clientNom||'Demande'), sub:(d.serviceSouhaite||d.canal||''), date:d.date||'', id:d.id}); });
+    dossAll().forEach(function(d){ items.push({t:'dossier', label:(d.ref||'Dossier'), sub:(typeof dossierClients==='function'?(dossierClients(d)||''):''), date:d.clotureLe||d.createdAt||d.date||'', id:d.id}); });
+    items.sort(function(a,b){ return (''+(b.date||'')).localeCompare(''+(a.date||'')); });
+    return items.slice(0,7);
+  }
+
+  function gauge(pct,label,val,cls){
+    pct=Math.max(0,Math.min(100,Math.round(pct)));
+    return '<div class="ckp-gauge-row"><div class="ckp-gauge-top"><span>'+E(label)+'</span><b class="'+(cls||'')+'">'+E(val)+'</b></div>'
+      +'<div class="ckp-gauge"><div class="ckp-gauge-fill '+(cls||'')+'" style="width:'+pct+'%"></div></div></div>';
+  }
+
+  window.pageCockpit=function(){
+    var s=(typeof pilotageStats==='function')?pilotageStats():{total:dossAll().length,actions:0,attente:0,encours:0,complets:0,signes:0,deposes:0,clotures:0,ca:0,aTraiter:demAll().filter(function(d){return !d.dossierId;}).length,retard:0,aRelancer:0,taux:0,conformite:0,conformiteNb:0};
+    var hh=new Date().getHours(); var salut=hh<12?'Bonjour':(hh<18?'Bon après-midi':'Bonsoir');
+    var cab=(portail().cabinet)||'AEM CONSEIL';
+    var dfull=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    var rdvT=rdvAll().filter(function(r){return r.date===tiso()&&r.statut!=='annule';}).length;
+    var rdvW=(function(){var ti=tiso();var end=new Date(Date.now()+7*864e5).toISOString().slice(0,10);return rdvAll().filter(function(r){return r.date>=ti&&r.date<=end&&r.statut!=='annule';}).length;})();
+    var pd=coffreItems().filter(function(it){return it.shared&&it.fileId;}).length;
+    var pcli=clientsDistincts();
+    var pmsg=Object.keys(portail().messages||{}).length;
+    var psusp=Object.keys(portail().disabled||{}).length;
+    var pip=pipeline();
+
+    /* Bandeau d'accueil */
+    var hero='<div class="ckp-hero"><div class="ckp-hero-l"><div class="ckp-hello">'+salut+'</div>'
+      +'<div class="ckp-cab">'+E(cab)+'</div><div class="ckp-date">'+E(dfull)+'</div></div>'
+      +'<div class="ckp-hero-r">'
+      +'<div class="ckp-chip"><span class="ckp-chip-v">'+s.total+'</span><span class="ckp-chip-l">Dossiers actifs</span></div>'
+      +'<div class="ckp-chip"><span class="ckp-chip-v">'+money(s.ca)+'</span><span class="ckp-chip-l">CA prévisionnel</span></div>'
+      +'<div class="ckp-chip'+(s.aTraiter?' warn':'')+'"><span class="ckp-chip-v">'+s.aTraiter+'</span><span class="ckp-chip-l">Demandes à traiter</span></div>'
+      +'</div></div>';
+
+    /* KPIs (8) */
+    var K=(typeof kpi==='function')?kpi:function(ic,v,l,c){return '<div class="kpi"><div class="val '+(c||'')+'">'+v+'</div><div class="lbl">'+l+'</div></div>';};
+    var kpis='<div class="ckp-kpis">'
+      +K('folder',s.total,'Dossiers actifs')
+      +K('bolt',s.actions||0,'Actions en attente',((s.actions||0)?'warn':''))
+      +K('clock',s.attente||0,'En attente de pièces',((s.attente||0)?'warn':''))
+      +K('gear',s.encours||0,'En cours')
+      +K('check',s.complets||0,'Complets','ok')
+      +K('trend',s.deposes||0,'Déposés (GU)')
+      +K('idcard',pcli,'Clients')
+      +K('calendar',rdvW,'RDV / 7 jours')
+      +'</div>';
+
+    /* CA card */
+    var objCA=(function(){ try{ var v=(portail().objectifCA); return v?+v:0; }catch(e){ return 0; } })();
+    if(!objCA)objCA=Math.max(50000, Math.ceil((s.ca||0)/10000)*10000*1.2||60000);
+    var caPct=objCA?Math.min(100,Math.round((s.ca||0)/objCA*100)):0;
+    var caCard='<div class="ckp-card"><div class="ckp-card-h"><span class="ckp-ic">💶</span>Chiffre d\'affaires</div><div class="ckp-card-b">'
+      +'<div class="ckp-big">'+money(s.ca)+'</div><div class="ckp-muted">Honoraires prévisionnels sur '+s.total+' dossier(s) — hors débours.</div>'
+      +gauge(caPct,'Objectif '+money(objCA),caPct+' %',(caPct>=100?'ok':''))
+      +'<div class="ckp-lines">'
+      +'<div class="ckp-line"><span>Dossiers clôturés</span><b>'+(s.clotures||0)+'</b></div>'
+      +'<div class="ckp-line"><span>Déposés au guichet unique</span><b>'+(s.deposes||0)+'</b></div>'
+      +'<div class="ckp-line"><span>Demandes en retard</span><b class="'+((s.retard||0)?'bad':'')+'">'+(s.retard||0)+'</b></div>'
+      +'</div></div></div>';
+
+    /* Automatisation + conformité */
+    var autoCard='<div class="ckp-card"><div class="ckp-card-h"><span class="ckp-ic">⚡</span>Performance</div><div class="ckp-card-b">'
+      +gauge(s.taux||0,'Automatisation',(s.taux||0)+' %',((s.taux||0)>=90?'ok':''))
+      +gauge(s.conformite||0,'Conformité IA (moy.)',(s.conformite||0)+' / 100',((s.conformite||0)>=80?'ok':((s.conformite||0)>=50?'':'bad')))
+      +'<div class="ckp-muted" style="margin-top:8px">Objectif d\'automatisation ≥ 90 %'+(((s.taux||0)>=90)?' — atteint ✓':'')+'. Score de conformité moyen des agents IA sur '+(s.conformiteNb||0)+' dossier(s).</div>'
+      +'</div></div>';
+
+    /* Pipeline commercial */
+    var pipTot=pip.chaud+pip.tiede+pip.froid;
+    function pbar(lbl,v,cls){ var w=pipTot?Math.round(v/pipTot*100):0; return '<div class="ckp-pip"><span class="ckp-pip-l">'+lbl+'</span><span class="ckp-pip-bar"><i class="'+cls+'" style="width:'+w+'%"></i></span><b>'+v+'</b></div>'; }
+    var pipCard='<div class="ckp-card"><div class="ckp-card-h"><span class="ckp-ic">🎯</span>Pipeline commercial</div><div class="ckp-card-b">'
+      +'<div class="ckp-muted" style="margin-bottom:8px">'+pipTot+' demande(s) non converties — priorisées par intention détectée (IA).</div>'
+      +pbar('🔥 Chaud',pip.chaud,'hot')+pbar('🌤️ Tiède',pip.tiede,'warm')+pbar('🧊 Froid',pip.froid,'cold')
+      +'<button class="ckp-act" onclick="try{go(\'demandes\')}catch(e){}">Ouvrir les demandes →</button>'
+      +'</div></div>';
+
+    /* Funnel étapes */
+    var steps=[['En attente pièces',s.attente||0],['En cours',s.encours||0],['Complets',s.complets||0],['Signés',s.signes||0],['Déposés',s.deposes||0],['Clôturés',s.clotures||0]];
+    var funnel='<div class="ckp-card"><div class="ckp-card-h"><span class="ckp-ic">🔄</span>Répartition des dossiers par étape</div><div class="ckp-card-b"><div class="ckp-funnel">'
+      +steps.map(function(x){var w=s.total?Math.round(x[1]/s.total*100):0;return '<div class="ckp-frow"><span class="ckp-fl">'+x[0]+'</span><span class="ckp-fbar"><i style="width:'+w+'%"></i></span><b>'+x[1]+'</b></div>';}).join('')
+      +'</div></div></div>';
+
+    /* Agenda */
+    var rdvs=nextRdv();
+    var agBody=rdvs.length?rdvs.map(function(r){
+      return '<div class="ckp-rdv"><div class="ckp-rdv-d"><b>'+E(frShort(r.date))+'</b><span>'+E(r.heure||'—')+'</span></div>'
+        +'<div class="ckp-rdv-i"><b>'+E(r.clientNom||r.objet||'Rendez-vous')+'</b><span>'+E(r.objet||'')+'</span></div></div>';
+    }).join(''):'<div class="ckp-empty">Aucun rendez-vous à venir.</div>';
+    var agCard='<div class="ckp-card"><div class="ckp-card-h"><span class="ckp-ic">📅</span>Prochains rendez-vous<button class="ckp-hlink" onclick="try{go(\'agenda\')}catch(e){}">Agenda →</button></div><div class="ckp-card-b">'+agBody+'</div></div>';
+
+    /* Portail client */
+    var portCard='<div class="ckp-card"><div class="ckp-card-h"><span class="ckp-ic">🛰️</span>Portail client</div><div class="ckp-card-b">'
+      +'<div class="ckp-mini">'
+      +'<div class="ckp-mini-c"><b>'+pcli+'</b><span>Clients</span></div>'
+      +'<div class="ckp-mini-c"><b>'+pd+'</b><span>Docs partagés</span></div>'
+      +'<div class="ckp-mini-c"><b>'+pmsg+'</b><span>Messages actifs</span></div>'
+      +'<div class="ckp-mini-c'+(psusp?' warn':'')+'"><b>'+psusp+'</b><span>Accès suspendus</span></div>'
+      +'</div></div></div>';
+
+    /* Activité récente */
+    var acts=activite();
+    var actBody=acts.length?acts.map(function(a){
+      var ic=a.t==='demande'?'📨':'📁';
+      return '<div class="ckp-feed"><span class="ckp-feed-ic">'+ic+'</span><div class="ckp-feed-i"><b>'+E(a.label)+'</b><span>'+E(a.sub||'')+'</span></div><span class="ckp-feed-d">'+E(frShort(a.date))+'</span></div>';
+    }).join(''):'<div class="ckp-empty">Aucune activité récente.</div>';
+    var actCard='<div class="ckp-card"><div class="ckp-card-h"><span class="ckp-ic">🕑</span>Activité récente</div><div class="ckp-card-b">'+actBody+'</div></div>';
+
+    /* Alertes / à faire */
+    var alerts=[];
+    if(s.aTraiter)alerts.push(['📨',s.aTraiter+' demande(s) à traiter','demandes',s.aTraiter?'warn':'']);
+    if(s.aRelancer)alerts.push(['📮',s.aRelancer+' relance(s) de pièces à envoyer','espace','warn']);
+    if(s.retard)alerts.push(['⏰',s.retard+' demande(s) en retard','demandes','bad']);
+    if(s.attente)alerts.push(['📎',s.attente+' dossier(s) en attente de pièces','espace','']);
+    if(rdvT)alerts.push(['📅',rdvT+' rendez-vous aujourd\'hui','agenda','']);
+    if(!alerts.length)alerts.push(['✓','Tout est à jour — aucune action urgente','',' ok']);
+    var alertCard='<div class="ckp-card ckp-alerts"><div class="ckp-card-h"><span class="ckp-ic">🔔</span>À faire maintenant</div><div class="ckp-card-b">'
+      +alerts.map(function(a){var clk=a[2]?(' onclick="try{go(\''+a[2]+'\')}catch(e){}" style="cursor:pointer"'):'';return '<div class="ckp-alert '+(a[3]||'')+'"'+clk+'><span class="ckp-alert-ic">'+a[0]+'</span><span class="ckp-alert-t">'+E(a[1])+'</span>'+(a[2]?'<span class="ckp-alert-go">→</span>':'')+'</div>';}).join('')
+      +'</div></div>';
+
+    return '<div class="ckp">'+hero+kpis
+      +'<div class="ckp-grid ckp-g3">'+caCard+autoCard+pipCard+'</div>'
+      +'<div class="ckp-grid ckp-g2">'+funnel+agCard+'</div>'
+      +'<div class="ckp-grid ckp-g2">'+portCard+actCard+'</div>'
+      +alertCard
+      +'</div>';
+  };
+
+  /* ---- PAGES + nav (module de référence en tête) ---- */
+  try{ if(typeof PAGES!=='undefined' && !PAGES.some(function(p){return p.id==='cockpit';})){
+    PAGES.unshift({id:'cockpit',lbl:'Tableau de bord',ic:'dash',sub:'Vue d\'ensemble du cabinet en temps réel'});
+  } }catch(e){}
+  /* Page de référence : atterrissage par défaut */
+  try{ var st=state2(); if(st && (st.page==='demandes'||!st.page) && !window.__ckpLanded){ st.page='cockpit'; } window.__ckpLanded=1; }catch(e){}
+
+  function injectCkpBtn(){
+    var nav=document.getElementById('nav'); if(!nav)return; if(nav.querySelector('[data-ckpbtn]'))return;
+    var on=(state2().page==='cockpit')?' on':'';
+    var ico=(typeof svg==='function'&&typeof IC!=='undefined'&&IC.dash)?svg(IC.dash):'';
+    var b=document.createElement('button'); b.className='nav-btn'+on; b.setAttribute('data-ckpbtn','1'); b.setAttribute('onclick',"go('cockpit')");
+    b.innerHTML=ico+'<span class="nav-btn-lbl">Tableau de bord</span>';
+    nav.insertBefore(b, nav.firstChild);
+  }
+  try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){var r=_bn.apply(this,arguments);try{injectCkpBtn();}catch(e){}return r;}; } }catch(e){}
+  try{ var _rd=window.render; if(typeof _rd==='function'){ window.render=function(){
+    if(state2().page==='cockpit'){
+      try{buildNav();}catch(e){} try{document.body.dataset.page='cockpit';}catch(e){}
+      var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='cockpit';}):null;
+      try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Tableau de bord';}catch(e){}
+      try{document.getElementById('psub').textContent=(p&&p.sub)||'';}catch(e){}
+      var V=document.getElementById('view')||document.getElementById('content'); if(V)V.innerHTML=pageCockpit();
+      try{ if(typeof injectCkpBtn==='function')injectCkpBtn(); }catch(e){}
+      return;
+    }
+    return _rd.apply(this,arguments);
+  }; } }catch(e){}
+
+  /* ---- Style ---- */
+  try{ if(!document.getElementById('cockpit-css')){ var cs=document.createElement('style'); cs.id='cockpit-css'; cs.textContent=[
+    '.ckp{display:flex;flex-direction:column;gap:14px}',
+    '.ckp-hero{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;background:linear-gradient(135deg,rgba(201,161,60,.16),rgba(122,106,73,.06));border:1px solid var(--line-2,#2c384b);border-radius:16px;padding:18px 22px}',
+    '.ckp-hello{font-size:13px;color:var(--ink-3,#8494aa);font-weight:600;letter-spacing:.02em}',
+    '.ckp-cab{font-family:Georgia,serif;font-size:26px;font-weight:800;color:var(--ink,#f5f9fe);line-height:1.1;margin:2px 0}',
+    '.ckp-date{font-size:12.5px;color:var(--ink-3,#8494aa);text-transform:capitalize}',
+    '.ckp-hero-r{display:flex;gap:10px;flex-wrap:wrap}',
+    '.ckp-chip{background:var(--card,#141b28);border:1px solid var(--line-2,#2c384b);border-radius:12px;padding:10px 16px;min-width:120px;text-align:center}',
+    '.ckp-chip.warn{border-color:rgba(224,176,96,.5);background:rgba(224,176,96,.08)}',
+    '.ckp-chip-v{display:block;font-size:19px;font-weight:800;color:var(--ink,#f5f9fe);font-family:Georgia,serif}',
+    '.ckp-chip-l{display:block;font-size:11px;color:var(--ink-3,#8494aa);margin-top:2px}',
+    '.ckp-kpis{display:grid;grid-template-columns:repeat(8,1fr);gap:9px}',
+    '@media(max-width:1100px){.ckp-kpis{grid-template-columns:repeat(4,1fr)}}',
+    '@media(max-width:560px){.ckp-kpis{grid-template-columns:repeat(2,1fr)}}',
+    '.ckp-kpis .kpi{padding:12px 13px}',
+    '.ckp-grid{display:grid;gap:14px}',
+    '.ckp-g3{grid-template-columns:repeat(3,1fr)}.ckp-g2{grid-template-columns:repeat(2,1fr)}',
+    '@media(max-width:980px){.ckp-g3,.ckp-g2{grid-template-columns:1fr}}',
+    '.ckp-card{background:var(--card,#141b28);border:1px solid var(--line-2,#2c384b);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}',
+    '.ckp-card-h{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line,#232d3d);font-size:12.5px;font-weight:700;color:var(--ink,#f5f9fe)}',
+    '.ckp-ic{font-size:15px}.ckp-hlink,.ckp-act{margin-left:auto;background:none;border:none;color:var(--accent,#c9a13c);font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;padding:0}',
+    '.ckp-act{display:block;margin:12px 0 0;text-align:left}',
+    '.ckp-card-b{padding:14px 16px;flex:1}',
+    '.ckp-big{font-family:Georgia,serif;font-size:30px;font-weight:800;color:var(--accent,#c9a13c);line-height:1}',
+    '.ckp-muted{font-size:11.5px;color:var(--ink-3,#8494aa);line-height:1.5;margin-top:4px}',
+    '.ckp-lines{margin-top:12px}.ckp-line{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--line,#232d3d);font-size:12.5px;color:var(--ink-2,#b6c3d6)}.ckp-line b{color:var(--ink,#f5f9fe)}.ckp-line b.bad{color:#e0674f}',
+    '.ckp-gauge-row{margin-top:12px}.ckp-gauge-top{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-2,#b6c3d6);margin-bottom:5px}.ckp-gauge-top b{color:var(--ink,#f5f9fe)}.ckp-gauge-top b.ok{color:#5bbf8a}.ckp-gauge-top b.bad{color:#e0674f}',
+    '.ckp-gauge{height:9px;border-radius:6px;background:rgba(255,255,255,.07);overflow:hidden}.ckp-gauge-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#c9a13c,#e2c26a);transition:width .5s}.ckp-gauge-fill.ok{background:linear-gradient(90deg,#3d9b6b,#5bbf8a)}.ckp-gauge-fill.bad{background:linear-gradient(90deg,#c0492f,#e0674f)}',
+    '.ckp-pip{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink-2,#b6c3d6);margin-bottom:8px}.ckp-pip-l{flex:0 0 78px}.ckp-pip-bar{flex:1;height:9px;background:rgba(255,255,255,.07);border-radius:6px;overflow:hidden}.ckp-pip-bar i{display:block;height:100%;border-radius:6px}.ckp-pip-bar i.hot{background:linear-gradient(90deg,#c0492f,#e0674f)}.ckp-pip-bar i.warm{background:linear-gradient(90deg,#c9a13c,#e2c26a)}.ckp-pip-bar i.cold{background:linear-gradient(90deg,#3f6bb0,#6b93d0)}.ckp-pip b{flex:0 0 26px;text-align:right;color:var(--ink,#f5f9fe)}',
+    '.ckp-funnel{display:flex;flex-direction:column;gap:9px}.ckp-frow{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-2,#b6c3d6)}.ckp-fl{flex:0 0 120px}.ckp-fbar{flex:1;height:10px;background:rgba(255,255,255,.07);border-radius:6px;overflow:hidden}.ckp-fbar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#7a6a49,#c9a13c)}.ckp-frow b{flex:0 0 28px;text-align:right;color:var(--ink,#f5f9fe)}',
+    '.ckp-rdv{display:flex;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line,#232d3d)}.ckp-rdv:last-child{border-bottom:none}.ckp-rdv-d{flex:0 0 52px;text-align:center;background:rgba(201,161,60,.12);border-radius:9px;padding:6px 4px}.ckp-rdv-d b{display:block;font-size:13px;color:var(--accent,#c9a13c);font-weight:800}.ckp-rdv-d span{font-size:10.5px;color:var(--ink-3,#8494aa)}.ckp-rdv-i{min-width:0}.ckp-rdv-i b{display:block;font-size:12.5px;color:var(--ink,#f5f9fe);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ckp-rdv-i span{font-size:11px;color:var(--ink-3,#8494aa)}',
+    '.ckp-mini{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.ckp-mini-c{background:rgba(255,255,255,.03);border:1px solid var(--line,#232d3d);border-radius:10px;padding:12px 8px;text-align:center}.ckp-mini-c.warn{border-color:rgba(224,176,96,.5);background:rgba(224,176,96,.08)}.ckp-mini-c b{display:block;font-size:20px;font-weight:800;color:var(--ink,#f5f9fe);font-family:Georgia,serif}.ckp-mini-c span{font-size:10.5px;color:var(--ink-3,#8494aa)}',
+    '@media(max-width:560px){.ckp-mini{grid-template-columns:repeat(2,1fr)}}',
+    '.ckp-feed{display:flex;gap:11px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line,#232d3d)}.ckp-feed:last-child{border-bottom:none}.ckp-feed-ic{font-size:15px;flex:none}.ckp-feed-i{flex:1;min-width:0}.ckp-feed-i b{display:block;font-size:12.5px;color:var(--ink,#f5f9fe);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ckp-feed-i span{font-size:11px;color:var(--ink-3,#8494aa);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}.ckp-feed-d{font-size:11px;color:var(--ink-3,#8494aa);flex:none}',
+    '.ckp-alert{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--line,#232d3d);margin-bottom:8px;font-size:12.5px;color:var(--ink-2,#b6c3d6)}.ckp-alert:last-child{margin-bottom:0}.ckp-alert.warn{border-color:rgba(224,176,96,.4);background:rgba(224,176,96,.07)}.ckp-alert.bad{border-color:rgba(224,103,79,.4);background:rgba(224,103,79,.08)}.ckp-alert.ok{border-color:rgba(91,191,138,.4);background:rgba(91,191,138,.07)}.ckp-alert-ic{font-size:15px}.ckp-alert-t{flex:1}.ckp-alert-go{color:var(--accent,#c9a13c);font-weight:800}',
+    '.ckp-empty{font-size:12px;color:var(--ink-3,#8494aa);padding:14px 0;text-align:center}'
+  ].join(''); document.head.appendChild(cs); } }catch(e){}
 })();</script>
 
 </body>
