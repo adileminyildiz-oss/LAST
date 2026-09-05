@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=464;
+var LAST_VER=465;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -23353,6 +23353,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +kpi
       +'<div class="card svc-card">'+table+'</div>'
       +portailPanel()
+      +onlinePanel()
       +'<p class="svc-note-min">Les fichiers sont stockés <b>localement sur cet appareil</b> (isolés de la comptabilité), taille maximale 1,5 Mo par fichier. Pour un vrai portail client hébergé (accès distant sécurisé), prévoir un stockage serveur — ce module en fournit la structure et l’organisation.</p></div>';
   }
 
@@ -23406,7 +23407,12 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'</div>'; }
   function portFoot(){ return '<div class="port-foot"><span>© '+new Date().getFullYear()+' '+E(cabName())+'</span><span class="port-foot-sep">·</span><span>Portail client sécurisé</span></div>'; }
   function portErr(msg){ var e=document.getElementById('port-err'); if(e){ e.textContent=msg; e.style.display='block'; } }
-  window.svcPortLogin=function(){ var c=(document.getElementById('port-in-client')||{}).value||''; var code=((document.getElementById('port-in-code')||{}).value||'').trim().toUpperCase(); var real=portailState().codes[ckey(c)]; if(!real){ portErr('Client non reconnu. Vérifiez le nom saisi.'); return; } if(code!==real){ portErr('Code d’accès incorrect.'); return; } var ov=document.getElementById('portail-ov'); if(ov)portailRenderDocs(ov,c); };
+  window.svcPortLogin=function(){ var c=(document.getElementById('port-in-client')||{}).value||''; var code=((document.getElementById('port-in-code')||{}).value||'').trim().toUpperCase(); var ov=document.getElementById('portail-ov'); var base=portApiBase();
+    if(base){ portErr(''); fetch(base+'/portal/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client:c,code:code})})
+        .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+        .then(function(x){ if(!x.ok){ portErr((x.j&&x.j.error)||'Nom de client ou code d’accès incorrect.'); return; } window.__portTok=x.j.token; window.__portClient=x.j.client||c; if(ov)portailRenderDocsRemote(ov, x.j.client||c, x.j.token); })
+        .catch(function(){ portErr('Serveur injoignable. Réessayez.'); }); return; }
+    var real=portailState().codes[ckey(c)]; if(!real){ portErr('Client non reconnu. Vérifiez le nom saisi.'); return; } if(code!==real){ portErr('Code d’accès incorrect.'); return; } if(ov)portailRenderDocs(ov,c); };
   var PORT_EYE='<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
   window.svcPortEye=function(){ var i=document.getElementById('port-in-code'); if(!i)return; i.type=(i.type==='password')?'text':'password'; var b=document.getElementById('port-eye'); if(b)b.classList.toggle('on',i.type==='text'); };
   function portailRenderLogin(ov, prefill){
@@ -23426,18 +23432,57 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var ci=document.getElementById('port-in-code'); if(ci)ci.addEventListener('keydown',function(e){ if(e.key==='Enter')svcPortLogin(); });
   }
   var PORT_DOCICON='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>';
-  function portailRenderDocs(ov, client){ var docs=clientSharedDocs(client);
+  /* ===== Portail en ligne (accès distant) : config côté cabinet + mode client distant ===== */
+  var PORTAL_API=''; /* URL du serveur portail hébergé (ex. https://portail.aemconseil.eu). Vide = mode LOCAL (cet appareil). */
+  function portSrvCfg(){ try{ return JSON.parse(localStorage.getItem('last-portal-srv')||'{}')||{}; }catch(e){ return {}; } }
+  function portSrvSaveCfg(o){ try{ localStorage.setItem('last-portal-srv',JSON.stringify(o||{})); }catch(e){} }
+  function portApiBase(){ return (PORTAL_API||portSrvCfg().url||'').trim().replace(/\/+$/,''); }
+  /* Rendu partagé de la liste des documents (local et distant). docs=[{rid,nom,cat,date}] */
+  function portDocsRender(ov, client, docs, remote){
     try{ ov.classList.remove('port-lav'); ov.classList.add('port-space'); ov.style.backgroundImage="url('"+PORT_BG+"')"; ov.style.backgroundSize='cover'; ov.style.backgroundPosition='center'; ov.style.backgroundAttachment='fixed'; }catch(e){}
     var cats={}; docs.forEach(function(d){ (cats[d.cat||'Divers']=cats[d.cat||'Divers']||[]).push(d); });
-    var body=Object.keys(cats).map(function(cat){ var items=cats[cat].map(function(d){
+    var body=Object.keys(cats).map(function(cat){ var items=cats[cat].map(function(d){ var rid=jq(d.rid);
+        var vv=remote?('svcPortFileViewRemote(\''+rid+'\')'):('svcPortFileView(\''+rid+'\')');
+        var dl=remote?('svcPortFileDlRemote(\''+rid+'\')'):('svcPortFileDl(\''+rid+'\')');
         return '<div class="port-doc"><div class="port-doc-ic">'+PORT_DOCICON+'</div><div class="port-doc-i"><div class="port-doc-n">'+E(d.nom||'Document')+'</div><div class="port-doc-m">'+E(cat)+(d.date?(' · '+E(d.date)):'')+'</div></div>'
-          +'<div class="port-doc-a"><button class="port-fbtn" onclick="svcPortFileView(\''+jq(d.fileId)+'\')">'+SVCEYE+'<span>Consulter</span></button><button class="port-fbtn port-fbtn-dl" onclick="svcPortFileDl(\''+jq(d.fileId)+'\')">'+SVCDL+'<span>Télécharger</span></button></div></div>';
+          +'<div class="port-doc-a"><button class="port-fbtn" onclick="'+vv+'">'+SVCEYE+'<span>Consulter</span></button><button class="port-fbtn port-fbtn-dl" onclick="'+dl+'">'+SVCDL+'<span>Télécharger</span></button></div></div>';
       }).join('');
       return '<div class="port-cat"><div class="port-cat-h">'+E(cat)+' <span class="port-cat-n">'+cats[cat].length+'</span></div>'+items+'</div>';
     }).join('')||'<div class="port-empty">Aucun document partagé pour le moment. Votre cabinet mettra vos documents à disposition ici.</div>';
     ov.innerHTML='<div class="port-shell"><div class="port-top">'+portBrand('sm')+'<div class="port-top-r"><span class="port-who">'+E(client)+'</span><button class="port-out" onclick="closePortail()">Se déconnecter</button></div></div>'
       +'<div class="port-welcome"><div class="port-welcome-h">Bonjour, '+E(client)+'</div><div class="port-welcome-s">'+docs.length+' document'+(docs.length>1?'s':'')+' à votre disposition</div></div>'
       +'<div class="port-docs-wrap">'+body+'</div>'+portFoot()+'</div>';
+  }
+  function portailRenderDocs(ov, client){ var docs=clientSharedDocs(client).map(function(it){ return {rid:it.fileId, nom:it.nom, cat:it.cat, date:it.date}; }); portDocsRender(ov, client, docs, false); }
+  function portailRenderDocsRemote(ov, client, token){ var base=portApiBase();
+    fetch(base+'/portal/docs',{headers:{'Authorization':'Bearer '+token}}).then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); }).then(function(x){
+      if(!x.ok){ portailRenderLogin(ov, client); try{ portErr((x.j&&x.j.error)||'Session expirée.'); }catch(e){} return; }
+      var docs=(x.j.docs||[]).map(function(d){ return {rid:d.id, nom:d.nom, cat:d.cat, date:d.date}; });
+      portDocsRender(ov, x.j.client||client, docs, true);
+    }).catch(function(){ portailRenderLogin(ov, client); try{ portErr('Serveur injoignable.'); }catch(e){} });
+  }
+  window.svcPortFileViewRemote=function(id){ var base=portApiBase(), tok=window.__portTok; if(!base||!tok)return; fetch(base+'/portal/file/'+encodeURIComponent(id),{headers:{'Authorization':'Bearer '+tok}}).then(function(r){ if(!r.ok)throw 0; return r.blob(); }).then(function(b){ var u=URL.createObjectURL(b); var w=window.open(u,'_blank'); if(!w&&typeof toast==='function')toast('Autorisez les fenêtres pop-up.'); setTimeout(function(){ URL.revokeObjectURL(u); },60000); }).catch(function(){ if(typeof toast==='function')toast('Document indisponible.'); }); };
+  window.svcPortFileDlRemote=function(id){ var base=portApiBase(), tok=window.__portTok; if(!base||!tok)return; fetch(base+'/portal/file/'+encodeURIComponent(id),{headers:{'Authorization':'Bearer '+tok}}).then(function(r){ if(!r.ok)throw 0; var cd=r.headers.get('Content-Disposition')||''; var m=cd.match(/filename="?([^"]+)"?/); var nm=m?decodeURIComponent(m[1]):'document'; return r.blob().then(function(b){ return {b:b,nm:nm}; }); }).then(function(x){ var u=URL.createObjectURL(x.b); var a=document.createElement('a'); a.href=u; a.download=x.nm; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(u); },60000); }).catch(function(){ if(typeof toast==='function')toast('Téléchargement indisponible.'); }); };
+  /* Synchronisation cabinet → serveur */
+  function poStatus(t){ var el=document.getElementById('po-status'); if(el)el.textContent=t; var cfg=portSrvCfg(); cfg._last=t; portSrvSaveCfg(cfg); }
+  window.svcPortSrvSave=function(){ var cfg=portSrvCfg(); var u=document.getElementById('po-url'), t=document.getElementById('po-token'); if(u)cfg.url=u.value||''; if(t)cfg.token=t.value||''; portSrvSaveCfg(cfg); if(typeof toast==='function')toast('Portail en ligne : configuration enregistrée.'); };
+  window.svcPortSrvTest=function(){ svcPortSrvSave(); var base=portApiBase(); if(!base){ poStatus('Renseignez l’adresse du serveur.'); return; } poStatus('Test en cours…'); fetch(base+'/health').then(function(r){ return r.json(); }).then(function(j){ poStatus(j&&j.ok?'✓ Serveur joignable.':'Réponse inattendue.'); }).catch(function(){ poStatus('✗ Serveur injoignable (vérifiez l’adresse et le CORS).'); }); };
+  window.svcPortSyncNow=function(){ svcPortSrvSave(); var cfg=portSrvCfg(); var base=portApiBase(); if(!base||!cfg.token){ poStatus('Adresse du serveur + secret cabinet requis.'); return; }
+    var st=coffreState(); var files=cofFiles(); var clients=cofClients().map(function(n){ return {name:n, code:portailCode(n)}; }); var docs=[], fmap={};
+    st.items.forEach(function(it){ if(it.shared&&it.fileId){ docs.push({id:it.fileId, client:it.client, nom:it.nom, cat:it.cat, date:it.date, type:it.ftype, size:it.fsize, shared:true}); var f=files[it.fileId]; if(f&&f.data)fmap[it.fileId]=f.data; } });
+    poStatus('Synchronisation… ('+docs.length+' document'+(docs.length>1?'s':'')+')');
+    fetch(base+'/admin/sync',{method:'POST',headers:{'Content-Type':'application/json','X-Cabinet-Token':cfg.token},body:JSON.stringify({cabinet:cabName(), mode:'replace', clients:clients, docs:docs, files:fmap})})
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+      .then(function(x){ if(!x.ok){ poStatus('✗ '+((x.j&&x.j.error)||'Échec de la synchronisation.')); return; } var b=x.j.bilan||{}; poStatus('✓ Synchronisé le '+new Date().toLocaleString('fr-FR')+' — '+(b.clients!=null?b.clients:clients.length)+' client(s), '+(b.docs!=null?b.docs:docs.length)+' document(s) en ligne.'); if(typeof toast==='function')toast('Portail en ligne synchronisé.'); })
+      .catch(function(){ poStatus('✗ Serveur injoignable.'); });
+  };
+  function onlinePanel(){ var cfg=portSrvCfg();
+    return '<div class="card svc-card port-online"><h2 class="svc-h2b">🌐 Portail en ligne (accès distant)</h2>'
+      +'<p class="svc-lead">Pour que vos clients accèdent à leurs documents <b>depuis n’importe où</b>, hébergez le petit serveur fourni (dossier <code>server/portal</code>), puis renseignez son adresse et le <b>secret cabinet</b> ci-dessous. « Synchroniser » envoie les clients, leurs codes d’accès et les documents cochés « Portail client » — <b>les fichiers non partagés ne quittent jamais cet appareil</b>.</p>'
+      +'<div class="port-online-grid"><label class="po-f"><span>Adresse du serveur</span><input id="po-url" class="cli-modin" placeholder="https://portail.votrecabinet.fr" value="'+E(cfg.url||'')+'"></label>'
+      +'<label class="po-f"><span>Secret cabinet (jeton)</span><input id="po-token" class="cli-modin" type="password" placeholder="CABINET_TOKEN" value="'+E(cfg.token||'')+'"></label></div>'
+      +'<div class="svc-cat-act"><button class="btn btn-ghost" onclick="svcPortSrvSave()">Enregistrer</button><button class="btn btn-ghost" onclick="svcPortSrvTest()">Tester la connexion</button><button class="btn btn-pri" onclick="svcPortSyncNow()">↑ Synchroniser maintenant</button></div>'
+      +'<div id="po-status" class="po-status">'+E(cfg._last||'Non synchronisé.')+'</div></div>';
   }
   window.openPortail=function(prefillClient, autoCode){ closePortail(); var ov=document.createElement('div'); ov.id='portail-ov'; ov.className='portail-ov'; var av=accentVars(); try{ ov.style.setProperty('--pa',av.a); ov.style.setProperty('--pa2',av.a2); ov.style.setProperty('--pad',av.ad); ov.style.setProperty('--pat',av.t); }catch(e){} document.body.appendChild(ov);
     if(autoCode!==undefined && prefillClient){ portailRenderDocs(ov, prefillClient); } else { portailRenderLogin(ov, prefillClient||''); } };
@@ -23672,6 +23717,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.port-space .port-doc-ic{background:rgba(120,160,255,.14);border-color:rgba(150,180,255,.26);color:#bcd2ff}.port-space .port-doc-n{color:#f2f5ff}'
     +'.port-space .port-fbtn{background:rgba(255,255,255,.06)!important;border-color:rgba(150,180,255,.24)!important;color:#dbe6ff!important}.port-space .port-fbtn:hover{border-color:#5aa9f2!important}.port-space .port-fbtn-dl{background:rgba(120,160,255,.16)!important;border-color:rgba(150,180,255,.34)!important;color:#eaf1ff!important}'
     +'.port-space .port-empty{border-color:rgba(150,180,255,.24);color:#c3d2ea}.port-space .port-foot{border-top-color:rgba(150,180,255,.14)}'
+    +'.port-online{margin-top:14px}.svc-h2b{font-size:15px;font-weight:700;color:#eaf2fb;margin:0 0 6px}.port-online code{background:#0b1119;border:1px solid #2a3a4e;border-radius:5px;padding:1px 6px;font:12px ui-monospace,Menlo,Consolas,monospace;color:#9fd0ff}'
+    +'.port-online-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0 12px}@media(max-width:640px){.port-online-grid{grid-template-columns:1fr}}.po-f{display:flex;flex-direction:column;gap:5px}.po-f>span{font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.03em;color:#8aa0b8;text-transform:uppercase}.po-f .cli-modin{width:100%;box-sizing:border-box}'
+    +'.po-status{font:12px "Hanken Grotesk",system-ui,sans-serif;color:#9fb6d0;margin-top:8px}'
     +'.portail-ov.port-lav{background-color:#211a38}'
     +'.port-lav .port-shell{max-width:none;padding:24px}.port-lav .plav-card{width:100%;max-width:400px;margin:auto;background:linear-gradient(180deg,rgba(78,68,116,.22),rgba(42,35,72,.30));border:1px solid rgba(255,255,255,.14);border-radius:24px;padding:30px 30px 24px;box-shadow:0 40px 90px rgba(10,8,30,.45);-webkit-backdrop-filter:blur(24px) saturate(1.2);backdrop-filter:blur(24px) saturate(1.2)}'
     +'.plav-brand{display:flex;justify-content:center;margin-bottom:12px}.port-lav .marq-sm{font-size:26px;color:#fff}'
