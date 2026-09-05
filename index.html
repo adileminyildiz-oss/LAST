@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=485;
+var LAST_VER=486;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -23994,6 +23994,16 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var conv=dem.length?Math.round(dem.filter(function(d){return d.dossierId;}).length/dem.length*100):0;
     return {demMois:demMois,dosMois:dosMois,conv:conv};
   }
+  /* Délai moyen de traitement (jours) : clôture − création sur les dossiers clôturés ;
+     à défaut, ancienneté moyenne des dossiers ouverts */
+  function delaiMoyen(){
+    var dos=dossAll(), clos=[];
+    dos.forEach(function(d){ var c=d.clotureLe, o=d.createdAt||d.date; if(c&&o){ var j=(new Date(c)-new Date(o))/864e5; if(j>=0&&j<3650)clos.push(j); } });
+    if(clos.length){ return {val:Math.round(clos.reduce(function(a,b){return a+b;},0)/clos.length), label:'Délai moyen'}; }
+    var now=Date.now(), ages=[]; dos.forEach(function(d){ var o=d.createdAt||d.date; if(o){ var j=(now-new Date(o))/864e5; if(j>=0&&j<3650)ages.push(j); } });
+    if(ages.length){ return {val:Math.round(ages.reduce(function(a,b){return a+b;},0)/ages.length), label:'Ancienneté moy.'}; }
+    return {val:null,label:'Délai moyen'};
+  }
   /* Répartition par forme juridique */
   function formeDist(){
     var map={}, n=0;
@@ -24042,12 +24052,13 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var pmsg=Object.keys(portail().messages||{}).length;
     var psusp=Object.keys(portail().disabled||{}).length;
     var pip=pipeline(); var pipTot=pip.chaud+pip.tiede+pip.froid;
-    var ms=moisStats(); var fd=formeDist();
+    var ms=moisStats(); var fd=formeDist(); var dm=delaiMoyen();
 
     /* En-tête */
     var header='<div class="ckp-head"><div><div class="ckp-h1">'+E(cab)+'</div><div class="ckp-hsub">'+E(dfull)+'</div></div>'
       +'<div class="ckp-headr">'
       +'<div class="ckp-hchip"><b>'+money(s.ca)+'</b><span>CA prévisionnel</span></div>'
+      +(dm.val!=null?('<div class="ckp-hchip ck-clickable" onclick="try{go(\'espace\')}catch(e){}"><b>'+dm.val+' j</b><span>'+E(dm.label)+'</span></div>'):'')
       +'<div class="ckp-hchip'+(s.aTraiter?' on':'')+'" onclick="try{go(\'demandes\')}catch(e){}" style="cursor:pointer"><b>'+s.aTraiter+'</b><span>À traiter</span></div>'
       +'</div></div>';
 
@@ -24079,7 +24090,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
 
     var rdvs=nextRdv();
     var agTile=tile('<div class="ckp-th">📅 Prochains rendez-vous<button class="ckp-lk" onclick="try{event.stopPropagation();go(\'agenda\')}catch(e){}">Agenda →</button></div>'
-      +(rdvs.length?rdvs.map(function(r){return '<div class="ckp-rdv"><div class="ckp-rd"><b>'+E(frShort(r.date))+'</b><span>'+E(r.heure||'—')+'</span></div><div class="ckp-ri"><b>'+E(r.clientNom||r.objet||'Rendez-vous')+'</b><span>'+E(r.objet||'')+'</span></div></div>';}).join(''):'<div class="ckp-empty">Aucun rendez-vous à venir.</div>'),'ck-ag','agenda');
+      +(rdvs.length?rdvs.map(function(r){var rid=(''+(r.id||'')).replace(/'/g,'');var clk=rid?(' class="ckp-rdv ck-clickable" onclick="try{event.stopPropagation();go(\'agenda\');if(window.agEdit)setTimeout(function(){agEdit(\''+rid+'\')},60)}catch(e){}"'):' class="ckp-rdv"';return '<div'+clk+'><div class="ckp-rd"><b>'+E(frShort(r.date))+'</b><span>'+E(r.heure||'—')+'</span></div><div class="ckp-ri"><b>'+E(r.clientNom||r.objet||'Rendez-vous')+'</b><span>'+E(r.objet||'')+'</span></div></div>';}).join(''):'<div class="ckp-empty">Aucun rendez-vous à venir.</div>'),'ck-ag','agenda');
 
     var d6=demande6(); var d6max=Math.max(1,Math.max.apply(null,d6.map(function(x){return x.count;})));
     var spark='<div class="ckp-flabel" style="margin-top:12px">Demandes reçues · 6 mois</div><div class="ckp-spark">'
@@ -24242,7 +24253,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.ckp-mc{padding:9px 6px}.ckp-mc b{font-size:17px}.ckp-mc span{font-size:9.5px}',
     '.ckp-feed{padding:7px 0}.ckp-alert{padding:9px 11px;font-size:12px;margin-bottom:7px}',
     '.ckp-rbtn{padding:8px 10px;font-size:11.5px}.ckp-racc{gap:7px}',
-    '.ck-clickable{cursor:pointer;transition:border-color .12s,background .12s}.ck-clickable:hover{border-color:#3a3a42}.ckp-t.ck-clickable:hover{background:#101014}.ckp-feed.ck-clickable{margin:0 -14px;padding-left:14px;padding-right:14px;border-radius:8px}.ckp-feed.ck-clickable:hover{background:#141418}',
+    '.ck-clickable{cursor:pointer;transition:border-color .12s,background .12s}.ck-clickable:hover{border-color:#3a3a42}.ckp-t.ck-clickable:hover{background:#101014}.ckp-feed.ck-clickable{margin:0 -14px;padding-left:14px;padding-right:14px;border-radius:8px}.ckp-feed.ck-clickable:hover{background:#141418}.ckp-rdv.ck-clickable{margin:0 -14px;padding-left:14px;padding-right:14px;border-radius:8px}.ckp-rdv.ck-clickable:hover{background:#141418}.ckp-hchip.ck-clickable{cursor:pointer}',
     '.ckp-spark{display:flex;align-items:flex-end;gap:6px;height:46px;margin-top:8px}.ckp-sp{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}.ckp-sp i{width:100%;background:#fff;border-radius:3px 3px 0 0;min-height:3px;transition:height .4s}.ckp-sp:hover i{background:#c9c9d0}.ckp-sp span{font-size:9px;color:#8a8a90;margin-top:4px}'
   ].join(''); document.head.appendChild(cs); } }catch(e){}
 })();</script>
