@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=462;
+var LAST_VER=463;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -20349,6 +20349,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   var CLI_X='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 5l14 14M19 5L5 19"/></svg>';
   window.cliCofPick=function(client){ window.__cliCofTarget=client||''; var inp=document.getElementById('cli-cof-file'); if(inp)inp.click(); };
   window.cliCofUpload=function(inp){ var t=window.__cliCofTarget||''; if(typeof window.cofAddFilesFor==='function')window.cofAddFilesFor(t, inp&&inp.files); if(inp)inp.value=''; window.__cliCofTarget=''; };
+  window.cliCofShare=function(i,el){ try{ if(typeof window.svcCofShare==='function')window.svcCofShare(i,el); }catch(e){} try{ if(typeof state!=='undefined'&&state.page==='clients'&&typeof render==='function')render(); }catch(e){} };
+  function cliDocStat(c){ var n=(typeof cliName==='function')?cliName(c):''; var items=(typeof window.cofItemsForClient==='function')?window.cofItemsForClient(n):[]; var shared=items.filter(function(r){return r.it.shared&&r.it.fileId;}).length; return {n:items.length,shared:shared}; }
   function cliDocsSection(c){ var name=cliName(c);
     var items=(typeof window.cofItemsForClient==='function')?window.cofItemsForClient(name):[];
     var shared=items.filter(function(r){return r.it.shared&&r.it.fileId;}).length;
@@ -20360,7 +20362,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
         +'<input class="clidoc-nm" value="'+E(it.nom)+'" oninput="svcCofSet('+i+',\'nom\',this.value)">'
         +'<select class="clidoc-cat" onchange="svcCofSet('+i+',\'cat\',this.value)">'+cat+'</select>'
         +'<input class="clidoc-date" placeholder="AAAA-MM-JJ" value="'+E(it.date||'')+'" onchange="svcCofSet('+i+',\'date\',this.value)">'
-        +'<label class="clidoc-share" title="Visible dans l’espace client"><input type="checkbox" '+(it.shared?'checked':'')+' onchange="svcCofShare('+i+',this)"><span>Espace client</span></label>'
+        +'<label class="clidoc-share" title="Visible dans l’espace client"><input type="checkbox" '+(it.shared?'checked':'')+' onchange="cliCofShare('+i+',this)"><span>Espace client</span></label>'
         +'<span class="clidoc-fa">'+file+'</span>'
         +'<button class="clidoc-del" title="Retirer" aria-label="Retirer" onclick="svcCofDel('+i+')">'+CLI_X+'</button>'
         +'</div>';
@@ -20403,7 +20405,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var q=window.__cliQ||'';var ft=window.__cliType||'';
     var cls=(DB.clients||[]).filter(function(c){var t=cliIsPart(c)?'particulier':'entreprise';if(ft&&t!==ft)return false;return !q||(cliName(c)+' '+(c.ville||'')+' '+(c.email||'')).toLowerCase().indexOf(q)>-1;});
     if(!cls.length)return '<div class="cli-empty2">Aucun client'+(q?' pour « '+E(q)+' »':'')+'.</div>';
-    return cls.map(function(c){var on=(state.cliSel===c.id)?' on':'';var part=cliIsPart(c);var meta=part?('Particulier · '+E(c.ville||'—')):(E(c.forme||'—')+' · '+E(c.ville||'—'));var tag='<span class="cli-tag '+(part?'cli-tag-p':'cli-tag-e')+'">'+(part?'PART':'ENT')+'</span>';return '<button class="cli-row'+on+'" onclick="cliSel(\''+c.id+'\')"><span class="cli-name" id="cli-name-'+c.id+'">'+tag+E(cliName(c))+'</span><span class="cli-meta">'+meta+'</span></button>';}).join('');
+    return cls.map(function(c){var on=(state.cliSel===c.id)?' on':'';var part=cliIsPart(c);var meta=part?('Particulier · '+E(c.ville||'—')):(E(c.forme||'—')+' · '+E(c.ville||'—'));var tag='<span class="cli-tag '+(part?'cli-tag-p':'cli-tag-e')+'">'+(part?'PART':'ENT')+'</span>';var ds=cliDocStat(c);var badge=ds.n?('<span class="cli-docbadge'+(ds.shared?' has':'')+'" title="'+ds.n+' document'+(ds.n>1?'s':'')+' · '+ds.shared+' dans l’espace client">'+ds.n+' doc'+(ds.n>1?'s':'')+(ds.shared?(' · '+ds.shared+' ●'):'')+'</span>'):'';return '<button class="cli-row'+on+'" onclick="cliSel(\''+c.id+'\')"><span class="cli-name" id="cli-name-'+c.id+'">'+tag+E(cliName(c))+'</span><span class="cli-meta">'+meta+badge+'</span></button>';}).join('');
   }
   window.pageClients=function(){
     if(state.cliSel&&!clientById(state.cliSel))state.cliSel=null;
@@ -20529,6 +20531,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.clidoc-fa{display:inline-flex;gap:5px}.clidoc-fb{background:#0d0e11;border:1px solid #26364a;color:#5ab0ff;border-radius:6px;width:30px;height:28px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}.clidoc-fb:hover{border-color:#2f8fff}.clidoc-nofile{font:11px "Hanken Grotesk",system-ui,sans-serif;color:#6b7280;white-space:nowrap}',
     '.clidoc-del{background:#1a1113;border:1px solid #4a2a30;color:#e88;border-radius:6px;width:28px;height:28px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}.clidoc-del:hover{border-color:#e88}',
     '.clidoc-portal{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid #23262d}.clidoc-plbl{font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.05em;text-transform:uppercase;color:#6b7280}',
+    '.cli-docbadge{display:inline-block;margin-left:8px;font:600 9.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.02em;color:#8a8a92;background:#14161b;border:1px solid #23262d;border-radius:5px;padding:2px 6px}.cli-docbadge.has{color:#7fd0a0;border-color:#2c6b4e;background:#0f1c16}',
     '@media(max-width:640px){.clidoc-row{grid-template-columns:1fr;gap:6px}}',
     '@media(max-width:860px){.cli-wrap{grid-template-columns:1fr}.cli-side{position:static}.cli-grid{grid-template-columns:1fr}.ed-clipick select{max-width:none}}'
   ].join('');document.head.appendChild(st);} }catch(e){}
