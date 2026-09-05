@@ -1,0 +1,57 @@
+name: deploy-portal
+
+# Déploie le serveur du portail client (server/portal) sur Fly.io à chaque push
+# sur main qui touche ce dossier. Nécessite le secret de dépôt FLY_API_TOKEN
+# (GitHub → Settings → Secrets and variables → Actions → New repository secret).
+# Générez le jeton avec :  fly tokens create deploy   (ou : fly auth token)
+#
+# Sans FLY_API_TOKEN configuré, le job de vérification s'exécute quand même
+# et le déploiement est simplement ignoré (aucune erreur).
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'server/portal/**'
+      - '.github/workflows/deploy-portal.yml'
+  workflow_dispatch:
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server/portal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Vérification de la syntaxe
+        run: npm run check
+      - name: Tests serveur (smoke)
+        env:
+          CABINET_TOKEN: ci-token
+          JWT_SECRET: ci-jwt
+          DATA_DIR: ${{ runner.temp }}/marq-data
+        run: npm run smoke
+
+  deployer:
+    needs: verifier
+    runs-on: ubuntu-latest
+    concurrency: deploy-portal
+    steps:
+      - uses: actions/checkout@v4
+      - name: Déploiement Fly.io (si FLY_API_TOKEN présent)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "FLY_API_TOKEN absent — déploiement ignoré (configurez le secret pour l'activer)."
+            exit 0
+          fi
+          curl -L https://fly.io/install.sh | sh
+          export FLYCTL_INSTALL="$HOME/.fly"
+          export PATH="$FLYCTL_INSTALL/bin:$PATH"
+          cd server/portal
+          flyctl deploy --remote-only

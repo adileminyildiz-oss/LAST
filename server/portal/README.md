@@ -1,5 +1,13 @@
 # Portail client Mar'q — backend léger
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/adileminyildiz-oss/last)
+
+> **Déploiement en un clic** — le bouton ci-dessus utilise le fichier `render.yaml`
+> à la **racine** du dépôt : Render crée le service, génère `CABINET_TOKEN` et
+> `JWT_SECRET`, monte le disque persistant. Réglez ensuite `ALLOWED_ORIGIN` sur
+> l'URL de votre site. Un **déploiement automatique Fly.io** (GitHub Actions) est
+> aussi fourni — voir l'option D plus bas.
+
 Backend minimal (Node.js, **http natif, zéro dépendance runtime**) qui rend le
 « portail client » de Mar'q réellement accessible **à distance**.
 
@@ -121,7 +129,12 @@ un service systemd, puis un reverse-proxy Nginx (TLS Let's Encrypt) vers
 
 ---
 
-## 4. Intégration front (portail de `index.html`) — NE PAS MODIFIER `index.html` ici
+## 4. Intégration front (portail de `index.html`) — ✅ DÉJÀ IMPLÉMENTÉE
+
+> **À jour :** cette intégration est **déjà en place** dans `index.html` (mode
+> distant automatique dès qu'un serveur est configuré via la carte « 🌐 Portail
+> en ligne » ou la constante `PORTAL_API`). La section ci-dessous est conservée
+> comme **référence technique** du contrat d'API.
 
 Cette section décrit **précisément** ce que le portail devrait appeler. Les
 fonctions front concernées lisent aujourd'hui :
@@ -271,7 +284,7 @@ Trois fichiers prêts à l'emploi sont fournis (aucune dépendance à installer,
 
 ### Option A — Render (le plus simple)
 1. Poussez ce dépôt sur GitHub.
-2. Render → **New → Blueprint** → sélectionnez le dépôt : Render lit `server/portal/render.yaml`, crée le service, **génère automatiquement** `CABINET_TOKEN` et `JWT_SECRET`, et monte un disque persistant (`/var/data`).
+2. Render → **New → Blueprint** → sélectionnez le dépôt : Render lit le `render.yaml` à la racine du dépôt, crée le service, **génère automatiquement** `CABINET_TOKEN` et `JWT_SECRET`, et monte un disque persistant (`/var/data`).
 3. Vérifiez la variable **`ALLOWED_ORIGIN`** = l'URL exacte de votre site (ex. `https://last.aemconseil.eu`).
 4. Récupérez l'URL publique du service (ex. `https://marq-portail.onrender.com`) et le `CABINET_TOKEN` (onglet *Environment*).
 
@@ -299,6 +312,18 @@ docker run -d --name marq-portail -p 8787:8787 \
   -v marq_data:/data \
   marq-portail
 ```
+
+### Option D — Déploiement automatique (GitHub Actions → Fly.io)
+Le workflow `.github/workflows/deploy-portal.yml` **vérifie** le serveur (syntaxe +
+tests smoke) à chaque push, puis **déploie sur Fly.io** dès que le dossier
+`server/portal/` change. Activation :
+1. Créez l'app + le volume une première fois en local (option B ci-dessus).
+2. Générez un jeton de déploiement : `fly tokens create deploy`.
+3. GitHub → **Settings → Secrets and variables → Actions → New repository secret** :
+   nom `FLY_API_TOKEN`, valeur = le jeton.
+
+Sans ce secret, le workflow se contente de vérifier le serveur (le déploiement est
+ignoré, sans erreur).
 
 ### Brancher Mar'q (une fois le serveur en ligne)
 1. Dans Mar'q → **Services → Coffre-fort & portail client → « 🌐 Portail en ligne »** : collez l'**adresse du serveur** et le **secret cabinet** (`CABINET_TOKEN`), puis **Tester la connexion** et **Synchroniser maintenant**.
