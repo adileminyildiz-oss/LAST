@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=480;
+var LAST_VER=481;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -24005,6 +24005,22 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var arr=Object.keys(map).map(function(k){return [k,map[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
     return {arr:arr,total:n};
   }
+  /* Répartition des demandes par canal d'acquisition */
+  function canalDist(){
+    var map={}, n=0;
+    demAll().forEach(function(d){ var c=(''+(d.canal||'')).trim()||'Autre'; map[c]=(map[c]||0)+1; n++; });
+    var arr=Object.keys(map).map(function(k){return [k,map[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,4);
+    return {arr:arr,total:n};
+  }
+  /* Top services demandés */
+  function serviceDist(){
+    var map={}, n=0;
+    demAll().forEach(function(d){ var sv=(''+(d.serviceSouhaite||'')).trim(); if(!sv)return;
+      sv=sv.replace(/\s*\(.*?\)\s*/g,'').replace(/urgent/i,'').trim(); if(!sv)sv='Autre';
+      map[sv]=(map[sv]||0)+1; n++; });
+    var arr=Object.keys(map).map(function(k){return [k,map[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,4);
+    return {arr:arr,total:n};
+  }
   var tile=function(inner,cls){ return '<div class="ckp-t '+(cls||'')+'">'+inner+'</div>'; };
 
   window.pageCockpit=function(){
@@ -24077,6 +24093,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var actTile=tile('<div class="ckp-th">🕑 Activité récente</div>'
       +(acts.length?acts.map(function(a){var ic=a.t==='demande'?'📨':'📁';return '<div class="ckp-feed"><span class="ckp-fic">'+ic+'</span><div class="ckp-fi"><b>'+E(a.label)+'</b><span>'+E(a.sub||'')+'</span></div><span class="ckp-fd">'+E(frShort(a.date))+'</span></div>';}).join(''):'<div class="ckp-empty">Aucune activité récente.</div>'),'ck-act');
 
+    /* Colonne 1 — À faire */
     var alerts=[];
     if(s.aTraiter)alerts.push(['📨',s.aTraiter+' demande(s) à traiter','demandes']);
     if(s.retard)alerts.push(['⏰',s.retard+' demande(s) en retard','demandes']);
@@ -24084,9 +24101,26 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     if(s.attente)alerts.push(['📎',s.attente+' dossier(s) en attente de pièces','espace']);
     if(rdvT)alerts.push(['📅',rdvT+' rendez-vous aujourd\'hui','agenda']);
     if(!alerts.length)alerts.push(['✓','Tout est à jour — aucune action urgente','']);
-    var alertTile=tile('<div class="ckp-th">🔔 À faire maintenant</div><div class="ckp-alerts">'
+    var col1='<div class="ckp-fcol"><div class="ckp-th">🔔 À faire maintenant</div>'
       +alerts.map(function(a){var clk=a[2]?(' onclick="try{go(\''+a[2]+'\')}catch(e){}" style="cursor:pointer"'):'';return '<div class="ckp-alert"'+clk+'><span>'+a[0]+'</span><span class="ckp-at">'+E(a[1])+'</span>'+(a[2]?'<span class="ckp-ago">→</span>':'')+'</div>';}).join('')
-      +'</div>','ck-alerts');
+      +'</div>';
+
+    /* Colonne 2 — Acquisition : canaux + top services */
+    var cd=canalDist(), sd=serviceDist();
+    var col2='<div class="ckp-fcol"><div class="ckp-th">📥 Acquisition des demandes</div>'
+      +'<div class="ckp-flabel">Par canal</div>'
+      +(cd.total?cd.arr.map(function(x){var w=cd.total?Math.round(x[1]/cd.total*100):0;return '<div class="ckp-frow"><span class="ckp-fl3">'+E(x[0])+'</span><span class="ckp-fb"><i style="width:'+w+'%"></i></span><b>'+x[1]+'</b></div>';}).join(''):'<div class="ckp-empty">Aucune demande.</div>')
+      +'<div class="ckp-flabel" style="margin-top:11px">Top services demandés</div>'
+      +(sd.total?sd.arr.map(function(x){var w=sd.total?Math.round(x[1]/sd.total*100):0;return '<div class="ckp-frow"><span class="ckp-fl3">'+E(x[0])+'</span><span class="ckp-fb"><i style="width:'+w+'%"></i></span><b>'+x[1]+'</b></div>';}).join(''):'<div class="ckp-empty">—</div>')
+      +'</div>';
+
+    /* Colonne 3 — Raccourcis rapides */
+    var racc=[['🗂️','Demandes','demandes'],['🛠️','Traitement','espace'],['📅','Agenda','agenda'],['🖨️','Éditions','editions'],['👤','Clients','clients'],['⚙️','Paramètres','params']];
+    var col3='<div class="ckp-fcol"><div class="ckp-th">⚡ Raccourcis</div><div class="ckp-racc">'
+      +racc.map(function(r){return '<button class="ckp-rbtn" onclick="try{go(\''+r[2]+'\')}catch(e){}"><span class="ckp-rbi">'+r[0]+'</span>'+E(r[1])+'</button>';}).join('')
+      +'</div></div>';
+
+    var alertTile=tile('<div class="ckp-foot">'+col1+col2+col3+'</div>','ck-alerts');
 
     return '<div class="ckp">'+header
       +'<div class="ckp-bento">'
@@ -24177,8 +24211,11 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.ckp-mini{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.ckp-mc{background:#111114;border:1px solid #1a1a1e;border-radius:10px;padding:11px 8px;text-align:center}.ckp-mc b{display:block;font-size:19px;font-weight:800;color:#fff}.ckp-mc span{font-size:10px;color:#8a8a90}',
     '@media(max-width:560px){.ckp-mini{grid-template-columns:repeat(2,1fr)}}',
     '.ckp-feed{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #1a1a1e;font-size:12px}.ckp-feed:first-of-type{border-top:none}.ckp-fic{font-size:14px;flex:none}.ckp-fi{flex:1;min-width:0}.ckp-fi b{display:block;font-size:12.5px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ckp-fi span{font-size:11px;color:#8a8a90;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}.ckp-fd{font-size:11px;color:#8a8a90;flex:none}',
-    '.ck-alerts .ckp-alerts{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}@media(max-width:820px){.ck-alerts .ckp-alerts{grid-template-columns:1fr}}',
-    '.ckp-alert{display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:10px;background:#111114;border:1px solid #222226;font-size:12.5px;color:#c9c9d0}.ckp-at{flex:1}.ckp-ago{color:#fff;font-weight:800}',
+    '.ckp-foot{display:grid;grid-template-columns:1.1fr 1.2fr .9fr;gap:22px}@media(max-width:900px){.ckp-foot{grid-template-columns:1fr}}',
+    '.ckp-fcol{min-width:0}.ckp-flabel{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#8a8a90;font-weight:700;margin-bottom:7px}',
+    '.ckp-fl3{flex:0 0 130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.ckp-alert{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:#111114;border:1px solid #222226;font-size:12.5px;color:#c9c9d0;margin-bottom:8px}.ckp-alert:last-child{margin-bottom:0}.ckp-at{flex:1}.ckp-ago{color:#fff;font-weight:800}',
+    '.ckp-racc{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ckp-rbtn{display:flex;align-items:center;gap:8px;background:#111114;border:1px solid #222226;border-radius:10px;padding:10px 12px;color:#e6e6ea;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;text-align:left}.ckp-rbtn:hover{border-color:#3a3a42;background:#16161a}.ckp-rbi{font-size:14px}',
     '.ckp-empty{font-size:12px;color:#8a8a90;padding:12px 0;text-align:center}'
   ].join(''); document.head.appendChild(cs); } }catch(e){}
 })();</script>
