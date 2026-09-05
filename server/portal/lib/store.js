@@ -170,6 +170,15 @@ function getUpload(id) {
   if (!Array.isArray(arr)) arr = [];
   return arr.find(function (u) { return u.id === id; }) || null;
 }
+
+// Révoque l'accès d'un client : supprime son empreinte de code (login impossible)
+// tout en conservant sa fiche/documents (restaurés à la prochaine synchronisation).
+function revokeClient(nomOuKey) {
+  const k = ckey(nomOuKey);
+  const clients = lireJSON('clients.json');
+  if (clients[k]) { delete clients[k].codeHash; ecrireJSON('clients.json', clients); return true; }
+  return false;
+}
 function supprimerUpload(id) {
   let arr = lireJSON('uploads.json');
   if (!Array.isArray(arr)) arr = [];
@@ -282,4 +291,5 @@ module.exports = {
   syncCabinet,
   logEvent, getEvents,
   enregistrerUpload, getUploads, getUpload, supprimerUpload,
+  revokeClient,
 };

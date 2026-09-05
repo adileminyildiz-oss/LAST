@@ -253,6 +253,17 @@ async function adminUploadDelete(req, res) {
   return envoyerJSON(res, 200, { ok: ok });
 }
 
+// POST /admin/revoke  { client }  -> suspend l'accès d'un client (login impossible)
+async function adminRevoke(req, res) {
+  if (!verifierCabinet(req, res)) return;
+  let corps;
+  try { corps = JSON.parse((await lireCorps(req, 4096)).toString('utf8') || '{}'); }
+  catch (e) { return envoyerJSON(res, 400, { error: 'JSON invalide' }); }
+  if (!corps.client) return envoyerJSON(res, 400, { error: 'Champ requis : client.' });
+  const ok = store.revokeClient(corps.client);
+  return envoyerJSON(res, 200, { ok: ok });
+}
+
 /* ===================== Routeur ===================== */
 
 const serveur = http.createServer(function (req, res) {
@@ -281,6 +292,7 @@ const serveur = http.createServer(function (req, res) {
     if (chemin === '/admin/events' && req.method === 'GET') return adminEvents(req, res, parsed.query || {});
     if (chemin === '/admin/uploads' && req.method === 'GET') return adminUploads(req, res, parsed.query || {});
     if (chemin === '/admin/upload-delete' && req.method === 'POST') return adminUploadDelete(req, res);
+    if (chemin === '/admin/revoke' && req.method === 'POST') return adminRevoke(req, res);
     const mu = chemin.match(/^\/admin\/upload\/([^/]+)$/);
     if (mu && req.method === 'GET') return adminUploadFile(req, res, decodeURIComponent(mu[1]));
 

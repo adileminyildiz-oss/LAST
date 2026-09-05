@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=470;
+var LAST_VER=471;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -20392,7 +20392,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<button class="cli-add clidoc-notify" onclick="cliNotify(\''+cidj+'\')">Prévenir le client</button>'
       +'<button class="cli-add" onclick="svcPortPreview(\''+nmj+'\')">Aperçu espace client</button>'
       +'<button class="cli-add" onclick="svcPortLink(\''+nmj+'\')">Copier le lien</button>'
-      +'<button class="cli-add" onclick="svcPortRegen(\''+nmj+'\')">Nouveau code</button></div>'
+      +'<button class="cli-add" onclick="svcPortRegen(\''+nmj+'\')">Nouveau code</button>'
+      +(function(){ var dis=(typeof window.cofPortDisabled==='function')?window.cofPortDisabled(name):false; return '<button class="cli-add '+(dis?'clidoc-restore':'clidoc-revoke')+'" onclick="svcPortSetActive(\''+nmj+'\','+(dis?'true':'false')+')">'+(dis?'Réactiver l’accès':'Suspendre l’accès')+'</button>'; })()
+      +'</div>'
       +'</div>';
   }
   function cliFiche(id){
@@ -20547,6 +20549,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.clidoc-portal{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid #23262d}.clidoc-plbl{font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.05em;text-transform:uppercase;color:#6b7280}',
     '.cli-docbadge{display:inline-block;margin-left:8px;font:600 9.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.02em;color:#8a8a92;background:#14161b;border:1px solid #23262d;border-radius:5px;padding:2px 6px}.cli-docbadge.has{color:#7fd0a0;border-color:#2c6b4e;background:#0f1c16}',
     '.clidoc-notify{background:#12233a!important;border-color:#2f6bb0!important;color:#bcd9ff!important}.clidoc-notify:hover{border-color:#5aa9f2!important}',
+    '.clidoc-revoke{background:#1c1810!important;border-color:#6b5a1a!important;color:#e0b060!important}.clidoc-revoke:hover{border-color:#e0b060!important}.clidoc-restore{background:#0f1c16!important;border-color:#2c6b4e!important;color:#7fd0a0!important}.clidoc-restore:hover{border-color:#5bbf8a!important}',
     '@media(max-width:640px){.clidoc-row{grid-template-columns:1fr;gap:6px}}',
     '@media(max-width:860px){.cli-wrap{grid-template-columns:1fr}.cli-side{position:static}.cli-grid{grid-template-columns:1fr}.ed-clipick select{max-width:none}}'
   ].join('');document.head.appendChild(st);} }catch(e){}
@@ -23445,6 +23448,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
         .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
         .then(function(x){ if(!x.ok){ portErr((x.j&&x.j.error)||'Nom de client ou code d’accès incorrect.'); return; } window.__portTok=x.j.token; window.__portClient=x.j.client||c; if(ov)portailRenderDocsRemote(ov, x.j.client||c, x.j.token); })
         .catch(function(){ portErr('Serveur injoignable. Réessayez.'); }); return; }
+    if(portDisabledMap()[ckey(c)]){ portErr('Accès suspendu par votre cabinet.'); return; }
     var real=portailState().codes[ckey(c)]; if(!real){ portErr('Client non reconnu. Vérifiez le nom saisi.'); return; } if(code!==real){ portErr('Code d’accès incorrect.'); return; } if(ov)portailRenderDocs(ov,c); };
   var PORT_EYE='<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
   window.svcPortEye=function(){ var i=document.getElementById('port-in-code'); if(!i)return; i.type=(i.type==='password')?'text':'password'; var b=document.getElementById('port-eye'); if(b)b.classList.toggle('on',i.type==='text'); };
@@ -23512,11 +23516,18 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.svcPortFileDlRemote=function(id){ var base=portApiBase(), tok=window.__portTok; if(!base||!tok)return; fetch(base+'/portal/file/'+encodeURIComponent(id),{headers:{'Authorization':'Bearer '+tok}}).then(function(r){ if(!r.ok)throw 0; var cd=r.headers.get('Content-Disposition')||''; var m=cd.match(/filename="?([^"]+)"?/); var nm=m?decodeURIComponent(m[1]):'document'; return r.blob().then(function(b){ return {b:b,nm:nm}; }); }).then(function(x){ var u=URL.createObjectURL(x.b); var a=document.createElement('a'); a.href=u; a.download=x.nm; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(u); },60000); }).catch(function(){ if(typeof toast==='function')toast('Téléchargement indisponible.'); }); };
   /* Synchronisation cabinet → serveur */
   function poStatus(t){ var el=document.getElementById('po-status'); if(el)el.textContent=t; var cfg=portSrvCfg(); cfg._last=t; portSrvSaveCfg(cfg); }
+  function portDisabledMap(){ var ps=portailState(); if(!ps.disabled)ps.disabled={}; return ps.disabled; }
+  window.cofPortDisabled=function(name){ return !!portDisabledMap()[ckey(name)]; };
+  window.svcPortSetActive=function(name, active){ var ps=portailState(); if(!ps.disabled)ps.disabled={}; var k=ckey(name); if(active){ delete ps.disabled[k]; } else { ps.disabled[k]=true; } portailSave(ps);
+    var base=portApiBase(), cfg=portSrvCfg();
+    if(base&&cfg.token){ if(!active){ fetch(base+'/admin/revoke',{method:'POST',headers:{'Content-Type':'application/json','X-Cabinet-Token':cfg.token},body:JSON.stringify({client:name})}).catch(function(){}); } else { try{ svcPortSyncNow(); }catch(e){} } }
+    try{ if(typeof render==='function')render(); }catch(e){}
+    if(typeof toast==='function')toast(active?('Accès réactivé — '+name):('Accès suspendu — '+name)); };
   window.svcPortSrvSave=function(){ var cfg=portSrvCfg(); var u=document.getElementById('po-url'), t=document.getElementById('po-token'); if(u)cfg.url=u.value||''; if(t)cfg.token=t.value||''; portSrvSaveCfg(cfg); if(typeof toast==='function')toast('Portail en ligne : configuration enregistrée.'); };
   window.svcPortSrvTest=function(){ svcPortSrvSave(); var base=portApiBase(); if(!base){ poStatus('Renseignez l’adresse du serveur.'); return; } poStatus('Test en cours…'); fetch(base+'/health').then(function(r){ return r.json(); }).then(function(j){ poStatus(j&&j.ok?'✓ Serveur joignable.':'Réponse inattendue.'); }).catch(function(){ poStatus('✗ Serveur injoignable (vérifiez l’adresse et le CORS).'); }); };
   window.svcPortSyncNow=function(){ svcPortSrvSave(); var cfg=portSrvCfg(); var base=portApiBase(); if(!base||!cfg.token){ poStatus('Adresse du serveur + secret cabinet requis.'); return; }
-    var st=coffreState(); var files=cofFiles(); var clients=cofClients().map(function(n){ return {name:n, code:portailCode(n)}; }); var docs=[], fmap={};
-    st.items.forEach(function(it){ if(it.shared&&it.fileId){ docs.push({id:it.fileId, client:it.client, nom:it.nom, cat:it.cat, date:it.date, type:it.ftype, size:it.fsize, shared:true}); var f=files[it.fileId]; if(f&&f.data)fmap[it.fileId]={name:f.name||it.nom, type:f.type||it.ftype||'application/octet-stream', data:f.data}; } });
+    var st=coffreState(); var files=cofFiles(); var dis=portDisabledMap(); var clients=cofClients().filter(function(n){ return !dis[ckey(n)]; }).map(function(n){ return {name:n, code:portailCode(n)}; }); var docs=[], fmap={};
+    st.items.forEach(function(it){ if(it.shared&&it.fileId&&!dis[ckey(it.client)]){ docs.push({id:it.fileId, client:it.client, nom:it.nom, cat:it.cat, date:it.date, type:it.ftype, size:it.fsize, shared:true}); var f=files[it.fileId]; if(f&&f.data)fmap[it.fileId]={name:f.name||it.nom, type:f.type||it.ftype||'application/octet-stream', data:f.data}; } });
     poStatus('Synchronisation… ('+docs.length+' document'+(docs.length>1?'s':'')+')');
     fetch(base+'/admin/sync',{method:'POST',headers:{'Content-Type':'application/json','X-Cabinet-Token':cfg.token},body:JSON.stringify({cabinet:cabName(), mode:'replace', clients:clients, docs:docs, files:fmap})})
       .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
