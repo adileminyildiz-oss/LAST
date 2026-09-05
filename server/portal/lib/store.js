@@ -133,6 +133,54 @@ function getEvents(limit, clientKey) {
 }
 
 /* -------------------------------------------------------------------------
+ * Dépôts client (le client envoie une pièce au cabinet depuis le portail).
+ * uploads.json = [ { id, client, name, nom, type, size, ts } ] ; les octets
+ * sont stockés via ecrireFichier(id) (préfixe up_ pour ne pas collisionner
+ * avec les documents partagés du cabinet).
+ * ------------------------------------------------------------------------- */
+function enregistrerUpload(clientKey, meta, data) {
+  const k = ckey(clientKey);
+  const fiche = getClient(k);
+  const id = 'up_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  ecrireFichier(id, decoderContenu(data)); // lève si data invalide
+  const buf = lireFichier(id);
+  const entree = {
+    id: id,
+    client: k,
+    name: (fiche && fiche.name) || k,
+    nom: String((meta && meta.nom) || 'document').slice(0, 180).replace(/[\r\n]/g, ''),
+    type: String((meta && meta.type) || 'application/octet-stream').slice(0, 120),
+    size: buf ? buf.length : 0,
+    ts: Date.now(),
+  };
+  let arr = lireJSON('uploads.json');
+  if (!Array.isArray(arr)) arr = [];
+  arr.push(entree);
+  ecrireJSON('uploads.json', arr);
+  return entree;
+}
+function getUploads(clientKey) {
+  let arr = lireJSON('uploads.json');
+  if (!Array.isArray(arr)) arr = [];
+  if (clientKey) { const k = ckey(clientKey); arr = arr.filter(function (u) { return u.client === k; }); }
+  return arr.slice().reverse(); // plus récents d'abord
+}
+function getUpload(id) {
+  let arr = lireJSON('uploads.json');
+  if (!Array.isArray(arr)) arr = [];
+  return arr.find(function (u) { return u.id === id; }) || null;
+}
+function supprimerUpload(id) {
+  let arr = lireJSON('uploads.json');
+  if (!Array.isArray(arr)) arr = [];
+  const avant = arr.length;
+  arr = arr.filter(function (u) { return u.id !== id; });
+  ecrireJSON('uploads.json', arr);
+  try { supprimerFichier(id); } catch (e) {}
+  return avant !== arr.length;
+}
+
+/* -------------------------------------------------------------------------
  * Synchronisation depuis le cabinet (endpoint /admin/sync).
  * payload = {
  *   cabinet?: string,
@@ -233,4 +281,5 @@ module.exports = {
   lireFichier, enregistrerFichier,
   syncCabinet,
   logEvent, getEvents,
+  enregistrerUpload, getUploads, getUpload, supprimerUpload,
 };

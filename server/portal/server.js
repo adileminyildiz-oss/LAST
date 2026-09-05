@@ -204,6 +204,55 @@ function adminEvents(req, res, query) {
   return envoyerJSON(res, 200, { events: events });
 }
 
+// POST /portal/upload  { nom, type, data }  (auth Bearer client) -> dépôt d'une pièce
+async function portalUpload(req, res) {
+  const k = authClient(req, res);
+  if (!k) return;
+  let corps;
+  try { corps = JSON.parse((await lireCorps(req, config.MAX_UPLOAD_BODY)).toString('utf8') || '{}'); }
+  catch (e) { return envoyerJSON(res, 400, { error: 'Fichier trop volumineux ou JSON invalide.' }); }
+  if (!corps.data) return envoyerJSON(res, 400, { error: 'Aucun fichier fourni.' });
+  let entree;
+  try { entree = store.enregistrerUpload(k, { nom: corps.nom, type: corps.type }, corps.data); }
+  catch (e) { return envoyerJSON(res, 400, { error: 'Fichier invalide.' }); }
+  try { store.logEvent(k, 'upload', { docId: entree.id, docNom: entree.nom, ip: ipClient(req) }); } catch (e) {}
+  return envoyerJSON(res, 200, { ok: true, id: entree.id, nom: entree.nom, size: entree.size });
+}
+
+// GET /admin/uploads?client=<nom>  -> liste des pièces déposées par les clients
+function adminUploads(req, res, query) {
+  if (!verifierCabinet(req, res)) return;
+  return envoyerJSON(res, 200, { uploads: store.getUploads(query.client) });
+}
+
+// GET /admin/upload/:id  -> octets d'une pièce déposée par un client
+function adminUploadFile(req, res, id) {
+  if (!verifierCabinet(req, res)) return;
+  const meta = store.getUpload(id);
+  if (!meta) return envoyerJSON(res, 404, { error: 'Dépôt introuvable.' });
+  const buf = store.lireFichier(id);
+  if (!buf) return envoyerJSON(res, 404, { error: 'Fichier introuvable.' });
+  const nom = (meta.nom || 'document').replace(/[\r\n"]/g, '');
+  res.writeHead(200, {
+    'Content-Type': meta.type || 'application/octet-stream',
+    'Content-Length': buf.length,
+    'Content-Disposition': 'inline; filename="' + encodeURIComponent(nom) + '"',
+    'Cache-Control': 'private, no-store',
+  });
+  res.end(buf);
+}
+
+// POST /admin/upload-delete  { id }
+async function adminUploadDelete(req, res) {
+  if (!verifierCabinet(req, res)) return;
+  let corps;
+  try { corps = JSON.parse((await lireCorps(req, 4096)).toString('utf8') || '{}'); }
+  catch (e) { return envoyerJSON(res, 400, { error: 'JSON invalide' }); }
+  if (!corps.id) return envoyerJSON(res, 400, { error: 'Champ requis : id.' });
+  const ok = store.supprimerUpload(corps.id);
+  return envoyerJSON(res, 200, { ok: ok });
+}
+
 /* ===================== Routeur ===================== */
 
 const serveur = http.createServer(function (req, res) {
@@ -225,9 +274,15 @@ const serveur = http.createServer(function (req, res) {
     const mf = chemin.match(/^\/portal\/file\/([^/]+)$/);
     if (mf && req.method === 'GET') return portalFile(req, res, decodeURIComponent(mf[1]));
 
+    if (chemin === '/portal/upload' && req.method === 'POST') return portalUpload(req, res);
+
     if (chemin === '/admin/sync' && req.method === 'POST') return adminSync(req, res);
     if (chemin === '/admin/file' && req.method === 'POST') return adminFile(req, res);
     if (chemin === '/admin/events' && req.method === 'GET') return adminEvents(req, res, parsed.query || {});
+    if (chemin === '/admin/uploads' && req.method === 'GET') return adminUploads(req, res, parsed.query || {});
+    if (chemin === '/admin/upload-delete' && req.method === 'POST') return adminUploadDelete(req, res);
+    const mu = chemin.match(/^\/admin\/upload\/([^/]+)$/);
+    if (mu && req.method === 'GET') return adminUploadFile(req, res, decodeURIComponent(mu[1]));
 
     return envoyerJSON(res, 404, { error: 'Route inconnue.' });
   }).catch(function (e) {

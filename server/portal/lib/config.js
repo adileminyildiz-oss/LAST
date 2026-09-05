@@ -65,6 +65,10 @@ const config = {
 
   // Taille maximale d'un corps de requête admin (JSON), en octets. 32 Mo.
   MAX_ADMIN_BODY: parseInt(process.env.MAX_ADMIN_BODY || String(32 * 1024 * 1024), 10),
+
+  // Taille maximale d'un dépôt client (corps JSON de /portal/upload), en octets.
+  // 12 Mo (~9 Mo de fichier réel après encodage base64).
+  MAX_UPLOAD_BODY: parseInt(process.env.MAX_UPLOAD_BODY || String(12 * 1024 * 1024), 10),
 };
 
 /* Vérifie la présence des secrets critiques. En développement on tolère des
