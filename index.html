@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=461;
+var LAST_VER=462;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -20344,6 +20344,41 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     }).join('');
     return '<div class="cli-grp"><div class="cli-grp-h">Associés<button class="cli-add" onclick="cliAssocAdd(\''+c.id+'\')">＋ Ajouter</button></div>'+(rows||'<div class="cli-empty2">Aucun associé — ajoutez-en un.</div>')+'</div>';
   }
+  var CLI_EYE='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var CLI_DL='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 12l5 5 5-5M5 21h14"/></svg>';
+  var CLI_X='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 5l14 14M19 5L5 19"/></svg>';
+  window.cliCofPick=function(client){ window.__cliCofTarget=client||''; var inp=document.getElementById('cli-cof-file'); if(inp)inp.click(); };
+  window.cliCofUpload=function(inp){ var t=window.__cliCofTarget||''; if(typeof window.cofAddFilesFor==='function')window.cofAddFilesFor(t, inp&&inp.files); if(inp)inp.value=''; window.__cliCofTarget=''; };
+  function cliDocsSection(c){ var name=cliName(c);
+    var items=(typeof window.cofItemsForClient==='function')?window.cofItemsForClient(name):[];
+    var shared=items.filter(function(r){return r.it.shared&&r.it.fileId;}).length;
+    var code=(typeof window.cofClientCode==='function')?window.cofClientCode(name):'';
+    var rows=items.map(function(r){ var it=r.it, i=r.i;
+      var cat=(typeof window.cofCatOptions==='function')?window.cofCatOptions(it.cat):('<option>'+E(it.cat||'Divers')+'</option>');
+      var file=it.fileId?('<button class="clidoc-fb" title="Consulter" aria-label="Consulter" onclick="svcCofView('+i+')">'+CLI_EYE+'</button><button class="clidoc-fb" title="Télécharger" aria-label="Télécharger" onclick="svcCofDl('+i+')">'+CLI_DL+'</button>'):'<span class="clidoc-nofile">— aucun fichier —</span>';
+      return '<div class="clidoc-row">'
+        +'<input class="clidoc-nm" value="'+E(it.nom)+'" oninput="svcCofSet('+i+',\'nom\',this.value)">'
+        +'<select class="clidoc-cat" onchange="svcCofSet('+i+',\'cat\',this.value)">'+cat+'</select>'
+        +'<input class="clidoc-date" placeholder="AAAA-MM-JJ" value="'+E(it.date||'')+'" onchange="svcCofSet('+i+',\'date\',this.value)">'
+        +'<label class="clidoc-share" title="Visible dans l’espace client"><input type="checkbox" '+(it.shared?'checked':'')+' onchange="svcCofShare('+i+',this)"><span>Espace client</span></label>'
+        +'<span class="clidoc-fa">'+file+'</span>'
+        +'<button class="clidoc-del" title="Retirer" aria-label="Retirer" onclick="svcCofDel('+i+')">'+CLI_X+'</button>'
+        +'</div>';
+    }).join('')||'<div class="clidoc-empty">Aucun document. Déposez ci-dessous ou glissez des fichiers dans cette zone.</div>';
+    var nmj=(''+name).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return '<div class="cli-grp clidoc-grp" ondragover="svcCofDragOver(event,this)" ondragleave="svcCofDragLeave(this)" ondrop="svcCofDrop(event,\''+nmj+'\')">'
+      +'<div class="cli-grp-h">Espace client — documents <span class="clidoc-count">'+items.length+' doc'+(items.length>1?'s':'')+' · '+shared+' partagé'+(shared>1?'s':'')+'</span></div>'
+      +'<p class="clidoc-lead">Déposez les documents de <b>'+E(name)+'</b> ici. Cochez <b>Espace client</b> pour les rendre consultables par le client sur son portail (lecture seule).</p>'
+      +'<div class="clidoc-act"><input type="file" id="cli-cof-file" multiple style="display:none" onchange="cliCofUpload(this)">'
+      +'<button class="cli-add clidoc-dep" onclick="cliCofPick(\''+nmj+'\')">⤒ Déposer des fichiers</button>'
+      +'<span class="clidoc-drop">⇩ ou glissez des fichiers ici</span></div>'
+      +'<div class="clidoc-list">'+rows+'</div>'
+      +'<div class="clidoc-portal"><span class="clidoc-plbl">Accès portail</span><code class="port-code">'+E(code)+'</code>'
+      +'<button class="cli-add" onclick="svcPortPreview(\''+nmj+'\')">Aperçu espace client</button>'
+      +'<button class="cli-add" onclick="svcPortLink(\''+nmj+'\')">Copier le lien</button>'
+      +'<button class="cli-add" onclick="svcPortRegen(\''+nmj+'\')">Nouveau code</button></div>'
+      +'</div>';
+  }
   function cliFiche(id){
     var c=clientById(id);if(!c)return '<div class="cli-empty">Sélectionnez un client dans la liste, ou créez-en un.</div>';
     var id2=c.id;
@@ -20360,9 +20395,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       var pid=grp('Identité',fld(id2,'civilite','Civilité','sel',['','M.','Mme'])+fld(id2,'prenom','Prénom')+fld(id2,'nom','Nom')+fld(id2,'dateNaissance','Date de naissance','date')+fld(id2,'lieuNaissance','Lieu de naissance')+fld(id2,'nationalite','Nationalité')+fld(id2,'numPiece','N° pièce d\'identité'));
       var pco=grp('Coordonnées',fld(id2,'adresse','Adresse')+fld(id2,'cp','Code postal')+fld(id2,'ville','Ville')+fld(id2,'email','E-mail')+fld(id2,'tel','Téléphone'));
       var pdiv=grp('Divers',fld(id2,'profession','Profession')+fld(id2,'situation','Situation familiale'));
-      return '<div class="cli-fiche">'+head+pid+pco+pdiv+'</div>';
+      return '<div class="cli-fiche">'+head+pid+pco+pdiv+cliDocsSection(c)+'</div>';
     }
-    return '<div class="cli-fiche">'+head+identity+siege+contact+dir+assocEditor(c)+acte+'</div>';
+    return '<div class="cli-fiche">'+head+identity+siege+contact+dir+assocEditor(c)+acte+cliDocsSection(c)+'</div>';
   }
   function cliListHTML(){
     var q=window.__cliQ||'';var ft=window.__cliType||'';
@@ -20479,6 +20514,22 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     'html body:not(#mq):not(#mq) .ed-clipick .ed-clipick-seg .ed-cseg{background:#0a0b0d !important;color:#8a8a92 !important}',
     'html body:not(#mq):not(#mq) .ed-clipick .ed-clipick-seg .ed-cseg:hover{background:#181b21 !important;color:#c9ccd3 !important}',
     'html body:not(#mq):not(#mq) .ed-clipick .ed-clipick-seg .ed-cseg.on{background:#f4f6fa !important;color:#0a0b0d !important}',
+    '.clidoc-grp{transition:border-color .12s,background .12s}.clidoc-grp.cof-drag{border-color:#5aa9f2;background:#0c1620;box-shadow:inset 0 0 0 1px #2f8fff}',
+    '.clidoc-count{text-transform:none;letter-spacing:0;color:#8a8a92;font-weight:600}',
+    '.clidoc-lead{font:12.5px/1.55 "Hanken Grotesk",system-ui,sans-serif;color:#aab2c0;margin:0 0 12px}',
+    '.clidoc-act{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}',
+    '.clidoc-dep{background:#f4f6fa;color:#0a0b0d;border-color:#f4f6fa;padding:9px 14px;font-size:12.5px}.clidoc-dep:hover{background:#e6e9ee}',
+    '.clidoc-drop{font:11.5px "IBM Plex Mono",monospace;color:#6b7280}.clidoc-grp.cof-drag .clidoc-drop{color:#5ab0ff}',
+    '.clidoc-list{display:flex;flex-direction:column;gap:6px}',
+    '.clidoc-empty{font:12.5px "Hanken Grotesk",system-ui,sans-serif;color:#8a8a92;padding:14px;border:1px dashed #2a2e37;border-radius:9px;text-align:center}',
+    '.clidoc-row{display:grid;grid-template-columns:1fr 150px 120px auto auto auto;gap:8px;align-items:center;background:#0a0b0d;border:1px solid #23262d;border-radius:9px;padding:8px 10px}',
+    '.clidoc-nm,.clidoc-cat,.clidoc-date{background:#0d0e11;border:1px solid #2a2e37;border-radius:7px;padding:8px 9px;color:#f4f6fa;font:12.5px "Hanken Grotesk",system-ui,sans-serif;min-width:0}',
+    '.clidoc-nm:focus,.clidoc-cat:focus,.clidoc-date:focus{outline:none;border-color:#5a616c}',
+    '.clidoc-share{display:inline-flex;align-items:center;gap:6px;font:11px "Hanken Grotesk",system-ui,sans-serif;color:#9fb6d0;white-space:nowrap;cursor:pointer}.clidoc-share input{width:15px;height:15px;accent-color:#1e90ff;cursor:pointer}',
+    '.clidoc-fa{display:inline-flex;gap:5px}.clidoc-fb{background:#0d0e11;border:1px solid #26364a;color:#5ab0ff;border-radius:6px;width:30px;height:28px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}.clidoc-fb:hover{border-color:#2f8fff}.clidoc-nofile{font:11px "Hanken Grotesk",system-ui,sans-serif;color:#6b7280;white-space:nowrap}',
+    '.clidoc-del{background:#1a1113;border:1px solid #4a2a30;color:#e88;border-radius:6px;width:28px;height:28px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}.clidoc-del:hover{border-color:#e88}',
+    '.clidoc-portal{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid #23262d}.clidoc-plbl{font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.05em;text-transform:uppercase;color:#6b7280}',
+    '@media(max-width:640px){.clidoc-row{grid-template-columns:1fr;gap:6px}}',
     '@media(max-width:860px){.cli-wrap{grid-template-columns:1fr}.cli-side{position:static}.cli-grid{grid-template-columns:1fr}.ed-clipick select{max-width:none}}'
   ].join('');document.head.appendChild(st);} }catch(e){}
 
@@ -23235,6 +23286,12 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.svcCofDragLeave=function(el){ if(el)el.classList.remove('cof-drag'); };
   window.svcCofDrop=function(ev,client){ try{ev.preventDefault();ev.stopPropagation();}catch(e){} var el=ev&&ev.currentTarget; if(el)el.classList.remove('cof-drag'); var dt=ev&&ev.dataTransfer; if(dt&&dt.files&&dt.files.length)_cofAddFiles(dt.files, client||''); return false; };
   window.svcCofToggle=function(key){ window.__cofClosed=window.__cofClosed||{}; window.__cofClosed[key]=!window.__cofClosed[key]; render(); };
+  /* API réutilisable par le module Clients (dépose dans le MÊME coffre → visible dans l'espace client) */
+  window.cofAddFilesFor=function(client,fileList){ _cofAddFiles(fileList, client||''); };
+  window.cofItemsForClient=function(client){ var k=ckey(client); var st=coffreState(); var out=[]; st.items.forEach(function(it,i){ if(ckey(it.client)===k)out.push({it:it,i:i}); }); return out; };
+  window.cofSizeFmt=function(b){ return cofSize(b); };
+  window.cofClientCode=function(client){ return portailCode(client); };
+  window.cofCatOptions=function(cat){ return COF_CAT.concat(COF_CAT.indexOf(cat)<0&&cat?[cat]:[]).map(function(c){return '<option '+(c===cat?'selected':'')+'>'+E(c)+'</option>';}).join(''); };
   window.svcCofAdd=function(){ var st=coffreState(); st.items.unshift({id:'e'+Date.now(),client:'',nom:'Document',cat:'Divers',date:todayISO(),shared:false,fileId:'',ftype:'',fsize:0}); coffreSave(st); render(); };
   window.svcCofSet=function(i,f,v){ var st=coffreState(); var it=st.items[i]; if(!it)return; it[f]=v; coffreSave(st); };
   window.svcCofShare=function(i,el){ var st=coffreState(); var it=st.items[i]; if(!it)return; it.shared=!!(el&&el.checked); coffreSave(st); svcCofRefresh(); };
