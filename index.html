@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=471;
+var LAST_VER=472;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -23475,17 +23475,31 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function portSrvSaveCfg(o){ try{ localStorage.setItem('last-portal-srv',JSON.stringify(o||{})); }catch(e){} }
   function portApiBase(){ return (PORTAL_API||portSrvCfg().url||'').trim().replace(/\/+$/,''); }
   /* Rendu partagé de la liste des documents (local et distant). docs=[{rid,nom,cat,date}] */
-  function portDocsRender(ov, client, docs, remote){
-    try{ ov.classList.remove('port-lav'); ov.classList.add('port-space'); ov.style.backgroundImage="url('"+PORT_BG+"')"; ov.style.backgroundSize='cover'; ov.style.backgroundPosition='center'; ov.style.backgroundAttachment='fixed'; }catch(e){}
-    var cats={}; docs.forEach(function(d){ (cats[d.cat||'Divers']=cats[d.cat||'Divers']||[]).push(d); });
-    var body=Object.keys(cats).map(function(cat){ var items=cats[cat].map(function(d){ var rid=jq(d.rid);
+  function portNorm(s){ s=(''+(s||'')).toLowerCase(); try{ s=s.normalize('NFD').replace(/[̀-ͯ]/g,''); }catch(e){} return s; }
+  function portDocsBody(docs, remote){
+    var q=portNorm((document.getElementById('port-q')||{}).value||'');
+    var sort=(document.getElementById('port-sort')||{}).value||'date-desc';
+    var list=docs.filter(function(d){ return !q || portNorm((d.nom||'')+' '+(d.cat||'')).indexOf(q)>=0; });
+    list.sort(function(a,b){ if(sort==='nom') return (''+(a.nom||'')).localeCompare(''+(b.nom||''),'fr',{sensitivity:'base'});
+      if(sort==='cat') return (''+(a.cat||'')).localeCompare(''+(b.cat||''),'fr',{sensitivity:'base'})||(''+(b.date||'')).localeCompare(''+(a.date||''));
+      if(sort==='date-asc') return (''+(a.date||'')).localeCompare(''+(b.date||''));
+      return (''+(b.date||'')).localeCompare(''+(a.date||'')); });
+    var cats={}, order=[]; list.forEach(function(d){ var c=d.cat||'Divers'; if(!cats[c]){ cats[c]=[]; order.push(c); } cats[c].push(d); });
+    return order.map(function(cat){ var items=cats[cat].map(function(d){ var rid=jq(d.rid);
         var vv=remote?('svcPortFileViewRemote(\''+rid+'\')'):('svcPortFileView(\''+rid+'\')');
         var dl=remote?('svcPortFileDlRemote(\''+rid+'\')'):('svcPortFileDl(\''+rid+'\')');
         return '<div class="port-doc"><div class="port-doc-ic">'+PORT_DOCICON+'</div><div class="port-doc-i"><div class="port-doc-n">'+E(d.nom||'Document')+'</div><div class="port-doc-m">'+E(cat)+(d.date?(' · '+E(d.date)):'')+'</div></div>'
           +'<div class="port-doc-a"><button class="port-fbtn" onclick="'+vv+'">'+SVCEYE+'<span>Consulter</span></button><button class="port-fbtn port-fbtn-dl" onclick="'+dl+'">'+SVCDL+'<span>Télécharger</span></button></div></div>';
       }).join('');
       return '<div class="port-cat"><div class="port-cat-h">'+E(cat)+' <span class="port-cat-n">'+cats[cat].length+'</span></div>'+items+'</div>';
-    }).join('')||'<div class="port-empty">Aucun document partagé pour le moment. Votre cabinet mettra vos documents à disposition ici.</div>';
+    }).join('')||'<div class="port-empty">'+(q?'Aucun document ne correspond à votre recherche.':'Aucun document partagé pour le moment. Votre cabinet mettra vos documents à disposition ici.')+'</div>';
+  }
+  window.portDocsApply=function(){ var w=document.getElementById('port-docs-wrap'); if(w)w.innerHTML=portDocsBody(window.__portDocsAll||[], !!window.__portRemote); };
+  function portDocsRender(ov, client, docs, remote){
+    try{ ov.classList.remove('port-lav'); ov.classList.add('port-space'); ov.style.backgroundImage="url('"+PORT_BG+"')"; ov.style.backgroundSize='cover'; ov.style.backgroundPosition='center'; ov.style.backgroundAttachment='fixed'; }catch(e){}
+    window.__portDocsAll=docs; window.__portRemote=remote;
+    var body=portDocsBody(docs, remote);
+    var toolbar = docs.length>1 ? ('<div class="port-tools"><input id="port-q" class="port-search" placeholder="Rechercher un document…" oninput="portDocsApply()"><select id="port-sort" class="port-sortsel" onchange="portDocsApply()"><option value="date-desc">Date (récent)</option><option value="date-asc">Date (ancien)</option><option value="nom">Nom (A→Z)</option><option value="cat">Catégorie</option></select></div>') : '';
     var up = remote ? ('<div class="port-up"><div class="port-up-h">Envoyer un document à votre cabinet</div>'
       +'<div class="port-up-row"><input type="file" id="port-up-file" multiple style="display:none" onchange="svcPortUpload(this)">'
       +'<button class="port-fbtn port-up-btn" onclick="svcPortUploadPick()">＋ Choisir un ou plusieurs fichiers</button>'
@@ -23493,7 +23507,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<div id="port-up-status" class="port-up-status"></div></div>') : '';
     ov.innerHTML='<div class="port-shell"><div class="port-top">'+portBrand('sm')+'<div class="port-top-r"><span class="port-who">'+E(client)+'</span><button class="port-out" onclick="closePortail()">Se déconnecter</button></div></div>'
       +'<div class="port-welcome"><div class="port-welcome-h">Bonjour, '+E(client)+'</div><div class="port-welcome-s">'+docs.length+' document'+(docs.length>1?'s':'')+' à votre disposition</div></div>'
-      +'<div class="port-docs-wrap">'+body+'</div>'+up+portFoot()+'</div>';
+      +toolbar+'<div class="port-docs-wrap" id="port-docs-wrap">'+body+'</div>'+up+portFoot()+'</div>';
   }
   window.svcPortUploadPick=function(){ var inp=document.getElementById('port-up-file'); if(inp)inp.click(); };
   window.svcPortUpload=function(inp){ var base=portApiBase(), tok=window.__portTok; var files=Array.prototype.slice.call((inp&&inp.files)||[]); if(inp)inp.value=''; if(!base||!tok||!files.length)return;
@@ -23806,6 +23820,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.port-space .port-doc-ic{background:rgba(120,160,255,.14);border-color:rgba(150,180,255,.26);color:#bcd2ff}.port-space .port-doc-n{color:#f2f5ff}'
     +'.port-space .port-fbtn{background:rgba(255,255,255,.06)!important;border-color:rgba(150,180,255,.24)!important;color:#dbe6ff!important}.port-space .port-fbtn:hover{border-color:#5aa9f2!important}.port-space .port-fbtn-dl{background:rgba(120,160,255,.16)!important;border-color:rgba(150,180,255,.34)!important;color:#eaf1ff!important}'
     +'.port-space .port-empty{border-color:rgba(150,180,255,.24);color:#c3d2ea}.port-space .port-foot{border-top-color:rgba(150,180,255,.14)}'
+    +'.port-tools{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}.port-search{flex:1;min-width:180px;background:rgba(18,24,44,.34);border:1px solid rgba(150,180,255,.24);border-radius:10px;padding:10px 13px;color:#eef3fa;font:13px "Hanken Grotesk",system-ui,sans-serif;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}.port-search::placeholder{color:#8aa0b8}.port-search:focus{outline:none;border-color:#5aa9f2}.port-sortsel{background:rgba(18,24,44,.34);border:1px solid rgba(150,180,255,.24);border-radius:10px;padding:10px 12px;color:#eef3fa;font:13px "Hanken Grotesk",system-ui,sans-serif;cursor:pointer}.port-sortsel:focus{outline:none;border-color:#5aa9f2}'
     +'.port-up{margin-top:22px;padding:16px 18px;border:1px dashed rgba(150,180,255,.28);border-radius:14px;background:rgba(18,24,44,.28);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}.port-up-h{font-size:13.5px;font-weight:700;color:#eaf2fb;margin-bottom:10px}.port-up-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.portail-ov .port-up-btn{background:rgba(120,160,255,.16)!important;border-color:rgba(150,180,255,.34)!important;color:#eaf1ff!important}.port-up-hint{font-size:11px;color:#8aa0b8}.port-up-status{font-size:12px;color:#7fd0a0;margin-top:8px;min-height:16px}'
     +'.ib-size{font:10px "IBM Plex Mono",monospace;color:#8aa0b8;margin-left:6px}.ib-act{white-space:nowrap;text-align:right}.ib-act .cli-add{margin-left:6px}.ib-del{color:#e88!important;border-color:#4a2a30!important}.ib-del:hover{border-color:#e88!important}.ib-file{color:#7fd0a0!important;border-color:#2c6b4e!important;background:#0f1c16!important}.ib-file:hover{border-color:#5bbf8a!important}'
     +'.port-online{margin-top:14px}.svc-h2b{font-size:15px;font-weight:700;color:#eaf2fb;margin:0 0 6px}.port-online code{background:#0b1119;border:1px solid #2a3a4e;border-radius:5px;padding:1px 6px;font:12px ui-monospace,Menlo,Consolas,monospace;color:#9fd0ff}'
