@@ -102,6 +102,37 @@ function docAppartientAuClient(nomOuKey, fileId) {
 }
 
 /* -------------------------------------------------------------------------
+ * Journal de consultation : trace des connexions et accès aux documents.
+ * events.json = [ { ts, client, name, type, docId?, docNom?, ip? }, ... ]
+ * (plafonné aux MAX_EVENTS plus récents pour rester léger).
+ * ------------------------------------------------------------------------- */
+const MAX_EVENTS = 3000;
+function logEvent(clientKey, type, opts) {
+  opts = opts || {};
+  const k = ckey(clientKey);
+  const fiche = getClient(k);
+  const ev = { ts: Date.now(), client: k, name: (fiche && fiche.name) || k, type: type };
+  if (opts.docId) ev.docId = String(opts.docId);
+  if (opts.docNom) ev.docNom = String(opts.docNom);
+  if (opts.ip) ev.ip = String(opts.ip);
+  let arr = lireJSON('events.json');
+  if (!Array.isArray(arr)) arr = [];
+  arr.push(ev);
+  if (arr.length > MAX_EVENTS) arr = arr.slice(arr.length - MAX_EVENTS);
+  ecrireJSON('events.json', arr);
+  return ev;
+}
+// Événements récents (les plus récents d'abord), filtrables par client.
+function getEvents(limit, clientKey) {
+  let arr = lireJSON('events.json');
+  if (!Array.isArray(arr)) arr = [];
+  if (clientKey) { const k = ckey(clientKey); arr = arr.filter(function (e) { return e.client === k; }); }
+  arr = arr.slice().reverse();
+  const n = Math.max(1, Math.min(parseInt(limit || 200, 10) || 200, 1000));
+  return arr.slice(0, n);
+}
+
+/* -------------------------------------------------------------------------
  * Synchronisation depuis le cabinet (endpoint /admin/sync).
  * payload = {
  *   cabinet?: string,
@@ -159,8 +190,10 @@ function syncCabinet(payload, mode) {
     Object.keys(payload.files).forEach(function (id) {
       if (!idSur(id)) return;
       const f = payload.files[id];
-      if (!f || !f.data) return;
-      try { ecrireFichier(id, decoderContenu(f.data)); fichiersEcrits++; } catch (e) {}
+      // Tolère les deux formes : { name, type, data } OU une dataURL/base64 en chaîne directe.
+      const data = (f && typeof f === 'object') ? f.data : f;
+      if (!data) return;
+      try { ecrireFichier(id, decoderContenu(data)); fichiersEcrits++; } catch (e) {}
     });
   }
 
@@ -199,4 +232,5 @@ module.exports = {
   getClient, docsClient, docAppartientAuClient,
   lireFichier, enregistrerFichier,
   syncCabinet,
+  logEvent, getEvents,
 };

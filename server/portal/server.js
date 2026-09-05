@@ -108,6 +108,7 @@ async function portalLogin(req, res) {
   }
 
   rate.reussite(cle); // reset du compteur après succès
+  try { store.logEvent(k, 'login', { ip: ipClient(req) }); } catch (e) {}
   const exp = Math.floor(Date.now() / 1000) + config.SESSION_TTL;
   const token = cryptoLib.signerJeton({ c: k, exp: exp }, config.JWT_SECRET);
   return envoyerJSON(res, 200, {
@@ -151,6 +152,7 @@ function portalFile(req, res, id) {
   const meta = store.docsClient(k).find(function (d) { return d.id === id; }) || {};
   const type = meta.type || 'application/octet-stream';
   const nom = (meta.nom || 'document').replace(/[\r\n"]/g, '');
+  try { store.logEvent(k, 'file', { docId: id, docNom: meta.nom || '', ip: ipClient(req) }); } catch (e) {}
   res.writeHead(200, {
     'Content-Type': type,
     'Content-Length': buf.length,
@@ -195,6 +197,13 @@ async function adminFile(req, res) {
   return envoyerJSON(res, 200, { ok: true, id: corps.id });
 }
 
+// GET /admin/events?limit=200&client=<nom>  -> journal de consultation
+function adminEvents(req, res, query) {
+  if (!verifierCabinet(req, res)) return;
+  const events = store.getEvents(query.limit, query.client);
+  return envoyerJSON(res, 200, { events: events });
+}
+
 /* ===================== Routeur ===================== */
 
 const serveur = http.createServer(function (req, res) {
@@ -218,6 +227,7 @@ const serveur = http.createServer(function (req, res) {
 
     if (chemin === '/admin/sync' && req.method === 'POST') return adminSync(req, res);
     if (chemin === '/admin/file' && req.method === 'POST') return adminFile(req, res);
+    if (chemin === '/admin/events' && req.method === 'GET') return adminEvents(req, res, parsed.query || {});
 
     return envoyerJSON(res, 404, { error: 'Route inconnue.' });
   }).catch(function (e) {
