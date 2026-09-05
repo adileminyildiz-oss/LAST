@@ -134,6 +134,7 @@ function portalDocs(req, res) {
   return envoyerJSON(res, 200, {
     client: fiche ? fiche.name : k,
     cabinet: store.getMeta().cabinet || '',
+    message: (fiche && fiche.message) || '',
     docs: store.docsClient(k), // { id, nom, cat, date, type, size }
   });
 }

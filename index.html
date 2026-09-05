@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=477;
+var LAST_VER=478;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -20396,6 +20396,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<button class="cli-add" onclick="svcPortRegen(\''+nmj+'\')">Nouveau code</button>'
       +(function(){ var dis=(typeof window.cofPortDisabled==='function')?window.cofPortDisabled(name):false; return '<button class="cli-add '+(dis?'clidoc-restore':'clidoc-revoke')+'" onclick="svcPortSetActive(\''+nmj+'\','+(dis?'true':'false')+')">'+(dis?'Réactiver l’accès':'Suspendre l’accès')+'</button>'; })()
       +'</div>'
+      +(function(){ var msg=(typeof window.cofPortMsg==='function')?window.cofPortMsg(name):''; return '<div class="clidoc-msg"><label class="clidoc-msg-lbl">Message affiché en tête de l’espace client</label>'
+        +'<textarea class="clidoc-msg-ta" maxlength="600" rows="2" placeholder="Ex : Merci de déposer vos relevés bancaires avant le 15." onchange="svcPortSetMsg(\''+nmj+'\',this.value)">'+E(msg)+'</textarea>'
+        +'<span class="clidoc-msg-hint">Ce message apparaît en haut de l’espace client (600 caractères max). Videz le champ pour le retirer.</span></div>'; })()
       +'</div>';
   }
   function cliFiche(id){
@@ -20548,6 +20551,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.clidoc-fa{display:inline-flex;gap:5px}.clidoc-fb{background:#0d0e11;border:1px solid #26364a;color:#5ab0ff;border-radius:6px;width:30px;height:28px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}.clidoc-fb:hover{border-color:#2f8fff}.clidoc-nofile{font:11px "Hanken Grotesk",system-ui,sans-serif;color:#6b7280;white-space:nowrap}',
     '.clidoc-del{background:#1a1113;border:1px solid #4a2a30;color:#e88;border-radius:6px;width:28px;height:28px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}.clidoc-del:hover{border-color:#e88}',
     '.clidoc-portal{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid #23262d}.clidoc-plbl{font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.05em;text-transform:uppercase;color:#6b7280}',
+    '.clidoc-msg{margin-top:12px;padding-top:12px;border-top:1px solid #23262d;display:flex;flex-direction:column;gap:6px}.clidoc-msg-lbl{font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.05em;text-transform:uppercase;color:#6b7280}.clidoc-msg-ta{width:100%;box-sizing:border-box;resize:vertical;background:#14161b;border:1px solid #23262d;border-radius:8px;padding:9px 11px;color:#e6e8ee;font:400 13px/1.5 inherit}.clidoc-msg-ta:focus{outline:none;border-color:#2f6bb0}.clidoc-msg-hint{font-size:11px;color:#6b7280}',
     '.cli-docbadge{display:inline-block;margin-left:8px;font:600 9.5px/1.4 "IBM Plex Mono",monospace;letter-spacing:.02em;color:#8a8a92;background:#14161b;border:1px solid #23262d;border-radius:5px;padding:2px 6px}.cli-docbadge.has{color:#7fd0a0;border-color:#2c6b4e;background:#0f1c16}',
     '.clidoc-notify{background:#12233a!important;border-color:#2f6bb0!important;color:#bcd9ff!important}.clidoc-notify:hover{border-color:#5aa9f2!important}',
     '.clidoc-revoke{background:#1c1810!important;border-color:#6b5a1a!important;color:#e0b060!important}.clidoc-revoke:hover{border-color:#e0b060!important}.clidoc-restore{background:#0f1c16!important;border-color:#2c6b4e!important;color:#7fd0a0!important}.clidoc-restore:hover{border-color:#5bbf8a!important}',
@@ -23514,6 +23518,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     try{ localStorage.setItem(key, JSON.stringify(merged.slice(-2000))); }catch(e){}
     window.__portNewCount=nNew;
     var body=portDocsBody(docs, remote);
+    var msg=(''+(window.__portMsg||'')).trim();
+    var msgBar = msg ? ('<div class="port-msg"><span class="port-msg-ic">✉</span><div class="port-msg-txt">'+E(msg)+'</div></div>') : '';
     var toolbar = docs.length>1 ? ('<div class="port-tools"><input id="port-q" class="port-search" placeholder="Rechercher un document…" oninput="portDocsApply()"><select id="port-sort" class="port-sortsel" onchange="portDocsApply()"><option value="date-desc">Date (récent)</option><option value="date-asc">Date (ancien)</option><option value="nom">Nom (A→Z)</option><option value="cat">Catégorie</option></select></div>') : '';
     var up = remote ? ('<div class="port-up"><div class="port-up-h">Envoyer un document à votre cabinet</div>'
       +'<div class="port-up-row"><input type="file" id="port-up-file" multiple style="display:none" onchange="svcPortUpload(this)">'
@@ -23522,7 +23528,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<div id="port-up-status" class="port-up-status"></div></div>') : '';
     ov.innerHTML='<div class="port-shell"><div class="port-top">'+portBrand('sm')+'<div class="port-top-r"><span class="port-who">'+E(client)+'</span><button class="port-out" onclick="closePortail()">Se déconnecter</button></div></div>'
       +'<div class="port-welcome"><div class="port-welcome-h">Bonjour, '+E(client)+'</div><div class="port-welcome-s">'+docs.length+' document'+(docs.length>1?'s':'')+' à votre disposition'+(window.__portNewCount?(' <span class="port-welcome-new">· '+window.__portNewCount+' nouveau'+(window.__portNewCount>1?'x':'')+'</span>'):'')+'</div></div>'
-      +toolbar+'<div class="port-docs-wrap" id="port-docs-wrap">'+body+'</div>'+up+portFoot()+'</div>';
+      +msgBar+toolbar+'<div class="port-docs-wrap" id="port-docs-wrap">'+body+'</div>'+up+portFoot()+'</div>';
   }
   window.svcPortUploadPick=function(){ var inp=document.getElementById('port-up-file'); if(inp)inp.click(); };
   window.svcPortUpload=function(inp){ var base=portApiBase(), tok=window.__portTok; var files=Array.prototype.slice.call((inp&&inp.files)||[]); if(inp)inp.value=''; if(!base||!tok||!files.length)return;
@@ -23533,11 +23539,12 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       var rd=new FileReader(); rd.onload=function(){ fetch(base+'/portal/upload',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify({nom:f.name,type:f.type||'application/octet-stream',data:rd.result})})
         .then(function(r){ return r.ok?r.json():Promise.reject(); }).then(function(){ ok++; step(); }).catch(function(){ fail++; step(); }); };
       rd.onerror=function(){ fail++; step(); }; rd.readAsDataURL(f); }); };
-  function portailRenderDocs(ov, client){ var docs=clientSharedDocs(client).map(function(it){ return {rid:it.fileId, nom:it.nom, cat:it.cat, date:it.date}; }); portDocsRender(ov, client, docs, false); }
+  function portailRenderDocs(ov, client){ var docs=clientSharedDocs(client).map(function(it){ return {rid:it.fileId, nom:it.nom, cat:it.cat, date:it.date}; }); try{ window.__portMsg=(typeof cofPortMsg==='function')?cofPortMsg(client):''; }catch(e){ window.__portMsg=''; } portDocsRender(ov, client, docs, false); }
   function portailRenderDocsRemote(ov, client, token){ var base=portApiBase();
     fetch(base+'/portal/docs',{headers:{'Authorization':'Bearer '+token}}).then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); }).then(function(x){
       if(!x.ok){ portailRenderLogin(ov, client); try{ portErr((x.j&&x.j.error)||'Session expirée.'); }catch(e){} return; }
       var docs=(x.j.docs||[]).map(function(d){ return {rid:d.id, nom:d.nom, cat:d.cat, date:d.date}; });
+      window.__portMsg=x.j.message||'';
       portDocsRender(ov, x.j.client||client, docs, true);
     }).catch(function(){ portailRenderLogin(ov, client); try{ portErr('Serveur injoignable.'); }catch(e){} });
   }
@@ -23546,6 +23553,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   /* Synchronisation cabinet → serveur */
   function poStatus(t){ var el=document.getElementById('po-status'); if(el)el.textContent=t; var cfg=portSrvCfg(); cfg._last=t; portSrvSaveCfg(cfg); }
   function portDisabledMap(){ var ps=portailState(); if(!ps.disabled)ps.disabled={}; return ps.disabled; }
+  function portMsgMap(){ var ps=portailState(); if(!ps.messages)ps.messages={}; return ps.messages; }
+  window.cofPortMsg=function(name){ return portMsgMap()[ckey(name)]||''; };
+  window.svcPortSetMsg=function(name, text){ var ps=portailState(); if(!ps.messages)ps.messages={}; var k=ckey(name); var v=(''+(text||'')).slice(0,600); if(v)ps.messages[k]=v; else delete ps.messages[k]; portailSave(ps); try{ portAutoSync(); }catch(e){} };
   window.cofPortDisabled=function(name){ return !!portDisabledMap()[ckey(name)]; };
   window.svcPortSetActive=function(name, active){ var ps=portailState(); if(!ps.disabled)ps.disabled={}; var k=ckey(name); if(active){ delete ps.disabled[k]; } else { ps.disabled[k]=true; } portailSave(ps);
     var base=portApiBase(), cfg=portSrvCfg();
@@ -23557,7 +23567,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.svcPortSrvTest=function(){ svcPortSrvSave(); var base=portApiBase(); if(!base){ poStatus('Renseignez l’adresse du serveur.'); return; } poStatus('Test en cours…'); fetch(base+'/health').then(function(r){ return r.json(); }).then(function(j){ poStatus(j&&j.ok?'✓ Serveur joignable.':'Réponse inattendue.'); }).catch(function(){ poStatus('✗ Serveur injoignable (vérifiez l’adresse et le CORS).'); }); };
   function portAutoSync(){ var cfg=portSrvCfg(); if(cfg.auto===false)return; if(!portApiBase()||!cfg.token)return; if(window.__portAutoT)clearTimeout(window.__portAutoT); window.__portAutoT=setTimeout(function(){ window.__portAutoT=0; try{ window.svcPortSyncNow(true); }catch(e){} }, 2500); }
   window.svcPortSyncNow=function(silent){ if(!silent)svcPortSrvSave(); var cfg=portSrvCfg(); var base=portApiBase(); if(!base||!cfg.token){ if(!silent)poStatus('Adresse du serveur + secret cabinet requis.'); return; }
-    var st=coffreState(); var files=cofFiles(); var dis=portDisabledMap(); var clients=cofClients().filter(function(n){ return !dis[ckey(n)]; }).map(function(n){ return {name:n, code:portailCode(n)}; }); var docs=[], fmap={};
+    var st=coffreState(); var files=cofFiles(); var dis=portDisabledMap(); var msgs=portMsgMap(); var clients=cofClients().filter(function(n){ return !dis[ckey(n)]; }).map(function(n){ return {name:n, code:portailCode(n), message:msgs[ckey(n)]||''}; }); var docs=[], fmap={};
     st.items.forEach(function(it){ if(it.shared&&it.fileId&&!dis[ckey(it.client)]){ docs.push({id:it.fileId, client:it.client, nom:it.nom, cat:it.cat, date:it.date, type:it.ftype, size:it.fsize, shared:true}); var f=files[it.fileId]; if(f&&f.data)fmap[it.fileId]={name:f.name||it.nom, type:f.type||it.ftype||'application/octet-stream', data:f.data}; } });
     poStatus('Synchronisation… ('+docs.length+' document'+(docs.length>1?'s':'')+')');
     fetch(base+'/admin/sync',{method:'POST',headers:{'Content-Type':'application/json','X-Cabinet-Token':cfg.token},body:JSON.stringify({cabinet:cabName(), mode:'replace', clients:clients, docs:docs, files:fmap})})
@@ -23826,6 +23836,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.port-err{display:none;color:#ff9aa4;font-size:12.5px;margin-top:11px;text-align:center}.portail-ov .port-btn{width:100%!important;margin-top:18px;background:linear-gradient(150deg,var(--pa,#e8c977),var(--pad,#9a6f1a))!important;color:var(--pat,#241a06)!important;border:0!important;border-radius:12px!important;padding:13px!important;font-size:14px!important;font-weight:800!important;letter-spacing:.02em;cursor:pointer;box-shadow:0 10px 26px rgba(0,0,0,.32)!important;text-transform:none!important}.portail-ov .port-btn:hover{filter:brightness(1.06)}.port-note{font-size:11px;color:#7f96b0;text-align:center;margin-top:14px;line-height:1.5}'
     +'.port-top{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-bottom:16px;border-bottom:1px solid rgba(231,207,143,.16);margin-bottom:22px}.port-top-r{display:flex;align-items:center;gap:14px}.port-who{font-size:13px;color:#dce7f4;font-weight:600}.portail-ov .port-out{background:rgba(255,255,255,.05)!important;border:1px solid rgba(231,207,143,.28)!important;color:#eef3fa!important;border-radius:10px!important;padding:9px 15px!important;cursor:pointer;font-size:12.5px!important;text-transform:none!important}.portail-ov .port-out:hover{border-color:var(--pa,#e8c977)!important}'
     +'.port-welcome{margin-bottom:20px}.port-welcome-h{font-family:Georgia,\"Times New Roman\",serif;font-size:24px;color:#f4f8fd;font-weight:700}.port-welcome-s{font-size:13px;color:#9fb6d0;margin-top:3px}'
+    +'.port-msg{display:flex;gap:12px;align-items:flex-start;background:linear-gradient(180deg,rgba(231,207,143,.12),rgba(231,207,143,.05));border:1px solid rgba(231,207,143,.30);border-left:3px solid var(--pa,#e7cf8f);border-radius:13px;padding:13px 16px;margin-bottom:18px}.port-msg-ic{color:var(--pa,#e7cf8f);font-size:16px;line-height:1.4;flex:none}.port-msg-txt{font-size:13.5px;color:#eadfc2;line-height:1.5;white-space:pre-wrap}'
     +'.port-cat{margin-bottom:22px}.port-cat-h{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--pa,#e7cf8f);font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}.port-cat-n{background:rgba(231,207,143,.14);color:var(--pa,#e7cf8f);border-radius:20px;padding:1px 8px;font-size:11px;letter-spacing:0}'
     +'.port-doc{display:flex;align-items:center;gap:14px;background:linear-gradient(180deg,rgba(20,29,46,.7),rgba(13,20,33,.7));border:1px solid #1e2a3b;border-left:3px solid transparent;border-radius:13px;padding:13px 16px;margin-bottom:9px;transition:border-color .12s,transform .12s}.port-doc:hover{border-color:#2a3a4e;border-left-color:var(--pa,#e7cf8f);transform:translateX(2px)}.port-doc-ic{width:38px;height:38px;flex:none;border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--pa,#e7cf8f);background:rgba(231,207,143,.10);border:1px solid rgba(231,207,143,.20)}.port-doc-i{flex:1;min-width:0}.port-doc-n{font-size:14.5px;color:#eef3fa;font-weight:600}.port-doc-m{font-size:11.5px;color:#8aa0b8;margin-top:2px}'
     +'.port-doc-a{display:flex;gap:8px;flex-wrap:wrap;flex:none}.portail-ov .port-fbtn{display:inline-flex!important;align-items:center;gap:6px;background:rgba(255,255,255,.04)!important;border:1px solid #2a3a4e!important;color:#cfe0ff!important;border-radius:9px!important;padding:8px 12px!important;font-size:12.5px!important;cursor:pointer;white-space:nowrap;text-transform:none!important;font-weight:600}.portail-ov .port-fbtn:hover{border-color:var(--pa,#e8c977)!important}.portail-ov .port-fbtn-dl{background:rgba(231,207,143,.13)!important;border-color:rgba(231,207,143,.32)!important;color:#f3e6c2!important}.port-fbtn svg{width:15px;height:15px;flex:none}'

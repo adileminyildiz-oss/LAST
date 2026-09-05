@@ -64,7 +64,8 @@ try {
     localStorage.setItem('last-portal-srv', JSON.stringify({ url: cfg.base, token: cfg.token, auto: false }));
   }, { base: BASE, token: TOKEN });
 
-  const syncMsg = await page.evaluate(async () => { window.svcPortSyncNow(); await new Promise(r => setTimeout(r, 900)); return JSON.parse(localStorage.getItem('last-portal-srv'))._last || ''; });
+  const CAB_MSG = 'Merci de deposer vos releves avant le 15.';
+  const syncMsg = await page.evaluate(async (msg) => { window.svcPortSetMsg('DEMO', msg); window.svcPortSyncNow(); await new Promise(r => setTimeout(r, 900)); return JSON.parse(localStorage.getItem('last-portal-srv'))._last || ''; }, CAB_MSG);
   check('synchronisation cabinet → serveur', /Synchronis/i.test(syncMsg));
 
   const code = await page.evaluate(() => JSON.parse(localStorage.getItem('last-svc')).portail.codes['demo']);
@@ -78,10 +79,11 @@ try {
     const d = await fetch(cfg.url + '/portal/docs', { headers: { 'Authorization': 'Bearer ' + tok } }); const dj = await d.json();
     const f = await fetch(cfg.url + '/portal/file/f1', { headers: { 'Authorization': 'Bearer ' + tok } });
     const up = await fetch(cfg.url + '/portal/upload', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify({ nom: 'Facture.pdf', type: 'application/pdf', data: 'data:application/pdf;base64,JVBERi0=' }) });
-    return { loginOk: r.status === 200, docs: (dj.docs || []).map(x => x.nom), fileStatus: f.status, uploadOk: up.status === 200 };
+    return { loginOk: r.status === 200, docs: (dj.docs || []).map(x => x.nom), message: dj.message || '', fileStatus: f.status, uploadOk: up.status === 200 };
   }, code);
   check('connexion client distante (200)', login.loginOk);
   check('documents servis par le serveur', login.docs.indexOf('Bilan 2024.pdf') >= 0);
+  check('message du cabinet servi au client', login.message === CAB_MSG);
   check('consultation de fichier (200)', login.fileStatus === 200);
   check('dépôt client (upload 200)', login.uploadOk);
 

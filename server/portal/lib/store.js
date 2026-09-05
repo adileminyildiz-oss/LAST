@@ -215,6 +215,7 @@ function syncCabinet(payload, mode) {
     // Le code n'est haché que s'il est fourni (permet de resynchroniser les docs
     // sans changer le code existant en mode merge).
     if (c.code) entree.codeHash = hasherCode(c.code);
+    if (typeof c.message === 'string') entree.message = c.message.slice(0, 600);
     if (entree.codeHash) clientsOut[k] = entree;
   });
   ecrireJSON('clients.json', clientsOut);
