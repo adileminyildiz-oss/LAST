@@ -1,0 +1,35 @@
+# Déploiement en un clic sur Render (https://render.com)
+# 1) Poussez ce dépôt sur GitHub.
+# 2) Render → New → Blueprint → sélectionnez le dépôt.
+# 3) Render lit ce fichier, crée le service, génère les secrets, monte le disque.
+# 4) Renseignez ALLOWED_ORIGIN avec l'URL EXACTE de votre site (front Mar'q).
+#
+# Note : le disque persistant nécessite un plan payant (Starter). En plan gratuit,
+# retirez la section « disk » — les fichiers seront alors éphémères (repartez
+# d'une resynchronisation après chaque redéploiement).
+services:
+  - type: web
+    name: marq-portail
+    runtime: node
+    rootDir: server/portal
+    plan: starter
+    region: frankfurt
+    buildCommand: ""
+    startCommand: node server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: CABINET_TOKEN
+        generateValue: true      # secret d'administration (à coller aussi dans Mar'q)
+      - key: JWT_SECRET
+        generateValue: true      # secret de signature des sessions client
+      - key: ALLOWED_ORIGIN
+        value: https://last.aemconseil.eu
+      - key: DATA_DIR
+        value: /var/data
+      - key: SESSION_TTL
+        value: "7200"
+    disk:
+      name: marq-data
+      mountPath: /var/data
+      sizeGB: 1

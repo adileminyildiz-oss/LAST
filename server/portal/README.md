@@ -262,3 +262,46 @@ server/portal/
 ├── .gitignore           # ignore .env et data/
 └── README.md
 ```
+
+---
+
+## Déploiement en un clic
+
+Trois fichiers prêts à l'emploi sont fournis (aucune dépendance à installer, le serveur est en Node natif).
+
+### Option A — Render (le plus simple)
+1. Poussez ce dépôt sur GitHub.
+2. Render → **New → Blueprint** → sélectionnez le dépôt : Render lit `server/portal/render.yaml`, crée le service, **génère automatiquement** `CABINET_TOKEN` et `JWT_SECRET`, et monte un disque persistant (`/var/data`).
+3. Vérifiez la variable **`ALLOWED_ORIGIN`** = l'URL exacte de votre site (ex. `https://last.aemconseil.eu`).
+4. Récupérez l'URL publique du service (ex. `https://marq-portail.onrender.com`) et le `CABINET_TOKEN` (onglet *Environment*).
+
+> Le disque persistant nécessite un plan **Starter**. En plan gratuit, supprimez la section `disk` du `render.yaml` : les fichiers deviennent éphémères (il suffit de **resynchroniser** depuis Mar'q après chaque redéploiement).
+
+### Option B — Fly.io (volumes inclus)
+```bash
+cd server/portal
+fly launch --no-deploy
+fly volumes create marq_data --size 1 --region cdg
+fly secrets set CABINET_TOKEN=$(openssl rand -hex 32) \
+                JWT_SECRET=$(openssl rand -hex 32) \
+                ALLOWED_ORIGIN=https://last.aemconseil.eu
+fly deploy
+```
+
+### Option C — Docker (n'importe quel hébergeur / VPS)
+```bash
+cd server/portal
+docker build -t marq-portail .
+docker run -d --name marq-portail -p 8787:8787 \
+  -e CABINET_TOKEN=$(openssl rand -hex 32) \
+  -e JWT_SECRET=$(openssl rand -hex 32) \
+  -e ALLOWED_ORIGIN=https://last.aemconseil.eu \
+  -v marq_data:/data \
+  marq-portail
+```
+
+### Brancher Mar'q (une fois le serveur en ligne)
+1. Dans Mar'q → **Services → Coffre-fort & portail client → « 🌐 Portail en ligne »** : collez l'**adresse du serveur** et le **secret cabinet** (`CABINET_TOKEN`), puis **Tester la connexion** et **Synchroniser maintenant**.
+2. Pour que vos clients atteignent le serveur depuis leurs propres appareils, renseignez la même adresse dans la constante **`PORTAL_API`** (en tête du bloc portail de `index.html`), puis redéployez le site.
+
+Vos clients se connectent alors sur `https://votre-site/#portail` avec leur **nom** + **code d'accès**, et consultent uniquement leurs documents partagés, en lecture seule.

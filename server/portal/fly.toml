@@ -1,0 +1,39 @@
+# Déploiement sur Fly.io (https://fly.io) — volumes persistants inclus.
+# Étapes :
+#   1) Installez flyctl puis :  fly launch --no-deploy   (dans server/portal)
+#   2) Créez un volume :        fly volumes create marq_data --size 1 --region cdg
+#   3) Définissez les secrets :
+#        fly secrets set CABINET_TOKEN=$(openssl rand -hex 32) \
+#                        JWT_SECRET=$(openssl rand -hex 32) \
+#                        ALLOWED_ORIGIN=https://last.aemconseil.eu
+#   4) Déployez :               fly deploy
+app = "marq-portail"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8787"
+  DATA_DIR = "/data"
+  SESSION_TTL = "7200"
+
+[[mounts]]
+  source = "marq_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.http_options.response.headers]
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "4s"
+    grace_period = "5s"
+    method = "GET"
+    path = "/health"
