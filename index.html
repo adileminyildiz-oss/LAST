@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=474;
+var LAST_VER=475;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -23290,7 +23290,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   /* ================= SERVICE 8 : COFFRE-FORT & PORTAIL CLIENT ================= */
   var COF_CAT=['Statuts','K-bis','Bilan / liasse','Contrats','Fiches de paie','Fiscal / TVA','Divers'];
   function coffreState(){ var o=store(); if(!o.coffre)o.coffre={items:[]}; return o.coffre; }
-  function coffreSave(st){ var o=store(); o.coffre=st; save(o); }
+  function coffreSave(st){ var o=store(); o.coffre=st; save(o); try{ if(typeof portAutoSync==='function')portAutoSync(); }catch(e){} }
   /* Fichiers du coffre : stockés en IndexedDB (grande capacité) avec cache mémoire
      synchrone + miroir localStorage (rapide) tant qu'il tient. Lève la limite ~5 Mo. */
   var COF_DB='marq-coffre', COF_STORE='kv', COF_KEY='files', COF_IDB=('indexedDB' in window), COF_MEM=null;
@@ -23550,15 +23550,17 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     if(base&&cfg.token){ if(!active){ fetch(base+'/admin/revoke',{method:'POST',headers:{'Content-Type':'application/json','X-Cabinet-Token':cfg.token},body:JSON.stringify({client:name})}).catch(function(){}); } else { try{ svcPortSyncNow(); }catch(e){} } }
     try{ if(typeof render==='function')render(); }catch(e){}
     if(typeof toast==='function')toast(active?('Accès réactivé — '+name):('Accès suspendu — '+name)); };
-  window.svcPortSrvSave=function(){ var cfg=portSrvCfg(); var u=document.getElementById('po-url'), t=document.getElementById('po-token'); if(u)cfg.url=u.value||''; if(t)cfg.token=t.value||''; portSrvSaveCfg(cfg); if(typeof toast==='function')toast('Portail en ligne : configuration enregistrée.'); };
+  window.svcPortSrvSave=function(){ var cfg=portSrvCfg(); var u=document.getElementById('po-url'), t=document.getElementById('po-token'), a=document.getElementById('po-auto'); if(u)cfg.url=u.value||''; if(t)cfg.token=t.value||''; if(a)cfg.auto=!!a.checked; portSrvSaveCfg(cfg); if(typeof toast==='function')toast('Portail en ligne : configuration enregistrée.'); };
+  window.svcPortAutoToggle=function(el){ var cfg=portSrvCfg(); cfg.auto=!!(el&&el.checked); portSrvSaveCfg(cfg); if(cfg.auto)try{ portAutoSync(); }catch(e){} };
   window.svcPortSrvTest=function(){ svcPortSrvSave(); var base=portApiBase(); if(!base){ poStatus('Renseignez l’adresse du serveur.'); return; } poStatus('Test en cours…'); fetch(base+'/health').then(function(r){ return r.json(); }).then(function(j){ poStatus(j&&j.ok?'✓ Serveur joignable.':'Réponse inattendue.'); }).catch(function(){ poStatus('✗ Serveur injoignable (vérifiez l’adresse et le CORS).'); }); };
-  window.svcPortSyncNow=function(){ svcPortSrvSave(); var cfg=portSrvCfg(); var base=portApiBase(); if(!base||!cfg.token){ poStatus('Adresse du serveur + secret cabinet requis.'); return; }
+  function portAutoSync(){ var cfg=portSrvCfg(); if(cfg.auto===false)return; if(!portApiBase()||!cfg.token)return; if(window.__portAutoT)clearTimeout(window.__portAutoT); window.__portAutoT=setTimeout(function(){ window.__portAutoT=0; try{ window.svcPortSyncNow(true); }catch(e){} }, 2500); }
+  window.svcPortSyncNow=function(silent){ if(!silent)svcPortSrvSave(); var cfg=portSrvCfg(); var base=portApiBase(); if(!base||!cfg.token){ if(!silent)poStatus('Adresse du serveur + secret cabinet requis.'); return; }
     var st=coffreState(); var files=cofFiles(); var dis=portDisabledMap(); var clients=cofClients().filter(function(n){ return !dis[ckey(n)]; }).map(function(n){ return {name:n, code:portailCode(n)}; }); var docs=[], fmap={};
     st.items.forEach(function(it){ if(it.shared&&it.fileId&&!dis[ckey(it.client)]){ docs.push({id:it.fileId, client:it.client, nom:it.nom, cat:it.cat, date:it.date, type:it.ftype, size:it.fsize, shared:true}); var f=files[it.fileId]; if(f&&f.data)fmap[it.fileId]={name:f.name||it.nom, type:f.type||it.ftype||'application/octet-stream', data:f.data}; } });
     poStatus('Synchronisation… ('+docs.length+' document'+(docs.length>1?'s':'')+')');
     fetch(base+'/admin/sync',{method:'POST',headers:{'Content-Type':'application/json','X-Cabinet-Token':cfg.token},body:JSON.stringify({cabinet:cabName(), mode:'replace', clients:clients, docs:docs, files:fmap})})
       .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
-      .then(function(x){ if(!x.ok){ poStatus('✗ '+((x.j&&x.j.error)||'Échec de la synchronisation.')); return; } var b=x.j.bilan||{}; poStatus('✓ Synchronisé le '+new Date().toLocaleString('fr-FR')+' — '+(b.clients!=null?b.clients:clients.length)+' client(s), '+(b.docs!=null?b.docs:docs.length)+' document(s) en ligne.'); if(typeof toast==='function')toast('Portail en ligne synchronisé.'); })
+      .then(function(x){ if(!x.ok){ poStatus('✗ '+((x.j&&x.j.error)||'Échec de la synchronisation.')); return; } var b=x.j.bilan||{}; poStatus((silent?'✓ Synchro auto le ':'✓ Synchronisé le ')+new Date().toLocaleString('fr-FR')+' — '+(b.clients!=null?b.clients:clients.length)+' client(s), '+(b.docs!=null?b.docs:docs.length)+' document(s) en ligne.'); if(!silent&&typeof toast==='function')toast('Portail en ligne synchronisé.'); })
       .catch(function(){ poStatus('✗ Serveur injoignable.'); });
   };
   window.svcPortJournal=function(){ var cfg=portSrvCfg(); var base=portApiBase(); if(!base||!cfg.token){ poStatus('Adresse du serveur + secret cabinet requis.'); return; }
@@ -23597,6 +23599,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<p class="svc-lead">Pour que vos clients accèdent à leurs documents <b>depuis n’importe où</b>, hébergez le petit serveur fourni (dossier <code>server/portal</code>), puis renseignez son adresse et le <b>secret cabinet</b> ci-dessous. « Synchroniser » envoie les clients, leurs codes d’accès et les documents cochés « Portail client » — <b>les fichiers non partagés ne quittent jamais cet appareil</b>.</p>'
       +'<div class="port-online-grid"><label class="po-f"><span>Adresse du serveur</span><input id="po-url" class="cli-modin" placeholder="https://portail.votrecabinet.fr" value="'+E(cfg.url||'')+'"></label>'
       +'<label class="po-f"><span>Secret cabinet (jeton)</span><input id="po-token" class="cli-modin" type="password" placeholder="CABINET_TOKEN" value="'+E(cfg.token||'')+'"></label></div>'
+      +'<label class="po-auto"><input type="checkbox" id="po-auto" '+(cfg.auto!==false?'checked':'')+' onchange="svcPortAutoToggle(this)"> Synchroniser automatiquement à chaque modification</label>'
       +'<div class="svc-cat-act"><button class="btn btn-ghost" onclick="svcPortSrvSave()">Enregistrer</button><button class="btn btn-ghost" onclick="svcPortSrvTest()">Tester la connexion</button><button class="btn btn-ghost" onclick="svcPortJournal()">Journal de consultation</button><button class="btn btn-ghost" onclick="svcPortInbox()">Documents reçus</button><button class="btn btn-pri" onclick="svcPortSyncNow()">↑ Synchroniser maintenant</button></div>'
       +'<div id="po-status" class="po-status">'+E(cfg._last||'Non synchronisé.')+'</div></div>';
   }
@@ -23838,7 +23841,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.port-up{margin-top:22px;padding:16px 18px;border:1px dashed rgba(150,180,255,.28);border-radius:14px;background:rgba(18,24,44,.28);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}.port-up-h{font-size:13.5px;font-weight:700;color:#eaf2fb;margin-bottom:10px}.port-up-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.portail-ov .port-up-btn{background:rgba(120,160,255,.16)!important;border-color:rgba(150,180,255,.34)!important;color:#eaf1ff!important}.port-up-hint{font-size:11px;color:#8aa0b8}.port-up-status{font-size:12px;color:#7fd0a0;margin-top:8px;min-height:16px}'
     +'.ib-size{font:10px "IBM Plex Mono",monospace;color:#8aa0b8;margin-left:6px}.ib-act{white-space:nowrap;text-align:right}.ib-act .cli-add{margin-left:6px}.ib-del{color:#e88!important;border-color:#4a2a30!important}.ib-del:hover{border-color:#e88!important}.ib-file{color:#7fd0a0!important;border-color:#2c6b4e!important;background:#0f1c16!important}.ib-file:hover{border-color:#5bbf8a!important}'
     +'.port-online{margin-top:14px}.svc-h2b{font-size:15px;font-weight:700;color:#eaf2fb;margin:0 0 6px}.port-online code{background:#0b1119;border:1px solid #2a3a4e;border-radius:5px;padding:1px 6px;font:12px ui-monospace,Menlo,Consolas,monospace;color:#9fd0ff}'
-    +'.port-online-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0 12px}@media(max-width:640px){.port-online-grid{grid-template-columns:1fr}}.po-f{display:flex;flex-direction:column;gap:5px}.po-f>span{font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.03em;color:#8aa0b8;text-transform:uppercase}.po-f .cli-modin{width:100%;box-sizing:border-box}'
+    +'.port-online-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0 12px}@media(max-width:640px){.port-online-grid{grid-template-columns:1fr}}.po-f{display:flex;flex-direction:column;gap:5px}.po-f>span{font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.03em;color:#8aa0b8;text-transform:uppercase}.po-f .cli-modin{width:100%;box-sizing:border-box}.po-auto{display:flex;align-items:center;gap:8px;font:12.5px "Hanken Grotesk",system-ui,sans-serif;color:#9fb6d0;margin:2px 0 12px;cursor:pointer}.po-auto input{width:15px;height:15px;accent-color:#1e90ff;cursor:pointer}'
     +'.po-status{font:12px "Hanken Grotesk",system-ui,sans-serif;color:#9fb6d0;margin-top:8px}'
     +'.jr-wrap{max-height:60vh;overflow:auto}.jr-t{width:100%;border-collapse:collapse;font-size:12.5px}.jr-t th{text-align:left;position:sticky;top:0;background:#0e1621;color:#9fb6d0;font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.04em;text-transform:uppercase;padding:9px 12px;border-bottom:1px solid #22303f}.jr-t td{padding:9px 12px;border-bottom:1px solid #1a2431;color:#dbe6f5}.jr-when{white-space:nowrap;color:#9fb6d0;font-variant-numeric:tabular-nums}.jr-cli{font-weight:600;color:#eaf2fb}.jr-act{display:inline-block;font:600 10px/1.4 "IBM Plex Mono",monospace;border-radius:5px;padding:2px 7px;margin-right:6px}.jr-login{color:#7fb0ff;background:rgba(90,169,242,.12);border:1px solid rgba(90,169,242,.3)}.jr-file{color:#7fd0a0;background:rgba(50,164,106,.12);border:1px solid rgba(50,164,106,.3)}'
     +'.portail-ov.port-lav{background-color:#211a38}'
