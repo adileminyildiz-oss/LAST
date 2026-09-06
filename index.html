@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=502;
+var LAST_VER=503;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -3217,6 +3217,27 @@ document.addEventListener('visibilitychange',function(){ if(!document.hidden) la
 window.addEventListener('focus',lastCheckUpdate);
 window.addEventListener('online',lastCheckUpdate);
 window.addEventListener('pageshow',function(e){ if(e.persisted) lastCheckUpdate(); });
+/* --- Cliquet anti-retour : la version ne redescend JAMAIS --- */
+/* On mémorise la plus haute version déjà chargée sur cet appareil. Si le code
+   servi est plus ancien (retour en arrière dû à un cache/SW périmé), on récupère
+   automatiquement la dernière version au lieu d'afficher l'ancienne. La valeur
+   enregistrée reste fixe (elle ne diminue jamais). */
+(function(){
+  var K='marq-ver-max'; var stored=0;
+  try{ stored=parseInt(localStorage.getItem(K)||'0',10)||0; }catch(e){}
+  if(LAST_VER>=stored){
+    if(LAST_VER>stored){ try{ localStorage.setItem(K,String(LAST_VER)); }catch(e){} }
+    try{ sessionStorage.removeItem('marq-ratchet-try'); }catch(e){}
+    return;
+  }
+  /* LAST_VER < plancher mémorisé → régression détectée */
+  var tried=false; try{ tried=sessionStorage.getItem('marq-ratchet-try')==='1'; }catch(e){}
+  if(tried || window.__lastReloaded) return;            /* déjà tenté ce chargement → ne pas boucler */
+  try{ sessionStorage.setItem('marq-ratchet-try','1'); }catch(e){}
+  window.__lastReloaded=true;
+  try{ if(typeof toast==='function')toast('Version obsolète détectée — récupération de la dernière version…'); }catch(e){}
+  try{ _lastHardReload(); }catch(e){ try{ location.reload(true); }catch(_){ try{location.reload();}catch(__){}} }
+})();
 /* petit badge de version (bas gauche) */
 /* Indicateur de version (badge « Mar’q · vN ») retiré à la demande. LAST_VER reste utilisé pour la mise à jour automatique. */
 var _pwaPrompt=null;
