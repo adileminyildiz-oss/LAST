@@ -3188,17 +3188,25 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=500;
+var LAST_VER=501;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
+}
+/* Rechargement « dur » : vide TOUS les caches ET désenregistre les service workers,
+   puis recharge. Désenregistrer est essentiel : si un ancien SW « cache-first » est
+   installé, il continuerait à servir l'ancien index.html même après vidage du cache ;
+   une fois désenregistré, le rechargement passe directement par le réseau (dernière
+   version), puis un SW neuf se réenregistre. */
+function _lastHardReload(){
+  var purge=function(){ try{ if(window.caches&&caches.keys) return caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));}); }catch(e){} return Promise.resolve(); };
+  var unreg=function(){ try{ if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations) return navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all((rs||[]).map(function(r){try{return r.unregister();}catch(e){return null;}}));}); }catch(e){} return Promise.resolve(); };
+  purge().then(unreg).catch(function(){}).then(function(){ setTimeout(function(){ try{ location.reload(true); }catch(e){ try{location.reload();}catch(_){}} },300); });
 }
 function lastCheckUpdate(){
   try{ if(!navigator.onLine)return; }catch(e){}
   fetch('version.json?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
     if(j&&+j.version>LAST_VER&&!window.__lastReloaded){ window.__lastReloaded=true; try{if(typeof toast==='function')toast('Nouvelle version — mise à jour…');}catch(e){}
-      var _purge=function(){ try{ if(window.caches&&caches.keys) return caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));}); }catch(e){} return Promise.resolve(); };
-      if('serviceWorker' in navigator){navigator.serviceWorker.getRegistration().then(function(reg){try{reg&&reg.update();}catch(e){}}).finally(function(){_purge().finally(function(){setTimeout(function(){location.reload(true);},400);});}); }
-      else { _purge().finally(function(){setTimeout(function(){location.reload(true);},400);}); }
+      _lastHardReload();
     }
   }).catch(function(){});
   if('serviceWorker' in navigator){navigator.serviceWorker.getRegistration().then(function(reg){try{reg&&reg.update();}catch(e){}});}
