@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=488;
+var LAST_VER=489;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -24339,6 +24339,35 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     rd.readAsDataURL(f);
   };
 
+  /* ---- Dépôt multiple (glisser-déposer / sélection) + analyse en lot ---- */
+  function isFacFile(f){ return f && (/pdf|image/i.test(f.type||'') || /\.(pdf|png|jpe?g|webp|gif|bmp|tiff?)$/i.test(f.name||'')); }
+  window.tvrFilesChosen=function(inp){ var files=inp&&inp.files; if(!files||!files.length)return; if(files.length>1) window.tvrDeposerLot(files); else window.tvrAnalyser(inp); };
+  window.tvrDragOver=function(e){ try{e.preventDefault();e.stopPropagation();}catch(_){} var z=e.currentTarget||document.querySelector('.tvr-drop'); if(z)z.classList.add('drag'); };
+  window.tvrDragLeave=function(e){ var z=e.currentTarget||document.querySelector('.tvr-drop'); if(z)z.classList.remove('drag'); };
+  window.tvrDrop=function(e){ try{e.preventDefault();e.stopPropagation();}catch(_){} var z=e.currentTarget||document.querySelector('.tvr-drop'); if(z)z.classList.remove('drag'); var files=(e.dataTransfer&&e.dataTransfer.files)||null; if(files&&files.length){ if(files.length>1) window.tvrDeposerLot(files); else { var inp=document.getElementById('tvr-file'); try{ var dt=new DataTransfer(); dt.items.add(files[0]); inp.files=dt.files; }catch(_){} window.tvrAnalyser(inp||{files:files}); } } };
+  window.tvrDeposerLot=function(fileList){
+    var files=Array.prototype.slice.call(fileList||[]).filter(isFacFile);
+    var st=document.getElementById('tvr-ocr-status'); function S(t,c){ if(st){ st.textContent=t; st.className='tvr-ocr'+(c?(' '+c):''); } }
+    if(!files.length){ S('Aucun fichier PDF/image reconnu.','warn'); return; }
+    if(files.length===1){ var inp=document.getElementById('tvr-file'); try{ var dt=new DataTransfer(); dt.items.add(files[0]); inp.files=dt.files; }catch(_){} return window.tvrAnalyser(inp||{files:files}); }
+    var sens=(ui().sens==='col'?'col':'deb'); var total=files.length, done=0, added=0;
+    S('⏳ Lecture de '+total+' factures…');
+    function finish(){ try{save();}catch(e){} render(); var stx=document.getElementById('tvr-ocr-status'); if(stx){ stx.textContent='✓ '+added+' facture(s) ajoutée(s) sur '+total+' (type : '+(sens==='col'?'TVA collectée':'TVA débitée')+'). Vérifiez le tableau ci-dessous.'; stx.className='tvr-ocr ok'; } if(typeof toast==='function')toast(added+' facture(s) ajoutée(s).'); }
+    files.forEach(function(fl){
+      var rd=new FileReader();
+      rd.onload=function(){
+        var url=rd.result;
+        function build(p){ var f={ id:uid2(), sens:sens, date:(p&&p.date)||'', fournisseur:(p&&p.fournisseur)||'', numero:(p&&p.numero)||'', services:(p&&p.services)||'', taux:(p&&p.taux!=null)?p.taux:20, ht:(p&&p.ht!=null)?p.ht:0, tva:(p&&p.tva!=null)?p.tva:0, ttc:(p&&p.ttc!=null)?p.ttc:0, ts:Date.now() };
+          if(!f.ttc)f.ttc=(+f.ht||0)+(+f.tva||0); if(fl.size<=6*1048576)f.file={name:fl.name,type:fl.type,data:url};
+          data().push(f); added++; done++; if(done<total){ S('⏳ Lecture… ('+done+'/'+total+')'); } else finish(); }
+        if(typeof window.espOcrRead==='function'){ try{ window.espOcrRead(url,function(text){ var p=(text&&(''+text).replace(/\s/g,'').length>=8)?window.tvrParseFacture(text):null; build(p); }); }catch(e){ build(null); } }
+        else build(null);
+      };
+      rd.onerror=function(){ done++; if(done>=total)finish(); };
+      rd.readAsDataURL(fl);
+    });
+  };
+
   /* ---- Calcul automatique HT / taux / TVA / TTC dans le formulaire ---- */
   window.tvrCalc=function(src){
     var g=function(id){var e=document.getElementById(id);return e?e.value:'';};
@@ -24426,11 +24455,11 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<button class="tvr-sb'+(u.sens==='col'?' on':'')+'" onclick="tvrSetSens(\'col\')">TVA collectée (vente)</button></div>';
     var form='<div class="card"><div class="card-h"><h2>➕ Déposer / ajouter une facture</h2></div><div class="card-b">'
       +sensBtns
-      +'<div class="tvr-drop">'
-      +'<input type="file" id="tvr-file" accept="application/pdf,image/*" onchange="tvrAnalyser(this)" style="display:none">'
-      +'<button class="btn tvr-dropbtn" onclick="var e=document.getElementById(\'tvr-file\');if(e)e.click()">📎 Déposer une facture (PDF ou image) — lecture automatique</button>'
+      +'<div class="tvr-drop" ondragover="tvrDragOver(event)" ondragenter="tvrDragOver(event)" ondragleave="tvrDragLeave(event)" ondrop="tvrDrop(event)">'
+      +'<input type="file" id="tvr-file" accept="application/pdf,image/*" multiple onchange="tvrFilesChosen(this)" style="display:none">'
+      +'<button class="btn tvr-dropbtn" onclick="var e=document.getElementById(\'tvr-file\');if(e)e.click()">📎 Glissez-déposez vos factures ici, ou cliquez pour les sélectionner</button>'
       +'<button class="btn btn-sm" onclick="tvrAnalyser(document.getElementById(\'tvr-file\'))">🔎 Analyser</button>'
-      +'<div class="tvr-ocr" id="tvr-ocr-status">Déposez une facture : la date, le fournisseur, le n°, les montants (HT/TVA/TTC) et le service sont extraits automatiquement. Vérifiez puis ajoutez.</div>'
+      +'<div class="tvr-ocr" id="tvr-ocr-status">Déposez <b>une ou plusieurs</b> factures (PDF ou image) — glisser-déposer depuis un dossier, ou sélection multiple. Date, fournisseur, n°, montants (HT/TVA/TTC) et service sont extraits automatiquement. Une facture → vérification dans le formulaire ; plusieurs → ajout automatique.</div>'
       +'</div>'
       +'<div class="tvr-form">'
       +'<label>Date<input type="date" id="tvr-date" max="9999-12-31"></label>'
@@ -24539,7 +24568,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.tvr-badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:20px}.tvr-badge.deb{background:rgba(79,157,255,.16);color:#7db4ff}.tvr-badge.col{background:rgba(201,161,60,.16);color:#e2c26a}',
     '.tvr-ic{background:none;border:1px solid var(--line-2,#2c384b);border-radius:7px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--ink-2,#b6c3d6);margin-left:5px}.tvr-ic:hover{border-color:var(--accent,#4f9dff)}.tvr-ic.danger:hover{border-color:#e0674f;color:#e0674f}.tvr-act{white-space:nowrap}',
     '.tvr-empty{text-align:center;color:var(--ink-3,#8494aa);padding:20px 0}',
-    '.tvr-drop{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--paper-2,#1a2334);border:1px dashed var(--line-2,#2c384b);border-radius:11px;padding:13px 15px;margin-bottom:14px}',
+    '.tvr-drop{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--paper-2,#1a2334);border:1px dashed var(--line-2,#2c384b);border-radius:11px;padding:13px 15px;margin-bottom:14px;transition:border-color .12s,background .12s}',
+    '.tvr-drop.drag{border-color:var(--accent,#4f9dff);border-style:solid;background:rgba(79,157,255,.10)}.tvr-drop.drag *{pointer-events:none}',
     '.tvr-dropbtn{font-weight:700}',
     '.tvr-ocr{flex-basis:100%;font-size:12px;color:var(--ink-3,#8494aa);line-height:1.5;margin-top:2px}.tvr-ocr.ok{color:#5bbf8a}.tvr-ocr.warn{color:#e0b060}',
     '.tvr-serv-l{grid-column:1/-1}',
