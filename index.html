@@ -3149,7 +3149,12 @@ function lastGate(){
     +'#last-gate .lg-dots{display:none!important}'
     /* Épuration (v507) : retrait des éléments superflus du panneau droit */
     +'#last-gate .lg-reserved,#last-gate .lg-welcome,#last-gate .lg-welcome-sub,#last-gate .lg-lock,#last-gate .lg-right-foot,#last-gate .lg-right-top{display:none!important}'
-    +'#last-gate .lg-right{justify-content:center!important}';
+    +'#last-gate .lg-right{justify-content:center!important}'
+    /* Correctif lisibilité (v509) : champ mot de passe illisible (texte clair du thème + autofill).
+       Sélecteur par id (imbattable) → champ sombre + texte clair, cohérent avec la carte. */
+    +'#last-gate #lg-pwd,#last-gate #lg-otp{background:#0f1622!important;color:#eef2f8!important;-webkit-text-fill-color:#eef2f8!important;border:1px solid #2a3140!important;caret-color:#eef2f8!important}'
+    +'#last-gate #lg-pwd::placeholder,#last-gate #lg-otp::placeholder{color:#8a93a3!important;-webkit-text-fill-color:#8a93a3!important}'
+    +'#last-gate #lg-pwd:-webkit-autofill,#last-gate #lg-pwd:-webkit-autofill:hover,#last-gate #lg-pwd:-webkit-autofill:focus,#last-gate #lg-pwd:-webkit-autofill:active,#last-gate #lg-otp:-webkit-autofill{-webkit-text-fill-color:#eef2f8!important;-webkit-box-shadow:0 0 0 1000px #0f1622 inset!important;box-shadow:0 0 0 1000px #0f1622 inset!important;caret-color:#eef2f8!important;transition:background-color 9999s ease 0s}';
     document.head.appendChild(st);}
   if(!document.getElementById('last-gate')){var g=document.createElement('div');g.id='last-gate';g.innerHTML='<div class="lg-shell"><div class="lg-left"><div class="lg-left-top"><span class="brand-logo" aria-label="Mar’q"></span></div><div class="lg-left-mid"></div><div class="lg-left-bot"><div class="lg-headline">Pilotez toutes vos formalités<br><b>depuis une seule plateforme.</b></div><div class="lg-lead">Création, modification, dépôt — AEM CONSEIL centralise vos démarches juridiques et fiscales au même endroit.</div><div class="lg-dots"><i class="on"></i><i></i><i></i></div></div></div><div class="lg-right"><div class="lg-right-top"><span class="brand-logo lg-rlogo" aria-label="Mar’q"></span><span class="lg-reserved">Accès réservé · AEM CONSEIL</span></div><div class="lg-right-mid"><div class="lg-welcome">Bienvenue sur Mar’q</div><div class="lg-welcome-sub">Saisissez vos identifiants pour accéder à votre espace interne.</div><div class="lg-lock">🔒 Accès sécurisé</div><div id="lg-body"></div></div><div class="lg-right-foot"><span>© 2026 Mar’q · AEM CONSEIL</span><span>Accès strictement personnel</span></div></div></div>';document.body.appendChild(g);}
   lastGateRender('pwd');
@@ -3226,7 +3231,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=508;
+var LAST_VER=509;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -25130,6 +25135,22 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.inv-ic{background:none;border:1px solid var(--line-2,#2c384b);border-radius:7px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--ink-2,#b6c3d6);margin-left:5px}.inv-ic:hover{border-color:var(--accent,#4f9dff)}.inv-ic.danger:hover{border-color:#e0674f;color:#e0674f}.inv-h-act{white-space:nowrap}'
   ].join(''); document.head.appendChild(st); } }catch(e){}
 })();</script>
+
+<script id="editions-facture-route">
+/* Éditions → « Facture » ouvre désormais la nouvelle facture (module Factures / Qonto),
+   remplaçant l'ancien document de facturation. */
+(function(){
+  function openInvoice(){ try{ if(typeof go==='function'){ go('facturier'); return true; } }catch(e){} return false; }
+  try{ var _n=window.edLibNew; if(typeof _n==='function' && !_n.__factQonto){
+    window.edLibNew=function(k,forme){ if(k==='factnorm'){ if(openInvoice())return; } return _n.apply(this,arguments); };
+    window.edLibNew.__factQonto=1;
+  } }catch(e){}
+  try{ var _o=window.edLibOpen; if(typeof _o==='function' && !_o.__factQonto){
+    window.edLibOpen=function(id){ try{ var d=(DB.editionsLibres||[]).find(function(x){return x.id===id;}); if(d&&d.k==='factnorm'){ if(openInvoice())return; } }catch(e){} return _o.apply(this,arguments); };
+    window.edLibOpen.__factQonto=1;
+  } }catch(e){}
+})();
+</script>
 
 </body>
 </html>
