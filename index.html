@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=486;
+var LAST_VER=487;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -24256,6 +24256,213 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.ck-clickable{cursor:pointer;transition:border-color .12s,background .12s}.ck-clickable:hover{border-color:#3a3a42}.ckp-t.ck-clickable:hover{background:#101014}.ckp-feed.ck-clickable{margin:0 -14px;padding-left:14px;padding-right:14px;border-radius:8px}.ckp-feed.ck-clickable:hover{background:#141418}.ckp-rdv.ck-clickable{margin:0 -14px;padding-left:14px;padding-right:14px;border-radius:8px}.ckp-rdv.ck-clickable:hover{background:#141418}.ckp-hchip.ck-clickable{cursor:pointer}',
     '.ckp-spark{display:flex;align-items:flex-end;gap:6px;height:46px;margin-top:8px}.ckp-sp{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}.ckp-sp i{width:100%;background:#fff;border-radius:3px 3px 0 0;min-height:3px;transition:height .4s}.ckp-sp:hover i{background:#c9c9d0}.ckp-sp span{font-size:9px;color:#8a8a90;margin-top:4px}'
   ].join(''); document.head.appendChild(cs); } }catch(e){}
+})();</script>
+
+<script id="tva-refund-mod">
+/* ===== Module Remboursement de TVA (factures + crédit de TVA) ===== */
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function money(n){ n=+n||0; try{ if(typeof eur==='function')return eur(n); }catch(e){} return n.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }
+  function state2(){ return (typeof state!=='undefined')?state:(window.state||{}); }
+  function data(){ try{ DB.parametres=DB.parametres||{}; if(!Array.isArray(DB.parametres.tvaFactures))DB.parametres.tvaFactures=[]; return DB.parametres.tvaFactures; }catch(e){ return []; } }
+  function ui(){ window.__tvrUI=window.__tvrUI||{filter:'all',q:'',sens:'deb',taux:20}; return window.__tvrUI; }
+  function frDate(iso){ if(!iso)return ''; var p=(''+iso).split('T')[0].split('-'); if(p.length<3)return iso; return p[2]+'/'+p[1]+'/'+p[0]; }
+  function uid2(){ return 'tvf'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+  /* ---- Calcul automatique HT / taux / TVA / TTC dans le formulaire ---- */
+  window.tvrCalc=function(src){
+    var g=function(id){var e=document.getElementById(id);return e?e.value:'';};
+    var ht=parseFloat(g('tvr-ht'))||0, taux=parseFloat(g('tvr-taux'))||0;
+    var tvaEl=document.getElementById('tvr-tva'), ttcEl=document.getElementById('tvr-ttc');
+    if(src!=='tva' && tvaEl){ tvaEl.value=(Math.round(ht*taux)/100).toFixed(2); }
+    var tva=parseFloat(tvaEl?tvaEl.value:0)||0;
+    if(ttcEl) ttcEl.value=(ht+tva).toFixed(2);
+  };
+  window.tvrSetSens=function(s){ ui().sens=(s==='col')?'col':'deb'; render(); };
+  window.tvrSetFilter=function(f){ ui().filter=f; render(); };
+  window.tvrSearch=function(v){ ui().q=(''+v).trim(); var w=document.getElementById('tvr-tbwrap'); if(w)w.innerHTML=tvrTableHTML(); };
+
+  window.tvrAjouter=function(){
+    var g=function(id){var e=document.getElementById(id);return e?(''+e.value).trim():'';};
+    var f={ id:uid2(), sens:(ui().sens==='col'?'col':'deb'),
+      date:g('tvr-date'), fournisseur:g('tvr-four'), numero:g('tvr-num'),
+      taux:parseFloat(g('tvr-taux'))||0, ht:parseFloat(g('tvr-ht'))||0,
+      tva:parseFloat(g('tvr-tva'))||0, ttc:parseFloat(g('tvr-ttc'))||0, ts:Date.now() };
+    if(!f.fournisseur && !f.numero){ if(typeof toast==='function')toast('Renseignez au moins le fournisseur ou le n° de facture.'); return; }
+    if(!f.ttc) f.ttc=f.ht+f.tva;
+    var file=document.getElementById('tvr-file');
+    function push(){ data().push(f); try{save();}catch(e){} render(); if(typeof toast==='function')toast('Facture ajoutée.'); }
+    if(file && file.files && file.files[0]){ var fl=file.files[0]; if(fl.size>6*1048576){ if(typeof toast==='function')toast('Fichier trop volumineux (6 Mo max).'); } var rd=new FileReader(); rd.onload=function(){ f.file={name:fl.name,type:fl.type,data:rd.result}; push(); }; rd.onerror=function(){ push(); }; rd.readAsDataURL(fl); }
+    else push();
+  };
+  window.tvrSupprimer=function(id){ var d=data(); var i=d.findIndex(function(x){return x.id===id;}); if(i>=0){ d.splice(i,1); try{save();}catch(e){} render(); } };
+  window.tvrVoir=function(id){ var f=data().find(function(x){return x.id===id;}); if(!f||!f.file||!f.file.data){ if(typeof toast==='function')toast('Aucun justificatif joint.'); return; } try{ var w=window.open(); if(w){ w.document.write('<iframe src="'+f.file.data+'" style="border:0;width:100%;height:100%;position:absolute;inset:0"></iframe>'); } }catch(e){ if(typeof toast==='function')toast('Impossible d’ouvrir le justificatif.'); } };
+
+  function filtered(){
+    var u=ui(), q=u.q.toLowerCase();
+    return data().filter(function(f){
+      if(u.filter==='deb'&&f.sens!=='deb')return false;
+      if(u.filter==='col'&&f.sens!=='col')return false;
+      if(q){ var hay=((f.fournisseur||'')+' '+(f.numero||'')).toLowerCase(); if(hay.indexOf(q)<0)return false; }
+      return true;
+    }).sort(function(a,b){ return (''+(b.date||'')).localeCompare(''+(a.date||''))|| (b.ts-a.ts); });
+  }
+  function tvrTableHTML(){
+    var rows=filtered();
+    var tH=0,tT=0,tC=0;
+    var body=rows.length?rows.map(function(f){ tH+=+f.ht||0; tT+=+f.tva||0; tC+=+f.ttc||0;
+      var badge=f.sens==='col'?'<span class="tvr-badge col">Collectée</span>':'<span class="tvr-badge deb">Débitée</span>';
+      var doc=f.file?('<button class="tvr-ic" title="Voir le justificatif" onclick="tvrVoir(\''+f.id+'\')">👁</button>'):'';
+      return '<tr class="tvr-tr '+(f.sens==='col'?'is-col':'is-deb')+'">'
+        +'<td>'+E(frDate(f.date))+'</td>'
+        +'<td>'+E(f.fournisseur||'—')+'</td>'
+        +'<td>'+E(f.numero||'—')+'</td>'
+        +'<td class="r">'+money(f.ht)+'</td>'
+        +'<td class="r">'+money(f.tva)+'</td>'
+        +'<td class="r">'+money(f.ttc)+'</td>'
+        +'<td>'+badge+'</td>'
+        +'<td class="r tvr-act">'+doc+'<button class="tvr-ic danger" title="Supprimer" onclick="tvrSupprimer(\''+f.id+'\')">🗑</button></td></tr>';
+    }).join(''):'<tr><td colspan="8" class="tvr-empty">Aucune facture. Ajoutez-en ci-dessus.</td></tr>';
+    return '<table class="tvr-tbl"><thead><tr><th>Date</th><th>Fournisseur</th><th>N° Facture</th><th class="r">Montant HT</th><th class="r">TVA</th><th class="r">TTC</th><th>Type</th><th class="r">Actions</th></tr></thead>'
+      +'<tbody>'+body+'</tbody>'
+      +(rows.length?('<tfoot><tr><td colspan="3">Total ('+rows.length+' facture'+(rows.length>1?'s':'')+')</td><td class="r">'+money(tH)+'</td><td class="r">'+money(tT)+'</td><td class="r">'+money(tC)+'</td><td colspan="2"></td></tr></tfoot>'):'')
+      +'</table>';
+  }
+
+  window.pageTvaRembours=function(){
+    var u=ui();
+    var all=data();
+    var deb=all.filter(function(f){return f.sens==='deb';});
+    var col=all.filter(function(f){return f.sens==='col';});
+    var tvaDeb=deb.reduce(function(a,f){return a+(+f.tva||0);},0);
+    var tvaCol=col.reduce(function(a,f){return a+(+f.tva||0);},0);
+    var htTot=all.reduce(function(a,f){return a+(+f.ht||0);},0);
+    var credit=tvaDeb-tvaCol;
+
+    /* Synthèse / remboursement */
+    var synth='<div class="card tvr-synth"><div class="card-h"><h2>💶 Crédit de TVA — remboursement</h2></div><div class="card-b">'
+      +'<div class="tvr-kpis">'
+      +'<div class="tvr-k"><div class="tvr-kv">'+money(tvaDeb)+'</div><div class="tvr-kl">TVA débitée (déductible)</div></div>'
+      +'<div class="tvr-k"><div class="tvr-kv">'+money(tvaCol)+'</div><div class="tvr-kl">TVA collectée</div></div>'
+      +'<div class="tvr-k big '+(credit>0?'ok':(credit<0?'due':''))+'"><div class="tvr-kv">'+money(Math.abs(credit))+'</div><div class="tvr-kl">'+(credit>0?'Crédit de TVA à rembourser':(credit<0?'TVA à décaisser':'Solde de TVA'))+'</div></div>'
+      +'</div>'
+      +'<div class="tvr-note">'+(credit>0?('Le dossier présente un crédit de TVA de <b>'+money(credit)+'</b> : une demande de remboursement peut être constituée à partir des '+deb.length+' facture(s) déductible(s).'):(credit<0?('TVA nette due de <b>'+money(-credit)+'</b> — pas de remboursement sur cette période.'):'Solde de TVA équilibré.'))+'</div>'
+      +'<div class="tvr-tools2"><button class="btn" onclick="tvrExportCSV()">⬇︎ Exporter (CSV)</button><button class="btn" onclick="tvrImprimer()">🖨 Éditer le dossier de remboursement</button></div>'
+      +'</div></div>';
+
+    /* Formulaire d'ajout */
+    var sensBtns='<div class="tvr-seg"><button class="tvr-sb'+(u.sens!=='col'?' on':'')+'" onclick="tvrSetSens(\'deb\')">TVA débitée (achat)</button>'
+      +'<button class="tvr-sb'+(u.sens==='col'?' on':'')+'" onclick="tvrSetSens(\'col\')">TVA collectée (vente)</button></div>';
+    var form='<div class="card"><div class="card-h"><h2>➕ Ajouter une facture</h2></div><div class="card-b">'
+      +sensBtns
+      +'<div class="tvr-form">'
+      +'<label>Date<input type="date" id="tvr-date" max="9999-12-31"></label>'
+      +'<label>'+(u.sens==='col'?'Client':'Fournisseur')+'<input type="text" id="tvr-four" placeholder="Nom"></label>'
+      +'<label>N° Facture<input type="text" id="tvr-num" placeholder="FAC-2026-001"></label>'
+      +'<label>Montant HT<input type="number" step="0.01" id="tvr-ht" oninput="tvrCalc()"></label>'
+      +'<label>Taux TVA<select id="tvr-taux" onchange="tvrCalc()"><option value="20">20 %</option><option value="10">10 %</option><option value="5.5">5,5 %</option><option value="2.1">2,1 %</option><option value="0">0 %</option></select></label>'
+      +'<label>TVA<input type="number" step="0.01" id="tvr-tva" oninput="tvrCalc(\'tva\')"></label>'
+      +'<label>TTC<input type="number" step="0.01" id="tvr-ttc" readonly></label>'
+      +'<label class="tvr-file">Justificatif (facultatif)<input type="file" id="tvr-file" accept="application/pdf,image/*"></label>'
+      +'</div>'
+      +'<div class="tvr-formact"><button class="btn btn-pri" onclick="tvrAjouter()">Ajouter la facture</button></div>'
+      +'</div></div>';
+
+    /* Barre de filtres */
+    var fb=function(k,lbl,n){ return '<button class="tvr-fb'+(u.filter===k?' on':'')+'" onclick="tvrSetFilter(\''+k+'\')">'+lbl+'<span class="tvr-fc">'+n+'</span></button>'; };
+    var filters='<div class="card"><div class="card-h"><h2>📋 Factures — détail</h2></div><div class="card-b">'
+      +'<div class="tvr-toolbar">'
+      +'<div class="tvr-filters">'+fb('all','Toutes',all.length)+fb('deb','TVA débitée',deb.length)+fb('col','TVA collectée',col.length)+'</div>'
+      +'<div class="tvr-search"><input type="text" id="tvr-q" placeholder="🔎 Filtrer (fournisseur, n° facture)…" value="'+E(u.q)+'" oninput="tvrSearch(this.value)"><button class="btn btn-sm" onclick="tvrSearch(document.getElementById(\'tvr-q\').value)">Filtrer</button></div>'
+      +'</div>'
+      +'<div class="tvr-tbwrap" id="tvr-tbwrap">'+tvrTableHTML()+'</div>'
+      +'</div></div>';
+
+    return '<div class="tvr-wrap">'+synth+form+filters+'</div>';
+  };
+
+  window.tvrExportCSV=function(){
+    var rows=filtered(); if(!rows.length){ if(typeof toast==='function')toast('Aucune facture à exporter.'); return; }
+    var esc=function(s){ s=''+(s==null?'':s); return /[";\n]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s; };
+    var lines=['Date;Fournisseur;N° Facture;HT;TVA;TTC;Type'];
+    rows.forEach(function(f){ lines.push([frDate(f.date),f.fournisseur||'',f.numero||'',(+f.ht||0).toFixed(2),(+f.tva||0).toFixed(2),(+f.ttc||0).toFixed(2),f.sens==='col'?'Collectée':'Débitée'].map(esc).join(';')); });
+    var blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remboursement-tva.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+  };
+  window.tvrImprimer=function(){
+    var all=data();
+    var deb=all.filter(function(f){return f.sens==='deb';}), col=all.filter(function(f){return f.sens==='col';});
+    var tvaDeb=deb.reduce(function(a,f){return a+(+f.tva||0);},0), tvaCol=col.reduce(function(a,f){return a+(+f.tva||0);},0);
+    var credit=tvaDeb-tvaCol;
+    var cab=''; try{ cab=(JSON.parse(localStorage.getItem('last-svc')||'{}').portail||{}).cabinet||'AEM CONSEIL'; }catch(e){ cab='AEM CONSEIL'; }
+    function tbl(list,titre){ if(!list.length)return ''; var h=0,t=0,c=0;
+      var r=list.slice().sort(function(a,b){return (''+(a.date||'')).localeCompare(''+(b.date||''));}).map(function(f){h+=+f.ht||0;t+=+f.tva||0;c+=+f.ttc||0;return '<tr><td>'+E(frDate(f.date))+'</td><td>'+E(f.fournisseur||'')+'</td><td>'+E(f.numero||'')+'</td><td style="text-align:right">'+money(f.ht)+'</td><td style="text-align:right">'+money(f.tva)+'</td><td style="text-align:right">'+money(f.ttc)+'</td></tr>';}).join('');
+      return '<h3>'+titre+'</h3><table class="tvr-doc-t"><thead><tr><th>Date</th><th>Fournisseur/Client</th><th>N° Facture</th><th style="text-align:right">HT</th><th style="text-align:right">TVA</th><th style="text-align:right">TTC</th></tr></thead><tbody>'+r+'</tbody><tfoot><tr><td colspan="3">Total</td><td style="text-align:right">'+money(h)+'</td><td style="text-align:right">'+money(t)+'</td><td style="text-align:right">'+money(c)+'</td></tr></tfoot></table>'; }
+    var html='<div class="doc-page tvr-doc"><style>.tvr-doc{font-family:Georgia,serif;color:#111;padding:24px}.tvr-doc h1{font-size:20px;margin:0 0 4px}.tvr-doc h3{font-size:14px;margin:18px 0 6px;border-bottom:1px solid #333;padding-bottom:3px}.tvr-doc-t{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:6px}.tvr-doc-t th,.tvr-doc-t td{border:1px solid #bbb;padding:5px 7px}.tvr-doc-t thead th{background:#eee}.tvr-doc-t tfoot td{font-weight:700;background:#f4f4f4}.tvr-sum{margin-top:14px;font-size:13px}.tvr-sum b{font-size:15px}</style>'
+      +'<h1>Dossier de demande de remboursement de TVA</h1>'
+      +'<div style="font-size:12px;color:#444">'+E(cab)+' — édité le '+E(frDate(new Date().toISOString().slice(0,10)))+'</div>'
+      +tbl(deb,'Factures d’achat — TVA déductible (débitée)')
+      +tbl(col,'Factures de vente — TVA collectée')
+      +'<div class="tvr-sum">TVA déductible : <b>'+money(tvaDeb)+'</b> · TVA collectée : <b>'+money(tvaCol)+'</b><br>'
+      +(credit>0?('<span style="color:#0a6b2f">Crédit de TVA à rembourser : <b>'+money(credit)+'</b></span>'):(credit<0?('TVA nette à décaisser : <b>'+money(-credit)+'</b>'):'Solde équilibré'))+'</div></div>';
+    var pa=document.getElementById('print-area');
+    if(pa){ pa.innerHTML=html; window.print(); setTimeout(function(){pa.innerHTML='';},600); }
+    else { var w=window.open(); if(w){ w.document.write(html); w.print(); } }
+  };
+
+  /* ---- PAGES + nav ---- */
+  try{ if(typeof PAGES!=='undefined' && !PAGES.some(function(p){return p.id==='tvarembours';})){
+    var iEd=PAGES.findIndex(function(p){return p.id==='editions';});
+    var entry={id:'tvarembours',lbl:'Remboursement TVA',ic:'euro',sub:'Analyse des factures & crédit de TVA'};
+    if(iEd>=0)PAGES.splice(iEd+1,0,entry);else PAGES.push(entry);
+  } }catch(e){}
+  function injectTvrBtn(){
+    var nav=document.getElementById('nav'); if(!nav)return; if(nav.querySelector('[data-tvrbtn]'))return;
+    var after=nav.querySelector('button.nav-btn[onclick*="editions"]');
+    var on=(state2().page==='tvarembours')?' on':'';
+    var ico=(typeof svg==='function'&&typeof IC!=='undefined'&&IC.euro)?svg(IC.euro):'';
+    var b=document.createElement('button'); b.className='nav-btn'+on; b.setAttribute('data-tvrbtn','1'); b.setAttribute('onclick',"go('tvarembours')");
+    b.innerHTML=ico+'<span class="nav-btn-lbl">Remboursement TVA</span>';
+    if(after&&after.parentNode)after.parentNode.insertBefore(b,after.nextSibling); else nav.appendChild(b);
+  }
+  try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){var r=_bn.apply(this,arguments);try{injectTvrBtn();}catch(e){}return r;}; } }catch(e){}
+  try{ var _rd=window.render; if(typeof _rd==='function'){ window.render=function(){
+    if(state2().page==='tvarembours'){
+      try{buildNav();}catch(e){} try{document.body.dataset.page='tvarembours';}catch(e){}
+      var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='tvarembours';}):null;
+      try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Remboursement TVA';}catch(e){}
+      try{document.getElementById('psub').textContent=(p&&p.sub)||'';}catch(e){}
+      var V=document.getElementById('view'); if(V)V.innerHTML=pageTvaRembours();
+      try{ tvrCalc(); }catch(e){}
+      try{ if(typeof injectTvrBtn==='function')injectTvrBtn(); }catch(e){}
+      return;
+    }
+    return _rd.apply(this,arguments);
+  }; } }catch(e){}
+
+  /* ---- Style ---- */
+  try{ if(!document.getElementById('tvr-css')){ var st=document.createElement('style'); st.id='tvr-css'; st.textContent=[
+    '.tvr-wrap{display:flex;flex-direction:column;gap:14px}',
+    '.tvr-kpis{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:12px}@media(max-width:760px){.tvr-kpis{grid-template-columns:1fr}}',
+    '.tvr-k{background:var(--paper-2,#1a2334);border:1px solid var(--line-2,#2c384b);border-radius:12px;padding:14px 16px}.tvr-kv{font-size:22px;font-weight:800;color:var(--ink,#f5f9fe)}.tvr-kl{font-size:11.5px;color:var(--ink-3,#8494aa);margin-top:3px}',
+    '.tvr-k.big{border-color:#2c6b4e}.tvr-k.big.ok{background:rgba(91,191,138,.10);border-color:#2c6b4e}.tvr-k.big.ok .tvr-kv{color:#5bbf8a}.tvr-k.big.due{background:rgba(224,103,79,.10);border-color:#7a3a2c}.tvr-k.big.due .tvr-kv{color:#e0674f}',
+    '.tvr-note{margin-top:12px;font-size:12.5px;color:var(--ink-2,#b6c3d6);line-height:1.6}',
+    '.tvr-tools2{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}',
+    '.tvr-seg{display:inline-flex;gap:4px;background:var(--paper-2,#1a2334);border:1px solid var(--line-2,#2c384b);border-radius:9px;padding:3px;margin-bottom:12px}.tvr-sb{border:none;background:none;color:var(--ink-2,#b6c3d6);font:inherit;font-size:12px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer}.tvr-sb.on{background:var(--accent,#4f9dff);color:#fff}',
+    '.tvr-form{display:grid;grid-template-columns:repeat(4,1fr);gap:11px}@media(max-width:900px){.tvr-form{grid-template-columns:1fr 1fr}}@media(max-width:560px){.tvr-form{grid-template-columns:1fr}}',
+    '.tvr-form label{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:var(--ink-3,#8494aa);font-weight:600}.tvr-form input,.tvr-form select{padding:8px 10px;border-radius:8px;border:1px solid var(--line-2,#2c384b);background:var(--paper,#141b28);color:var(--ink,#f5f9fe);font:inherit;font-size:13px}.tvr-file{grid-column:1/-1}',
+    '.tvr-formact{margin-top:13px}',
+    '.tvr-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}',
+    '.tvr-filters{display:inline-flex;gap:6px;flex-wrap:wrap}.tvr-fb{border:1px solid var(--line-2,#2c384b);background:var(--card,#141b28);color:var(--ink-2,#b6c3d6);font:inherit;font-size:12px;font-weight:600;padding:7px 13px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}.tvr-fb.on{background:var(--accent,#4f9dff);border-color:var(--accent,#4f9dff);color:#fff}.tvr-fc{font-size:10.5px;font-weight:700;background:rgba(255,255,255,.12);border-radius:20px;padding:0 7px}',
+    '.tvr-search{display:flex;gap:7px;align-items:center}.tvr-search input{padding:8px 11px;border-radius:8px;border:1px solid var(--line-2,#2c384b);background:var(--paper,#141b28);color:var(--ink,#f5f9fe);font:inherit;font-size:12.5px;min-width:230px}',
+    '.tvr-tbwrap{overflow-x:auto}',
+    '.tvr-tbl{width:100%;border-collapse:collapse;font-size:12.5px}.tvr-tbl th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3,#8494aa);font-weight:700;padding:9px 11px;border-bottom:1px solid var(--line-2,#2c384b);white-space:nowrap}.tvr-tbl td{padding:9px 11px;border-bottom:1px solid var(--line-soft,#1b2432);color:var(--ink,#f5f9fe);white-space:nowrap}.tvr-tbl td.r,.tvr-tbl th.r{text-align:right}',
+    '.tvr-tr.is-deb{box-shadow:inset 3px 0 0 #4f9dff}.tvr-tr.is-col{box-shadow:inset 3px 0 0 #c9a13c}.tvr-tbl tbody tr:hover{background:rgba(255,255,255,.03)}',
+    '.tvr-tbl tfoot td{font-weight:800;color:var(--ink,#f5f9fe);border-top:2px solid var(--line-2,#2c384b);padding:10px 11px}',
+    '.tvr-badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:20px}.tvr-badge.deb{background:rgba(79,157,255,.16);color:#7db4ff}.tvr-badge.col{background:rgba(201,161,60,.16);color:#e2c26a}',
+    '.tvr-ic{background:none;border:1px solid var(--line-2,#2c384b);border-radius:7px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--ink-2,#b6c3d6);margin-left:5px}.tvr-ic:hover{border-color:var(--accent,#4f9dff)}.tvr-ic.danger:hover{border-color:#e0674f;color:#e0674f}.tvr-act{white-space:nowrap}',
+    '.tvr-empty{text-align:center;color:var(--ink-3,#8494aa);padding:20px 0}'
+  ].join(''); document.head.appendChild(st); } }catch(e){}
 })();</script>
 
 </body>
