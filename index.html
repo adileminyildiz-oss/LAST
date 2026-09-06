@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=487;
+var LAST_VER=488;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -24269,6 +24269,76 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function frDate(iso){ if(!iso)return ''; var p=(''+iso).split('T')[0].split('-'); if(p.length<3)return iso; return p[2]+'/'+p[1]+'/'+p[0]; }
   function uid2(){ return 'tvf'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 
+  /* ---- Analyse (lecture) d'une facture : extraction des informations ---- */
+  function pad2(n){ n=''+n; return n.length<2?('0'+n):n; }
+  function toISO(s){ var m=(''+s).match(/(\d{1,2})[\/.\- ](\d{1,2})[\/.\- ](\d{2,4})/); if(!m)return ''; var y=m[3]; if(y.length===2)y='20'+y; var mo=+m[2], d=+m[1]; if(mo>12&&d<=12){ var t=mo;mo=d;d=t; } if(mo<1||mo>12||d<1||d>31)return ''; return y+'-'+pad2(mo)+'-'+pad2(d); }
+  function toNum(s){ if(s==null)return null; s=(''+s).replace(/[ \s€]/g,''); if(s.indexOf(',')>=0&&s.indexOf('.')>=0){ s=s.replace(/\./g,'').replace(',','.'); } else if(s.indexOf(',')>=0){ s=s.replace(',','.'); } else { var dots=s.split('.'); if(dots.length>2)s=dots.slice(0,-1).join('')+'.'+dots[dots.length-1]; } var v=parseFloat(s); return isNaN(v)?null:v; }
+  var AMT='([0-9][0-9\\u00a0 .,]*[0-9]|[0-9])';
+  function capAmt(flat,kw){ try{ var re=new RegExp(kw+'\\s*[:\\-]?\\s*€?\\s*'+AMT,'i'); var m=flat.match(re); return m?toNum(m[1]):null; }catch(e){ return null; } }
+  window.tvrParseFacture=function(text){
+    var raw=''+(text||''); var flat=raw.replace(/ /g,' ').replace(/\s+/g,' '); var out={};
+    /* numéro de facture */
+    var mNum=flat.match(/facture\s*(?:n[°ºo]|no|num[ée]ro)?\s*[:#º°\-]?\s*([A-Z0-9][A-Z0-9\/\.\-]{2,22})/i)
+          || flat.match(/n[°ºo]\s*(?:de\s*)?facture\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\/\.\-]{2,22})/i);
+    if(mNum)out.numero=mNum[1].replace(/[.\-]+$/,'');
+    /* date */
+    var mDate=flat.match(/date\s*(?:de\s*facture|d.[ée]mission|facture|du)?\s*[:\-]?\s*(\d{1,2}[\/.\- ]\d{1,2}[\/.\- ]\d{2,4})/i)
+           || flat.match(/(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4})/);
+    if(mDate)out.date=toISO(mDate[1]);
+    /* taux */
+    var mTaux=flat.match(/(?:tva|t\.v\.a)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d)?)\s*%/i)||flat.match(/(\d{1,2}(?:[.,]\d)?)\s*%/);
+    if(mTaux)out.taux=parseFloat(mTaux[1].replace(',','.'));
+    /* montants */
+    var ttc=capAmt(flat,'(?:total\\s*ttc|montant\\s*ttc|net\\s*[àa]\\s*payer|total\\s*t\\.t\\.c|net\\s*[àa]\\s*r[ée]gler|à\\s*payer)');
+    var ht =capAmt(flat,'(?:total\\s*ht|montant\\s*ht|base\\s*ht|total\\s*h\\.t|sous[- ]?total\\s*ht|total\\s*hors\\s*taxes?)');
+    var tva=capAmt(flat,'(?:total\\s*(?:de\\s*)?tva|montant\\s*(?:de\\s*)?tva|dont\\s*tva|t\\.v\\.a\\.?)');
+    if(ttc==null&&ht!=null&&tva!=null)ttc=Math.round((ht+tva)*100)/100;
+    if(ht==null&&ttc!=null&&out.taux)ht=Math.round(ttc/(1+out.taux/100)*100)/100;
+    if(tva==null&&ttc!=null&&ht!=null)tva=Math.round((ttc-ht)*100)/100;
+    if(ht==null&&ttc!=null&&tva!=null)ht=Math.round((ttc-tva)*100)/100;
+    if(tva==null&&ht!=null&&out.taux)tva=Math.round(ht*out.taux)/100;
+    if(ttc==null&&ht!=null&&tva!=null)ttc=Math.round((ht+tva)*100)/100;
+    if(ht!=null)out.ht=ht; if(tva!=null)out.tva=tva; if(ttc!=null)out.ttc=ttc;
+    /* fournisseur */
+    var four='';
+    var mF=flat.match(/(?:fournisseur|[ée]metteur|vendeur|[ée]mis\s*par|soci[ée]t[ée])\s*[:\-]\s*([A-Za-zÀ-ÿ0-9'’&\.\- ]{3,42})/i);
+    if(mF)four=mF[1];
+    if(!four){ var lines=raw.split(/[\r\n]+/).map(function(x){return x.trim();}).filter(Boolean);
+      for(var i=0;i<Math.min(lines.length,8)&&!four;i++){ var L=lines[i]; if(/facture|devis|invoice/i.test(L))continue; if(/(sarl|sas|sasu|eurl|\bsa\b|sci|\bei\b|entreprise|soci[ée]t[ée])/i.test(L)&&L.length<=48)four=L; }
+      if(!four){ for(var j=0;j<Math.min(lines.length,4)&&!four;j++){ var Lj=lines[j]; if(/^[\d\W]+$/.test(Lj)||/facture|devis/i.test(Lj))continue; if(Lj.length>=3&&Lj.length<=42)four=Lj; } }
+    }
+    if(!four){ var mC=flat.match(/([A-ZÀ-Þ][A-Za-zÀ-ÿ'’&\.\- ]{2,40}?\s+(?:SARL|SAS|SASU|EURL|SA|SCI))/); if(mC)four=mC[1]; }
+    if(four)out.fournisseur=four.replace(/\s+/g,' ').replace(/[\s\-:]+$/,'').slice(0,60);
+    /* service / prestation (désignation) */
+    var mS=flat.match(/(?:d[ée]signation|description|libell[ée]|prestations?|d[ée]tail|objet)\s*[:\-]?\s*(.{4,140}?)\s*(?:quantit|qt[ée]|p\.?\s?u|prix\s*unit|montant|total|ht\b|tva|\d+[.,]\d{2})/i);
+    if(mS)out.services=mS[1].replace(/\s+/g,' ').trim();
+    return out;
+  };
+  window.tvrAnalyser=function(inp){
+    var f=inp&&inp.files&&inp.files[0]; if(!f)return;
+    var st=document.getElementById('tvr-ocr-status'); function S(t,c){ if(st){ st.textContent=t; st.className='tvr-ocr'+(c?(' '+c):''); } }
+    if(typeof window.espOcrRead!=='function'){ S('Lecture non disponible — saisissez les champs manuellement.','warn'); return; }
+    S('⏳ Lecture de la facture…');
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{ window.espOcrRead(rd.result,function(text){
+        if(!text||(''+text).replace(/\s/g,'').length<8){ S('Facture illisible automatiquement (PDF scanné sans texte, ou image hors-ligne). Renseignez les champs à la main.','warn'); return; }
+        var p=window.tvrParseFacture(text);
+        function set(id,v){ var e=document.getElementById(id); if(e&&v!=null&&v!=='')e.value=v; }
+        set('tvr-date',p.date); set('tvr-four',p.fournisseur); set('tvr-num',p.numero); set('tvr-serv',p.services);
+        if(p.taux!=null)set('tvr-taux',String(p.taux));
+        if(p.ht!=null)set('tvr-ht',(+p.ht).toFixed(2));
+        if(p.tva!=null)set('tvr-tva',(+p.tva).toFixed(2));
+        if(p.ttc!=null)set('tvr-ttc',(+p.ttc).toFixed(2));
+        try{ if(p.ttc==null)tvrCalc('tva'); }catch(e){}
+        var got=[]; if(p.numero)got.push('n°'); if(p.date)got.push('date'); if(p.fournisseur)got.push('fournisseur'); if(p.ttc!=null||p.ht!=null)got.push('montants'); if(p.services)got.push('service');
+        S(got.length?('✓ Facture analysée — reconnus : '+got.join(', ')+'. Vérifiez puis « Ajouter ».'):'Facture lue mais peu d’informations détectées — complétez à la main.', got.length?'ok':'warn');
+      }); }catch(e){ S('Lecture impossible — saisissez les champs manuellement.','warn'); }
+    };
+    rd.onerror=function(){ S('Lecture du fichier impossible.','warn'); };
+    rd.readAsDataURL(f);
+  };
+
   /* ---- Calcul automatique HT / taux / TVA / TTC dans le formulaire ---- */
   window.tvrCalc=function(src){
     var g=function(id){var e=document.getElementById(id);return e?e.value:'';};
@@ -24285,7 +24355,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.tvrAjouter=function(){
     var g=function(id){var e=document.getElementById(id);return e?(''+e.value).trim():'';};
     var f={ id:uid2(), sens:(ui().sens==='col'?'col':'deb'),
-      date:g('tvr-date'), fournisseur:g('tvr-four'), numero:g('tvr-num'),
+      date:g('tvr-date'), fournisseur:g('tvr-four'), numero:g('tvr-num'), services:g('tvr-serv'),
       taux:parseFloat(g('tvr-taux'))||0, ht:parseFloat(g('tvr-ht'))||0,
       tva:parseFloat(g('tvr-tva'))||0, ttc:parseFloat(g('tvr-ttc'))||0, ts:Date.now() };
     if(!f.fournisseur && !f.numero){ if(typeof toast==='function')toast('Renseignez au moins le fournisseur ou le n° de facture.'); return; }
@@ -24316,16 +24386,17 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       return '<tr class="tvr-tr '+(f.sens==='col'?'is-col':'is-deb')+'">'
         +'<td>'+E(frDate(f.date))+'</td>'
         +'<td>'+E(f.fournisseur||'—')+'</td>'
+        +'<td class="tvr-serv-c" title="'+E(f.services||'')+'">'+E(f.services||'—')+'</td>'
         +'<td>'+E(f.numero||'—')+'</td>'
         +'<td class="r">'+money(f.ht)+'</td>'
         +'<td class="r">'+money(f.tva)+'</td>'
         +'<td class="r">'+money(f.ttc)+'</td>'
         +'<td>'+badge+'</td>'
         +'<td class="r tvr-act">'+doc+'<button class="tvr-ic danger" title="Supprimer" onclick="tvrSupprimer(\''+f.id+'\')">🗑</button></td></tr>';
-    }).join(''):'<tr><td colspan="8" class="tvr-empty">Aucune facture. Ajoutez-en ci-dessus.</td></tr>';
-    return '<table class="tvr-tbl"><thead><tr><th>Date</th><th>Fournisseur</th><th>N° Facture</th><th class="r">Montant HT</th><th class="r">TVA</th><th class="r">TTC</th><th>Type</th><th class="r">Actions</th></tr></thead>'
+    }).join(''):'<tr><td colspan="9" class="tvr-empty">Aucune facture. Déposez-en une ci-dessus.</td></tr>';
+    return '<table class="tvr-tbl"><thead><tr><th>Date</th><th>Fournisseur</th><th>Service</th><th>N° Facture</th><th class="r">Montant HT</th><th class="r">TVA</th><th class="r">TTC</th><th>Type</th><th class="r">Actions</th></tr></thead>'
       +'<tbody>'+body+'</tbody>'
-      +(rows.length?('<tfoot><tr><td colspan="3">Total ('+rows.length+' facture'+(rows.length>1?'s':'')+')</td><td class="r">'+money(tH)+'</td><td class="r">'+money(tT)+'</td><td class="r">'+money(tC)+'</td><td colspan="2"></td></tr></tfoot>'):'')
+      +(rows.length?('<tfoot><tr><td colspan="4">Total ('+rows.length+' facture'+(rows.length>1?'s':'')+')</td><td class="r">'+money(tH)+'</td><td class="r">'+money(tT)+'</td><td class="r">'+money(tC)+'</td><td colspan="2"></td></tr></tfoot>'):'')
       +'</table>';
   }
 
@@ -24353,8 +24424,14 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     /* Formulaire d'ajout */
     var sensBtns='<div class="tvr-seg"><button class="tvr-sb'+(u.sens!=='col'?' on':'')+'" onclick="tvrSetSens(\'deb\')">TVA débitée (achat)</button>'
       +'<button class="tvr-sb'+(u.sens==='col'?' on':'')+'" onclick="tvrSetSens(\'col\')">TVA collectée (vente)</button></div>';
-    var form='<div class="card"><div class="card-h"><h2>➕ Ajouter une facture</h2></div><div class="card-b">'
+    var form='<div class="card"><div class="card-h"><h2>➕ Déposer / ajouter une facture</h2></div><div class="card-b">'
       +sensBtns
+      +'<div class="tvr-drop">'
+      +'<input type="file" id="tvr-file" accept="application/pdf,image/*" onchange="tvrAnalyser(this)" style="display:none">'
+      +'<button class="btn tvr-dropbtn" onclick="var e=document.getElementById(\'tvr-file\');if(e)e.click()">📎 Déposer une facture (PDF ou image) — lecture automatique</button>'
+      +'<button class="btn btn-sm" onclick="tvrAnalyser(document.getElementById(\'tvr-file\'))">🔎 Analyser</button>'
+      +'<div class="tvr-ocr" id="tvr-ocr-status">Déposez une facture : la date, le fournisseur, le n°, les montants (HT/TVA/TTC) et le service sont extraits automatiquement. Vérifiez puis ajoutez.</div>'
+      +'</div>'
       +'<div class="tvr-form">'
       +'<label>Date<input type="date" id="tvr-date" max="9999-12-31"></label>'
       +'<label>'+(u.sens==='col'?'Client':'Fournisseur')+'<input type="text" id="tvr-four" placeholder="Nom"></label>'
@@ -24363,7 +24440,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<label>Taux TVA<select id="tvr-taux" onchange="tvrCalc()"><option value="20">20 %</option><option value="10">10 %</option><option value="5.5">5,5 %</option><option value="2.1">2,1 %</option><option value="0">0 %</option></select></label>'
       +'<label>TVA<input type="number" step="0.01" id="tvr-tva" oninput="tvrCalc(\'tva\')"></label>'
       +'<label>TTC<input type="number" step="0.01" id="tvr-ttc" readonly></label>'
-      +'<label class="tvr-file">Justificatif (facultatif)<input type="file" id="tvr-file" accept="application/pdf,image/*"></label>'
+      +'<label class="tvr-serv-l">Service / prestation du fournisseur<input type="text" id="tvr-serv" placeholder="ex : carburant, honoraires, matériel…"></label>'
       +'</div>'
       +'<div class="tvr-formact"><button class="btn btn-pri" onclick="tvrAjouter()">Ajouter la facture</button></div>'
       +'</div></div>';
@@ -24384,8 +24461,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.tvrExportCSV=function(){
     var rows=filtered(); if(!rows.length){ if(typeof toast==='function')toast('Aucune facture à exporter.'); return; }
     var esc=function(s){ s=''+(s==null?'':s); return /[";\n]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s; };
-    var lines=['Date;Fournisseur;N° Facture;HT;TVA;TTC;Type'];
-    rows.forEach(function(f){ lines.push([frDate(f.date),f.fournisseur||'',f.numero||'',(+f.ht||0).toFixed(2),(+f.tva||0).toFixed(2),(+f.ttc||0).toFixed(2),f.sens==='col'?'Collectée':'Débitée'].map(esc).join(';')); });
+    var lines=['Date;Fournisseur;Service;N° Facture;HT;TVA;TTC;Type'];
+    rows.forEach(function(f){ lines.push([frDate(f.date),f.fournisseur||'',f.services||'',f.numero||'',(+f.ht||0).toFixed(2),(+f.tva||0).toFixed(2),(+f.ttc||0).toFixed(2),f.sens==='col'?'Collectée':'Débitée'].map(esc).join(';')); });
     var blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
     var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='remboursement-tva.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
   };
@@ -24461,7 +24538,12 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.tvr-tbl tfoot td{font-weight:800;color:var(--ink,#f5f9fe);border-top:2px solid var(--line-2,#2c384b);padding:10px 11px}',
     '.tvr-badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:20px}.tvr-badge.deb{background:rgba(79,157,255,.16);color:#7db4ff}.tvr-badge.col{background:rgba(201,161,60,.16);color:#e2c26a}',
     '.tvr-ic{background:none;border:1px solid var(--line-2,#2c384b);border-radius:7px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--ink-2,#b6c3d6);margin-left:5px}.tvr-ic:hover{border-color:var(--accent,#4f9dff)}.tvr-ic.danger:hover{border-color:#e0674f;color:#e0674f}.tvr-act{white-space:nowrap}',
-    '.tvr-empty{text-align:center;color:var(--ink-3,#8494aa);padding:20px 0}'
+    '.tvr-empty{text-align:center;color:var(--ink-3,#8494aa);padding:20px 0}',
+    '.tvr-drop{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--paper-2,#1a2334);border:1px dashed var(--line-2,#2c384b);border-radius:11px;padding:13px 15px;margin-bottom:14px}',
+    '.tvr-dropbtn{font-weight:700}',
+    '.tvr-ocr{flex-basis:100%;font-size:12px;color:var(--ink-3,#8494aa);line-height:1.5;margin-top:2px}.tvr-ocr.ok{color:#5bbf8a}.tvr-ocr.warn{color:#e0b060}',
+    '.tvr-serv-l{grid-column:1/-1}',
+    '.tvr-serv-c{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2,#b6c3d6)}'
   ].join(''); document.head.appendChild(st); } }catch(e){}
 })();</script>
 
