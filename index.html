@@ -3231,7 +3231,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=509;
+var LAST_VER=510;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -25028,13 +25028,13 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var form='<div class="inv-col-form">'
       +'<div class="card"><div class="card-h"><h2>Détails de la facture</h2></div><div class="card-b">'
       +'<div class="inv-grid" style="margin-bottom:6px">'+modSel()+'</div>'
-      +'<div class="inv-note">Émetteur (votre cabinet)</div>'
-      +'<div class="inv-grid">'+inp('emNom','Dénomination',d.emNom,'',null,true)+inp('emMail','E-mail',d.emMail,'',null)+inp('emAdr','Adresse',d.emAdr,'',null,true)
-      +inp('emSiren','SIREN',d.emSiren,'')+inp('emTva','N° TVA intracom.',d.emTva,'')+inp('emIban','IBAN',d.emIban,'')+inp('emBic','BIC',d.emBic,'')+'</div>'
-      +'<div class="inv-note">Client (destinataire)</div>'
-      +'<div class="inv-grid">'+inp('clNom','Nom du client',d.clNom,'Ex : SARL Dupont',null,true)+inp('clMail','E-mail',d.clMail,'',null)+inp('clAdr','Adresse',d.clAdr,'',null,true)+'</div>'
-      +'<div class="inv-note">Références</div>'
-      +'<div class="inv-grid">'+inp('numero','N° de facture',d.numero,'',null)+devSel()+inp('dateEmise','Date d’émission',d.dateEmise,'','date')+inp('dateEch','Date d’échéance',d.dateEch,'','date')+'</div>'
+      +'<details class="inv-sec"><summary class="inv-sec-h">Émetteur (votre cabinet)</summary>'
+      +'<div class="inv-grid" style="margin-top:8px">'+inp('emNom','Dénomination',d.emNom,'',null,true)+inp('emMail','E-mail',d.emMail,'',null)+inp('emAdr','Adresse',d.emAdr,'',null,true)
+      +inp('emSiren','SIREN',d.emSiren,'')+inp('emTva','N° TVA intracom.',d.emTva,'')+inp('emIban','IBAN',d.emIban,'')+inp('emBic','BIC',d.emBic,'')+'</div></details>'
+      +'<details class="inv-sec" open><summary class="inv-sec-h">Client (destinataire)</summary>'
+      +'<div class="inv-grid" style="margin-top:8px">'+inp('clNom','Nom du client',d.clNom,'Ex : SARL Dupont',null,true)+inp('clMail','E-mail',d.clMail,'',null)+inp('clAdr','Adresse',d.clAdr,'',null,true)+'</div></details>'
+      +'<details class="inv-sec"><summary class="inv-sec-h">Références</summary>'
+      +'<div class="inv-grid" style="margin-top:8px">'+inp('numero','N° de facture',d.numero,'',null)+devSel()+inp('dateEmise','Date d’émission',d.dateEmise,'','date')+inp('dateEch','Date d’échéance',d.dateEch,'','date')+'</div></details>'
       +'</div></div>'
       +'<div class="card"><div class="card-h"><h2>Prestations</h2></div><div class="card-b">'
       +'<div class="inv-lhead"><span>Désignation</span><span>Qté</span><span>Prix unitaire</span><span>Total</span><span></span></div>'
@@ -25086,6 +25086,14 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.inv-2col{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}.inv-2col.solo{grid-template-columns:1fr}@media(max-width:1000px){.inv-2col{grid-template-columns:1fr}}',
     '.inv-col-form{display:flex;flex-direction:column;gap:14px}',
     '.inv-note{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3,#8494aa);font-weight:700;margin:4px 0 8px}',
+    /* Sections repliables du formulaire */
+    '.inv-sec{border:1px solid var(--line-2,#2c384b);border-radius:10px;margin-bottom:8px;background:rgba(255,255,255,.02)}',
+    '.inv-sec>summary{list-style:none;cursor:pointer;padding:10px 12px;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-2,#b6c3d6);font-weight:700;display:flex;align-items:center;gap:8px;user-select:none}',
+    '.inv-sec>summary::-webkit-details-marker{display:none}',
+    '.inv-sec>summary::before{content:"›";font-size:15px;color:var(--accent,#4f9dff);transition:transform .15s;display:inline-block}',
+    '.inv-sec[open]>summary::before{transform:rotate(90deg)}',
+    '.inv-sec[open]>summary{border-bottom:1px solid var(--line-soft,#1b2432)}',
+    '.inv-sec>.inv-grid{padding:0 12px 12px}',
     '.inv-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.inv-grid label{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:var(--ink-3,#8494aa);font-weight:600}.inv-grid label.full{grid-column:1/-1}.inv-grid input,.inv-grid select{padding:8px 10px;border-radius:8px;border:1px solid var(--line-2,#2c384b);background:var(--paper,#141b28);color:var(--ink,#f5f9fe);font:inherit;font-size:13px}',
     /* Correctif « champ blanc » : le remplissage auto du navigateur (autofill) forçait un fond clair illisible sur le thème sombre → fond sombre + texte clair forcés. */
     '.inv-col-form input:-webkit-autofill,.inv-col-form input:-webkit-autofill:hover,.inv-col-form input:-webkit-autofill:focus,.inv-col-form input:-webkit-autofill:active,.inv-col-form textarea:-webkit-autofill{-webkit-text-fill-color:#f5f9fe!important;-webkit-box-shadow:0 0 0 1000px #141b28 inset!important;box-shadow:0 0 0 1000px #141b28 inset!important;caret-color:#f5f9fe!important;transition:background-color 9999s ease-in-out 0s}',
