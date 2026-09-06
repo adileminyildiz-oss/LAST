@@ -1,0 +1,45 @@
+# ============================================================================
+# Mar'q — Déploiement automatique vers l'hébergement IONOS
+# ----------------------------------------------------------------------------
+# À chaque push sur "main", les fichiers du site sont envoyés en SFTP dans
+# l'espace web IONOS relié à marq.aemconseil.eu.
+#
+# À CONFIGURER UNE FOIS dans GitHub :
+#   Dépôt → Settings → Secrets and variables → Actions → New repository secret
+#     IONOS_SFTP_HOST     = l'hôte SFTP donné par IONOS (ex. accessXXXX.webspace-data.io)
+#     IONOS_SFTP_USER     = l'identifiant SFTP IONOS
+#     IONOS_SFTP_PASSWORD = le mot de passe SFTP IONOS
+#     IONOS_REMOTE_PATH   = le dossier du site (ex. / ou /marq/ — le dossier relié au domaine)
+#
+# (Ces valeurs se trouvent dans IONOS → Hébergement → SFTP/SSH.)
+# ============================================================================
+name: Déploiement IONOS
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:   # permet un déclenchement manuel depuis l'onglet Actions
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Préparer le dossier de publication (fichiers du site uniquement)
+        run: |
+          mkdir -p dist
+          cp index.html sw.js version.json .htaccess dist/
+          ls -la dist
+
+      - name: Envoyer sur IONOS (SFTP)
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        with:
+          server:      ${{ secrets.IONOS_SFTP_HOST }}
+          username:    ${{ secrets.IONOS_SFTP_USER }}
+          password:    ${{ secrets.IONOS_SFTP_PASSWORD }}
+          port:        22
+          local_path:  './dist/*'
+          remote_path: ${{ secrets.IONOS_REMOTE_PATH }}
+          sftp_only:   true
