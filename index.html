@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=489;
+var LAST_VER=490;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -13434,17 +13434,36 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     pa.innerHTML=window.__fiscalDocPrint||'';setTimeout(function(){window.print();},140);};
 
   /* ---------- Contrat de sous-traitance ---------- */
-  function stData(d){d.fiscal=d.fiscal||{};if(!d.fiscal.soustraitance)d.fiscal.soustraitance={stNom:'',stForme:'',stSiret:'',stAdresse:'',stRep:'',objet:'',lieu:'',montant:0,tva:'normale',dateDebut:'',dateFin:'',delai:30,penalites:'',assurance:true,confid:true};return d.fiscal.soustraitance;}
+  function stData(d){d.fiscal=d.fiscal||{};if(!d.fiscal.soustraitance)d.fiscal.soustraitance={stNom:'',stForme:'',stSiret:'',stAdresse:'',stRep:'',objet:'',lieu:'',montant:0,tva:'normale',dateDebut:'',dateFin:'',delai:30,penalites:'',assurance:true,confid:true};
+    var s=d.fiscal.soustraitance;
+    /* Champs additionnels pour le modèle « BTP détaillé » */
+    if(s.modele==null)s.modele='standard';
+    ['refChantier','travaux','epCapital','epSiege','epRcs','epSiren','epRep','stCapital','stRcs','stSiren'].forEach(function(k){ if(s[k]==null)s[k]=''; });
+    if(s.dureeMois==null)s.dureeMois=12;
+    return s;}
   window.fiscalStSave=function(id,rer){var d=doss(id);if(!d)return;var st=stData(d),g=function(x){return document.getElementById(x);},q=function(x){return g(x)?g(x).value:'';},c=function(x){return g(x)?g(x).checked:false;};
-    ['stNom','stForme','stSiret','stAdresse','stRep','objet','lieu','tva','dateDebut','dateFin','penalites'].forEach(function(k){if(g('st-'+k))st[k]=q('st-'+k);});
-    if(g('st-montant'))st.montant=pf(q('st-montant'));if(g('st-delai'))st.delai=pf(q('st-delai'));
+    ['stNom','stForme','stSiret','stAdresse','stRep','objet','lieu','tva','dateDebut','dateFin','penalites','modele','refChantier','travaux','epCapital','epSiege','epRcs','epSiren','epRep','stCapital','stRcs','stSiren'].forEach(function(k){if(g('st-'+k))st[k]=q('st-'+k);});
+    if(g('st-montant'))st.montant=pf(q('st-montant'));if(g('st-delai'))st.delai=pf(q('st-delai'));if(g('st-dureeMois'))st.dureeMois=pf(q('st-dureeMois'))||12;
     if(g('st-assurance'))st.assurance=c('st-assurance');if(g('st-confid'))st.confid=c('st-confid');
     if(typeof save==='function')save();if(rer!==false){window.fiscalTab='soustraitance';fiscalRender(id);}};
   function m_soustraitance(d){var st=stData(d),i=info(d),p=i._p;var act=(d.fiscal.prev&&d.fiscal.prev.activite)||d.fiscal.secteur||'';var btp=/BTP|construction|travaux|maconnerie|batiment/i.test(actNorm(act))||/travaux|construction|maconnerie/i.test(actNorm(st.objet));
     var inp=function(id2,lbl,val,ph,full){return '<label'+(full?' style="grid-column:1/-1"':'')+'>'+E(lbl)+'<input id="'+id2+'" value="'+E(val||'')+'"'+(ph?(' placeholder="'+E(ph)+'"'):'')+' onchange="fiscalStSave(\''+d.id+'\')"></label>';};
     var numi=function(id2,lbl,val){return '<label>'+E(lbl)+'<input id="'+id2+'" type="number" value="'+(val||0)+'" onchange="fiscalStSave(\''+d.id+'\')"></label>';};
     var tvaSel='<label>Régime de TVA<select id="st-tva" onchange="fiscalStSave(\''+d.id+'\')"><option value="normale" '+(st.tva!=='autoliq'?'selected':'')+'>TVA 20 % (normale)</option><option value="autoliq" '+(st.tva==='autoliq'?'selected':'')+'>Autoliquidation (sous-traitance BTP)</option></select></label>';
+    var ta=function(id2,lbl,val,ph){return '<label style="grid-column:1/-1">'+E(lbl)+'<textarea id="'+id2+'" rows="5" placeholder="'+E(ph||'')+'" onchange="fiscalStSave(\''+d.id+'\')">'+E(val||'')+'</textarea></label>';};
+    var modeleSel='<label style="grid-column:1/-1">Modèle de contrat<select id="st-modele" onchange="fiscalStSave(\''+d.id+'\')"><option value="standard" '+(st.modele!=='btp'?'selected':'')+'>Standard (générique)</option><option value="btp" '+(st.modele==='btp'?'selected':'')+'>BTP détaillé (chantier · loi 1975 · révision BT01)</option></select></label>';
+    var btpFields=st.modele==='btp'?('<div class="fx-note" style="grid-column:1/-1">Modèle BTP détaillé — renseignez le chantier, les travaux et les informations des deux parties.</div>'
+      +inp('st-epRep','Entreprise principale — représentant',st.epRep,'Nom Prénom, qualité (ex : CEVIK Yasin, Président)')
+      +inp('st-epCapital','Entreprise principale — capital social',st.epCapital,'ex : 10 000 €')
+      +inp('st-epSiege','Entreprise principale — siège social',st.epSiege,'Adresse complète',true)
+      +inp('st-epRcs','Entreprise principale — ville RCS',st.epRcs,'ex : Bobigny')+inp('st-epSiren','Entreprise principale — SIREN/RCS n°',st.epSiren,'ex : 984374181')
+      +inp('st-stCapital','Sous-traitant — capital social',st.stCapital,'ex : 8 000 €')
+      +inp('st-stRcs','Sous-traitant — ville RCS',st.stRcs,'ex : Paris')+inp('st-stSiren','Sous-traitant — SIREN/RCS n°',st.stSiren,'ex : 938 239 316')
+      +inp('st-refChantier','Référence / adresse du chantier',st.refChantier,'ex : 52 avenue du Général Leclerc 77360 Vaires-sur-Marne',true)
+      +ta('st-travaux','Description des travaux (une ligne par tâche)',st.travaux,'- Étaiement des planchers\n- Coffrage, ferraillage et coulage des poteaux…')
+      +numi('st-dureeMois','Durée d’exécution (mois)',st.dureeMois)):'';
     var form='<div class="fx-form">'
+      +modeleSel
       +inp('st-stNom','Sous-traitant — dénomination',st.stNom,'Ex : BAT SERVICES SARL',true)
       +inp('st-stForme','Forme juridique',st.stForme,'SARL, SAS…')+inp('st-stSiret','SIRET',st.stSiret,'14 chiffres')
       +inp('st-stAdresse','Adresse du sous-traitant',st.stAdresse,'',true)
@@ -13455,6 +13474,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +inp('st-dateDebut','Date de début',st.dateDebut,'jj/mm/aaaa')+inp('st-dateFin','Date de fin',st.dateFin,'jj/mm/aaaa')
       +numi('st-delai','Délai de paiement (jours)',st.delai)
       +inp('st-penalites','Pénalités de retard',st.penalites,'Ex : 0,5 %/jour de retard')
+      +btpFields
       +'<label class="fx-ck"><input type="checkbox" id="st-assurance" '+(st.assurance?'checked':'')+' onchange="fiscalStSave(\''+d.id+'\')"> Attestation d’assurance RC pro exigée</label>'
       +'<label class="fx-ck"><input type="checkbox" id="st-confid" '+(st.confid?'checked':'')+' onchange="fiscalStSave(\''+d.id+'\')"> Clause de confidentialité</label>'
       +'</div>';
@@ -13462,7 +13482,36 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     return '<div class="fx-h1">Contrat de sous-traitance</div>'+approvalBanner(d)+notice+form
       +'<div class="fx-formact"><button class="fx-btn" onclick="fiscalStGen(\''+d.id+'\')">📄 Générer le contrat de sous-traitance</button></div>';
   }
-  function soustraitanceDocHTML(d){var st=stData(d),soc=nomD(d),c=(typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};
+  function soustraitanceDocBTP(d){var st=stData(d),soc=nomD(d),c=(typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};
+    var mnt=pf0(st.montant),auto=st.tva==='autoliq',_tvx=(window.barGet?window.barGet('fisc.tva20'):20),tva=auto?0:mnt*_tvx/100,ttc=mnt+tva;
+    var epSiege=st.epSiege||((c.adresse?c.adresse:'')+' '+(c.cp||'')+' '+(c.ville||'')).trim();
+    var epSiren=st.epSiren||c.siren||c.siret||'';
+    var lignes=(st.travaux||'').split(/\r?\n/).map(function(x){return x.replace(/^[\-–•\s]+/,'').trim();}).filter(Boolean);
+    var travauxHtml=lignes.length?('<ul style="margin:6px 0 6px 18px;padding:0">'+lignes.map(function(x){return '<li style="margin:2px 0">'+E(x)+'</li>';}).join('')+'</ul>'):'<p>……………………………………</p>';
+    var tampon=st.tampon?cachetHTML({tampon:st.tampon}):'';
+    var art=function(n,t,txt){return '<div class="ct-art"><b>ARTICLE '+n+' — '+E(t)+'</b>'+txt+'</div>';};
+    var party=function(nom,cap,siege,rcsVille,siren,rep,role){return '<p><b>'+E(nom||'……………')+'</b>,'+(cap?(' au capital social de '+E(cap)+','):'')+(siege?(' dont le siège social se situe au '+E(siege)+','):'')+(rcsVille||siren?(' immatriculée au R.C.S. de '+E(rcsVille||'……')+' sous le numéro '+E(siren||'……')+'.'):'')+(rep?(' Représentée par '+E(rep)+'.'):'')+' Ci-après désigné « '+E(role)+' ».</p>';};
+    return '<div class="doc-gen"><div class="dg-page ct-doc">'
+      +'<div class="ct-title">CONTRAT DE SOUS-TRAITANCE</div>'
+      +(st.tampon?('<div class="pv-final">✓ Document finalisé et tamponné le '+E(st.tampon.date)+' — AEM CONSEIL.</div>'):'')
+      +'<div class="ct-parties"><p><b>ENTRE LES SOUSSIGNÉS :</b></p>'
+      +party(soc,st.epCapital,epSiege,st.epRcs,epSiren,st.epRep,"l'Entreprise Principale")
+      +'<p style="text-align:center"><b>ET</b></p>'
+      +party(st.stNom,st.stCapital,st.stAdresse,st.stRcs,st.stSiren||st.stSiret,st.stRep,'le Sous-traitant')
+      +'</div>'
+      +art(1,'Objet du contrat de sous-traitance','<p>Par les présentes, l’Entrepreneur confie au Sous-traitant, qui accepte, une partie de la réalisation de l’ouvrage ci-dessous décrit, aux conditions ci-après relatées. Le présent contrat est un contrat de sous-traitance régi par les dispositions de la loi n° 75-1334 du 31 décembre 1975 et les articles 1710 et suivants du Code civil.</p>')
+      +art(2,'Description de l’ouvrage à construire','<p><b>Référence chantier :</b> '+E(st.refChantier||st.lieu||'……………')+'</p>'+travauxHtml+'<p>Lesdits travaux sont précisés par les documents annexés (descriptif détaillé, plans, calendrier général) et paraphés par les deux parties. Aucune modification (travaux supplémentaires, changement de matériaux…) ne sera apportée sans accord écrit des deux parties, par voie d’avenant.</p>')
+      +art(3,'Délai de la prestation','<p>Le Sous-traitant s’oblige à commencer les travaux à compter de la date de signature du présent contrat, et à les exécuter dans un délai de <b>'+pf0(st.dureeMois||12)+' mois</b> à compter de la date de début. Le délai est prorogé de plein droit en cas de retards imputables à l’Entrepreneur ou de force majeure.</p>')
+      +art(4,'Réception des travaux','<p>L’Entrepreneur demande la réception des travaux au Maître de l’ouvrage dans les meilleurs délais. La réception par le Maître de l’ouvrage vaut réception des travaux du Sous-traitant. Copie du procès-verbal de réception est transmise au Sous-traitant sous 14 jours.</p>')
+      +art(5,'Prix','<p><b>Montant du prix :</b> le prix forfaitaire convenu est fixé à <b>'+eu2(mnt)+' H.T.</b>'+(auto?', soit <b>TVA auto-liquidée</b>, '+eu2(mnt)+' T.T.C.':' — TVA '+_tvx+' % : '+eu2(tva)+', soit <b>'+eu2(ttc)+' T.T.C.</b>')+'</p><p><b>Révision du prix :</b> le prix est révisé par application de l’index national « bâtiment tous corps d’État » (BT 01) publié au Journal Officiel. <b>Modalités de règlement :</b> un état de situation mensuel est remis au plus tard le 5 de chaque mois (2 exemplaires) ; après vérification, la situation est réglée par virement le 20 de chaque mois. En cas de retard de règlement, une pénalité de 5 % par mois court sans mise en demeure préalable.</p>')
+      +art(6,'Obligations du Sous-traitant','<p>Le Sous-traitant exécute les travaux conformément aux documents visés à l’article 2 et aux règles de l’art, avec un personnel qualifié et déclaré, dans le respect de la réglementation (hygiène et sécurité). Il assume les charges de main-d’œuvre, matériels et matériaux, assurances, taxes et impôts afférents, et informe l’Entrepreneur de toute difficulté sous 3 jours. Il est tenu d’une obligation de résultat et reste responsable de la garde et de la sécurité de ses travaux.</p>')
+      +(st.assurance?art(7,'Assurance & responsabilité','<p>Le Sous-traitant justifie d’une assurance de responsabilité civile professionnelle et d’une garantie décennale en cours de validité, dont l’attestation est remise avant tout commencement d’exécution.</p>'):'')
+      +art(8,'Litiges','<p>Le présent contrat est soumis au droit français. À défaut d’accord amiable, tout litige relève des tribunaux compétents du siège de l’Entreprise Principale.</p>')
+      +'<div class="ct-sign"><div>Fait à ……………………, le ……………………, en deux exemplaires.</div>'
+      +'<div class="ct-sign-row"><div class="pv-sign">L’Entreprise Principale<br>'+E(soc)+'<br>………………………</div><div class="pv-sign">Le Sous-traitant<br>'+E(st.stNom||'………')+'<br>………………………</div></div>'
+      +(tampon||'')+'</div></div></div>';
+  }
+  function soustraitanceDocHTML(d){var st=stData(d);if(st.modele==='btp')return soustraitanceDocBTP(d);var soc=nomD(d),c=(typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{};
     var don=E(soc)+(c.adresse?(', '+E(c.adresse)):'')+((c.cp||c.ville)?(' '+E(c.cp||'')+' '+E(c.ville||'')):'')+(c.siren||c.siret?(', SIREN/SIRET '+E(c.siren||c.siret)):'');
     var sst=E(st.stNom||'……………')+(st.stForme?(' ('+E(st.stForme)+')'):'')+(st.stAdresse?(', '+E(st.stAdresse)):'')+(st.stSiret?(', SIRET '+E(st.stSiret)):'');
     var _tvx=(window.barGet?window.barGet('fisc.tva20'):20);var mnt=pf0(st.montant),tva=st.tva==='autoliq'?0:mnt*_tvx/100,ttc=mnt+tva;
