@@ -1,0 +1,26 @@
+# ============================================================================
+# Mar'q — Hébergement IONOS (Apache) — mises à jour immédiates
+# ----------------------------------------------------------------------------
+# Empêche le navigateur de garder en cache la page et le service worker, afin
+# que CHAQUE nouveau fichier envoyé soit visible tout de suite (cohérent avec
+# le kill-switch du service worker).
+# ============================================================================
+
+# Page d'accueil = index.html
+DirectoryIndex index.html
+
+<IfModule mod_headers.c>
+  # index.html + sw.js + version.json : jamais mis en cache
+  <FilesMatch "^(index\.html|sw\.js|version\.json)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+</IfModule>
+
+# Forcer HTTPS (redirection http -> https)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} off
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
