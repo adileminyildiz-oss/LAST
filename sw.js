@@ -1,8 +1,28 @@
-var CACHE='last-v501';
+var CACHE='last-v502';
 var ASSETS=['./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-512-maskable.png'];
 self.addEventListener('install',function(e){e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(ASSETS).catch(function(){});}).then(function(){return self.skipWaiting();}));});
 self.addEventListener('message',function(e){if(e.data==='skipWaiting'){self.skipWaiting();}});
-self.addEventListener('activate',function(e){e.waitUntil(caches.keys().then(function(ks){return Promise.all(ks.filter(function(k){return k!==CACHE;}).map(function(k){return caches.delete(k);}));}).then(function(){return self.clients.claim();}));});
+self.addEventListener('activate',function(e){e.waitUntil(
+  caches.keys().then(function(ks){
+    var old=ks.filter(function(k){return k!==CACHE;});
+    var hadOld=old.length>0;                                   /* une version antérieure existait → c'est une MISE À JOUR */
+    return Promise.all(old.map(function(k){return caches.delete(k);})).then(function(){return hadOld;});
+  }).then(function(hadOld){
+    return self.clients.claim().then(function(){
+      if(!hadOld) return;                                       /* première installation : ne pas recharger */
+      /* MISE À JOUR : on force le rechargement des fenêtres ouvertes DEPUIS le service worker.
+         client.navigate() fonctionne même si la page tourne sur un ancien code (aucune
+         coopération de la page requise) → l'app installée se met à jour toute seule. */
+      return self.clients.matchAll({type:'window'}).then(function(cs){
+        return Promise.all((cs||[]).map(function(c){
+          try{ if(c.navigate) return c.navigate(c.url).catch(function(){try{c.postMessage('reload');}catch(_){}}); }catch(e){}
+          try{c.postMessage('reload');}catch(_){}
+          return null;
+        }));
+      });
+    });
+  })
+);});
 self.addEventListener('fetch',function(e){
   var r=e.request; if(r.method!=='GET') return;
   var url; try{url=new URL(r.url);}catch(_){return;}
