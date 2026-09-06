@@ -1,49 +1,34 @@
-var CACHE='last-v503';
-var ASSETS=['./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-512-maskable.png'];
-self.addEventListener('install',function(e){e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(ASSETS).catch(function(){});}).then(function(){return self.skipWaiting();}));});
-self.addEventListener('message',function(e){if(e.data==='skipWaiting'){self.skipWaiting();}});
-self.addEventListener('activate',function(e){e.waitUntil(
-  caches.keys().then(function(ks){
-    var old=ks.filter(function(k){return k!==CACHE;});
-    var hadOld=old.length>0;                                   /* une version antérieure existait → c'est une MISE À JOUR */
-    return Promise.all(old.map(function(k){return caches.delete(k);})).then(function(){return hadOld;});
-  }).then(function(hadOld){
-    return self.clients.claim().then(function(){
-      if(!hadOld) return;                                       /* première installation : ne pas recharger */
-      /* MISE À JOUR : on force le rechargement des fenêtres ouvertes DEPUIS le service worker.
-         client.navigate() fonctionne même si la page tourne sur un ancien code (aucune
-         coopération de la page requise) → l'app installée se met à jour toute seule. */
-      return self.clients.matchAll({type:'window'}).then(function(cs){
-        return Promise.all((cs||[]).map(function(c){
-          try{ if(c.navigate) return c.navigate(c.url).catch(function(){try{c.postMessage('reload');}catch(_){}}); }catch(e){}
-          try{c.postMessage('reload');}catch(_){}
-          return null;
-        }));
+/* ============================================================================
+   Mar'q — Service worker AUTO-DÉSACTIVANT (kill-switch, sans cache)
+   ----------------------------------------------------------------------------
+   But : garantir que l'app charge TOUJOURS la dernière version depuis le réseau,
+   sans jamais rester bloquée sur une version antérieure (module manquant, etc.).
+
+   Ce worker REMPLACE l'ancien worker « cache-first ». Dès que le navigateur le
+   récupère (vérification automatique du script), il :
+     1) vide TOUS les caches,
+     2) se DÉSENREGISTRE lui-même,
+     3) recharge les fenêtres ouvertes (elles repartent du réseau → dernière version).
+   Il n'a AUCUN gestionnaire 'fetch' : il n'intercepte plus rien → chargement
+   réseau normal. Après sa désinscription, plus aucun service worker ne contrôle
+   la page : chaque ouverture récupère la dernière version en ligne.
+   ============================================================================ */
+var CACHE='last-v504-killswitch';
+self.addEventListener('install',function(e){ try{ self.skipWaiting(); }catch(_){} });
+self.addEventListener('message',function(e){ if(e&&e.data==='skipWaiting'){ try{ self.skipWaiting(); }catch(_){} } });
+self.addEventListener('activate',function(e){ e.waitUntil((function(){
+  var purge = (self.caches && caches.keys)
+    ? caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); })
+    : Promise.resolve();
+  return purge.catch(function(){})
+    .then(function(){ try{ return self.registration.unregister(); }catch(e){ return null; } })
+    .catch(function(){})
+    .then(function(){ try{ return self.clients.matchAll({type:'window'}); }catch(e){ return []; } })
+    .then(function(cs){
+      (cs||[]).forEach(function(c){
+        try{ if(c.navigate){ c.navigate(c.url).catch(function(){ try{c.postMessage('reload');}catch(_){}} ); } else { c.postMessage('reload'); } }
+        catch(e){ try{ c.postMessage('reload'); }catch(_){} }
       });
     });
-  })
-);});
-self.addEventListener('fetch',function(e){
-  var r=e.request; if(r.method!=='GET') return;
-  var url; try{url=new URL(r.url);}catch(_){return;}
-  var path=url.pathname||'';
-  var isDoc=(r.mode==='navigate')||path==='/'||path.slice(-1)==='/'||/\.html$/i.test(path);
-  var isVer=/version\.json$/i.test(path);
-  /* PAGES : jamais servies depuis le cache — toujours la dernière version (aucun flash de l'ancien design).
-     Le HTML n'est PAS renvoyé depuis le cache ; une copie de secours (hors-ligne) est rafraîchie en arrière-plan. */
-  if(isDoc){
-    e.respondWith(fetch(r.url,{cache:'no-store'}).then(function(resp){
-      try{var cp=resp.clone();caches.open(CACHE).then(function(c){c.put('./index.html',cp);});}catch(_){}
-      return resp;
-    }).catch(function(){return caches.match('./index.html');}));
-    return;
-  }
-  /* version.json : toujours frais, jamais mis en cache */
-  if(isVer){
-    e.respondWith(fetch(r.url,{cache:'no-store'}).catch(function(){return new Response('{}',{headers:{'Content-Type':'application/json'}});}));
-    return;
-  }
-  /* Autres ressources (icônes, manifest) : réseau d'abord, cache en secours hors-ligne */
-  e.respondWith(fetch(r).then(function(resp){var cp=resp.clone();caches.open(CACHE).then(function(c){try{c.put(r,cp);}catch(_){}});return resp;})
-    .catch(function(){return caches.match(r);}));
-});
+})()); });
+/* Pas de gestionnaire 'fetch' : le réseau gère tout (dernière version). */
