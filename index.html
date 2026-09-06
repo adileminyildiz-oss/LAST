@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=491;
+var LAST_VER=492;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -13580,6 +13580,67 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     fiscalShowDoc(id,'📄 Compensation TVA / IS — '+nomD(d),compensationDocHTML(d),tb);};
   window.fiscalCompTampon=function(id){var d=doss(id);if(!d)return;var C=compData(d);C.tampon={date:(new Date()).toLocaleDateString('fr-FR'),by:'AEM CONSEIL',ts:Date.now()};if(typeof save==='function')save();fiscalCompGen(id);if(typeof toast==='function')toast('✅ Courrier finalisé et tamponné');};
 
+  /* ---------- PPSPS — Plan Particulier de Sécurité et de Protection de la Santé ---------- */
+  var PPSPS_RISQUES_DEF='• Chutes de hauteur → garde-corps, échafaudages conformes, harnais avec point d’ancrage, protection des trémies.\n• Chutes de plain-pied → rangement, éclairage, zones de circulation dégagées.\n• Manutentions manuelles → aides mécaniques, gestes et postures, limitation des charges.\n• Heurts / écrasements engins → balisage, plan de circulation, avertisseurs, port du gilet HV.\n• Électrisation → consignation, matériel classe II, protections différentielles 30 mA.\n• Poussières / bruit → aspiration à la source, EPI (masque FFP2/3, bouchons), arrosage.\n• Effondrement / éboulement → étaiement, blindage des fouilles, contrôle avant intervention.\n• Incendie → extincteurs, permis de feu, éloignement des matières inflammables.';
+  var PPSPS_HYG_DEF='Base-vie / installations mises à disposition : vestiaires, réfectoire, sanitaires avec eau potable, point d’eau et savon. Évacuation des déchets et nettoyage réguliers du poste de travail.';
+  function ppspsData(d){d.fiscal=d.fiscal||{};if(!d.fiscal.ppsps){var soc=(typeof nomD==='function')?nomD(d):'';d.fiscal.ppsps={chantier:'',adresse:'',moa:'',moe:'',sps:'',entNom:soc||'',entAdr:'',entRep:'',effectif:'',dateDeb:'',dateFin:'',travaux:'',risques:PPSPS_RISQUES_DEF,hygiene:PPSPS_HYG_DEF,sstNom:'',hopital:'',hopitalTel:'',dateDoc:'',signataire:'Le Gérant'};}return d.fiscal.ppsps;}
+  window.fiscalPpspsSave=function(id,rer){var d=doss(id);if(!d)return;var P=ppspsData(d),g=function(x){return document.getElementById(x);},q=function(x){return g(x)?g(x).value:'';};
+    ['chantier','adresse','moa','moe','sps','entNom','entAdr','entRep','effectif','dateDeb','dateFin','travaux','risques','hygiene','sstNom','hopital','hopitalTel','dateDoc','signataire'].forEach(function(k){if(g('pp-'+k))P[k]=q('pp-'+k);});
+    if(typeof save==='function')save();if(rer!==false){window.fiscalTab='ppsps';fiscalRender(id);}};
+  function m_ppsps(d){var P=ppspsData(d);
+    var inp=function(id2,lbl,val,ph,full){return '<label'+(full?' style="grid-column:1/-1"':'')+'>'+E(lbl)+'<input id="'+id2+'" value="'+E(val||'')+'"'+(ph?(' placeholder="'+E(ph)+'"'):'')+' onchange="fiscalPpspsSave(\''+d.id+'\')"></label>';};
+    var ta=function(id2,lbl,val,ph){return '<label style="grid-column:1/-1">'+E(lbl)+'<textarea id="'+id2+'" rows="6" placeholder="'+E(ph||'')+'" onchange="fiscalPpspsSave(\''+d.id+'\')">'+E(val||'')+'</textarea></label>';};
+    var form='<div class="fx-form">'
+      +'<div class="fx-note" style="grid-column:1/-1">Renseignements du chantier</div>'
+      +inp('pp-chantier','Désignation du chantier',P.chantier,'Ex : Construction / rénovation …',true)
+      +inp('pp-adresse','Adresse du chantier',P.adresse,'',true)
+      +inp('pp-moa','Maître d’ouvrage',P.moa,'')+inp('pp-moe','Maître d’œuvre',P.moe,'')
+      +inp('pp-sps','Coordonnateur SPS',P.sps,'Nom / société')
+      +inp('pp-dateDeb','Date de début d’intervention',P.dateDeb,'jj/mm/aaaa')+inp('pp-dateFin','Date de fin',P.dateFin,'jj/mm/aaaa')
+      +'<div class="fx-note" style="grid-column:1/-1">Entreprise intervenante</div>'
+      +inp('pp-entNom','Entreprise (dénomination)',P.entNom,'',true)
+      +inp('pp-entAdr','Adresse de l’entreprise',P.entAdr,'',true)
+      +inp('pp-entRep','Représentant / responsable travaux',P.entRep,'Nom Prénom, qualité')+inp('pp-effectif','Effectif prévu sur le chantier',P.effectif,'Ex : 4 compagnons')
+      +ta('pp-travaux','Nature des travaux / mode opératoire',P.travaux,'Décrivez les tâches, l’ordre d’exécution, les matériels utilisés…')
+      +ta('pp-risques','Analyse des risques & mesures de prévention',P.risques,'')
+      +ta('pp-hygiene','Installations d’hygiène',P.hygiene,'')
+      +'<div class="fx-note" style="grid-column:1/-1">Organisation des secours</div>'
+      +inp('pp-sstNom','Sauveteur Secouriste du Travail (SST)',P.sstNom,'Nom du SST présent')
+      +inp('pp-hopital','Hôpital / centre de secours le plus proche',P.hopital,'Nom + ville',true)
+      +inp('pp-hopitalTel','Téléphone de l’hôpital',P.hopitalTel,'')
+      +inp('pp-dateDoc','Date du document',P.dateDoc,'jj/mm/aaaa')+inp('pp-signataire','Signataire',P.signataire,'Le Gérant / Nom Prénom')
+      +'</div>';
+    return '<div class="fx-h1">PPSPS — Plan Particulier de Sécurité et de Protection de la Santé</div>'+approvalBanner(d)
+      +'<div class="fx-note">Document conforme à la structure d’un PPSPS BTP (art. R.4532-56 et suivants du Code du travail). Les mesures de prévention et l’hygiène sont pré-remplies : adaptez-les au chantier et au client.</div>'
+      +form+'<div class="fx-formact"><button class="fx-btn" onclick="fiscalPpspsGen(\''+d.id+'\')">📄 Générer le PPSPS</button></div>';
+  }
+  function ppspsDocHTML(d){var P=ppspsData(d);var nl=function(t){return E(t||'').replace(/\n/g,'<br>');};
+    var tampon=P.tampon?cachetHTML({tampon:P.tampon}):'';
+    var row=function(l,v){return '<tr><td style="width:38%;font-weight:600;background:#f4f4f4">'+E(l)+'</td><td>'+E(v||'……………')+'</td></tr>';};
+    var sec=function(n,t,html){return '<div class="ct-art"><b>'+n+'. '+E(t)+'</b>'+html+'</div>';};
+    return '<div class="doc-gen"><div class="dg-page ct-doc">'
+      +'<div class="ct-title">PLAN PARTICULIER DE SÉCURITÉ ET DE PROTECTION DE LA SANTÉ (PPSPS)</div>'
+      +(P.tampon?('<div class="pv-final">✓ Document finalisé et tamponné le '+E(P.tampon.date)+' — AEM CONSEIL.</div>'):'')
+      +sec(1,'Renseignements généraux','<table class="ppx-t" style="width:100%;border-collapse:collapse">'
+        +row('Désignation du chantier',P.chantier)+row('Adresse du chantier',P.adresse)
+        +row('Maître d’ouvrage',P.moa)+row('Maître d’œuvre',P.moe)+row('Coordonnateur SPS',P.sps)
+        +row('Entreprise intervenante',P.entNom)+row('Adresse de l’entreprise',P.entAdr)
+        +row('Représentant / responsable travaux',P.entRep)+row('Effectif prévu',P.effectif)
+        +row('Période d’intervention',(P.dateDeb||'……')+' → '+(P.dateFin||'……'))+'</table>')
+      +sec(2,'Nature des travaux et mode opératoire','<p>'+nl(P.travaux)+'</p>')
+      +sec(3,'Analyse des risques et mesures de prévention','<p>'+nl(P.risques)+'</p>')
+      +sec(4,'Installations d’hygiène et conditions de travail','<p>'+nl(P.hygiene)+'</p>')
+      +sec(5,'Organisation des secours','<p><b>Sauveteur Secouriste du Travail (SST) :</b> '+E(P.sstNom||'……………')+'<br><b>Hôpital / centre de secours le plus proche :</b> '+E(P.hopital||'……………')+(P.hopitalTel?(' — Tél. '+E(P.hopitalTel)):'')+'<br><b>Numéros d’urgence :</b> SAMU 15 · Pompiers 18 · Urgences 112.<br>En cas d’accident : protéger, alerter, secourir. Une trousse de premiers secours est disponible sur le chantier.</p>')
+      +sec(6,'Diffusion et engagement','<p>Le présent PPSPS est communiqué au coordonnateur SPS et tenu à disposition sur le chantier. L’entreprise s’engage à respecter les mesures de prévention décrites et la réglementation applicable en matière d’hygiène et de sécurité.</p>')
+      +'<div class="ct-sign"><div>Fait à ……………………, le '+E(P.dateDoc||'……………………')+'.</div>'
+      +'<div class="ct-sign-row"><div class="pv-sign">Pour l’entreprise '+E(P.entNom||'')+'<br>'+E(P.signataire||'Le Gérant')+'<br>………………………</div><div class="pv-sign">Le Coordonnateur SPS<br>'+E(P.sps||'')+'<br>………………………</div></div>'
+      +(tampon||'')+'</div></div></div>';
+  }
+  window.fiscalPpspsGen=function(id){var d=doss(id);if(!d)return;var P=ppspsData(d);
+    var tb=P.tampon?'<button class="fx-btn fx-btn-2" onclick="fiscalPpspsTampon(\''+id+'\')">🔏 Re-tamponner</button>':'<button class="fx-btn fx-tampon" onclick="fiscalPpspsTampon(\''+id+'\')">🔏 Tamponner (cachet AEM CONSEIL)</button>';
+    fiscalShowDoc(id,'📄 PPSPS — '+nomD(d),ppspsDocHTML(d),tb);};
+  window.fiscalPpspsTampon=function(id){var d=doss(id);if(!d)return;var P=ppspsData(d);P.tampon={date:(new Date()).toLocaleDateString('fr-FR'),by:'AEM CONSEIL',ts:Date.now()};if(typeof save==='function')save();fiscalPpspsGen(id);if(typeof toast==='function')toast('✅ PPSPS finalisé et tamponné');};
+
   /* ---------- Demande de remboursement de crédit de TVA ---------- */
   function rembData(d){d.fiscal=d.fiscal||{};if(!d.fiscal.tvaRemb)d.fiscal.tvaRemb={periode:'',iban:'',bic:'',lignes:[]};return d.fiscal.tvaRemb;}
   window.fiscalRembSave=function(id,rer){var d=doss(id);if(!d)return;var R=rembData(d),g=function(x){return document.getElementById(x);},q=function(x){return g(x)?g(x).value:'';};
@@ -13799,6 +13860,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     {k:'soustraitance',ic:'',l:'Contrat de sous-traitance',f:m_soustraitance},
     {k:'remboursement',ic:'',l:'Remboursement de TVA',f:m_remboursement},
     {k:'compensation',ic:'',l:'Compensation TVA / IS',f:m_compensation},
+    {k:'ppsps',ic:'',l:'PPSPS (sécurité chantier)',f:m_ppsps},
     {k:'infos',ic:'',l:'Infos client',f:m_infos},
     {k:'regime',ic:'',l:'Régime fiscal & social',f:m_regime},
     {k:'exon',ic:'',l:'Exonérations & aides',f:m_exon},
