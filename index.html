@@ -3188,7 +3188,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){navig
   reg.addEventListener&&reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){if(nw.state==='installed'){try{if(reg.waiting&&reg.waiting.postMessage)reg.waiting.postMessage('skipWaiting');}catch(e){}}});});
 }).catch(function(){});});}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=490;
+var LAST_VER=491;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
 }
@@ -13540,6 +13540,46 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     fiscalShowDoc(id,'📝 Contrat de sous-traitance — '+nomD(d),soustraitanceDocHTML(d),tb);};
   window.fiscalStTampon=function(id){var d=doss(id);if(!d)return;var st=stData(d);st.tampon={date:(new Date()).toLocaleDateString('fr-FR'),by:'AEM CONSEIL',ts:Date.now()};if(typeof save==='function')save();fiscalStGen(id);if(typeof toast==='function')toast('✅ Contrat finalisé et tamponné');};
 
+  /* ---------- Demande de compensation crédit de TVA / IS ---------- */
+  function compData(d){d.fiscal=d.fiscal||{};if(!d.fiscal.compensation)d.fiscal.compensation={creditTVA:0,isDu:0,dateDoc:'',sie:'',signataire:'Le Gérant'};return d.fiscal.compensation;}
+  window.fiscalCompSave=function(id,rer){var d=doss(id);if(!d)return;var C=compData(d),g=function(x){return document.getElementById(x);},q=function(x){return g(x)?g(x).value:'';};
+    if(g('comp-creditTVA'))C.creditTVA=pf(q('comp-creditTVA'));if(g('comp-isDu'))C.isDu=pf(q('comp-isDu'));
+    ['dateDoc','sie','signataire'].forEach(function(k){if(g('comp-'+k))C[k]=q('comp-'+k);});
+    if(typeof save==='function')save();if(rer!==false){window.fiscalTab='compensation';fiscalRender(id);}};
+  function m_compensation(d){var C=compData(d);var comp=Math.min(pf0(C.creditTVA),pf0(C.isDu));var reste=pf0(C.creditTVA)-comp;
+    var inp=function(id2,lbl,val,ph,full){return '<label'+(full?' style="grid-column:1/-1"':'')+'>'+E(lbl)+'<input id="'+id2+'" value="'+E(val||'')+'"'+(ph?(' placeholder="'+E(ph)+'"'):'')+' onchange="fiscalCompSave(\''+d.id+'\')"></label>';};
+    var numi=function(id2,lbl,val){return '<label>'+E(lbl)+'<input id="'+id2+'" type="number" step="0.01" value="'+(val||0)+'" onchange="fiscalCompSave(\''+d.id+'\')"></label>';};
+    var form='<div class="fx-form">'
+      +numi('comp-creditTVA','Crédit de TVA (€)',C.creditTVA)
+      +numi('comp-isDu','Impôt sur les sociétés dû (€)',C.isDu)
+      +inp('comp-dateDoc','Date du courrier',C.dateDoc,'jj/mm/aaaa')
+      +inp('comp-sie','Service des impôts (destinataire)',C.sie,'Ex : SIE de Bobigny',true)
+      +inp('comp-signataire','Signataire',C.signataire,'Le Gérant / Nom Prénom')
+      +'</div>';
+    var note='<div class="fx-note">Compensation demandée à hauteur de l’IS dû : <b>'+eu2(comp)+'</b>'+(reste>0?(' — crédit de TVA restant après imputation : <b>'+eu2(reste)+'</b>.'):(pf0(C.isDu)>pf0(C.creditTVA)?(' — solde d’IS à régler : <b>'+eu2(pf0(C.isDu)-pf0(C.creditTVA))+'</b>.'):'.'))+' Fondement : art. L.257 du LPF · formulaire 3516-SD.</div>';
+    return '<div class="fx-h1">Demande de compensation crédit de TVA / IS</div>'+approvalBanner(d)+note+form
+      +'<div class="fx-formact"><button class="fx-btn" onclick="fiscalCompGen(\''+d.id+'\')">📄 Générer le courrier de compensation</button></div>';
+  }
+  function compensationDocHTML(d){var C=compData(d),soc=nomD(d);var comp=Math.min(pf0(C.creditTVA),pf0(C.isDu));
+    var tampon=C.tampon?cachetHTML({tampon:C.tampon}):'';
+    return '<div class="doc-gen"><div class="dg-page ct-doc">'
+      +(C.tampon?('<div class="pv-final">✓ Document finalisé et tamponné le '+E(C.tampon.date)+' — AEM CONSEIL.</div>'):'')
+      +'<div style="text-align:right;margin-bottom:12px">'+E(soc)+'<br>'+E(C.sie?('À l’attention du '+C.sie):'À l’attention du Service des Impôts des Entreprises')+(C.dateDoc?('<br>Le '+E(C.dateDoc)):'')+'</div>'
+      +'<div class="ct-title" style="font-size:15px">Objet : Demande de compensation entre crédit de TVA et impôt sur les sociétés</div>'
+      +'<p>Madame, Monsieur,</p>'
+      +'<p>Nous vous prions de bien vouloir prendre en compte la présente demande de compensation entre deux créances et dettes fiscales dont notre société est actuellement redevable.</p>'
+      +'<p>En effet, notre entreprise dispose d’un <b>crédit de TVA d’un montant de '+eu2(pf0(C.creditTVA))+'</b>, et se trouve parallèlement redevable d’un <b>impôt sur les sociétés s’élevant à '+eu2(pf0(C.isDu))+'</b>.</p>'
+      +'<p>Conformément aux dispositions de l’article L.257 du Livre des procédures fiscales, nous vous sollicitons afin que la compensation de ces sommes soit effectuée, à hauteur du montant de l’impôt sur les sociétés dû, soit <b>'+eu2(comp)+'</b>.</p>'
+      +'<p>Vous trouverez ci-joint le formulaire dûment rempli de demande d’imputation d’une créance fiscale sur une échéance <b>3516-SD</b>. Nous restons à votre disposition pour tout complément d’information ou pour vous fournir les justificatifs nécessaires à l’appui de cette demande.</p>'
+      +'<p>Dans l’attente de votre retour, nous vous prions d’agréer, Madame, Monsieur, l’expression de nos salutations distinguées.</p>'
+      +'<div class="ct-sign" style="margin-top:22px"><div class="pv-sign" style="margin-left:auto;text-align:right">'+E(C.signataire||'Le Gérant')+'<br>………………………</div></div>'
+      +(tampon||'')+'</div></div></div>';
+  }
+  window.fiscalCompGen=function(id){var d=doss(id);if(!d)return;var C=compData(d);
+    var tb=C.tampon?'<button class="fx-btn fx-btn-2" onclick="fiscalCompTampon(\''+id+'\')">🔏 Re-tamponner</button>':'<button class="fx-btn fx-tampon" onclick="fiscalCompTampon(\''+id+'\')">🔏 Tamponner (cachet AEM CONSEIL)</button>';
+    fiscalShowDoc(id,'📄 Compensation TVA / IS — '+nomD(d),compensationDocHTML(d),tb);};
+  window.fiscalCompTampon=function(id){var d=doss(id);if(!d)return;var C=compData(d);C.tampon={date:(new Date()).toLocaleDateString('fr-FR'),by:'AEM CONSEIL',ts:Date.now()};if(typeof save==='function')save();fiscalCompGen(id);if(typeof toast==='function')toast('✅ Courrier finalisé et tamponné');};
+
   /* ---------- Demande de remboursement de crédit de TVA ---------- */
   function rembData(d){d.fiscal=d.fiscal||{};if(!d.fiscal.tvaRemb)d.fiscal.tvaRemb={periode:'',iban:'',bic:'',lignes:[]};return d.fiscal.tvaRemb;}
   window.fiscalRembSave=function(id,rer){var d=doss(id);if(!d)return;var R=rembData(d),g=function(x){return document.getElementById(x);},q=function(x){return g(x)?g(x).value:'';};
@@ -13758,6 +13798,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     {k:'questionnaire',ic:'',l:'Questionnaire dirigeant',f:m_questionnaire},
     {k:'soustraitance',ic:'',l:'Contrat de sous-traitance',f:m_soustraitance},
     {k:'remboursement',ic:'',l:'Remboursement de TVA',f:m_remboursement},
+    {k:'compensation',ic:'',l:'Compensation TVA / IS',f:m_compensation},
     {k:'infos',ic:'',l:'Infos client',f:m_infos},
     {k:'regime',ic:'',l:'Régime fiscal & social',f:m_regime},
     {k:'exon',ic:'',l:'Exonérations & aides',f:m_exon},
