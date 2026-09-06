@@ -3232,7 +3232,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=512;
+var LAST_VER=513;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -18088,7 +18088,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       var openl=docs.length?('<div class="ed2-openwrap"><div class="ed2-grp-h">Documents ouverts <span class="ed2-cnt">'+recents.length+(docs.length>4?(' / '+docs.length):'')+'</span></div><div class="ed2-openlist">'
         +recents.map(function(x){return '<div class="ed2-open"><button class="ed2-open-b" onclick="edLibOpen(\''+x.id+'\')"><b>'+edE(x.titre)+'</b><span>'+edE((EDLIB_TYPES.filter(function(t){return t.k===x.k;})[0]||{}).g||'')+'</span></button><button class="ed2-x" title="Supprimer" onclick="edLibDel(\''+x.id+'\')">×</button></div>';}).join('')
         +'</div>'+(docs.length>4?'<div class="ed2-open-more">Les 4 documents les plus récents sont affichés.</div>':'')+'</div>'):'';
-      return '<div class="ed2-home"><div class="ed2-home-head"><h2>Créer un document</h2><p>Choisissez un modèle, renseignez les informations dans le volet de saisie, puis exportez en Word, PDF ou Excel.</p></div><div class="ed2-create">'+create+'</div>'+openl+'</div>';
+      var apps='<div class="ed2-grp ed2-grp-apps"><div class="ed2-grp-h">Applications</div><div class="ed2-grp-b">'
+        +'<button class="ed2-new ed2-new-app" onclick="go(\'facturier\')">Factures</button>'
+        +'<button class="ed2-new ed2-new-app" onclick="go(\'tvarembours\')">Remboursement de TVA</button>'
+        +'</div></div>';
+      return '<div class="ed2-home"><div class="ed2-home-head"><h2>Créer un document</h2><p>Choisissez un modèle ou une application, renseignez les informations dans le volet de saisie, puis exportez en Word, PDF ou Excel.</p></div><div class="ed2-create">'+apps+create+'</div>'+openl+'</div>';
     }
     /* --- éditeur : volet de saisie + aperçu en direct --- */
     var D=cur.data||{};
@@ -24782,7 +24786,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var entry={id:'tvarembours',lbl:'Remboursement TVA',ic:'euro',sub:'Analyse des factures & crédit de TVA'};
     if(iEd>=0)PAGES.splice(iEd+1,0,entry);else PAGES.push(entry);
   } }catch(e){}
-  function injectTvrBtn(){
+  function injectTvrBtn(){ return; /* Remboursement TVA déplacé dans le module Éditions (plus de bouton latéral) */
     var nav=document.getElementById('nav'); if(!nav)return; if(nav.querySelector('[data-tvrbtn]'))return;
     var after=nav.querySelector('button.nav-btn[onclick*="editions"]');
     var on=(state2().page==='tvarembours')?' on':'';
@@ -25058,7 +25062,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var entry={id:'facturier',lbl:'Factures',ic:'card',sub:'Création & émission de factures'};
     if(iEd>=0)PAGES.splice(iEd+1,0,entry);else PAGES.push(entry);
   } }catch(e){}
-  function injectInvBtn(){ var nav=document.getElementById('nav'); if(!nav)return; if(nav.querySelector('[data-invbtn]'))return;
+  function injectInvBtn(){ return; /* Factures déplacé dans le module Éditions (plus de bouton latéral) */ var nav=document.getElementById('nav'); if(!nav)return; if(nav.querySelector('[data-invbtn]'))return;
     var after=nav.querySelector('button.nav-btn[onclick*="editions"]');
     var on=(state2().page==='facturier')?' on':'';
     var ico=(typeof svg==='function'&&typeof IC!=='undefined'&&IC.card)?svg(IC.card):'';
