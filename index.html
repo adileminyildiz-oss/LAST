@@ -3242,7 +3242,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=529;
+var LAST_VER=530;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -21157,26 +21157,52 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
 
   /* ---- Page ---- */
   window.pageFactPresta=function(){
-    var list=store(); var total=list.reduce(function(n,e){var m=parseFloat((''+(e.montant||'')).replace(',','.').replace(/[^0-9.]/g,''));return n+(isNaN(m)?0:m);},0);
+    var list=store();
+    var q=(''+(window.__fpQ||'')).toLowerCase();
+    var pm=function(e){var m=parseFloat((''+(e.montant||'')).replace(',','.').replace(/[^0-9.]/g,''));return isNaN(m)?0:m;};
+    var fmt=function(n){return (n?n.toLocaleString('fr-FR'):'0')+' €';};
+    var total=list.reduce(function(n,e){return n+pm(e);},0);
+    var ym=(new Date()).toISOString().slice(0,7);
+    var mois=list.reduce(function(n,e){return n+(((''+(e.date||'')).slice(0,7)===ym)?pm(e):0);},0);
+    var nmail=list.filter(function(e){return e.recuMail;}).length;
     var rows=list.map(function(e){
-      return '<tr><td><input class="fp-in" value="'+E(e.fournisseur||'')+'" placeholder="Prestataire" oninput="fpSet(\''+e.id+'\',\'fournisseur\',this.value)"></td>'
+      var hay=((e.fournisseur||'')+' '+(e.objet||'')).toLowerCase();
+      var hide=q&&hay.indexOf(q)<0;
+      var trash=(window.mqIcon?window.mqIcon('trash'):'✕');
+      return '<tr'+(hide?' style="display:none"':'')+'><td><input class="fp-in" value="'+E(e.fournisseur||'')+'" placeholder="Prestataire" oninput="fpSet(\''+e.id+'\',\'fournisseur\',this.value)"></td>'
         +'<td><input class="fp-in" value="'+E(e.objet||'')+'" placeholder="Objet" oninput="fpSet(\''+e.id+'\',\'objet\',this.value)"></td>'
         +'<td><input class="fp-in fp-num" value="'+E(e.montant||'')+'" placeholder="€" oninput="fpSet(\''+e.id+'\',\'montant\',this.value)"></td>'
         +'<td><input class="fp-in" type="date" value="'+E(e.date||'')+'" oninput="fpSet(\''+e.id+'\',\'date\',this.value)"></td>'
         +'<td class="fp-file">'+(e.recuMail?'<span class="fp-mail">📥 e-mail</span> ':'')+'📄 '+E(e.fichierNom||'—')+'</td>'
-        +'<td style="text-align:right;white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="fpVoir(\''+e.id+'\')">Voir</button><button class="btn btn-sm btn-ghost" onclick="fpDl(\''+e.id+'\')">⤓</button><button class="btn btn-sm btn-ghost fp-x" onclick="fpDel(\''+e.id+'\')">✕</button></td></tr>';
+        +'<td style="text-align:right;white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="fpVoir(\''+e.id+'\')">Voir</button><button class="btn btn-sm btn-ghost" onclick="fpDl(\''+e.id+'\')">⤓</button><button class="btn btn-sm btn-ghost fp-x" title="Supprimer" aria-label="Supprimer" onclick="fpDel(\''+e.id+'\')">'+trash+'</button></td></tr>';
     }).join('');
-    return '<div class="fp-wrap">'
-      +'<div class="card fp-head"><div class="card-b">'
-      +'<p class="fp-note">Ces factures (annonces légales, INPI, autres prestataires) sont reçues par mail et conservées ici, <b>séparément des dossiers clients</b>, pour justifier les paiements du cabinet.</p>'
-      +'<div class="fp-add"><label class="btn btn-pri">＋ Déposer une facture<input type="file" accept="image/*,application/pdf" style="display:none" onchange="fpUpload(this)"></label>'
+    var refresh=(window.mqRefresh?'<button class="mq-ib" onclick="mqRefresh(this)" title="Actualiser la page" aria-label="Actualiser">'+((window.MQ_ICONS&&window.MQ_ICONS.refresh)||'')+'</button>':'');
+    var hero='<div class="fp-hero"><div><h2 class="fp-hero-t">Factures prestataires</h2>'
+      +'<div class="fp-hero-s">Justificatifs de paiement du cabinet — annonces légales, INPI, autres prestataires. Reçues par e-mail et conservées ici, séparément des dossiers clients.</div></div>'
+      +'<div class="fp-hero-r">'+refresh+'</div></div>';
+    var K=function(v,l,cls){return '<div class="kpi"><div class="val '+(cls||'')+'">'+v+'</div><div class="lbl">'+l+'</div></div>';};
+    var kpis='<div class="fp-kpis">'+K(fmt(total),'Total dépensé','blue')+K(list.length,'Factures')+K(fmt(mois),'Ce mois-ci')+K(nmail,'Reçues par e-mail','ok')+'</div>';
+    var toolbar='<div class="fp-tool">'
+      +'<div class="fp-search"><svg class="fp-search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
+      +'<input id="fp-search" value="'+E(q)+'" placeholder="Rechercher un prestataire, un objet…" oninput="fpFilter(this.value)"></div>'
+      +'<label class="btn btn-pri fp-add-b">'+(typeof svg==='function'&&typeof IC!=='undefined'&&IC.plus?svg(IC.plus):'＋ ')+'Déposer une facture<input type="file" accept="image/*,application/pdf" style="display:none" onchange="fpUpload(this)"></label>'
       +'<button class="btn btn-ghost" onclick="fpSimuler()">📥 Simuler une réception e-mail</button>'
-      +'<span class="fp-total">Total : <b>'+(total?total.toLocaleString('fr-FR'):'0')+' €</b> · '+list.length+' facture(s)</span></div>'
-      +'</div></div>'
+      +'</div>';
+    return '<div class="fp-wrap">'+hero+kpis+toolbar
       +'<div class="card"><div class="card-b">'
       +(list.length?('<table class="fp-t"><thead><tr><th>Prestataire</th><th>Objet</th><th>Montant</th><th>Date</th><th>Justificatif</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>')
         :'<div class="fp-empty">Aucune facture prestataire. Déposez-en une ou simulez une réception e-mail.</div>')
       +'</div></div></div>';
+  };
+  /* Recherche instantanée (filtre les lignes sans re-rendu → garde le focus & l'édition en cours) */
+  window.fpFilter=function(v){
+    window.__fpQ=v||'';
+    var q=(''+v).toLowerCase();
+    try{ document.querySelectorAll('.fp-t tbody tr').forEach(function(tr){
+      var ins=tr.querySelectorAll('input');
+      var hay=(((ins[0]&&ins[0].value)||'')+' '+((ins[1]&&ins[1].value)||'')).toLowerCase();
+      tr.style.display=(!q||hay.indexOf(q)>=0)?'':'none';
+    }); }catch(e){}
   };
 
   /* ---- Hook de rendu ---- */
@@ -21207,8 +21233,23 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.fp-num{max-width:90px}',
     '.fp-file{font:12px "Hanken Grotesk",system-ui,sans-serif;color:#c9ccd3;white-space:nowrap}',
     '.fp-mail{font:600 10px/1 "IBM Plex Mono",monospace;color:#57d98a;border:1px solid #1f8a4d;border-radius:5px;padding:2px 5px}',
-    '.fp-x{color:#e88 !important}',
-    '.fp-empty{color:#8a8a92;font:13px "Hanken Grotesk",system-ui,sans-serif;padding:16px;text-align:center}'
+    '.fp-x{color:#e88 !important;display:inline-flex;align-items:center;justify-content:center}',
+    '.fp-x .mq-ic{width:15px;height:15px}',
+    '.fp-empty{color:#8a8a92;font:13px "Hanken Grotesk",system-ui,sans-serif;padding:16px;text-align:center}',
+    '.fp-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:2px}',
+    '.fp-hero-t{font-size:21px;font-weight:800;margin:0;letter-spacing:.2px;color:#f4f6fa}',
+    '.fp-hero-s{font-size:12.5px;color:#8a90a0;margin-top:5px;max-width:620px;line-height:1.55}',
+    '.fp-hero-r{display:flex;align-items:center;gap:9px;flex-shrink:0}',
+    '.fp-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}',
+    '@media(max-width:820px){.fp-kpis{grid-template-columns:repeat(2,1fr)}}',
+    '.fp-tool{display:flex;align-items:center;gap:10px;flex-wrap:wrap}',
+    '.fp-search{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:0 11px;transition:border-color .15s}',
+    '.fp-search:focus-within{border-color:rgba(93,140,255,.55)}',
+    '.fp-search-ic{width:15px;height:15px;color:#8a90a0;flex-shrink:0}',
+    'html body:not(#mq) .fp-search input{background:transparent !important;border:0 !important;outline:0;color:#fff !important;font-size:13px;padding:9px 2px;width:230px}',
+    '.fp-search input::placeholder{color:#8a90a0}',
+    '.fp-tool .fp-add-b{margin-left:auto}',
+    '@media(max-width:820px){.fp-tool .fp-add-b{margin-left:0}.fp-search input{width:150px}}'
   ].join(''); document.head.appendChild(st); } }catch(e){}
 })();
 </script>
