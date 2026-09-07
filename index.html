@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=537;
+var LAST_VER=538;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -13218,8 +13218,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   ];
   function formeOf(d){var p=profil(d);return (d.fiscal&&d.fiscal.typeOverride||p.forme||'SAS').toUpperCase();}
   function prevData(d){d.fiscal=d.fiscal||{};
-    if(!d.fiscal.prev){var f=fin(d);d.fiscal.prev={activite:d.fiscal.secteur||'',growth:15,
-      base:{ca:f.caExpl||0,autres:0,achats:f.achats||0,ext:f.chargesExt||0,pers:(f.chargesPers||0)+(f.remDir||0),imp:f.impotsTaxes||0,amort:f.amort||0},
+    if(!d.fiscal.prev){var f=fin(d);d.fiscal.prev={activite:d.fiscal.secteur||(d.etude&&d.etude.secteur)||'',growth:15,
+      base:{ca:(f.caExpl||(window.etudeCA?window.etudeCA(d):0)||0),autres:0,achats:f.achats||0,ext:f.chargesExt||0,pers:(f.chargesPers||0)+(f.remDir||0),imp:f.impotsTaxes||0,amort:f.amort||0},
       fin:{immob:f.amort?f.amort*5:0,frais:1500,bfr:0,capital:f.capitalSocial||0,cca:0,emprunt:0,subv:0}};}
     var pr=d.fiscal.prev,f=fin(d);
     if(pr.periode==null)pr.periode=12; if(!pr.activiteType)pr.activiteType='normale';
@@ -13902,7 +13902,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   /* Connexion : la Synthèse et le Prévisionnel affichent l'état approuvé + liens croisés */
   var _m_apercu_base=m_apercu; m_apercu=function(d){return approvalBanner(d)+_m_apercu_base(d)+apercuLinks(d);};
-  var _m_prev_base=m_previsionnel; m_previsionnel=function(d){return approvalBanner(d)+fiscalLinkPanel(d)+_m_prev_base(d);};
+  var _m_prev_base=m_previsionnel; m_previsionnel=function(d){return approvalBanner(d)+fiscalLinkPanel(d)+(window.etudePrevBanner?window.etudePrevBanner(d):'')+_m_prev_base(d);};
 
   /* ---------- Optimiseur : constituer la meilleure société ---------- */
   function optData(d){d.fiscal=d.fiscal||{};if(!d.fiscal.optim)d.fiscal.optim={
@@ -15807,6 +15807,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var ref=window.formTakeDossierNum();
     var dos={id:uid('do'),ref:ref,clientIds:[c.id],serviceIds:[],statut:'Qualification',pretDepot:true,createdAt:today(),historique:[{d:today(),t:'Dossier complet créé manuellement (formulaire) — prêt au dépôt'}]};
     if(c.forme)dos.forme=c.forme; dos.formalite=intake.type; dos.intake=intake; dos.numeroDossier=ref; dos.numeroService=window.formTakeServiceNum('creation');
+    try{ if(o.etude && Object.keys(o.etude).length) dos.etude=JSON.parse(JSON.stringify(o.etude)); }catch(e){}
     /* Dirigeant → verif.extract (lu par l'éditeur de documents) */
     dos.verif=dos.verif||{};dos.verif.extract=Object.assign(dos.verif.extract||{},{
       civilite:dir.civilite||'M.',prenom:dir.prenom||'',nom:dir.nom||'',dateNaissance:dir.naissance||'',lieuNaissance:dir.lieuNaissance||'',paysNaissance:dir.pays||'',nationalite:dir.nationalite||'',adresse:dir.adresse||'',cpPerso:dx.cp||'',villePerso:dx.ville||'',typePiece:dx.typePiece||'',numPiece:dx.numPiece||''});
@@ -26985,6 +26986,75 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     '.em-prog-bar{height:8px;border-radius:6px;background:#17171b;overflow:hidden}',
     '.em-prog-bar>i{display:block;height:100%;background:linear-gradient(90deg,#2b6cff,#4d8bff);transition:width .25s ease}',
     '.em-calc-note{font-size:11px;color:#8b8b95;margin-top:10px;line-height:1.5}'
+  ].join(''); document.head.appendChild(st); }catch(e){}
+})();
+</script>
+
+<!-- ===== Propagation « Étude de marché » → Bilan prévisionnel ===== -->
+<script>
+(function(){
+  function n(v){ v=(''+(v==null?'':v)).replace(/[^0-9.,-]/g,'').replace(',','.'); var x=parseFloat(v); return isNaN(x)?null:x; }
+  function fmt(v){ try{ return Math.round(v).toLocaleString('fr-FR'); }catch(e){ return ''+v; } }
+  function esc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  /* CA potentiel (an 1) issu de l'étude de marché d'un dossier :
+     priorité au CA visé saisi, sinon clients potentiels × panier moyen × part de marché visée. */
+  window.etudeCA=function(d){
+    var e=(d&&d.etude)||{};
+    var caVise=n(e.caVise); if(caVise!=null&&caVise>0)return Math.round(caVise);
+    var nb=n(e.nbClients),pan=n(e.panier),part=n(e.partVisee);
+    if(nb!=null&&pan!=null){ var adr=nb*pan; var ca=(part!=null)?adr*(part/100):adr; return ca>0?Math.round(ca):0; }
+    return 0;
+  };
+  window.etudeInfo=function(d){
+    var e=(d&&d.etude)||{};
+    var nb=n(e.nbClients),pan=n(e.panier),part=n(e.partVisee),caVise=n(e.caVise);
+    var adr=(nb!=null&&pan!=null)?(nb*pan):null;
+    var ca=window.etudeCA(d);
+    var has=!!(adr||caVise||(e.secteur||'').trim()||(e.marche||'').trim());
+    return {has:has,adr:adr,part:part,ca:ca,caVise:caVise,secteur:e.secteur||''};
+  };
+
+  /* Reprend le CA de l'étude dans le prévisionnel (prestations de services 20 %) */
+  window.etudePrevApply=function(id){
+    try{
+      var d=(typeof DB!=='undefined'&&DB.dossiers)?DB.dossiers.filter(function(x){return x.id===id;})[0]:null; if(!d)return;
+      var ca=window.etudeCA(d);
+      if(!(ca>0)){ if(typeof toast==='function')toast('Complétez le panier moyen et la part de marché visée dans l\'étude pour estimer le CA.'); return; }
+      var el=document.getElementById('prev-p-presta20');
+      if(el && typeof window.fiscalPrevSave==='function'){ el.value=ca; window.fiscalPrevSave(id); }
+      if(typeof toast==='function')toast('CA prévisionnel repris de l\'étude de marché : '+fmt(ca)+' € (prestations 20 %).');
+    }catch(e){}
+  };
+
+  /* Bandeau affiché en tête du Bilan prévisionnel */
+  window.etudePrevBanner=function(d){
+    try{
+      var I=window.etudeInfo(d); if(!I.has)return '';
+      var lignes=[];
+      if(I.adr!=null)lignes.push('Marché adressable&nbsp;: <b>'+fmt(I.adr)+' €</b>');
+      if(I.part!=null)lignes.push('Part visée&nbsp;: <b>'+fmt(I.part)+' %</b>');
+      lignes.push('CA potentiel (an 1)&nbsp;: <b>'+(I.ca>0?(fmt(I.ca)+' €'):'à préciser')+'</b>');
+      var btn=(I.ca>0)?('<button class="fx-btn em-prev-btn" onclick="etudePrevApply(\''+d.id+'\')">↧ Reprendre ce CA dans le prévisionnel</button>'):'';
+      return '<div class="em-prev-banner">'
+        +'<div class="em-prev-ic">📈</div>'
+        +'<div class="em-prev-tx"><div class="em-prev-t">Issu de l\'étude de marché'+(I.secteur?(' — '+esc(I.secteur)):'')+'</div>'
+        +'<div class="em-prev-l">'+lignes.join('<span class="em-prev-sep">·</span>')+'</div></div>'
+        +(btn?('<div class="em-prev-a">'+btn+'</div>'):'')
+        +'</div>';
+    }catch(e){ return ''; }
+  };
+
+  try{ var st=document.createElement('style'); st.id='em-prev-css'; st.textContent=[
+    '.em-prev-banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 14px;padding:13px 16px;border:1px solid rgba(43,108,255,.35);border-radius:12px;background:linear-gradient(180deg,rgba(43,108,255,.12),rgba(43,108,255,.05))}',
+    '.em-prev-ic{font-size:20px;line-height:1}',
+    '.em-prev-tx{flex:1;min-width:200px}',
+    '.em-prev-t{font-size:11px;letter-spacing:.5px;text-transform:uppercase;font-weight:800;color:#9cc0ff;margin-bottom:4px}',
+    '.em-prev-l{font-size:13px;color:#dfe7f5}',
+    '.em-prev-l b{color:#fff}',
+    '.em-prev-sep{margin:0 8px;color:#5f6b86}',
+    '.em-prev-a{flex:none}',
+    '.em-prev-btn{white-space:nowrap}'
   ].join(''); document.head.appendChild(st); }catch(e){}
 })();
 </script>
