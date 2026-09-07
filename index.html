@@ -3233,7 +3233,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=521;
+var LAST_VER=522;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -25311,6 +25311,17 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       '.cf-ab .r{font-weight:700;color:var(--ink);font-size:13px}',
       '.cf-ab .m{font-size:11px;color:var(--ink-3);margin-top:2px}',
       '.cf-ab .e{font-size:11px;color:var(--ink-3);text-align:right;white-space:nowrap}',
+      '.cf-focus{border:1px solid var(--gold-line,rgba(201,162,74,.4));background:linear-gradient(180deg,rgba(201,162,74,.10),rgba(201,162,74,.03));border-radius:12px;padding:14px 16px;margin-bottom:14px}',
+      '.cf-focus.cf-focus-retard{border-color:rgba(190,80,55,.5);background:linear-gradient(180deg,rgba(190,80,55,.12),rgba(190,80,55,.03))}',
+      '.cf-focus.cf-focus-ajour{border-color:rgba(120,160,80,.45);background:linear-gradient(180deg,rgba(120,160,80,.1),rgba(120,160,80,.02))}',
+      '.cf-focus-tag{font-size:9.5px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--gold,#caa24a);display:flex;align-items:center;gap:7px}',
+      '.cf-focus.cf-focus-retard .cf-focus-tag{color:#d8795f}.cf-focus.cf-focus-ajour .cf-focus-tag{color:#7fb06a}',
+      '.cf-focus-tag::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px rgba(201,162,74,.18)}',
+      '.cf-focus-lb{font-size:16px;font-weight:800;margin:7px 0 3px;color:var(--ink)}',
+      '.cf-focus-dt{font-size:11.5px;color:var(--ink-3);margin-bottom:11px}.cf-focus-dt b{color:var(--ink)}',
+      '.cf-focus-act{display:flex;gap:8px;flex-wrap:wrap;align-items:center}',
+      '.cf-focus-rest{font-size:11px;color:var(--ink-3);margin-left:auto}',
+      '.cf-dim{opacity:.6}',
       '.cf-grp{margin-top:14px}.cf-grp:first-child{margin-top:0}',
       '.cf-grp-h{font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--ink-3);margin:0 0 7px}',
       '.cf-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px 11px;border:1px solid var(--line-soft);border-radius:8px;background:var(--card)}',
@@ -25368,6 +25379,30 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
           +'<button class="btn btn-sm" onclick="cfMarquer(\''+a.id+'\',\''+ob.code+'\')">Déposé aujourd\'hui</button></div></div>';
       }).join('')+'</div>';
     }).join('') + cfFactPanel(a);
+    /* --- « Une formalité à la fois » : on force la formalité la plus urgente en tête,
+           et « passer à la suivante » enchaîne obligation par obligation (zéro oubli). --- */
+    var RK={retard:0,avenir:1,ajour:2};
+    var ordered=(a.obligations||[]).slice().sort(function(x,y){
+      var d=RK[obStatutFor(a,x)]-RK[obStatutFor(a,y)]; if(d)return d;
+      return (''+(x.prochaine||'')).localeCompare(''+(y.prochaine||''));
+    });
+    var focusOb=ordered[0], focusS=focusOb?obStatutFor(a,focusOb):'ajour';
+    var nAttn=(a.obligations||[]).filter(function(o){return obStatutFor(a,o)!=='ajour';}).length;
+    var focus;
+    if(focusOb && focusS!=='ajour'){
+      focus='<div class="cf-focus cf-focus-'+focusS+'">'
+        +'<div class="cf-focus-tag">Une formalité à la fois — à traiter maintenant'+(nAttn>1?'<span class="cf-focus-rest">'+nAttn+' formalités en attente</span>':'')+'</div>'
+        +'<div class="cf-focus-lb">'+esc(focusOb.label)+'</div>'
+        +'<div class="cf-focus-dt">'+cadenceLbl(focusOb.anchors.length)+' · échéance <b>'+frDate(focusOb.prochaine)+'</b> · '+STLBL[focusS]+'</div>'
+        +'<div class="cf-focus-act"><button class="btn btn-pri" onclick="cfMarquer(\''+a.id+'\',\''+focusOb.code+'\')">Déposé aujourd\'hui — passer à la suivante</button>'
+        +'<button class="btn btn-sm" onclick="cfAttestation(\''+a.id+'\')">Attestation</button></div>'
+        +'</div>';
+    } else {
+      focus='<div class="cf-focus cf-focus-ajour"><div class="cf-focus-tag">Conformité</div>'
+        +'<div class="cf-focus-lb">✓ Toutes les formalités sont à jour</div>'
+        +'<div class="cf-focus-dt">Prochaine échéance <b>'+frDate((ordered[0]||{}).prochaine)+'</b></div></div>';
+    }
+    body=focus+body;
     var head='<div style="font-size:11px;color:var(--ink-3);margin-bottom:12px">'+esc(a.forme)+' · SIREN '+esc(a.siren)
       +' · '+({IS:'Impôt sociétés',micro:'Micro-entreprise','reel-IR':'IR au réel'}[a.fiscal]||a.fiscal)
       +' · TVA '+({'franchise':'franchise en base','ca3-mensuel':'CA3 mensuelle','ca3-trimestriel':'CA3 trimestrielle','ca12':'CA12 annuelle'}[a.tva]||a.tva)
@@ -25593,7 +25628,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.cfCommander=function(id){
     var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return; ensureServices();
     var opts=(DB.cfServices||[]).map(function(s){ return '<option value="'+s.id+'">'+esc(s.nom)+' — '+euro(s.prix)+'</option>'; }).join('');
-    var body='<div class="cf-form"><div class="full"><label>Service (facturé en plus de l\'abonnement)</label><select id="cfc-svc">'+opts+'</select></div>'
+    var body='<div class="cf-form"><div class="full" style="font-size:11px;color:var(--ink-3);margin-bottom:2px">Un service à la fois — chaque prestation est commandée et facturée séparément.</div>'
+      +'<div class="full"><label>Service (facturé en plus de l\'abonnement)</label><select id="cfc-svc">'+opts+'</select></div>'
       +'<div class="full"><label>Précision (optionnel)</label><input id="cfc-note" placeholder="ex. transfert de siège vers Lille"></div>'
       +'<div><label>Mode de règlement</label><select id="cfc-mode">'+['Virement','Carte bancaire','Chèque','Prélèvement'].map(function(m){return opt(m,'Virement',m);}).join('')+'</select></div></div>';
     openModal('Commander un service — '+esc(a.raison), body, '<button class="btn" onclick="cfOpen(\''+id+'\')">Annuler</button><button class="btn btn-pri" onclick="cfCommanderValider(\''+id+'\')">Commander &amp; facturer</button>');
