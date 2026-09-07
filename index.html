@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=540;
+var LAST_VER=541;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -27116,8 +27116,8 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
 
   /* ---- Barre d'onglets « Formulaire · Étude de marché » ---- */
   function tabsHTML(active){
-    function tab(id,lbl){ return '<button type="button" class="fi-subtab'+(active===id?' on':'')+'" onclick="go(\''+id+'\')">'+esc(lbl)+'</button>'; }
-    return '<div class="fi-subtabs-in">'+tab('formulaire','Formulaire')+tab('etudemarche','Étude de marché')+'</div>'
+    function tab(id,lbl){ return '<button type="button" data-tab="'+id+'" class="fi-subtab'+(active===id?' on':'')+'" onclick="emTabGo(\''+id+'\')">'+esc(lbl)+'</button>'; }
+    return '<div class="fi-subtabs-in" data-active="'+esc(active)+'"><span class="fi-subtab-ind" aria-hidden="true"></span>'+tab('formulaire','Formulaire')+tab('etudemarche','Étude de marché')+'</div>'
       +'<div class="fi-subtabs-sub">Étude de marché — sous-module du Formulaire (rattachée au dossier en cours)</div>';
   }
   window.__emTabsHTML=tabsHTML;
@@ -27484,6 +27484,52 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     '.em-doc .emd-foot{margin-top:18px;border-top:1px solid #cdd6e2;padding-top:10px;font-size:10.5px;color:#444}',
     '.em-doc .emd-sign{display:flex;justify-content:space-between;gap:30px;margin-top:22px;font-size:11px;color:#333}',
     '@media print{@page{size:A4;margin:12mm}#em-doc-ov{position:static!important;background:#fff!important;padding:0!important}#em-doc-ov .fxd-top{display:none!important}.em-doc{box-shadow:none!important;max-width:none!important;padding:0!important}}'
+  ].join(''); document.head.appendChild(st); }catch(e){}
+})();
+</script>
+
+<!-- ===== Onglets Formulaire ↔ Étude de marché : design « verre » + transition ===== -->
+<script>
+(function(){
+  /* Clic sur un onglet : on fait GLISSER l'indicateur, puis on navigue (transition visible). */
+  window.emTabGo=function(id){
+    try{ if(typeof state!=='undefined' && state.page===id) return; }catch(e){}
+    try{
+      var inner=document.querySelector('.fi-subtabs-in');
+      if(inner){
+        inner.setAttribute('data-active',id);
+        inner.querySelectorAll('.fi-subtab').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-tab')===id); });
+      }
+    }catch(e){}
+    setTimeout(function(){ try{ go(id); }catch(e){} }, 240);
+  };
+
+  /* Animation d'apparition du contenu au changement d'onglet (module change animé). */
+  try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){
+    var res=_r.apply(this,arguments);
+    try{ if(typeof state!=='undefined' && (state.page==='formulaire'||state.page==='etudemarche')){
+      var wrap=document.querySelector('#view .fi-wrap');
+      if(wrap){ wrap.classList.remove('fi-anim'); void wrap.offsetWidth; wrap.classList.add('fi-anim'); }
+    } }catch(e){}
+    return res;
+  }; } }catch(e){}
+
+  /* Styles (segmented control « liquid glass », sans icône) — injectés après em-css → prioritaires. */
+  try{ var st=document.createElement('style'); st.id='em-subtabs-css'; st.textContent=[
+    '.fi-subtabs{margin:2px auto 12px!important;padding:0!important;border:0!important;background:none!important;display:flex;flex-direction:column;align-items:center;max-width:520px}',
+    '.fi-subtabs-in{position:relative;display:grid!important;grid-template-columns:1fr 1fr;gap:0;width:100%;max-width:430px;padding:6px!important;border-radius:999px!important;background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.028))!important;-webkit-backdrop-filter:blur(16px) saturate(1.3);backdrop-filter:blur(16px) saturate(1.3);border:1px solid rgba(255,255,255,.14)!important;box-shadow:0 12px 36px -14px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,255,255,.09)}',
+    '.fi-subtab-ind{position:absolute;top:6px;left:6px;width:calc(50% - 6px);height:calc(100% - 12px);border-radius:999px;background:linear-gradient(180deg,rgba(14,19,28,.78),rgba(8,11,17,.66));border:1px solid rgba(255,255,255,.11);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 7px 18px -9px rgba(0,0,0,.85);transition:transform .38s cubic-bezier(.22,1,.36,1);z-index:0;pointer-events:none}',
+    '.fi-subtabs-in[data-active="etudemarche"] .fi-subtab-ind{transform:translateX(100%)}',
+    '.fi-subtab{position:relative;z-index:1;appearance:none;border:0!important;background:transparent!important;color:#9aa4b4!important;font-weight:700;font-size:13px;letter-spacing:.2px;padding:10px 14px!important;border-radius:999px!important;cursor:pointer;box-shadow:none!important;transition:color .3s ease,transform .2s ease}',
+    '.fi-subtab:hover{color:#e3e9f2!important}',
+    '.fi-subtab:active{transform:scale(.97)}',
+    '.fi-subtab.on{color:#fff!important;background:transparent!important;box-shadow:none!important}',
+    '.fi-subtabs-sub{font-size:11px;color:#8b8b95;margin-top:9px;text-align:center}',
+    '@keyframes fiFadeIn{from{opacity:0}to{opacity:1}}',
+    '@keyframes fiSlideIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}',
+    '.fi-wrap:not(.em-wrap).fi-anim{animation:fiFadeIn .32s ease both}',
+    '.em-wrap.fi-anim{animation:fiSlideIn .42s cubic-bezier(.22,1,.36,1) both}',
+    '@media(prefers-reduced-motion:reduce){.fi-subtab-ind{transition:none}.fi-wrap.fi-anim,.em-wrap.fi-anim{animation:none}}'
   ].join(''); document.head.appendChild(st); }catch(e){}
 })();
 </script>
