@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=538;
+var LAST_VER=539;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -26753,165 +26753,357 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
 })();
 </script>
 
-<!-- ===== Sous-module « Étude de Marché » (sous le module Formulaire) ===== -->
+<!-- ===== Sous-module « Étude de Marché » (méthode du guide AEM CONSEIL, sous Formulaire) ===== -->
 <script>
 (function(){
-  /* Lecture/écriture dans le brouillon de dossier courant (window.__formData),
-     donc l'étude voyage avec le dossier et se sauvegarde avec le brouillon. */
+  /* Données dans le brouillon de dossier courant, sous window.__formData.etude → voyage avec le dossier.
+     E()/S() sont RELATIVES à .etude : un chemin « mar.nbClients » vise __formData.etude.mar.nbClients. */
   function FD(){ if(!window.__formData||typeof window.__formData!=='object')window.__formData={}; return window.__formData; }
-  function E(path){ var o=FD(),ks=path.split('.'); for(var i=0;i<ks.length;i++){ o=(o&&o[ks[i]]); if(o==null)return ''; } return o; }
-  function S(path,val){ if(typeof window.formSet==='function')window.formSet(path,val); else { var o=FD(),ks=path.split('.'); for(var i=0;i<ks.length-1;i++){o[ks[i]]=o[ks[i]]||{};o=o[ks[i]];} o[ks[ks.length-1]]=val; } }
-  function esc(s){return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-  function num(v){ v=(''+(v==null?'':v)).replace(/[^0-9.,-]/g,'').replace(',','.'); var n=parseFloat(v); return isNaN(n)?null:n; }
-  function fmt(n){ try{ return (Math.round(n*100)/100).toLocaleString('fr-FR'); }catch(e){ return ''+n; } }
+  function EROOT(){ var o=FD(); if(!o.etude||typeof o.etude!=='object')o.etude={}; return o.etude; }
+  function E(path){ var o=EROOT(),ks=path.split('.'); for(var i=0;i<ks.length;i++){ o=(o&&o[ks[i]]); if(o==null)return ''; } return o; }
+  function S(path,val){ var o=EROOT(),ks=path.split('.'); for(var i=0;i<ks.length-1;i++){o[ks[i]]=o[ks[i]]||{};o=o[ks[i]];} o[ks[ks.length-1]]=val; }
+  function esc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function num(v){ v=(''+(v==null?'':v)).replace(/[^0-9.,-]/g,'').replace(',','.'); var x=parseFloat(v); return isNaN(x)?null:x; }
+  function fmt(v){ try{ return Math.round(v).toLocaleString('fr-FR'); }catch(e){ return ''+v; } }
+  function fmt2(v){ try{ return (Math.round(v*100)/100).toLocaleString('fr-FR'); }catch(e){ return ''+v; } }
 
-  /* ---- Constructeurs de champs (mêmes classes que le Formulaire) ---- */
+  /* ---- Constructeurs de champs ---- */
   function eI(path,ph){ return '<input value="'+esc(E(path))+'" data-em="'+esc(path)+'" oninput="emSet(this)" placeholder="'+esc(ph||'')+'">'; }
   function eN(path,ph){ return '<input inputmode="decimal" value="'+esc(E(path))+'" data-em="'+esc(path)+'" oninput="emSet(this)" placeholder="'+esc(ph||'')+'">'; }
   function eT(path,ph,rows){ return '<textarea rows="'+(rows||2)+'" data-em="'+esc(path)+'" oninput="emSet(this)" placeholder="'+esc(ph||'')+'">'+esc(E(path))+'</textarea>'; }
-  function eSel(path,opts,cur){ return '<select data-em="'+esc(path)+'" onchange="emSetR(this)">'+opts.map(function(o){var v=(o instanceof Array)?o[0]:o,l=(o instanceof Array)?o[1]:o;return '<option value="'+esc(v)+'"'+((''+cur)===(''+v)?' selected':'')+'>'+esc(l)+'</option>';}).join('')+'</select>'; }
-  function r1(l,inp,adv){ return '<label>'+esc(l)+'</label>'+inp+(adv||''); }
+  function eSel(path,opts,cur){ return '<select data-em="'+esc(path)+'" onchange="emSet(this)">'+opts.map(function(o){var v=(o instanceof Array)?o[0]:o,l=(o instanceof Array)?o[1]:o;return '<option value="'+esc(v)+'"'+((''+cur)===(''+v)?' selected':'')+'>'+esc(l)+'</option>';}).join('')+'</select>'; }
+  function r1(l,inp){ return '<label>'+esc(l)+'</label>'+inp; }
   function r2(l1,i1,l2,i2){ return '<div class="frow"><div><label>'+esc(l1)+'</label>'+i1+'</div><div><label>'+esc(l2)+'</label>'+i2+'</div></div>'; }
-  function grp(t,inner,note){ return '<div class="card fi-card"><div class="card-h"><h2>'+esc(t)+'</h2>'+(note?'<span class="sub" style="margin-left:auto">'+esc(note)+'</span>':'')+'</div><div class="card-b">'+inner+'</div></div>'; }
-  /* Conseil discret (réutilise le style .fx-adv du Formulaire) — uniquement sous les cases stratégiques */
-  function adv(html){ return html?('<div class="fx-adv">'+html+'</div>'):''; }
+  function grp(t,sub,inner){ return '<div class="card fi-card em-sec"><div class="card-h"><h2>'+esc(t)+'</h2>'+(sub?'<span class="sub" style="margin-left:auto">'+esc(sub)+'</span>':'')+'</div><div class="card-b">'+inner+'</div></div>'; }
+  function M(txt){ return '<div class="em-method"><span class="em-method-ic">🎯</span><div>'+txt+'</div></div>'; }
+  function O(key,label,unit){ return '<div class="em-out"><span class="em-out-l">'+esc(label)+'</span><span class="em-out-v" data-emout="'+esc(key)+'"'+(unit?(' data-unit="'+esc(unit)+'"'):'')+'>—</span></div>'; }
+  function AL(id){ return '<div class="em-alert" id="'+id+'" hidden></div>'; }
+  function outBox(items){ return '<div class="em-outbox">'+items+'</div>'; }
 
-  /* Écriture (input texte/nombre) : pas de re-render → garde le focus, met à jour la synthèse */
-  window.emSet=function(el){ try{ S(el.getAttribute('data-em'),el.value); }catch(e){} try{ emRecalc(); }catch(e){} };
-  /* Écriture (select) : re-render pour rafraîchir les conseils sous la case */
-  window.emSetR=function(el){ try{ S(el.getAttribute('data-em'),el.value); }catch(e){} if(typeof render==='function')render(); };
+  window.emSet=function(el){ try{ S(el.getAttribute('data-em'),el.value); }catch(e){} try{ window.emRecalcAll(); }catch(e){} };
 
-  /* ---- Concurrents (liste dynamique) ---- */
+  /* ---- Listes dynamiques ---- */
   function concList(){ var o=FD(); o.etude=o.etude||{}; if(!Array.isArray(o.etude.concurrents))o.etude.concurrents=[]; return o.etude.concurrents; }
-  window.emConcAdd=function(){ concList().push({nom:'',force:'',faiblesse:''}); if(typeof render==='function')render(); };
+  window.emConcAdd=function(){ concList().push({nom:'',type:'direct',ca:'',cible:'',prix:'',faible:''}); if(typeof render==='function')render(); };
   window.emConcDel=function(i){ var l=concList(); if(i>=0&&i<l.length)l.splice(i,1); if(typeof render==='function')render(); };
-  window.emConcSet=function(i,key,el){ var l=concList(); if(l[i]){ l[i][key]=el.value; } };
+  window.emConcSet=function(i,key,el){ var l=concList(); if(l[i])l[i][key]=el.value; try{ window.emRecalcAll(); }catch(e){} };
+  function critList(){ var o=FD(); o.etude=o.etude||{}; if(!Array.isArray(o.etude.criteres))o.etude.criteres=[]; return o.etude.criteres; }
+  window.emCritAdd=function(){ critList().push({nom:'',poids:'',vous:'',conc:''}); if(typeof render==='function')render(); };
+  window.emCritDel=function(i){ var l=critList(); if(i>=0&&i<l.length)l.splice(i,1); if(typeof render==='function')render(); };
+  window.emCritSet=function(i,key,el){ var l=critList(); if(l[i])l[i][key]=el.value; try{ window.emRecalcAll(); }catch(e){} };
+  function risqueList(){ var o=FD(); o.etude=o.etude||{}; if(!Array.isArray(o.etude.risques))o.etude.risques=[]; return o.etude.risques; }
+  window.emRisqueAdd=function(){ risqueList().push({nom:'',proba:'',impact:'',parade:''}); if(typeof render==='function')render(); };
+  window.emRisqueDel=function(i){ var l=risqueList(); if(i>=0&&i<l.length)l.splice(i,1); if(typeof render==='function')render(); };
+  window.emRisqueSet=function(i,key,el){ var l=risqueList(); if(l[i])l[i][key]=el.value; try{ window.emRecalcAll(); }catch(e){} };
 
-  /* ---- Synthèse SWOT auto-proposée (heuristique légère) ---- */
-  window.emSwotAuto=function(){
-    var o=FD(),e=o.etude||{};
-    function set(p,v){ if(!E(p))S(p,v); }
-    var av=e.avantage||''; if(av)set('etude.swot.forces',av);
-    if(e.nivConcurrence==='forte')set('etude.swot.menaces','Concurrence forte sur le secteur — nécessité de se différencier.');
-    if(e.stade==='croissance')set('etude.swot.opportunites','Marché en croissance — fenêtre favorable pour se positionner.');
-    if(e.stade==='declin')set('etude.swot.menaces','Marché en déclin — vigilance sur la demande à moyen terme.');
-    if(!e.avantage)set('etude.swot.faiblesses','Avantage concurrentiel à préciser.');
-    if(typeof render==='function')render();
-    if(typeof toast==='function')toast('Synthèse SWOT proposée — ajustez librement.');
-  };
+  /* ---- Moteur de calcul (logique de la Partie 1) ---- */
+  function emComputeFrom(e){
+    e=e||{}; var mar=e.mar||{},eco=e.eco||{},qnt=e.qnt||{},prev=e.prev||{},conc=e.conc||{},ech=e.ech||{};
+    var C={};
+    var prixUnit=num(mar.prixUnit),freq=num(mar.freq),abo=num(mar.abo),nbClients=num(mar.nbClients);
+    var dep=(abo!=null&&abo>0)?abo*12:((prixUnit!=null&&freq!=null)?prixUnit*freq:(prixUnit!=null?prixUnit:null));
+    C.depense=dep;
+    C.tamBottom=(nbClients!=null&&dep!=null)?nbClients*dep:null;
+    var tamTop=num(mar.tamTop);
+    C.tamTop=tamTop;
+    C.ecart=(tamTop!=null&&C.tamBottom!=null&&C.tamBottom>0&&tamTop>0)?(Math.max(tamTop,C.tamBottom)/Math.min(tamTop,C.tamBottom)):null;
+    var samClients=num(mar.samClients),pen=num(mar.penetration);
+    C.sam=(samClients!=null&&dep!=null)?samClients*dep:null;
+    C.somClients=(samClients!=null&&pen!=null)?Math.round(samClients*(pen/100)):null;
+    C.som=(C.sam!=null&&pen!=null)?C.sam*(pen/100):null;
+    var cas=(e.concurrents||[]).map(function(c){return num(c.ca);}).filter(function(v){return v!=null&&v>0;});
+    var sumk=cas.reduce(function(a,b){return a+b;},0);
+    C.sumCAk=sumk>0?sumk:null; C.sumCAeur=sumk>0?sumk*1000:null;
+    C.hhi=sumk>0?Math.round(cas.reduce(function(a,ca){var p=ca/sumk*100;return a+p*p;},0)):null;
+    C.hhiLabel=C.hhi==null?null:(C.hhi<1500?'Fragmenté — entrée plus facile':(C.hhi>2500?'Concentré — entrée difficile':'Modérément concentré'));
+    var crit=e.criteres||[]; var poidsTot=crit.reduce(function(a,c){return a+(num(c.poids)||0);},0);
+    function sc(f){ if(!poidsTot)return null; return crit.reduce(function(a,c){return a+((num(c.poids)||0)*(num(c[f])||0));},0)/poidsTot; }
+    C.poidsTot=poidsTot||null; C.scoreVous=sc('vous'); C.scoreConc=sc('conc');
+    var cert=num(qnt.intCertain),prob=num(qnt.intProbable);
+    C.intention=(cert!=null||prob!=null)?(0.7*(cert||0)+0.3*(prob||0)):null;
+    var arpu=num(eco.arpu),marge=num(eco.marge),cac=num(eco.cac),churn=num(eco.churn),cf=num(eco.chargesFixes);
+    var arpuM=arpu!=null?arpu/12:null; var margeM=(arpuM!=null&&marge!=null)?arpuM*(marge/100):null;
+    var duree=(churn!=null&&churn>0)?100/churn:null;
+    C.ltv=(margeM!=null&&duree!=null)?margeM*duree:null;
+    C.ltvCac=(C.ltv!=null&&cac!=null&&cac>0)?C.ltv/cac:null;
+    C.recup=(cac!=null&&margeM!=null&&margeM>0)?cac/margeM:null;
+    C.seuil=(cf!=null&&marge!=null&&marge>0)?cf/(marge/100):null;
+    C.seuilClients=(C.seuil!=null&&arpu!=null&&arpu>0)?Math.ceil(C.seuil/arpu):null;
+    var prevPrev=0; C.somAlert=false;
+    for(var i=0;i<3;i++){
+      var budget=num(prev['budget'+i]);
+      var nouveaux=(budget!=null&&cac!=null&&cac>0)?Math.round(budget/cac):num(prev['nouveaux'+i]);
+      var perdus=num(prev['perdus'+i])||0;
+      var fin=Math.max(0,prevPrev+(nouveaux||0)-perdus);
+      var moyens=(prevPrev+fin)/2;
+      var ca=(arpu!=null)?moyens*arpu:null;
+      var pct=(ca!=null&&C.som!=null&&C.som>0)?(ca/C.som*100):null;
+      C['prevNouveaux'+i]=nouveaux; C['prevFin'+i]=fin; C['prevCA'+i]=ca; C['prevPct'+i]=pct;
+      if(pct!=null&&pct>100)C.somAlert=true; prevPrev=fin;
+    }
+    C.caAn1=(C.prevCA0!=null)?C.prevCA0:null;
+    var eMap={'10':0.10,'7':0.07,'5':0.05,'3':0.03}; var eVal=eMap[(ech.marge||'5')]||0.05;
+    var z=1.96,pp=0.5; var n=Math.ceil((z*z*pp*(1-pp))/(eVal*eVal));
+    var N=num(ech.population); if(N!=null&&N>0)n=Math.ceil(n/(1+(n-1)/N));
+    C.sampleN=n; C.sampleContacts=Math.ceil(n/0.10);
+    return C;
+  }
+  window.emComputeFrom=emComputeFrom;
+  function emCompute(){ return emComputeFrom((FD().etude||{})); }
 
-  /* ---- Recalcul en direct de la carte « Marché potentiel » (sans re-render) ---- */
-  window.emRecalc=function(){
-    var box=document.getElementById('em-calc'); if(!box)return;
-    box.innerHTML=emCalcInner();
-  };
-  function emCalcInner(){
-    var e=(FD().etude||{});
-    var nb=num(e.nbClients),pan=num(e.panier),part=num(e.partVisee);
-    var adressable=(nb!=null&&pan!=null)?(nb*pan):null;
-    var ca=(adressable!=null&&part!=null)?(adressable*(part/100)):null;
-    /* Complétude : champs clés renseignés */
-    var keys=['secteur','marche','stade','zone','cibleType','besoin','nbClients','panier','partVisee','avantage','offre','prix','canaux'];
-    var done=0; keys.forEach(function(k){ if((''+(e[k]==null?'':e[k])).trim()!=='')done++; });
+  function fmtOut(k,v){
+    if(v==null||(typeof v==='number'&&!isFinite(v)))return '—';
+    if(typeof v==='string')return v;
+    if(/Pct/.test(k))return fmt(v)+' %';
+    if(/ecart|ltvCac/i.test(k))return fmt2(v)+' ×';
+    if(/score/i.test(k))return fmt2(v);
+    if(/intention/i.test(k))return fmt(v)+' %';
+    if(/recup/i.test(k))return fmt2(v)+' mois';
+    if(/hhi$/i.test(k))return fmt(v);
+    if(/Clients|prevNouveaux|prevFin|sampleN|sampleContacts|seuilClients/i.test(k))return fmt(v);
+    return fmt(v)+' €';
+  }
+  function setAlert(id,cond,txt){ var el=document.getElementById(id); if(!el)return; el.hidden=!cond; el.textContent=cond?('⚠ '+txt):''; }
+  window.emRecalcAll=function(){
+    var C=emCompute();
+    try{ document.querySelectorAll('[data-emout]').forEach(function(el){ var k=el.getAttribute('data-emout'); el.textContent=fmtOut(k,C[k]); }); }catch(e){}
+    /* score par ligne de risque (proba × impact) */
+    try{ document.querySelectorAll('.em-risk-row').forEach(function(row){ var p=num((row.querySelector('[data-rk=proba]')||{}).value),im=num((row.querySelector('[data-rk=impact]')||{}).value),sc=row.querySelector('[data-rscore]'); if(sc)sc.textContent=(p!=null&&im!=null)?String(p*im):'—'; }); }catch(e){}
+    setAlert('em-al-ecart',C.ecart!=null&&C.ecart>2,'Écart TAM top-down / bottom-up > 2 → une hypothèse est fausse, à revoir.');
+    setAlert('em-al-ltvcac',C.ltvCac!=null&&C.ltvCac<3,'LTV / CAC < 3 : modèle fragile (viser ≥ 3).');
+    setAlert('em-al-recup',C.recup!=null&&C.recup>12,'Récupération du CAC > 12 mois (viser ≤ 12 mois).');
+    setAlert('em-al-som',C.somAlert,'CA prévisionnel > SOM : revoir le CAC ou le taux de pénétration.');
+    /* complétude */
+    var e=FD().etude||{};
+    var keys=['ident.entreprise','ident.offre','cad.decision','cad.go','cad.nogo','mar.nbClients','mar.penetration','mar.croissance','pes.decisif','conc.angle','qua.pb1','qnt.n','qnt.intCertain','eco.prix','eco.arpu','eco.cac','ccl.verdict','ccl.position'];
+    var done=0; keys.forEach(function(k){ if((''+(E(k)||'')).trim()!=='')done++; });
+    if((e.concurrents||[]).length)done++; keys.push('__conc');
     var pct=Math.round(done/keys.length*100);
-    function kpi(lbl,val,unit){ return '<div class="em-kpi"><div class="em-kpi-l">'+esc(lbl)+'</div><div class="em-kpi-v">'+(val==null?'<span class="em-na">à renseigner</span>':(fmt(val)+(unit||''))) +'</div></div>'; }
-    return '<div class="em-kpis">'
-      +kpi('Marché adressable (clients × panier)',adressable,' €')
-      +kpi('Part de marché visée (an 1)',part,' %')
-      +kpi('Chiffre d\'affaires potentiel (an 1)',ca,' €')
-      +'</div>'
-      +'<div class="em-prog"><div class="em-prog-h"><span>Complétude de l\'étude</span><span>'+done+'/'+keys.length+' · '+pct+'%</span></div><div class="em-prog-bar"><i style="width:'+pct+'%"></i></div></div>'
-      +'<div class="em-calc-note">Estimation indicative : CA potentiel = clients potentiels × panier moyen × part de marché visée. Ces montants alimentent le raisonnement du bilan prévisionnel.</div>';
-  }
+    var pb=document.getElementById('em-prog-bar'), pt=document.getElementById('em-prog-txt');
+    if(pb)pb.style.width=pct+'%'; if(pt)pt.textContent=done+'/'+keys.length+' · '+pct+'%';
+    /* verdict pastille */
+    var vd=document.getElementById('em-verdict'); if(vd){ var v=(E('ccl.verdict')||'').toLowerCase(); vd.className='em-verdict '+(/no.?go/.test(v)?'ko':(/condition/.test(v)?'mid':(/go/.test(v)?'ok':''))); vd.textContent=(E('ccl.verdict')||'À statuer'); }
+  };
 
-  /* ---- Barre d'onglets « Formulaire · Étude de marché » (sous-module) ---- */
-  function tabsHTML(active){
-    function tab(id,lbl){ return '<button type="button" class="fi-subtab'+(active===id?' on':'')+'" onclick="go(\''+id+'\')">'+esc(lbl)+'</button>'; }
-    return '<div class="fi-subtabs-in">'+tab('formulaire','Formulaire')+tab('etudemarche','Étude de marché')+'</div>'
-      +'<div class="fi-subtabs-sub">Étude de marché — sous-module du Formulaire (rattachée au dossier en cours)</div>';
-  }
-  window.__emTabsHTML=tabsHTML;
-
-  /* ---- Page « Étude de marché » ---- */
+  /* ---- Page ---- */
   function pageEtudeMarche(){
-    var e=(FD().etude||{});
-    var refresh=(window.mqRefresh?'<button class="mq-ib" onclick="mqRefresh(this)" title="Actualiser la page" aria-label="Actualiser">'+((window.MQ_ICONS&&window.MQ_ICONS.refresh)||'↻')+'</button>':'');
+    var e=(FD().etude||{}),mar=e.mar||{},ech=e.ech||{};
+    var refresh=(window.mqRefresh?'<button class="mq-ib" onclick="mqRefresh(this)" title="Actualiser" aria-label="Actualiser">'+((window.MQ_ICONS&&window.MQ_ICONS.refresh)||'↻')+'</button>':'');
     var hero='<div class="em-hero"><div><h2 class="em-hero-t">Étude de marché</h2>'
-      +'<div class="em-hero-s">Analyse du marché du projet client : secteur, clientèle cible, concurrence, offre &amp; prix, prévisions. Les informations complètent le dossier et éclairent le bilan prévisionnel.</div></div>'
+      +'<div class="em-hero-s">Méthode du guide AEM CONSEIL — on ne « connaît » pas le marché, on tranche une décision. Suivez les sections A→K : chaque calcul (TAM/SAM/SOM, concurrence, prix, LTV/CAC, prévisions) est fait en direct sous la case.</div></div>'
       +'<div class="em-hero-r">'+refresh+'</div></div>';
 
-    /* 1. Projet & marché */
-    var advStade=adv((function(){var m={emergent:'Marché émergent : fort potentiel mais demande à confirmer — prévoir une phase de test et un besoin de trésorerie initial.',croissance:'Marché en croissance : fenêtre favorable — soigner l\'acquisition pour capter des parts rapidement.',mature:'Marché mature : la différenciation et la fidélisation priment sur la conquête.',declin:'Marché en déclin : vérifier la pérennité de la demande et envisager une niche ou une diversification.'};return m[e.stade]||'';})());
-    var advZone=adv(e.zone?'Zone de chalandise renseignée — estimez la demande locale (population, entreprises, flux) pour dimensionner le prévisionnel.':'');
-    var g1=grp('Projet & marché',
-      r1('Secteur d\'activité',eI('etude.secteur','ex. Restauration rapide, BTP second œuvre, e-commerce…'))
-      +r1('Description du marché',eT('etude.marche','Nature du marché, dynamique générale, acteurs en présence…'))
-      +r2('Stade du marché',eSel('etude.stade',[['','—'],['emergent','Émergent'],['croissance','En croissance'],['mature','Mature'],['declin','En déclin']],e.stade),'Zone de chalandise / périmètre',eI('etude.zone','ex. Locale (10 km), régionale, nationale, en ligne'))
-      +(advStade||advZone?('<div class="em-advrow">'+advStade+advZone+'</div>'):'')
-      +r1('Taille estimée du marché',eI('etude.taille','ex. 500 clients potentiels dans la zone / marché national de X M€')));
+    /* Synthèse chiffrée (en tête) */
+    var synth='<div class="card fi-card em-sec em-synth"><div class="card-h"><h2>Synthèse chiffrée</h2><span class="em-verdict" id="em-verdict">À statuer</span></div><div class="card-b">'
+      +outBox(O('tamBottom','TAM (bottom-up)')+O('sam','SAM')+O('som','SOM à 3 ans')+O('somClients','SOM (clients)')+O('ltv','LTV')+O('ltvCac','LTV / CAC')+O('caAn1','CA année 1')+O('sampleN','Échantillon requis'))
+      +'<div class="em-prog"><div class="em-prog-h"><span>Complétude de l\'étude</span><span id="em-prog-txt">0 %</span></div><div class="em-prog-bar-wrap"><i id="em-prog-bar" style="width:0%"></i></div></div>'
+      +'</div></div>';
 
-    /* 2. Clientèle cible */
-    var advCible=adv('Définir précisément la cible (B2C/B2B, profil) conditionne le message commercial, les canaux et le panier moyen — donc le prévisionnel.');
-    var g2=grp('Clientèle cible',
-      r2('Type de clientèle',eSel('etude.cibleType',[['','—'],['B2C','Particuliers (B2C)'],['B2B','Entreprises (B2B)'],['mixte','Mixte (B2C + B2B)'],['public','Secteur public / collectivités']],e.cibleType),'Nombre de clients potentiels',eN('etude.nbClients','ex. 500'))
-      +advCible
-      +r1('Profil des clients cibles',eT('etude.cibleProfil','Âge, CSP, localisation, habitudes, taille d\'entreprise…'))
-      +r1('Besoin / problème résolu',eT('etude.besoin','Quel besoin concret votre offre satisfait-elle ?')));
+    /* A. Identification */
+    var A=grp('A. Identification','Section A',
+      r2('Entreprise / projet',eI('ident.entreprise'),'Offre étudiée',eI('ident.offre'))
+      +r2('Rédigé par · date',eI('ident.redige'),'Version',eI('ident.version','v1')));
 
-    /* 3. Concurrence */
+    /* B. Cadrage */
+    var B=grp('B. Cadrage — la question de décision','Section B',
+      M('Une étude de marché sert à <b>trancher une décision</b>, pas à « connaître le marché ». Écrivez la décision en une phrase, avec des critères chiffrés. <b>Règle :</b> chaque donnée collectée doit se rattacher à un critère GO/NO-GO, sinon elle est superflue.')
+      +r1('Décision à prendre (une phrase)',eT('cad.decision','Ex. : Lancer ou non l\'offre X sur le segment Y en 2027'))
+      +r2('Critères de GO (chiffrés)',eT('cad.go','Ex. : SOM ≥ 2 M€ à 3 ans, ≥ 40 % paient déjà, LTV/CAC ≥ 3'),'Critères de NO-GO (chiffrés)',eT('cad.nogo','Ex. : < 20 % reconnaissent le problème, ou 1 concurrent > 60 % du segment'))
+      +r2('Périmètre géographique',eI('cad.perimetre','France métropolitaine…'),'Horizon',eI('cad.horizon','3 ans'))
+      +r1('Segment étudié (taille, secteur, caractéristiques)',eI('cad.segment','Ex. : TPE 3–20 salariés, services, hors professions réglementées')));
+
+    /* C. Marché TAM/SAM/SOM */
+    var C=grp('C. Marché — TAM · SAM · SOM','Section C',
+      M('Deux approches doivent <b>converger</b> (top-down & bottom-up) : un écart > facteur 2 = hypothèse fausse. Bottom-up (le plus crédible) : <b>TAM = clients potentiels × dépense annuelle</b> ; dépense = prix × fréquence, ou abonnement × 12. <b>SOM = SAM × pénétration réaliste</b> (1 à 5 % à 3 ans pour un nouvel entrant). Le SOM est la seule ligne qui compte pour le business plan.')
+      +r2('Nombre de clients potentiels (France)',eN('mar.nbClients','Source INSEE / étude'),'TAM top-down (€)',eN('mar.tamTop','Marché global × % segment'))
+      +'<div class="frow"><div><label>Prix unitaire (€)</label>'+eN('mar.prixUnit','ex. 60')+'</div><div><label>Fréquence d\'achat / an</label>'+eN('mar.freq','ex. 12')+'</div><div><label>ou Abonnement mensuel (€)</label>'+eN('mar.abo','ex. 60 → ×12')+'</div></div>'
+      +r2('Clients atteignables (SAM, en nombre)',eN('mar.samClients','après filtres géo/taille/secteur'),'Taux de pénétration à 3 ans (%)',eN('mar.penetration','1 à 5 %'))
+      +r1('Filtres appliqués pour le SAM (%, justification)',eT('mar.filtres','Ex. : géographie 50 %, équipables 60 %, canaux 50 %…'))
+      +outBox(O('depense','Dépense annuelle / client')+O('tamBottom','TAM bottom-up')+O('ecart','Écart top-down / bottom-up')+O('sam','SAM (€)')+O('som','SOM à 3 ans (€)')+O('somClients','SOM (clients)'))
+      +AL('em-al-ecart')
+      +r2('Taux de croissance annuel du marché (%)',eI('mar.croissance','+ source'),'Tendances structurantes (max 3)',eT('mar.tendances','3 tendances + impact')));
+
+    /* D. PESTEL */
+    var D=grp('D. Environnement — PESTEL (France)','Section D',
+      M('Instruisez chaque facteur avec une source : subventions (Bpifrance, France 2030), délais de paiement (Banque de France), obligations numériques (facturation électronique, DSN — France Num), RGPD (CNIL), professions réglementées. Datez les échéances légales.')
+      +r2('Politique',eT('pes.pol','Réformes, subventions, commande publique'),'Économique',eT('pes.eco','Croissance, inflation, délais de paiement, défaillances'))
+      +r2('Social',eT('pes.soc','Usages, démographie dirigeants, RSE'),'Technologique',eT('pes.tech','Obligations numériques, IA, taux d\'équipement'))
+      +r2('Environnemental',eT('pes.env','CSRD, énergie, attentes clients'),'Légal / réglementaire (échéances datées)',eT('pes.legal','RGPD, droit du travail, normes sectorielles'))
+      +r1('Facteur le plus décisif',eI('pes.decisif')));
+
+    /* E. Concurrence */
     var cl=concList();
     var concRows=cl.map(function(c,i){ return '<div class="em-conc"><button type="button" class="fi-ax" title="Retirer" onclick="emConcDel('+i+')">×</button>'
       +'<div class="em-conc-t">Concurrent '+(i+1)+'</div>'
-      +'<label>Nom</label><input value="'+esc(c.nom||'')+'" oninput="emConcSet('+i+',\'nom\',this)" placeholder="Nom du concurrent">'
-      +'<div class="frow"><div><label>Point fort</label><input value="'+esc(c.force||'')+'" oninput="emConcSet('+i+',\'force\',this)" placeholder="Ce qu\'il fait bien"></div>'
-      +'<div><label>Point faible</label><input value="'+esc(c.faiblesse||'')+'" oninput="emConcSet('+i+',\'faiblesse\',this)" placeholder="Sa faiblesse = votre opportunité"></div></div>'
+      +'<div class="frow"><div><label>Nom</label><input value="'+esc(c.nom||'')+'" oninput="emConcSet('+i+',\'nom\',this)"></div>'
+      +'<div><label>Type</label><select onchange="emConcSet('+i+',\'type\',this)">'+[['direct','Direct'],['indirect','Indirect'],['substitut','Substitut']].map(function(o){return '<option value="'+o[0]+'"'+((c.type||'direct')===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></div></div>'
+      +'<div class="frow"><div><label>CA (k€)</label><input inputmode="decimal" value="'+esc(c.ca||'')+'" oninput="emConcSet('+i+',\'ca\',this)"></div>'
+      +'<div><label>Cible</label><input value="'+esc(c.cible||'')+'" oninput="emConcSet('+i+',\'cible\',this)"></div></div>'
+      +'<div class="frow"><div><label>Prix</label><input value="'+esc(c.prix||'')+'" oninput="emConcSet('+i+',\'prix\',this)"></div>'
+      +'<div><label>Point faible n°1</label><input value="'+esc(c.faible||'')+'" oninput="emConcSet('+i+',\'faible\',this)" placeholder="sa faiblesse = votre opportunité"></div></div>'
       +'</div>'; }).join('');
-    var advConc=adv((function(){if(e.nivConcurrence==='forte')return 'Concurrence forte : la différenciation (offre, prix, service, image) est décisive — précisez votre avantage ci-dessous.';if(e.nivConcurrence==='faible')return 'Peu de concurrence : vérifiez que la demande existe réellement (un marché vide peut cacher une demande faible).';return '';})());
-    var g3=grp('Concurrence',
-      r2('Niveau de concurrence',eSel('etude.nivConcurrence',[['','—'],['faible','Faible'],['moyenne','Moyenne'],['forte','Forte']],e.nivConcurrence),'Avantage concurrentiel',eI('etude.avantage','Ce qui vous distingue durablement'))
-      +advConc
+    var cr=critList();
+    var critRows=cr.map(function(c,i){ return '<div class="em-crit-row"><input class="em-crit-nom" value="'+esc(c.nom||'')+'" oninput="emCritSet('+i+',\'nom\',this)" placeholder="Critère de choix">'
+      +'<input class="em-crit-n" inputmode="decimal" value="'+esc(c.poids||'')+'" oninput="emCritSet('+i+',\'poids\',this)" placeholder="poids">'
+      +'<input class="em-crit-n" inputmode="decimal" value="'+esc(c.vous||'')+'" oninput="emCritSet('+i+',\'vous\',this)" placeholder="vous 1-5">'
+      +'<input class="em-crit-n" inputmode="decimal" value="'+esc(c.conc||'')+'" oninput="emCritSet('+i+',\'conc\',this)" placeholder="concur. 1-5">'
+      +'<button type="button" class="fi-ax em-crit-x" onclick="emCritDel('+i+')">×</button></div>'; }).join('');
+    var Esec=grp('E. Concurrence','Section E',
+      M('Une ligne par concurrent (8 à 15). <b>HHI = Σ(part de marché en %)²</b> → &lt; 1500 fragmenté (entrée facile), &gt; 2500 concentré (entrée difficile). Pondérez les critères de choix (total 100) et notez 1–5 : cherchez le critère où <b>vous êtes seul à être fort</b> = votre angle de différenciation.')
       +'<div class="em-conc-list">'+(concRows||'<div class="hint">Aucun concurrent listé.</div>')+'</div>'
-      +'<button type="button" class="btn btn-sm btn-ghost em-add" onclick="emConcAdd()">+ Ajouter un concurrent</button>');
+      +'<button type="button" class="btn btn-sm btn-ghost em-add" onclick="emConcAdd()">+ Ajouter un concurrent</button>'
+      +outBox(O('sumCAk','Marché servi (Σ CA, k€)')+O('hhi','Indice HHI')+O('hhiLabel','Concentration'))
+      +'<div class="em-sub2">Critères de choix pondérés (total des poids = 100)</div>'
+      +'<div class="em-crit-head"><span>Critère</span><span>Poids</span><span>Vous</span><span>Concur.</span><span></span></div>'
+      +'<div class="em-crit-list">'+(critRows||'<div class="hint">Aucun critère.</div>')+'</div>'
+      +'<button type="button" class="btn btn-sm btn-ghost em-add" onclick="emCritAdd()">+ Ajouter un critère</button>'
+      +outBox(O('poidsTot','Total des poids')+O('scoreVous','Votre score pondéré')+O('scoreConc','Score concurrent'))
+      +r2('Concurrent le plus dangereux (pourquoi)',eI('conc.dangereux'),'Substituts (ne rien faire, Excel, prestataire)',eI('conc.substituts'))
+      +r1('Angle de différenciation (le critère où vous êtes seul à être fort)',eI('conc.angle')));
 
-    /* 4. Offre & prix */
-    var advPrix=adv('Le positionnement prix (entrée / milieu / haut de gamme) doit être cohérent avec la cible et la marge : un prix trop bas fragilise la rentabilité, trop haut réduit le volume.');
-    var g4=grp('Offre & prix',
-      r1('Produits / services proposés',eT('etude.offre','Détaillez l\'offre principale et les offres connexes…'))
-      +r2('Politique de prix',eI('etude.prix','ex. Prix moyen 25 € · abonnement 49 €/mois'),'Positionnement',eSel('etude.gamme',[['','—'],['entree','Entrée de gamme'],['milieu','Milieu de gamme'],['haut','Haut de gamme']],e.gamme))
-      +advPrix
-      +r1('Canaux de distribution / acquisition',eT('etude.canaux','ex. Boutique, site web, réseaux sociaux, bouche-à-oreille, apporteurs…')));
+    /* F. Qualitatif */
+    var F=grp('F. Résultats qualitatifs (entretiens)','Section F',
+      M('15 à 25 entretiens de 45–60 min <b>avant</b> le questionnaire (60 % cibles, 25 % clients de concurrents, 15 % prescripteurs). <b>Signal fort :</b> le problème est cité spontanément, la personne a déjà bricolé une solution et chiffre son coût, elle demande quand ce sera disponible. <b>Signal faible :</b> « ce serait bien d\'avoir ça ».')
+      +r1('Nombre d\'entretiens · répartition',eI('qua.nb','ex. 20 — 60/25/15 %'))
+      +r1('Problème n°1 cité spontanément (mots exacts + fréquence)',eT('qua.pb1'))
+      +r2('Problème n°2',eI('qua.pb2'),'Problème n°3',eI('qua.pb3'))
+      +r2('Solutions actuelles',eT('qua.solutions','Ce qu\'ils font aujourd\'hui'),'Coût du problème estimé',eI('qua.cout','€ ou h / mois'))
+      +r2('Décideur & processus d\'achat',eT('qua.decideur','Qui, combien de temps, quel budget'),'Objections entendues',eT('qua.objections'))
+      +r1('Signaux forts observés (nb de personnes ayant demandé une suite)',eI('qua.signaux')));
 
-    /* 5. Prévisions & objectifs */
-    var advPart=adv('Restez réaliste : une part de marché atteinte en année 1 est généralement modeste. Un objectif prudent crédibilise le prévisionnel auprès des financeurs.');
-    var g5=grp('Prévisions & objectifs',
-      r2('Panier moyen estimé (€)',eN('etude.panier','ex. 40'),'Part de marché visée an 1 (%)',eN('etude.partVisee','ex. 5'))
-      +advPart
-      +r2('Saisonnalité',eI('etude.saison','ex. Pics en été / activité régulière'),'Chiffre d\'affaires visé an 1 (€)',eN('etude.caVise','optionnel — sinon estimé ci-dessous')));
+    /* G. Quantitatif */
+    var G=grp('G. Résultats quantitatifs (questionnaire)','Section G',
+      M('<b>Intention pondérée = 0,7 × certainement + 0,3 × probablement</b> (corrige la surdéclaration). Budget = <b>médiane</b> (jamais la moyenne). NPS = % promoteurs (9-10) − % détracteurs (0-6). Croisez toujours par segment : le marché n\'existe pas en moyenne, il existe par segment.')
+      +r2('Réponses exploitables (n)',eN('qnt.n','ex. 200'),'Marge d\'erreur (± %)',eI('qnt.marge','± 7 %'))
+      +r2('Taux de reconnaissance du problème (% ≥ 4/5)',eN('qnt.reconnaissance'),'Taux de solution payante actuelle (%)',eN('qnt.payant'))
+      +r2('Intention « certainement » (%)',eN('qnt.intCertain'),'Intention « probablement » (%)',eN('qnt.intProbable'))
+      +outBox(O('intention','Intention d\'achat pondérée'))
+      +r2('Budget médian déclaré',eI('qnt.budgetMedian','€ / mois ou / an'),'NPS du concurrent principal',eI('qnt.nps'))
+      +'<div class="em-sub2">Fourchette de prix acceptable — Van Westendorp</div>'
+      +'<div class="frow"><div><label>Borne basse (€)</label>'+eN('qnt.vwBas')+'</div><div><label>Prix optimal (€)</label>'+eN('qnt.vwOptimal')+'</div><div><label>Borne haute (€)</label>'+eN('qnt.vwHaut')+'</div></div>'
+      +r2('Prix maximisant le revenu — Gabor-Granger (€)',eN('qnt.gg'),'Segment le plus réceptif',eI('qnt.segment','croisement taille / secteur'))
+      +r1('Top 3 critères de choix',eI('qnt.top3')));
 
-    /* Carte calculée */
-    var calc='<div class="card fi-card"><div class="card-h"><h2>Marché potentiel</h2><span class="sub" style="margin-left:auto">Estimation en direct</span></div><div class="card-b"><div id="em-calc">'+emCalcInner()+'</div></div></div>';
+    /* H. Prix & économie unitaire */
+    var H=grp('H. Prix & économie unitaire','Section H',
+      M('<b>LTV = marge brute mensuelle × durée de vie (1/churn)</b>. Objectifs : <b>LTV/CAC ≥ 3</b> et <b>récupération du CAC ≤ 12 mois</b>. Prix par la valeur (B2B) : le client doit gagner 3 à 10 fois ce qu\'il paie. Seuil de rentabilité = charges fixes / taux de marge.')
+      +r2('Prix retenu (€ + justification)',eI('eco.prix'),'ARPU annuel (€)',eN('eco.arpu','revenu moyen / client / an'))
+      +r2('Marge brute (%)',eN('eco.marge','ex. 75'),'CAC estimé (€)',eN('eco.cac'))
+      +r2('Churn mensuel estimé (%)',eN('eco.churn','ex. 3'),'Charges fixes annuelles (€)',eN('eco.chargesFixes'))
+      +outBox(O('ltv','LTV')+O('ltvCac','LTV / CAC')+O('recup','Récupération du CAC')+O('seuil','Seuil de rentabilité')+O('seuilClients','Clients au seuil'))
+      +AL('em-al-ltvcac')+AL('em-al-recup'));
 
-    /* 6. Environnement */
-    var g6=grp('Environnement du marché',
-      r1('Réglementation / contraintes',eT('etude.regl','Autorisations, normes, diplômes, assurances obligatoires…'))
-      +r2('Fournisseurs clés',eI('etude.fournisseurs','Principaux fournisseurs / dépendances'),'Tendances & opportunités',eI('etude.tendances','Évolutions favorables du marché'))
-      +r1('Risques identifiés',eT('etude.risques','Ce qui pourrait freiner le projet')));
+    /* I. Prévisions 3 ans */
+    function prevCell(row,i,ph){ return '<input inputmode="decimal" value="'+esc(E('prev.'+row+i))+'" data-em="prev.'+row+i+'" oninput="emSet(this)" placeholder="'+(ph||'')+'">'; }
+    function prevOut(k){ return '<span data-emout="'+k+'">—</span>'; }
+    var Itab='<div class="em-prevwrap"><table class="em-prev"><thead><tr><th>Ligne</th><th>Année 1</th><th>Année 2</th><th>Année 3</th><th>Hypothèse clé</th></tr></thead><tbody>'
+      +'<tr><td>Budget acquisition (€)</td><td>'+prevCell('budget',0)+'</td><td>'+prevCell('budget',1)+'</td><td>'+prevCell('budget',2)+'</td><td rowspan="5" class="em-prev-hyp">'+eT('prev.hyp','Hypothèses clés (CAC, pénétration, churn…)',6)+'</td></tr>'
+      +'<tr><td>Nouveaux clients <span class="em-prev-c">= budget / CAC</span></td><td>'+prevOut('prevNouveaux0')+'</td><td>'+prevOut('prevNouveaux1')+'</td><td>'+prevOut('prevNouveaux2')+'</td></tr>'
+      +'<tr><td>Clients perdus</td><td>'+prevCell('perdus',0)+'</td><td>'+prevCell('perdus',1)+'</td><td>'+prevCell('perdus',2)+'</td></tr>'
+      +'<tr><td>Clients fin d\'année</td><td>'+prevOut('prevFin0')+'</td><td>'+prevOut('prevFin1')+'</td><td>'+prevOut('prevFin2')+'</td></tr>'
+      +'<tr class="em-prev-ca"><td>CA (€) <span class="em-prev-c">= clients moyens × ARPU</span></td><td>'+prevOut('prevCA0')+'</td><td>'+prevOut('prevCA1')+'</td><td>'+prevOut('prevCA2')+'</td></tr>'
+      +'<tr><td>% du SOM</td><td>'+prevOut('prevPct0')+'</td><td>'+prevOut('prevPct1')+'</td><td>'+prevOut('prevPct2')+'</td><td></td></tr>'
+      +'</tbody></table></div>';
+    var Isec=grp('I. Prévisions sur 3 ans','Section I',
+      M('<b>Nouveaux clients = budget d\'acquisition / CAC</b> · <b>CA = clients moyens de l\'année × ARPU annuel</b>. Vérification : le CA de l\'année 3 doit rester <b>≤ SOM</b> — sinon revoir le CAC ou la pénétration.')
+      +Itab+AL('em-al-som'));
 
-    /* 7. SWOT */
-    var g7='<div class="card fi-card"><div class="card-h"><h2>Synthèse (SWOT)</h2><button type="button" class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="emSwotAuto()">Proposer une synthèse</button></div><div class="card-b">'
-      +'<div class="frow"><div><label>Forces</label>'+eT('etude.swot.forces','Atouts internes',3)+'</div><div><label>Faiblesses</label>'+eT('etude.swot.faiblesses','Points faibles internes',3)+'</div></div>'
-      +'<div class="frow"><div><label>Opportunités</label>'+eT('etude.swot.opportunites','Facteurs externes favorables',3)+'</div><div><label>Menaces</label>'+eT('etude.swot.menaces','Facteurs externes défavorables',3)+'</div></div>'
-      +'</div></div>';
+    /* J. Risques */
+    var rl=risqueList();
+    var riskRows=rl.map(function(rk,i){ return '<div class="em-risk-row"><input class="em-risk-nom" value="'+esc(rk.nom||'')+'" oninput="emRisqueSet('+i+',\'nom\',this)" placeholder="Risque">'
+      +'<input class="em-risk-n" data-rk="proba" inputmode="numeric" value="'+esc(rk.proba||'')+'" oninput="emRisqueSet('+i+',\'proba\',this)" placeholder="P 1-5">'
+      +'<input class="em-risk-n" data-rk="impact" inputmode="numeric" value="'+esc(rk.impact||'')+'" oninput="emRisqueSet('+i+',\'impact\',this)" placeholder="I 1-5">'
+      +'<span class="em-risk-sc" data-rscore>—</span>'
+      +'<input class="em-risk-parade" value="'+esc(rk.parade||'')+'" oninput="emRisqueSet('+i+',\'parade\',this)" placeholder="Parade">'
+      +'<button type="button" class="fi-ax em-risk-x" onclick="emRisqueDel('+i+')">×</button></div>'; }).join('');
+    var J=grp('J. Risques','Section J',
+      M('Notez chaque risque : probabilité (1-5) × impact (1-5) = criticité. Traitez d\'abord les scores les plus élevés.')
+      +'<div class="em-risk-head"><span>Risque</span><span>Proba</span><span>Impact</span><span>Score</span><span>Parade</span><span></span></div>'
+      +'<div class="em-risk-list">'+(riskRows||'<div class="hint">Aucun risque listé.</div>')+'</div>'
+      +'<button type="button" class="btn btn-sm btn-ghost em-add" onclick="emRisqueAdd()">+ Ajouter un risque</button>');
+
+    /* K. Conclusion */
+    var K=grp('K. Conclusion','Section K',
+      M('Positionnement en une phrase : « Pour [cible], [offre] est [catégorie] qui [bénéfice], contrairement à [alternative]. »')
+      +r2('Verdict',eSel('ccl.verdict',[['','À statuer'],['GO','GO'],['GO conditionnel','GO conditionnel'],['NO-GO','NO-GO']],E('ccl.verdict')),'Segment de lancement recommandé',eI('ccl.segment'))
+      +r2('Critères de GO atteints (oui/non pour chacun)',eT('ccl.goAtteints'),'Hypothèses les plus fragiles',eT('ccl.fragiles','celles qui changeraient le verdict'))
+      +r1('Prochaines étapes (actions datées)',eT('ccl.etapes'))
+      +r1('Positionnement en une phrase',eT('ccl.position','Pour [cible], [offre] est [catégorie] qui [bénéfice], contrairement à [alternative]')));
+
+    /* Outil : taille d'échantillon */
+    var ech8=grp('Outil — Taille d\'échantillon','Enquête quantitative',
+      M('<b>n = z² × p(1−p) / e²</b> (z = 1,96 à 95 %, p = 0,5). Correction population finie : n\' = n / (1 + (n−1)/N). Taux de réponse 5–15 % en diffusion : prévoyez de contacter ~10× l\'objectif.')
+      +r2('Marge d\'erreur visée',eSel('ech.marge',[['10','± 10 % (exploratoire) → 96'],['7','± 7 % (standard) → 196'],['5','± 5 % (décision) → 384'],['3','± 3 % (référence) → 1067']],E('ech.marge')||'5'),'Taille de la population cible (N, optionnel)',eN('ech.population','ex. 660000'))
+      +outBox(O('sampleN','Échantillon requis (n)')+O('sampleContacts','Contacts à prévoir (~×10)')));
+
+    /* Annexe : questionnaire & guide d'entretien (Partie 3) */
+    var annexe='<details class="fi-drafts em-annexe"><summary class="fi-drafts-sum">Annexe — Guide d\'entretien & questionnaire quantitatif (Partie 3)</summary><div class="fi-drafts-b em-annexe-b">'+emAnnexeHTML()+'</div></details>';
 
     return '<div class="fi-wrap em-wrap"><div class="fi-subtabs">'+tabsHTML('etudemarche')+'</div>'
-      +hero+g1+g2+g3+g4+g5+calc+g6+g7+'</div>';
+      +hero+synth+A+B+C+D+Esec+F+G+H+Isec+J+K+ech8+annexe+'</div>';
   }
   window.pageEtudeMarche=pageEtudeMarche;
+
+  /* Annexe (référence, non calculée) */
+  function emAnnexeHTML(){
+    var g=[
+      ['Guide d\'entretien qualitatif (45–60 min)','Laissez des silences ; relancez « pourquoi ? », « racontez-moi la dernière fois », « combien ? ». Ne présentez votre solution qu\'à la fin.'],
+    ];
+    var entretien=[
+      '<b>Ouverture (5 min)</b> — Décrivez votre activité et votre rôle. À quoi ressemble une semaine type ?',
+      '<b>Le problème (20 min)</b> — Comment gérez-vous [le domaine] aujourd\'hui ? Racontez la dernière fois que cela a posé problème. Combien de temps par mois ? Qu\'est-ce que ça coûte (temps, argent, erreurs, stress) ? Priorité sur 1-10 ? Qu\'avez-vous déjà essayé ?',
+      '<b>Solutions existantes (10 min)</b> — Quels outils/prestataires ? Combien payez-vous ? Ce que vous appréciez / ce qui agace. Avez-vous déjà changé, pourquoi ?',
+      '<b>L\'achat (10 min)</b> — Qui décide ? Quel budget existe ? Combien de temps prend la décision ? Qu\'est-ce qui vous ferait dire non ? Où vous informez-vous ?',
+      '<b>Idée & clôture (10 min)</b> — [pitch 3 phrases] première réaction ? Qu\'est-ce qui manque / est superflu ? À quel prix cher / bon marché ? Prêt à tester ? À me présenter quelqu\'un ?'
+    ];
+    var Q=[
+      'Q1. Fonction : Dirigeant · Resp. admin/financier · Resp. opérationnel · Salarié · Indépendant · Autre',
+      'Q2. Effectif : 0 · 1-2 · 3-9 · 10-19 · 20-49 · 50+',
+      'Q3. Secteur : Services aux entreprises · Commerce · Artisanat/BTP · Santé/réglementées · Industrie · Restauration/hôtellerie · Autre',
+      'Q4. CA annuel : &lt;100 k€ · 100-500 k€ · 500 k€-2 M€ · 2-10 M€ · &gt;10 M€ · NSP',
+      'Q5. Région (IDF, ARA, N.-Aquitaine, Occitanie, Hauts-de-France, PdL/Bretagne, Grand Est/BFC, PACA/Corse, Normandie/CVL, Outre-mer)',
+      'Q6. Comment gérez-vous [le domaine] ? manuellement/Excel · logiciel dédié · prestataire · un salarié · pas vraiment',
+      'Q7. Temps / mois : &lt;2 h · 2-5 h · 5-10 h · 10-20 h · &gt;20 h',
+      'Q8. À quel point est-ce un problème ? 1 (pas du tout) → 5 (majeur)',
+      'Q9. Sur 12 mois, ce sujet a causé (multi) : perte de temps · erreur coûteuse · pénalité/retard/litige · stress · rien',
+      'Q10. Coût estimé / an : &lt;500 € · 500-2 000 € · 2 000-5 000 € · 5 000-15 000 € · &gt;15 000 € · NSP',
+      'Q11. Priorité : n°1 · top 3 · important pas urgent · secondaire',
+      'Q12. Solution(s) actuelle(s) (multi) : [Concurrent A/B/C] · Excel · prestataire · aucune · autre',
+      'Q13. Budget / mois : rien · &lt;20 € · 20-50 € · 50-100 € · 100-300 € · &gt;300 €',
+      'Q14. Recommanderiez-vous votre solution actuelle ? 0 → 10 (NPS)',
+      'Q15. Ce qui vous agace le plus (ouvert)',
+      'Q16. Changé de solution (3 ans) ? oui (prix / fonctions / simplicité / support) · non',
+      'Q17. Importance des critères 1-5 : Prix · Simplicité · Gain de temps · Conformité · Intégrations · Support FR · Reco expert-comptable · Réputation',
+      'Q18. Qui décide ? moi seul · moi + associé/direction · resp. admin/financier · mon expert-comptable · autre',
+      'Q19. Où vous informez-vous (multi) : Google · pairs · expert-comptable · réseaux pro · salons/CCI/CMA · presse',
+      'Q20. [Concept en 3 phrases neutres]. Répond-il à votre besoin ? 1 → 5',
+      'Q21. Si disponible aujourd\'hui, l\'adopteriez-vous ? certainement · probablement · peut-être · probablement pas · certainement pas',
+      'Q22. Qu\'est-ce qui vous empêcherait de l\'adopter ? (ouvert)',
+      'Q23-Q26. Van Westendorp (chiffres libres) : trop cher · cher mais envisageable · bonne affaire · trop bon marché (doute qualité)',
+      'Q27. Échange de 30 min ? oui (email) · non',
+      'Q28. Informé du lancement ? oui (email) · non'
+    ];
+    var depouil=[
+      'Reconnaissance du problème → Q8 ≥ 4, croiser Q2/Q3',
+      'Coût du problème (médiane) → Q10 vs fourchette Q23-Q26',
+      'Marché monétisé → Q12 × Q13 (% payant, budget médian)',
+      'Vulnérabilité concurrents → Q14 (NPS) par solution Q12 ; Q15 verbatims',
+      'Différenciation → Q17 par moyenne vs forces concurrents',
+      'Décision & canaux → Q18, Q19 (ex. partenariat experts-comptables)',
+      'Intention pondérée → Q21 : 0,7×certainement + 0,3×probablement',
+      'Fourchette de prix → Q23-Q26 courbes cumulées, 4 intersections',
+      'Segment prioritaire → croiser Q8, Q21, Q10 par Q2/Q3'
+    ];
+    function li(a){ return '<ul class="em-anx-ul">'+a.map(function(x){return '<li>'+x+'</li>';}).join('')+'</ul>'; }
+    return '<div class="em-anx-h">Guide d\'entretien qualitatif (45–60 min)</div><div class="em-anx-note">15 à 25 entretiens avant le questionnaire (60 % cibles · 25 % clients de concurrents · 15 % prescripteurs). Parlez du passé, pas du futur hypothétique.</div>'+li(entretien)
+      +'<div class="em-anx-h">Questionnaire quantitatif (20–25 questions, 6–8 min)</div><div class="em-anx-note">Ne jamais citer le nom de votre solution avant la Section E (Q20).</div>'+li(Q)
+      +'<div class="em-anx-h">Plan de dépouillement</div>'+li(depouil);
+  }
 
   /* ---- Enregistrement de la page dans le routage (juste après « formulaire ») ---- */
   try{ if(typeof PAGES!=='undefined' && !PAGES.some(function(p){return p.id==='etudemarche';})){
     var iF=PAGES.findIndex(function(p){return p.id==='formulaire';});
-    var entry={id:'etudemarche',lbl:'Étude de marché',ic:'trend',sub:'Analyse du marché du projet client'};
+    var entry={id:'etudemarche',lbl:'Étude de marché',ic:'trend',sub:'Analyse du marché — méthode AEM CONSEIL'};
     if(iF>=0)PAGES.splice(iF+1,0,entry);else PAGES.push(entry);
   } }catch(e){}
 
@@ -26919,7 +27111,7 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
   function injectEtudeBtn(){
     var nav=document.getElementById('nav'); if(!nav)return;
     if(nav.querySelector('[data-etudebtn]'))return;
-    var form=nav.querySelector('[data-formbtn]'); if(!form)return; /* attend l'injection du bouton Formulaire */
+    var form=nav.querySelector('[data-formbtn]'); if(!form)return;
     var on=(typeof state!=='undefined'&&state.page==='etudemarche')?' on':'';
     var ico=(typeof svg==='function'&&typeof IC!=='undefined'&&IC.trend)?svg(IC.trend):'';
     var b=document.createElement('button');
@@ -26929,7 +27121,15 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
   }
   try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){ var r=_bn.apply(this,arguments); try{injectEtudeBtn();}catch(e){} return r; }; } }catch(e){}
 
-  /* ---- Rendu de la page « Étude de marché » + onglets sur la page Formulaire ---- */
+  /* ---- Barre d'onglets « Formulaire · Étude de marché » ---- */
+  function tabsHTML(active){
+    function tab(id,lbl){ return '<button type="button" class="fi-subtab'+(active===id?' on':'')+'" onclick="go(\''+id+'\')">'+esc(lbl)+'</button>'; }
+    return '<div class="fi-subtabs-in">'+tab('formulaire','Formulaire')+tab('etudemarche','Étude de marché')+'</div>'
+      +'<div class="fi-subtabs-sub">Étude de marché — sous-module du Formulaire (rattachée au dossier en cours)</div>';
+  }
+  window.__emTabsHTML=tabsHTML;
+
+  /* ---- Rendu ---- */
   try{ var _rd=window.render; if(typeof _rd==='function'){ window.render=function(){
     if(typeof state!=='undefined'&&state.page==='etudemarche'){
       try{buildNav();}catch(e){}
@@ -26938,11 +27138,11 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
       try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Étude de marché';}catch(e){}
       try{document.getElementById('psub').textContent=(p&&p.sub)||'';}catch(e){}
       var V=document.getElementById('view'); if(V)V.innerHTML=pageEtudeMarche();
+      try{ requestAnimationFrame(function(){ try{window.emRecalcAll();}catch(e){} }); }catch(e){ try{window.emRecalcAll();}catch(_e){} }
       try{ if(typeof window.fiBarAlign==='function')requestAnimationFrame(window.fiBarAlign); }catch(e){}
       return;
     }
     var res=_rd.apply(this,arguments);
-    /* Injecte la barre d'onglets en tête du Formulaire (pour naviguer vers le sous-module) */
     try{ if(typeof state!=='undefined'&&state.page==='formulaire'){
       var wrap=document.querySelector('#view .fi-wrap');
       if(wrap && !wrap.querySelector('.fi-subtabs')){
@@ -26955,7 +27155,7 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
 
   /* ---- Styles ---- */
   try{ var st=document.createElement('style'); st.id='em-css'; st.textContent=[
-    '.em-wrap{padding-bottom:40px}',
+    '.em-wrap{padding-bottom:56px}',
     '.fi-subtabs{margin:2px 0 8px;padding:10px 12px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.02)}',
     '.fi-subtabs-in{display:inline-flex;gap:4px;background:#0c0c0f;border:1px solid #232326;border-radius:11px;padding:4px}',
     '.fi-subtab{appearance:none;border:0;background:transparent;color:#b7b7c0;font-weight:700;font-size:12.5px;padding:7px 15px;border-radius:8px;cursor:pointer;transition:.15s ease}',
@@ -26968,24 +27168,55 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     'aside .nav-sub-btn.on::before{background:#2b6cff}',
     '.em-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:2px 0 4px}',
     '.em-hero-t{font-size:21px;font-weight:800;margin:0;letter-spacing:.2px;color:#f4f6fa}',
-    '.em-hero-s{font-size:12.5px;line-height:1.55;color:#a9a9b2;margin-top:4px;max-width:640px}',
+    '.em-hero-s{font-size:12.5px;line-height:1.55;color:#a9a9b2;margin-top:4px;max-width:680px}',
     '.em-hero-r{display:flex;gap:8px;flex:none}',
-    '.em-advrow{display:flex;flex-direction:column;gap:6px;margin-top:2px}',
-    '.em-conc{position:relative;border:1px solid #232326;border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#0a0a0c}',
-    '.em-conc-t{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin-bottom:8px}',
-    '.em-conc-list{margin-top:4px}',
-    '.em-add{margin-top:2px}',
-    '.em-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}',
-    '@media(max-width:680px){.em-kpis{grid-template-columns:1fr}}',
-    '.em-kpi{border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 13px;background:rgba(255,255,255,.02)}',
-    '.em-kpi-l{font-size:11px;color:#9a9aa4;font-weight:600;line-height:1.35}',
-    '.em-kpi-v{font-size:18px;font-weight:800;color:#f4f6fa;margin-top:6px}',
-    '.em-na{font-size:12px;font-weight:600;color:#7a7a84}',
+    '.em-sec .card-h h2{font-size:15px}',
+    '.em-sec .card-h .sub{font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;color:#7f8a9c}',
+    '.em-method{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.5;color:#c4ccd8;background:rgba(43,108,255,.08);border:1px solid rgba(43,108,255,.22);border-left:3px solid #2b6cff;border-radius:9px;padding:9px 12px;margin:0 0 12px}',
+    '.em-method-ic{flex:none;font-size:13px}',
+    '.em-method b{color:#eaf1ff}',
+    '.em-outbox{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 2px}',
+    '@media(max-width:680px){.em-outbox{grid-template-columns:1fr 1fr}}',
+    '.em-out{border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:9px 11px;background:rgba(255,255,255,.02)}',
+    '.em-out-l{display:block;font-size:10.5px;color:#9a9aa4;font-weight:600;line-height:1.3}',
+    '.em-out-v{display:block;font-size:15px;font-weight:800;color:#eaf1ff;margin-top:4px}',
+    '.em-alert{font-size:12px;font-weight:600;color:#ffce9e;background:rgba(150,90,30,.16);border:1px solid rgba(190,120,50,.45);border-radius:9px;padding:8px 11px;margin:8px 0 0}',
+    '.em-synth .em-out-v{color:#fff}',
+    '.em-verdict{margin-left:auto;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:5px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.16);color:#c9c9d2}',
+    '.em-verdict.ok{background:rgba(38,86,52,.5);color:#bff0cf;border-color:rgba(84,150,104,.6)}',
+    '.em-verdict.ko{background:rgba(120,42,42,.4);color:#f2b6b0;border-color:rgba(170,74,74,.6)}',
+    '.em-verdict.mid{background:rgba(150,110,30,.35);color:#ffdca0;border-color:rgba(190,140,50,.6)}',
     '.em-prog{margin-top:12px}',
     '.em-prog-h{display:flex;justify-content:space-between;font-size:11.5px;color:#9a9aa4;font-weight:600;margin-bottom:5px}',
-    '.em-prog-bar{height:8px;border-radius:6px;background:#17171b;overflow:hidden}',
-    '.em-prog-bar>i{display:block;height:100%;background:linear-gradient(90deg,#2b6cff,#4d8bff);transition:width .25s ease}',
-    '.em-calc-note{font-size:11px;color:#8b8b95;margin-top:10px;line-height:1.5}'
+    '.em-prog-bar-wrap{height:8px;border-radius:6px;background:#17171b;overflow:hidden}',
+    '.em-prog-bar-wrap>i{display:block;height:100%;background:linear-gradient(90deg,#2b6cff,#4d8bff);transition:width .25s ease}',
+    '.em-conc{position:relative;border:1px solid #232326;border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#0a0a0c}',
+    '.em-conc-t{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin-bottom:8px}',
+    '.em-conc-list{margin-top:4px}.em-add{margin-top:2px}',
+    '.em-sub2{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin:16px 0 8px}',
+    '.em-crit-head,.em-crit-row{display:grid;grid-template-columns:1fr 70px 70px 70px 30px;gap:8px;align-items:center}',
+    '.em-crit-head{font-size:10.5px;color:#8f8f98;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;padding:0 2px}',
+    '.em-crit-row{margin-bottom:6px}',
+    '.em-crit-x{position:static;width:28px;height:28px}',
+    '.em-risk-head,.em-risk-row{display:grid;grid-template-columns:1fr 64px 64px 52px 1.2fr 30px;gap:8px;align-items:center}',
+    '.em-risk-head{font-size:10.5px;color:#8f8f98;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;padding:0 2px}',
+    '.em-risk-row{margin-bottom:6px}.em-risk-sc{text-align:center;font-weight:800;color:#eaf1ff}',
+    '.em-risk-x{position:static;width:28px;height:28px}',
+    '.em-prevwrap{overflow-x:auto}',
+    '.em-prev{width:100%;border-collapse:collapse;font-size:12.5px;min-width:560px}',
+    '.em-prev th,.em-prev td{border:1px solid #232326;padding:7px 9px;text-align:left;vertical-align:middle}',
+    '.em-prev thead th{background:#141416;color:#cfd6e2;font-weight:700}',
+    '.em-prev td:first-child{color:#c4ccd8}',
+    '.em-prev input{width:100%;box-sizing:border-box}',
+    '.em-prev [data-emout]{font-weight:800;color:#eaf1ff}',
+    '.em-prev-c{color:#7f8a9c;font-size:10.5px;font-weight:600}',
+    '.em-prev-ca [data-emout]{color:#7fd3a2}',
+    '.em-prev-hyp{vertical-align:top;width:26%}.em-prev-hyp textarea{width:100%;box-sizing:border-box}',
+    '.em-annexe{margin-top:14px}',
+    '.em-annexe-b{font-size:12px;line-height:1.55;color:#c4ccd8}',
+    '.em-anx-h{font-size:12px;font-weight:800;color:#eaf1ff;margin:12px 0 4px}',
+    '.em-anx-note{font-size:11px;color:#8b93a1;margin-bottom:6px}',
+    '.em-anx-ul{margin:0 0 6px 0;padding-left:18px}.em-anx-ul li{margin:3px 0}'
   ].join(''); document.head.appendChild(st); }catch(e){}
 })();
 </script>
@@ -26997,10 +27228,15 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
   function fmt(v){ try{ return Math.round(v).toLocaleString('fr-FR'); }catch(e){ return ''+v; } }
   function esc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-  /* CA potentiel (an 1) issu de l'étude de marché d'un dossier :
-     priorité au CA visé saisi, sinon clients potentiels × panier moyen × part de marché visée. */
+  /* CA potentiel (an 1) issu de l'étude de marché d'un dossier — méthode du guide :
+     CA prévisionnel année 1 (nouveaux = budget/CAC ; CA = clients moyens × ARPU), sinon SOM/3,
+     avec repli sur l'ancien schéma (CA visé, ou clients × panier × part visée). */
   window.etudeCA=function(d){
     var e=(d&&d.etude)||{};
+    try{ if(typeof window.emComputeFrom==='function'){ var C=window.emComputeFrom(e);
+      if(C.caAn1!=null&&C.caAn1>0)return Math.round(C.caAn1);
+      if(C.som!=null&&C.som>0)return Math.round(C.som/3);
+    } }catch(_e){}
     var caVise=n(e.caVise); if(caVise!=null&&caVise>0)return Math.round(caVise);
     var nb=n(e.nbClients),pan=n(e.panier),part=n(e.partVisee);
     if(nb!=null&&pan!=null){ var adr=nb*pan; var ca=(part!=null)?adr*(part/100):adr; return ca>0?Math.round(ca):0; }
@@ -27008,11 +27244,13 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
   };
   window.etudeInfo=function(d){
     var e=(d&&d.etude)||{};
-    var nb=n(e.nbClients),pan=n(e.panier),part=n(e.partVisee),caVise=n(e.caVise);
-    var adr=(nb!=null&&pan!=null)?(nb*pan):null;
+    var som=null,caAn1=null,pen=null,secteur='';
+    try{ if(typeof window.emComputeFrom==='function'){ var C=window.emComputeFrom(e); som=C.som; caAn1=C.caAn1; } }catch(_e){}
+    pen=n((e.mar||{}).penetration);
+    secteur=((e.ident&&e.ident.offre)||e.secteur||'');
     var ca=window.etudeCA(d);
-    var has=!!(adr||caVise||(e.secteur||'').trim()||(e.marche||'').trim());
-    return {has:has,adr:adr,part:part,ca:ca,caVise:caVise,secteur:e.secteur||''};
+    var has=!!(som||caAn1||ca>0||((e.mar||{}).nbClients)||(e.cad&&e.cad.decision)||secteur);
+    return {has:has,som:som,caAn1:caAn1,pen:pen,ca:ca,secteur:secteur};
   };
 
   /* Reprend le CA de l'étude dans le prévisionnel (prestations de services 20 %) */
@@ -27032,8 +27270,8 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     try{
       var I=window.etudeInfo(d); if(!I.has)return '';
       var lignes=[];
-      if(I.adr!=null)lignes.push('Marché adressable&nbsp;: <b>'+fmt(I.adr)+' €</b>');
-      if(I.part!=null)lignes.push('Part visée&nbsp;: <b>'+fmt(I.part)+' %</b>');
+      if(I.som!=null&&I.som>0)lignes.push('SOM à 3 ans&nbsp;: <b>'+fmt(I.som)+' €</b>');
+      if(I.pen!=null)lignes.push('Pénétration&nbsp;: <b>'+fmt(I.pen)+' %</b>');
       lignes.push('CA potentiel (an 1)&nbsp;: <b>'+(I.ca>0?(fmt(I.ca)+' €'):'à préciser')+'</b>');
       var btn=(I.ca>0)?('<button class="fx-btn em-prev-btn" onclick="etudePrevApply(\''+d.id+'\')">↧ Reprendre ce CA dans le prévisionnel</button>'):'';
       return '<div class="em-prev-banner">'
