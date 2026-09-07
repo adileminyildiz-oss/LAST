@@ -3233,7 +3233,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=516;
+var LAST_VER=517;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -25615,9 +25615,10 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function injectScrollFix(){
     if(document.getElementById('cf-scrollfix')) return;
     var s=document.createElement('style'); s.id='cf-scrollfix';
+    /* Exclut le module Traitement (data-page="espace") : il a son propre outil à défilement interne. */
     s.textContent='@media(min-width:861px){'
-      +'html body main{height:100vh!important;max-height:100vh!important;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain;scrollbar-gutter:stable}'
-      +'html body main>.content,html body main>#view,html body main .content.fl-in,html body main #view.fl-in{overflow:visible!important;height:auto!important;max-height:none!important;min-height:0!important;flex:0 0 auto!important;padding-bottom:120px!important}'
+      +'html body:not([data-page="espace"]) main{height:100vh!important;max-height:100vh!important;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain;scrollbar-gutter:stable}'
+      +'html body:not([data-page="espace"]) main>.content,html body:not([data-page="espace"]) main>#view,html body:not([data-page="espace"]) main .content.fl-in,html body:not([data-page="espace"]) main #view.fl-in{overflow:visible!important;height:auto!important;max-height:none!important;min-height:0!important;flex:0 0 auto!important;padding-bottom:120px!important}'
       +'}';
     document.head.appendChild(s);
   }
@@ -25625,6 +25626,79 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
 
   // init au chargement
   try{ ensureData(); }catch(e){}
+})();
+</script>
+
+<script>
+/* ===================================================================
+   MAR'Q — Assistant « Style 4 » : format standard des formulaires/parcours
+   Centré, étroit, pastilles numérotées, une section à la fois.
+   100% additif — n'altère aucun champ ni la logique d'enregistrement
+   (on ne fait qu'afficher une section à la fois ; le contrôle de
+   complétude lit le modèle de données, pas le DOM).
+   =================================================================== */
+(function(){
+  function injectCSS(){
+    if(document.getElementById('wz4-css')) return;
+    var s=document.createElement('style'); s.id='wz4-css';
+    s.textContent=[
+      '.fi-wrap.wz4on{max-width:560px!important;margin:0 auto!important}',
+      '.fi-wrap.wz4on .fi-card{border:0!important;background:transparent!important;box-shadow:none!important;border-radius:0!important}',
+      '.fi-wrap.wz4on .fi-card>.card-b{padding:0!important}',
+      '.fi-wrap.wz4on .fi-card>.card-h{padding:0 0 8px 0!important;border-bottom:0!important}',
+      '.wz4-pills{margin:4px 0 18px}',
+      '.wz4-track{display:flex;justify-content:center;gap:7px;flex-wrap:wrap}',
+      '.wz4-pill{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font:700 12px/1 ui-sans-serif,system-ui,Arial;background:var(--card);border:1px solid var(--line-2);color:var(--ink-3);cursor:pointer;padding:0}',
+      '.wz4-pill.done{background:var(--sage,#5b8f3e);border-color:var(--sage,#5b8f3e);color:#fff}',
+      '.wz4-pill.on{background:var(--espresso);border-color:var(--espresso);color:#fff}',
+      '.wz4-cap{text-align:center;font-size:11.5px;color:var(--ink-3);margin-top:10px}',
+      '.wz4-nav{display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:15px;border-top:1px solid var(--line-soft,var(--line-2))}',
+      '.wz4-last{font-size:12px;color:var(--ink-3)}'
+    ].join('');
+    document.head.appendChild(s);
+  }
+  function title(el){ var h=el.querySelector('.card-h h2'); return h?h.textContent.trim():''; }
+  function stepsOf(wrap){
+    return Array.prototype.filter.call(wrap.children, function(c){
+      return c.classList && c.classList.contains('fi-card') && !c.classList.contains('fi-head');
+    });
+  }
+  function paint(fromClick){
+    if(typeof state==='undefined' || state.page!=='formulaire') return;
+    var wrap=document.querySelector('.fi-wrap'); if(!wrap) return;
+    var ss=stepsOf(wrap); if(ss.length<2){ wrap.classList.remove('wz4on'); return; }
+    injectCSS(); wrap.classList.add('wz4on');
+    // nettoyage d'un rendu précédent
+    Array.prototype.forEach.call(wrap.querySelectorAll('.wz4-pills,.wz4-nav'), function(e){ e.remove(); });
+    var n=ss.length;
+    if(window.__fiStep==null) window.__fiStep=0;
+    if(window.__fiStep>n-1) window.__fiStep=n-1;
+    if(window.__fiStep<0) window.__fiStep=0;
+    var cur=window.__fiStep, labels=ss.map(title);
+    // pastilles
+    var pills=document.createElement('div'); pills.className='wz4-pills';
+    var track='';
+    for(var i=0;i<n;i++){ var cls=i<cur?'done':(i===cur?'on':''); track+='<button type="button" class="wz4-pill '+cls+'" data-i="'+i+'" title="'+(labels[i]||('Étape '+(i+1)))+'">'+(i<cur?'✓':(i+1))+'</button>'; }
+    pills.innerHTML='<div class="wz4-track">'+track+'</div><div class="wz4-cap">Étape '+(cur+1)+' sur '+n+' · '+(labels[cur]||'')+'</div>';
+    ss[0].parentNode.insertBefore(pills, ss[0]);
+    // visibilité
+    ss.forEach(function(c,i){ c.style.display = (i===cur)?'':'none'; });
+    // navigation
+    var nav=document.createElement('div'); nav.className='wz4-nav';
+    nav.innerHTML='<button type="button" class="btn" '+(cur===0?'disabled':'')+' data-prev>‹ Précédent</button>'
+      + (cur<n-1 ? '<button type="button" class="btn btn-pri" data-next>Étape suivante ›</button>' : '<span class="wz4-last">Dernière étape — enregistrez ci-dessous</span>');
+    ss[cur].appendChild(nav);
+    // actions d'enregistrement uniquement sur la dernière étape
+    var act=wrap.querySelector('.fi-actions'); if(act) act.style.display=(cur===n-1)?'':'none';
+    // câblage (sans re-render complet → conserve la saisie & le focus)
+    Array.prototype.forEach.call(pills.querySelectorAll('.wz4-pill'), function(b){ b.addEventListener('click', function(){ window.__fiStep=+b.getAttribute('data-i'); paint(true); try{window.scrollTo(0,0);}catch(e){} }); });
+    var nx=nav.querySelector('[data-next]'); if(nx) nx.addEventListener('click', function(){ window.__fiStep=Math.min(n-1,cur+1); paint(true); try{window.scrollTo(0,0);}catch(e){} });
+    var pv=nav.querySelector('[data-prev]'); if(pv) pv.addEventListener('click', function(){ window.__fiStep=Math.max(0,cur-1); paint(true); try{window.scrollTo(0,0);}catch(e){} });
+  }
+  // ré-applique après chaque rendu de l'app (formType/formNature relancent render)
+  try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var o=_r.apply(this,arguments); try{ paint(false); }catch(e){} return o; }; } }catch(e){}
+  try{ paint(false); }catch(e){}
+  window.fiWizardPaint=paint;
 })();
 </script>
 
