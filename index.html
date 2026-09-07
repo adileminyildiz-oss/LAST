@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=545;
+var LAST_VER=546;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -25615,12 +25615,11 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var nb=A.length, ajour=0, retard=0, bientot=0, aenc=0;
     A.forEach(function(a){ var s=aboStatut(a); if(s==='ajour')ajour++; else if(s==='retard')retard++; else bientot++; aenc+=factuAnalyse(a).aEncaisser; });
     aenc=Math.round(aenc*100)/100;
-    var kpis='<div class="grid" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">'
-      +'<div class="kpi"><div class="val blue">'+nb+'</div><div class="lbl">Abonnés suivis</div></div>'
+    var kpis='<div class="grid" style="grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">'
+      +'<div class="kpi"><div class="val blue">'+nb+'</div><div class="lbl">Clients suivis</div></div>'
       +'<div class="kpi"><div class="val ok">'+ajour+'</div><div class="lbl">Tout à jour</div></div>'
       +'<div class="kpi"><div class="val" style="color:#c48a24">'+bientot+'</div><div class="lbl">Échéance &lt; 15 j</div></div>'
       +'<div class="kpi"><div class="val hot">'+retard+'</div><div class="lbl">En retard</div></div>'
-      +'<div class="kpi"><div class="val" style="color:#c48a24">'+euro(aenc)+'</div><div class="lbl">À encaisser</div></div>'
       +'</div>';
     var rows=A.slice().sort(function(x,y){ var o={retard:0,avenir:1,ajour:2}; return o[aboStatut(x)]-o[aboStatut(y)]; }).map(function(a){
       var s=aboStatut(a); var pe=prochaineEcheance(a); var abst=aboAbonnementStatut(a); var an=factuAnalyse(a);
@@ -25630,8 +25629,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
         +'<div><span class="cf-pill cf-'+s+'">'+STLBL[s]+'</span></div>'
         +'</div>';
     }).join('') || '<div class="card-b" style="color:var(--ink-3)">Aucun abonné pour le moment.</div>';
-    return '<div class="card"><div class="card-h"><h2>Conformité des abonnés</h2><span class="sub">Tout à jour, aucune échéance oubliée</span>'
-      +'<button class="btn btn-pri btn-sm" style="margin-left:auto" onclick="cfNouvel()">+ Nouvel abonné</button></div>'
+    return '<div class="card"><div class="card-h"><h2>Échéancier fiscal &amp; social</h2><span class="sub">Obligations déclaratives (TVA, DSN, IS, CFE, AG…) — aucune échéance oubliée</span>'
+      +'<button class="btn btn-pri btn-sm" style="margin-left:auto" onclick="cfNouvel()">+ Nouveau client suivi</button></div>'
       +'<div class="card-b">'+kpis+'<div class="cf-list">'+rows+'</div></div></div>';
   };
 
@@ -25925,11 +25924,13 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var ico=''; try{ if(typeof svg==='function'&&typeof IC!=='undefined') ico=svg(IC.dash||''); }catch(e){}
     var b=document.createElement('button');
     b.className='nav-btn'+on; b.setAttribute('data-cfbtn','1'); b.setAttribute('onclick',"go('conformite')");
-    b.innerHTML=ico+'<span class="nav-btn-lbl">Conformité</span>';
+    b.innerHTML=ico+'<span class="nav-btn-lbl">Fiscal</span>';
     if(ref&&ref.parentNode) ref.parentNode.insertBefore(b, ref.nextSibling); else nav.appendChild(b);
   }
   try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){ var r=_bn.apply(this,arguments); try{injectCfBtn();}catch(e){} return r; }; } }catch(e){}
   try{ injectCfBtn(); }catch(e){}
+  /* Exposition pour le module Services (carte des abonnés / suivi de conformité) */
+  try{ window.factuAnalyse=factuAnalyse; window.aboAbonnementStatut=aboAbonnementStatut; window.aboStatut=aboStatut; }catch(e){}
 
   /* ---- Correctif GLOBAL de défilement : une seule zone de scroll (main) qui va jusqu'en bas,
          sur tous les modules. Neutralise le double conteneur de scroll (.content/#view) qui
@@ -27650,6 +27651,44 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     '.emdest-tx b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.emdest-tx small{font-size:10.5px;color:#8b8b95}',
     '.ed2-dest{white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}'
+  ].join(''); document.head.appendChild(st); }catch(e){}
+})();
+</script>
+
+<!-- ===== Services : carte « Abonnés — suivi mensuel » (repris de Fiscal) ===== -->
+<script>
+(function(){
+  function esc(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function money(v){ try{ return (Math.round((+v||0)*100)/100).toLocaleString('fr-FR')+' €'; }catch(e){ return (v||0)+' €'; } }
+  function cfAbonnesCard(){
+    var A=(typeof DB!=='undefined'&&DB.abonnes)||[];
+    if(!A.length) return '';
+    var totEnc=0;
+    var rows=A.map(function(a){
+      var st=''; try{ st=window.aboAbonnementStatut?window.aboAbonnementStatut(a):(a.abonnementActif!==false?'actif':'inactif'); }catch(e){ st=(a.abonnementActif!==false?'actif':'inactif'); }
+      var enc=0; try{ enc=window.factuAnalyse?(window.factuAnalyse(a).aEncaisser||0):0; }catch(e){}
+      totEnc+=enc;
+      var stTxt=(st==='actif')?'<span class="cfab-pill ok">Actif</span>':((st==='suspendu')?'<span class="cfab-pill warn">Suspendu</span>':'<span class="cfab-pill">Inactif</span>');
+      return '<tr><td>'+esc(a.raison||'—')+'</td><td>'+esc(a.forme||'')+(a.siren?(' · '+esc(a.siren)):'')+'</td><td>'+esc(a.aboFormule||'—')+'</td><td>'+stTxt+'</td><td class="r">'+(enc>0?money(enc):'—')+'</td></tr>';
+    }).join('');
+    return '<div class="card cfab-card"><div class="card-h"><h2>Abonnés — suivi mensuel des services</h2>'
+      +'<span class="sub" style="margin-left:auto">'+A.length+' abonné'+(A.length>1?'s':'')+' · à encaisser '+money(totEnc)+'</span></div>'
+      +'<div class="card-b"><div class="cfab-note">Clients abonnés à un service mensuel AEM CONSEIL (formule, statut, montant à encaisser). Les échéances déclaratives associées se gèrent dans le module <b>Fiscal</b>.</div>'
+      +'<div class="cfab-tw"><table class="cfab-t"><thead><tr><th>Client</th><th>Forme · SIREN</th><th>Formule</th><th>Abonnement</th><th class="r">À encaisser</th></tr></thead><tbody>'+rows+'</tbody></table></div></div></div>';
+  }
+  window.cfAbonnesCard=cfAbonnesCard;
+  try{ var _ps=window.pageServices; if(typeof _ps==='function'){ window.pageServices=function(){ var h=_ps.apply(this,arguments); try{ if(window.__svcView==='abo' && typeof h==='string') h+=cfAbonnesCard(); }catch(e){} return h; }; } }catch(e){}
+  try{ var st=document.createElement('style'); st.id='cfab-css'; st.textContent=[
+    '.cfab-card{margin-top:14px}',
+    '.cfab-note{font-size:12px;color:#a9a9b2;line-height:1.5;margin-bottom:10px}',
+    '.cfab-tw{overflow-x:auto}',
+    '.cfab-t{width:100%;border-collapse:collapse;font-size:12.5px;min-width:520px}',
+    '.cfab-t th,.cfab-t td{border-bottom:1px solid rgba(255,255,255,.08);padding:8px 10px;text-align:left}',
+    '.cfab-t thead th{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:#8a8a92;font-weight:700}',
+    '.cfab-t .r{text-align:right}',
+    '.cfab-pill{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid rgba(255,255,255,.16);color:#c9c9d2}',
+    '.cfab-pill.ok{background:rgba(38,86,52,.4);color:#bff0cf;border-color:rgba(84,150,104,.5)}',
+    '.cfab-pill.warn{background:rgba(150,90,30,.28);color:#ffd9a8;border-color:rgba(190,120,50,.5)}'
   ].join(''); document.head.appendChild(st); }catch(e){}
 })();
 </script>
