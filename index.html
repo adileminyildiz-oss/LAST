@@ -3233,7 +3233,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=522;
+var LAST_VER=523;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -17203,8 +17203,25 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     nodes.forEach(function(n){n.nodeValue=n.nodeValue.replace(STRIP_RE,'').replace(/\s{2,}/g,' ');});
     if(nodes.length){nodes[0].nodeValue=nodes[0].nodeValue.replace(/^\s+/,'');nodes[nodes.length-1].nodeValue=nodes[nodes.length-1].nodeValue.replace(/\s+$/,'');}
   }
+  function isCrossBtn(btn){
+    try{
+      /* On ne convertit en croix que les vraies croix de fermeture : contenu vide (icône),
+         « Fermer » (état après ce balayage), ou un glyphe de croix — jamais un bouton libellé. */
+      var t=(btn.textContent||'').replace(/\s+/g,' ').trim();
+      var closeContent = (t==='' || t==='Fermer' || /^[✕✖✗✘×]$/.test(t.replace(/\s/g,'')));
+      if(!closeContent) return false;
+      var cls=' '+(btn.className||'')+' ';
+      if(/\s(?:[a-z0-9]+-x|de-ico-close|pwa-x|tst-x)\s/.test(cls)) return true;
+      var lab=((btn.getAttribute&&(btn.getAttribute('title')||btn.getAttribute('aria-label')))||'').trim().toLowerCase();
+      if(lab==='fermer') return true;
+      if(/^[✕✖✗✘×]$/.test(t.replace(/\s/g,''))) return true;
+    }catch(e){}
+    return false;
+  }
   function cleanBtn(btn){
     try{
+      /* Croix de fermeture : on garde un « ✕ » propre (symétrie site : toutes les fermetures = même croix) */
+      if(isCrossBtn(btn)){ if(btn.querySelector&&btn.querySelector('svg,img'))return; if(btn.textContent!=='✕')btn.textContent='✕'; return; }
       var before=btn.textContent;STRIP_RE.lastIndex=0;
       if(!STRIP_RE.test(before)){STRIP_RE.lastIndex=0;return;}STRIP_RE.lastIndex=0;
       var svg=btn.querySelector('svg,img');
@@ -20666,6 +20683,70 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
         +'<span class="clidoc-msg-hint">Ce message apparaît en haut de l’espace client (600 caractères max). Videz le champ pour le retirer.</span></div>'; })()
       +'</div>';
   }
+  /* ===== Refonte fiche : faits clés + conformité (relié aux abonnés Conformité) + abonnement ===== */
+  function cliCfToday(){return new Date().toISOString().slice(0,10);}
+  function cliCfFr(iso){if(!iso)return '—';var p=(''+iso).split('-');return p.length<3?iso:(p[2]+'/'+p[1]);}
+  function cliCfEuro(n){return (Math.round((+n||0)*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';}
+  function cliCfNorm(s){return (''+(s||'')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');}
+  function cliCfDig(s){return (''+(s||'')).replace(/\D/g,'');}
+  function cliCfAbonne(c){
+    var A=(typeof DB!=='undefined'&&DB.abonnes)||[]; if(!A.length||!c)return null;
+    var sir=cliCfDig(c.siren); if(sir){var b=A.filter(function(a){return cliCfDig(a.siren)===sir;})[0]; if(b)return b;}
+    var nm=cliCfNorm(c.denomination||''); if(!nm||nm.length<4)return null;
+    return A.filter(function(a){var an=cliCfNorm(a.raison);return an&&(an===nm||an.indexOf(nm)>=0||nm.indexOf(an)>=0);})[0]||null;
+  }
+  function cliCfObSt(ob){var p=(''+(ob.prochaine||''));if(!p)return 'ajour';var t=cliCfToday();if(p<t)return 'retard';var d=Math.round((new Date(p+'T00:00:00')-new Date(t+'T00:00:00'))/86400000);return d<=15?'avenir':'ajour';}
+  function cliCfWorst(list){var rk={ajour:0,avenir:1,retard:2};var w='ajour';(list||[]).forEach(function(o){var s=cliCfObSt(o);if(rk[s]>rk[w])w=s;});return w;}
+  function cliCfCss(){ if(document.getElementById('cli-cf-css'))return; var s=document.createElement('style'); s.id='cli-cf-css'; s.textContent=[
+    '.cli-facts{display:flex;gap:18px;flex-wrap:wrap;margin:2px 0 14px;padding:0 2px}',
+    '.cli-fact{display:flex;flex-direction:column;gap:1px}.cli-fact i{font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-3);font-style:normal;font-weight:700}.cli-fact b{font-size:12.5px;color:var(--ink)}',
+    '.cli-cf-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 16px}',
+    '@media(max-width:820px){.cli-cf-strip{grid-template-columns:1fr}}',
+    '.cli-cc{background:var(--card,#0b0b0b);border:1px solid var(--line-2,#1f2024);border-radius:13px;padding:12px 14px;position:relative;overflow:hidden}',
+    '.cli-cc::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#5ca97a}',
+    '.cli-cc-avenir::after{background:#c9a24a}.cli-cc-retard::after{background:#c0563f}',
+    '.cli-cc-t{font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-3);font-weight:700}',
+    '.cli-cc-v{font-size:14px;font-weight:800;margin-top:4px;display:flex;align-items:center;gap:7px;color:var(--ink)}',
+    '.cli-cc-pin{width:8px;height:8px;border-radius:50%;background:#5ca97a}.cli-cc-avenir .cli-cc-pin{background:#c9a24a}.cli-cc-retard .cli-cc-pin{background:#c0563f}',
+    '.cli-cc-ic{font-size:11px;color:#7fb06a}.cli-cc-avenir .cli-cc-ic{color:#d8b45f}.cli-cc-retard .cli-cc-ic{color:#d8795f}',
+    '.cli-cc-s{font-size:10.5px;color:var(--ink-3);margin-top:3px;line-height:1.4}',
+    '.cli-abo{background:var(--card,#0b0b0b);border:1px solid var(--line-2,#1f2024);border-radius:13px;padding:13px 15px;margin:0 0 16px}',
+    '.cli-abo-h{font-size:12px;font-weight:800;margin-bottom:2px}.cli-abo-sub{font-size:10.5px;color:var(--ink-3);margin-bottom:10px}',
+    '.cli-abr{display:flex;align-items:center;justify-content:space-between;font-size:11.5px;padding:7px 0;border-top:1px solid var(--line-soft,#151517)}.cli-abr:first-of-type{border-top:0}.cli-abr .k{color:var(--ink-3)}.cli-abr .v{font-weight:700;color:var(--ink)}',
+    '.cli-abo-pill{font-size:9px;font-weight:800;padding:3px 8px;border-radius:6px;background:rgba(92,169,122,.14);color:#8fd3ac;letter-spacing:.4px}',
+    '.cli-abo-act{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}',
+    '.cli-cf-nonabo{background:var(--card,#0b0b0b);border:1px dashed var(--line-2,#262629);border-radius:13px;padding:13px 15px;margin:0 0 16px;font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}'
+  ].join(''); document.head.appendChild(s); }
+  function cliConfBlock(c){
+    cliCfCss();
+    var a=cliCfAbonne(c);
+    var FISC={IS:'Impôt sociétés',micro:'Micro-entreprise','reel-IR':'IR au réel'};
+    var regime=c.regime||(a?(FISC[a.fiscal]||a.fiscal):'')||'—';
+    var proch='—'; if(a&&a.obligations&&a.obligations.length){var ord=a.obligations.slice().sort(function(x,y){return (''+(x.prochaine||'')).localeCompare(''+(y.prochaine||''));});proch=cliCfFr(ord[0].prochaine);}
+    var facts='<div class="cli-facts">'+[
+      ['SIREN',c.siren||(a&&a.siren)||'—'],['Forme',c.forme||(a&&a.forme)||'—'],['Régime',regime],
+      ['Abonnement',a?(a.aboFormule||'Abonnement'):'Non abonné'],['Prochaine échéance',proch]
+    ].map(function(f){return '<span class="cli-fact"><i>'+E(f[0])+'</i><b>'+E(f[1])+'</b></span>';}).join('')+'</div>';
+    if(!a) return facts+'<div class="cli-cf-nonabo"><span>Ce client n\'est pas encore suivi en Conformité (aucun abonné au même SIREN / dénomination).</span><button class="cli-b" onclick="go(\'conformite\')">Ouvrir la Conformité →</button></div>';
+    var fiscObs=(a.obligations||[]).filter(function(o){return o.cat==='fiscal';});
+    var socObs=(a.obligations||[]).filter(function(o){return o.cat==='social';});
+    var fisc=cliCfWorst(fiscObs),soc=cliCfWorst(socObs);
+    var unpaid=(a.factures||[]).filter(function(f){return f.statut!=='payee';});
+    var over=unpaid.filter(function(f){return (''+(f.echeance||''))<cliCfToday();});
+    var fac=over.length?'retard':(unpaid.length?'avenir':'ajour');
+    function card(t,st,sub){var LB={ajour:'À jour',avenir:'À suivre',retard:'En retard'};var IC={ajour:'✓',avenir:'•',retard:'!'};return '<div class="cli-cc cli-cc-'+st+'"><div class="cli-cc-t">'+E(t)+'</div><div class="cli-cc-v"><span class="cli-cc-pin"></span>'+LB[st]+' <span class="cli-cc-ic">'+IC[st]+'</span></div><div class="cli-cc-s">'+E(sub)+'</div></div>';}
+    var fiscSub=fiscObs.length?(fiscObs.length+' déclaration(s) suivie(s)'):'—';
+    var socSub=socObs.length?(socObs.length+' déclaration(s)'+(a.salaries?' · DSN active':'')):(a.salaries?'DSN':'Pas de social');
+    var facSub=over.length?(over.length+' facture(s) en retard'):(unpaid.length?(unpaid.length+' facture(s) à encaisser'):'Aucun impayé');
+    var strip='<div class="cli-cf-strip">'+card('Déclarations fiscales',fisc,fiscSub)+card('Déclarations sociales',soc,socSub)+card('Facturation',fac,facSub)+'</div>';
+    var mens=a.aboMensualite?(cliCfEuro(a.aboMensualite)+' / mois'):'—';
+    var abo='<div class="cli-abo"><div class="cli-abo-h">Abonnement & services</div><div class="cli-abo-sub">Suivi de conformité relié à la fiche Conformité de l\'abonné</div>'
+      +'<div class="cli-abr"><span class="k">Formule</span><span class="v">'+E(a.aboFormule||'—')+'</span></div>'
+      +'<div class="cli-abr"><span class="k">Mensualité</span><span class="v">'+E(mens)+'</span></div>'
+      +'<div class="cli-abr"><span class="k">Statut</span><span class="v">'+(a.abonnementActif!==false?'<span class="cli-abo-pill">ACTIF</span>':'Inactif')+'</span></div>'
+      +'<div class="cli-abo-act"><button class="cli-b" onclick="cfOpen(\''+a.id+'\')">Ouvrir la conformité →</button><button class="cli-b" onclick="cfCommander(\''+a.id+'\')">Commander un service</button></div></div>';
+    return facts+strip+abo;
+  }
   function cliFiche(id){
     var c=clientById(id);if(!c)return '<div class="cli-empty">Sélectionnez un client dans la liste, ou créez-en un.</div>';
     var id2=c.id;
@@ -20684,7 +20765,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       var pdiv=grp('Divers',fld(id2,'profession','Profession')+fld(id2,'situation','Situation familiale'));
       return '<div class="cli-fiche">'+head+pid+pco+pdiv+cliDocsSection(c)+'</div>';
     }
-    return '<div class="cli-fiche">'+head+identity+siege+contact+dir+assocEditor(c)+acte+cliDocsSection(c)+'</div>';
+    return '<div class="cli-fiche">'+head+cliConfBlock(c)+identity+siege+contact+dir+assocEditor(c)+acte+cliDocsSection(c)+'</div>';
   }
   function cliListHTML(){
     var q=window.__cliQ||'';var ft=window.__cliType||'';
@@ -21967,7 +22048,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var tb='<div class="pf-top"><div class="pf-title"><b>'+E(tpl.titre)+'</b><span>'+E(pg.name)+' · page '+(pi+1)+'/'+tpl.pages.length+'</span></div>'
       +'<div class="pf-act">'+nav
       +'<button class="pf-b" onclick="pfClearPage()">Effacer la page</button>'
-      +'<button class="pf-b pf-pri" onclick="pfPrint()">Imprimer / PDF</button>'
+      +'<button class="pf-b pf-pri" onclick="pfPrint()">Imprimer</button>'
+      +'<button class="pf-b pf-dl" onclick="pfDownload(this)" title="Télécharger" aria-label="Télécharger">'+PF_ICON_DL+'</button>'
       +'<button class="pf-x" onclick="pfClose()" title="Fermer">✕</button></div></div>';
     var inputs=pg.fields.map(function(f){
       var k=f[0],val=store[k]||'',auto=pfIsComputed(pg,k),o=f[5]||{};
@@ -21985,7 +22067,10 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     ov.innerHTML=tb+'<div class="pf-body">'+side+'<div class="pf-scroll"><div class="pf-page" style="background-image:url('+pg.img+')">'+inputs+'</div></div></div>';
   }
 
-  window.pfPrint=function(){
+  var PF_ICON_DL='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v10.5"/><path d="M7.5 10L12 14.5 16.5 10"/><path d="M5 19.5h14"/></svg>';
+  var PF_ICON_CHECK='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#38e0a4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M7.8 12.4l2.8 2.8L16.4 9"/></svg>';
+  try{ window.PF_ICON_DL=PF_ICON_DL; window.PF_ICON_CHECK=PF_ICON_CHECK; }catch(e){}
+  function pfBuildDocHTML(){
     var tpl=curTpl(),doc=window.__pfDoc,D=docData(doc);
     var pagesHtml=tpl.pages.map(function(pg,pi){
       var store=(D[pg.key||('p'+pi)]||{}); if(pg.calc)pfRecalc(pg,store);
@@ -21996,10 +22081,18 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var css=PF_FONT_CSS+'@page{size:A4;margin:0}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0}'
       +'.pfp-page{position:relative;width:210mm;height:297mm;background-repeat:no-repeat;background-size:100% 100%;page-break-after:always;overflow:hidden}'
       +'.pfp-v{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;color:#111;line-height:1}';
+    return {titre:tpl.titre||'document', html:'<!doctype html><html><head><meta charset="utf-8"><title>'+E(tpl.titre)+'</title><style>'+css+'</style></head><body>'+pagesHtml+'</body></html>'};
+  }
+  window.pfPrint=function(){
+    var d=pfBuildDocHTML(); if(!d)return;
     var w=window.open('','_blank'); if(!w){ if(typeof toast==='function')toast('Autorisez les fenêtres pour imprimer.'); return; }
-    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+E(tpl.titre)+'</title><style>'+css+'</style></head><body>'+pagesHtml+'</body></html>');
+    w.document.write(d.html);
     w.document.close(); setTimeout(function(){try{w.focus();w.print();}catch(e){}},350);
   };
+  function pfDlAnim(btn){ if(!btn)return; try{ btn.classList.add('pf-dl-ok'); btn.innerHTML=PF_ICON_CHECK; btn.setAttribute('title','Téléchargé ✓'); clearTimeout(btn.__dlt); btn.__dlt=setTimeout(function(){ try{ btn.classList.remove('pf-dl-ok'); btn.innerHTML=PF_ICON_DL; btn.setAttribute('title','Télécharger'); }catch(e){} },4000); }catch(e){} }
+  function pfDlBlob(html,title){ try{ var blob=new Blob([html],{type:'text/html;charset=utf-8'}); var u=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=u; a.download=(title||'document').replace(/[^0-9a-zA-ZÀ-ÿ]+/g,'_').replace(/^_+|_+$/g,'')+'.html'; document.body.appendChild(a); a.click(); setTimeout(function(){try{URL.revokeObjectURL(u);a.remove();}catch(e){}},900); return true; }catch(e){ if(typeof toast==='function')toast('Téléchargement impossible'); return false; } }
+  window.pfDownload=function(btn){ var d=pfBuildDocHTML(); if(!d)return; if(pfDlBlob(d.html,d.titre))pfDlAnim(btn); };
+  window.pfDlDoc=function(btn,sel,title){ var el=document.querySelector(sel); if(!el){ if(typeof toast==='function')toast('Document introuvable'); return; } var css=Array.prototype.map.call(document.querySelectorAll('style'),function(s){return s.textContent;}).join('\n'); var html='<!doctype html><html><head><meta charset="utf-8"><title>'+E(title||'document')+'</title><style>'+css+'@page{size:A4;margin:0}html,body{margin:0;background:#fff}</style></head><body style="background:#fff">'+el.outerHTML+'</body></html>'; if(pfDlBlob(html,title))pfDlAnim(btn); };
 
   /* ===== Fiche de paie : même présentation (barre latérale + document), bulletin calculé en direct ===== */
   var PAIE_SCHEMA=[
@@ -22034,7 +22127,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     ov.className='pf-ov show'+(document.body.classList.contains('dark')?' dark':''); document.body.style.overflow='hidden';
     var bul=(typeof window.paieDocInline==='function')?window.paieDocInline(doc.data):'<p>Renseignez la rémunération.</p>';
     var tb='<div class="pf-top"><div class="pf-title"><b>Fiche de paie</b><span>Bulletin de salaire clarifié · calcul automatique</span></div>'
-      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfPaiePrint()">Imprimer / PDF</button><button class="pf-x" onclick="pfClose()" title="Fermer">✕</button></div></div>';
+      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfPaiePrint()">Imprimer</button><button class="pf-b pf-dl" onclick="pfDlDoc(this,\'#pf-paie-doc\',\'Fiche de paie\')" title="Télécharger" aria-label="Télécharger">'+PF_ICON_DL+'</button><button class="pf-x" onclick="pfClose()" title="Fermer">✕</button></div></div>';
     ov.innerHTML=tb+'<div class="pf-body">'+pfPaieSideHTML()+'<div class="pf-scroll"><div id="pf-paie-doc" class="pf-paie-doc">'+bul+'</div></div></div>';
   };
   window.pfPaiePrint=function(){
@@ -22059,12 +22152,14 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.pf-ov{position:fixed;inset:0;z-index:9000;background:#0a0a0c;display:none;flex-direction:column}',
     '.pf-ov.show{display:flex}',
     '.pf-top{display:flex;align-items:center;gap:12px;padding:11px 16px;background:#0f0f13;border-bottom:1px solid #26262b;flex-wrap:wrap;flex:none}',
-    '.pf-title b{font-size:14px;color:#f3f5f9}.pf-title span{display:block;font-size:11px;color:#858d9b;margin-top:2px}',
-    '.pf-act{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
-    '.pf-b{background:#17181d;color:#dbe3ef;border:1px solid #2a2b31;border-radius:9px;padding:7px 12px;font:600 12px/1 inherit;cursor:pointer}',
+    '.pf-title{min-width:0;flex:0 1 auto}.pf-title b{font-size:14px;color:#f3f5f9}.pf-title span{display:block;font-size:11px;color:#858d9b;margin-top:2px}',
+    '.pf-act{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}',
+    '.pf-b{display:inline-flex;align-items:center;justify-content:center;gap:6px;box-sizing:border-box;height:32px;background:#17181d;color:#dbe3ef;border:1px solid #2a2b31;border-radius:9px;padding:0 12px;font:600 12px/1 inherit;cursor:pointer}',
     '.pf-b:hover:not([disabled]){border-color:#4f9dff;color:#fff}.pf-b[disabled]{opacity:.4;cursor:default}',
     '.pf-pri{background:#4f9dff;color:#03121f;border-color:#4f9dff}.pf-pri:hover{background:#69adff}',
-    '.pf-x{background:#17181d;color:#f4a3a0;border:1px solid #3a2426;border-radius:9px;width:34px;height:34px;font-size:15px;cursor:pointer}.pf-x:hover{background:#2a1416}',
+    '.pf-x{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:32px;width:32px;padding:0;background:#17181d;color:#f4a3a0;border:1px solid #3a2426;border-radius:9px;font-size:14px;line-height:1;cursor:pointer}.pf-x:hover{background:#2a1416;border-color:#5a2a2c}',
+    '.pf-dl{width:38px;padding:0;color:#dbe3ef}.pf-dl svg{display:block}.pf-dl:hover:not([disabled]){border-color:#4f9dff;color:#fff}',
+    '.pf-dl.pf-dl-ok{border-color:#2a5a48;background:#0e1f18}',
     '.pf-body{flex:1;display:flex;min-height:0}',
     '.pf-side{width:340px;min-width:340px;background:#0d0d10;border-right:1px solid #26262b;overflow:auto;padding:14px 14px 40px}',
     '.pf-side-h{font-size:14px;font-weight:800;color:#f3f5f9;margin-bottom:2px}',
@@ -22367,7 +22462,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var ov=document.getElementById('pf-ov'); if(!ov)return;
     var doc=window.__pfDoc, type=curType(doc), cfg=FACT_TYPES[type]||FACT_TYPES.factnorm;
     var tb='<div class="pf-top"><div class="pf-title"><b>'+E(cfg.titre)+'</b><span>Modèle A4 · remplissage direct</span></div>'
-      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfFactPrint()">Imprimer / PDF</button><button class="pf-x" onclick="pfClose()" title="Fermer">✕</button></div></div>';
+      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfFactPrint()">Imprimer</button><button class="pf-b pf-dl" onclick="pfDlDoc(this,\'#pf-fac-doc\',(window.__pfDoc&&(window.__pfDoc.titre))||\'Facture\')" title="Télécharger" aria-label="Télécharger">'+window.PF_ICON_DL+'</button><button class="pf-x" onclick="pfClose()" title="Fermer">✕</button></div></div>';
     var doch=window.factureDocInline(doc);
     ov.innerHTML=tb+'<div class="pf-body">'+sideHTML(doc)+'<div class="pf-scroll"><div id="pf-fac-doc" class="pf-fac-doc">'+doch+'</div></div></div>';
   }
@@ -22658,7 +22753,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function render(){
     var ov=document.getElementById('pf-ov'); if(!ov)return; var doc=window.__pfDoc;
     var tb='<div class="pf-top"><div class="pf-title"><b>Fiche de paie</b><span>Bulletin calculé automatiquement</span></div>'
-      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfPaieXPrint()">Imprimer / PDF</button><button class="pf-x" onclick="pfClose()" title="Fermer">✕</button></div></div>';
+      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfPaieXPrint()">Imprimer</button><button class="pf-b pf-dl" onclick="pfDlDoc(this,\'#pe-doc\',\'Fiche de paie\')" title="Télécharger" aria-label="Télécharger">'+window.PF_ICON_DL+'</button><button class="pf-x" onclick="pfClose()" title="Fermer">✕</button></div></div>';
     ov.innerHTML=tb+'<div class="pf-body">'+sideHTML(doc)+'<div class="pf-scroll"><div id="pe-doc" class="pe-doc-host">'+window.paieExactDoc(doc)+'</div></div></div>';
   }
   window.pfPaieExactRender=render;
@@ -25779,6 +25874,27 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.fiWizardPaint=paint;
 })();
 </script>
+
+<style id="all-white-mod">
+/* ===== Toutes les écritures en BLANC (UI sombre) — hors documents/papier ===== */
+html body,
+html body h1,html body h2,html body h3,html body h4,html body h5,html body h6,
+html body p,html body span,html body div,html body td,html body th,html body li,
+html body label,html body a,html body b,html body strong,html body em,html body i,
+html body small,html body summary,html body caption,html body dt,html body dd,
+html body figcaption,html body button,html body option,html body legend{color:#fff!important}
+html body input,html body select,html body textarea{color:#fff!important;-webkit-text-fill-color:#fff!important}
+html body input::placeholder,html body textarea::placeholder{color:rgba(255,255,255,.5)!important;-webkit-text-fill-color:rgba(255,255,255,.5)!important}
+/* Documents / papier : écriture NOIRE (lisible sur fond blanc) — priorité (règle postérieure) */
+html body .pfp-page,html body .pfp-page *,html body .pfp-v,
+html body .pf-page,html body .pf-page *,html body .pf-f,html body textarea.pf-f,html body .pfs-i.pf-f,
+html body .doc-page,html body .doc-page *,html body .doc-gen,html body .doc-gen *,
+html body .inv,html body .inv *,html body .fxd-body,html body .fxd-body *,
+html body #print-area,html body #print-area *,html body #fv-printarea,html body #fv-printarea *,
+html body .lp-doc,html body .lp-doc *,html body .ct-doc,html body .ct-doc *{color:#111!important;-webkit-text-fill-color:#111!important}
+/* les champs de saisie sur le document (fond blanc) restent en placeholder gris */
+html body .pf-f::placeholder,html body .pfs-i.pf-f::placeholder{color:#8a8f98!important;-webkit-text-fill-color:#8a8f98!important}
+</style>
 
 </body>
 </html>
