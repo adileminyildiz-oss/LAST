@@ -3242,7 +3242,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=526;
+var LAST_VER=527;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -9250,12 +9250,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
   /* ---- Barre IA sous une zone de texte ---- */
   function barHTML(id){
-    var b='<div class="iatb" data-for="'+id+'"><span class="iatb-t">✨ IA</span>'
-      +'<button type="button" class="btn btn-sm btn-ghost" onclick="iaTA(\''+id+'\',\'corriger\')">Corriger</button>'
-      +'<button type="button" class="btn btn-sm btn-ghost" onclick="iaTA(\''+id+'\',\'raccourcir\')">Raccourcir</button>'
-      +'<button type="button" class="btn btn-sm btn-ghost" onclick="iaTA(\''+id+'\',\'pro\')">Plus pro</button>';
-    if(SR)b+='<button type="button" class="btn btn-sm btn-ghost ia-mic" onclick="iaMic(\''+id+'\',this)" title="Dicter">🎤</button>';
-    b+='</div>';return b;
+    /* Boutons de reformulation (Corriger / Raccourcir / Plus pro) retirés — inutiles.
+       On ne garde que la dictée si disponible. */
+    if(!SR) return '';
+    return '<div class="iatb" data-for="'+id+'"><button type="button" class="btn btn-sm btn-ghost ia-mic" onclick="iaMic(\''+id+'\',this)" title="Dicter">🎤</button></div>';
   }
   var _uid=0;
   function decorer(){
@@ -15103,7 +15101,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       r1('Dénomination sociale',fI('societe.denomination','ex. AEM CONSEIL'))
       +r1('Sigle / nom commercial',fI('societe.sigle'))
       +r2('Capital social (€)',fI('societe.capital','ex. 1000'),'Régime fiscal',fSel('societe.regime',[['','—'],['IS','IS — Impôt sur les sociétés'],['IR','IR — Impôt sur le revenu']],get('societe.regime')))
-      +r1('Objet social (activités)',fT('societe.objet','Décrire l\'activité principale et les activités connexes'))
+      +r1('Objet social (activités)',(window.fObjetSocial?window.fObjetSocial(get('societe.objet')):fT('societe.objet','Décrire l\'activité principale et les activités connexes')))
       +r1('Adresse du siège social',fI('siege.rue'))
       +r2('Code postal',fI('siege.cp'),'Ville',fI('siege.ville'))
       +r2('Type de local',fSel('siege.type',[['','—'],['Local commercial','Local commercial'],['Domiciliation','Société de domiciliation'],['Domicile du dirigeant','Domicile du dirigeant']],get('siege.type')),'Date de début d\'activité',fD('societe.debut'))
@@ -25941,8 +25939,8 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
   var IB='viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
   window.MQ_ICONS={
     add:'<svg class="mq-ic" '+IB+'><path d="M12 5v14M5 12h14"/></svg>',
-    trash:'<svg class="mq-ic" '+IB+'><path d="M4 7h16"/><path d="M9 7V5.4A1.4 1.4 0 0 1 10.4 4h3.2A1.4 1.4 0 0 1 15 5.4V7"/><path d="M6.2 7l.9 12.2A1.6 1.6 0 0 0 8.7 20.7h6.6a1.6 1.6 0 0 0 1.6-1.5L17.8 7"/><path d="M10 11v6M14 11v6"/></svg>',
-    mail:'<svg class="mq-ic" '+IB+'><circle cx="12" cy="12" r="3.6"/><path d="M15.6 8.4V13a2.4 2.4 0 0 0 4.8 0v-1a9 9 0 1 0-3.4 7.05"/></svg>',
+    trash:'<svg class="mq-ic" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M16.5 4.48v.23c1.3.09 2.6.24 3.88.44a.75.75 0 1 1-.24 1.48l-.2-.03-1 13.05a3 3 0 0 1-3 2.77H8.06a3 3 0 0 1-2.99-2.77l-1-13.05-.2.03a.75.75 0 1 1-.25-1.48c1.28-.2 2.57-.35 3.88-.44v-.23c0-1.56 1.21-2.9 2.82-2.95a52.6 52.6 0 0 1 3.37 0c1.6.05 2.81 1.39 2.81 2.95Zm-6.13-1.45c1.09-.03 2.18-.03 3.27 0 .75.02 1.36.66 1.36 1.45v.11a49.5 49.5 0 0 0-6 0v-.11c0-.79.61-1.43 1.37-1.45Zm-.36 5.94a.75.75 0 1 0-1.5.06l.35 9a.75.75 0 1 0 1.5-.06l-.35-9Zm5.48.06a.75.75 0 1 0-1.5-.06l-.34 9a.75.75 0 1 0 1.5.06l.34-9Z"/></svg>',
+    mail:'<svg class="mq-ic" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M15.5 8.5V13a2.5 2.5 0 0 0 5 0v-1a9 9 0 1 0-3.5 7.1"/></svg>',
     link:'<svg class="mq-ic" '+IB+'><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 3 2.6 15 0 18M12 3c-2.6 3-2.6 15 0 18"/></svg>',
     refresh:'<svg class="mq-ic" '+IB+'><path d="M20.5 11a8.5 8.5 0 0 0-15-4.3"/><path d="M5 3.2V7h3.8"/><path d="M3.5 13a8.5 8.5 0 0 0 15 4.3"/><path d="M19 20.8V17h-3.8"/></svg>',
     settings:'<svg class="mq-ic" '+IB+'><circle cx="12" cy="12" r="3.1"/><path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0c-.02.63.36 1.2.94 1.44.2.08.42.12.66.12H21a2 2 0 0 1 0 4h-.09c-.7 0-1.31.42-1.51 1z"/></svg>'
@@ -25951,6 +25949,172 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
   window.mqIconBtn=function(name,onclick,opts){ opts=opts||{}; var dis=opts.disabled?' disabled':''; var cls='mq-ib'+(opts.danger?' mq-ib-danger':'')+(opts.cls?(' '+opts.cls):''); var lbl=opts.label||''; var oc=(onclick||'').replace(/"/g,'&quot;'); return '<button type="button" class="'+cls+'"'+dis+' onclick="'+oc+'" title="'+lbl+'" aria-label="'+lbl+'">'+window.mqIcon(name)+'</button>'; };
   /* Actualiser la page courante (re-génère le rendu — corrige un affichage incomplet) */
   window.mqRefresh=function(btn){ try{ if(btn&&btn.classList){ btn.classList.add('mq-spin'); setTimeout(function(){ try{btn.classList.remove('mq-spin');}catch(e){} },650); } }catch(e){} try{ if(typeof render==='function') render(); }catch(e){} try{ if(typeof toast==='function') toast('Page actualisée'); }catch(e){} };
+})();
+</script>
+
+<!-- ===== Objet social — reconnaissance de mots-clés → propositions d'activités ===== -->
+<script>
+(function(){
+  /* Base d'activités avec mots-clés (reconnaissance à la saisie). Chaque entrée :
+     {a:'libellé d'activité proposé', k:[mots-clés déclencheurs]} */
+  var ACT=[
+    /* Commerce & vente */
+    {a:"L'achat, la vente et la distribution de boissons alcoolisées et non alcoolisées",k:['boisson','boissons','soda','alcool','vin','biere','biere','jus','eau','spiritueux']},
+    {a:"Le commerce de détail de produits alimentaires (épicerie)",k:['epicerie','alimentaire','alimentation','epicier','superette','grande surface','denree']},
+    {a:"L'achat et la revente de tous produits, marchandises et articles, en gros et au détail",k:['vente','revente','achat revente','commerce','negoce','marchandise','marchandises','distribution','detail','gros']},
+    {a:"Le commerce en ligne de tous produits (vente à distance, e-commerce)",k:['e-commerce','ecommerce','en ligne','internet','dropshipping','vente a distance','boutique en ligne','site marchand','marketplace']},
+    {a:"L'import-export de tous produits et marchandises",k:['import','export','import-export','importation','exportation','negoce international']},
+    {a:"Le commerce de vêtements, prêt-à-porter et accessoires de mode",k:['vetement','vetements','pret-a-porter','pret a porter','mode','textile','habillement','accessoires','chaussure','chaussures']},
+    {a:"Le commerce de matériel informatique, téléphonie et objets connectés",k:['informatique materiel','ordinateur','ordinateurs','telephone','telephonie','high-tech','high tech','electronique','objets connectes']},
+    {a:"Le commerce de meubles, mobilier et articles de décoration",k:['meuble','meubles','mobilier','decoration','ameublement','deco']},
+    {a:"Le commerce de fleurs et de plantes (fleuriste)",k:['fleur','fleurs','fleuriste','plante','plantes','horticulture']},
+    {a:"La vente de produits cosmétiques, de parfumerie et de bien-être",k:['cosmetique','cosmetiques','parfum','parfumerie','beaute produits','bien-etre','soin']},
+    /* Restauration & alimentaire */
+    {a:"La restauration traditionnelle sur place et à emporter",k:['restaurant','restauration','brasserie','bistrot','emporter','a emporter','cuisine','traiteur repas']},
+    {a:"La restauration rapide, snack et vente à emporter",k:['fast-food','fast food','snack','restauration rapide','sandwich','burger','kebab','pizza','pizzeria','food truck']},
+    {a:"Un débit de boissons, bar, café (licence)",k:['bar','cafe','debit de boisson','pub','licence iv','licence 4','brasserie bar']},
+    {a:"La boulangerie, pâtisserie et fabrication de pain",k:['boulangerie','patisserie','boulanger','patissier','pain','viennoiserie']},
+    {a:"L'activité de traiteur et l'organisation de réceptions",k:['traiteur','reception','receptions','banquet','evenementiel repas','buffet']},
+    /* BTP & artisanat */
+    {a:"Les travaux de bâtiment, tous corps d'état (BTP)",k:['btp','batiment','construction','travaux','tous corps','gros oeuvre','renovation','maconnerie','macon']},
+    {a:"Les travaux de plomberie, chauffage et sanitaire",k:['plomberie','plombier','chauffage','sanitaire','chauffagiste']},
+    {a:"Les travaux d'électricité générale",k:['electricite','electricien','installation electrique','courant fort','domotique']},
+    {a:"Les travaux de peinture, revêtement et finition",k:['peinture','peintre','revetement','enduit','ravalement','finition']},
+    {a:"Les travaux de menuiserie, agencement et pose",k:['menuiserie','menuisier','agencement','ebenisterie','pose','bois travaux']},
+    {a:"Les travaux de carrelage, faïence et revêtement de sol",k:['carrelage','carreleur','faience','sol','parquet','dallage']},
+    {a:"Les travaux de couverture, toiture et zinguerie",k:['couverture','toiture','couvreur','zinguerie','charpente','charpentier']},
+    {a:"Le nettoyage de locaux, l'entretien et la propreté",k:['nettoyage','proprete','entretien','menage','nettoyeur','vitrerie']},
+    {a:"L'aménagement paysager, l'entretien d'espaces verts et le jardinage",k:['paysagiste','espaces verts','jardin','jardinage','jardinier','paysager','elagage']},
+    /* Transport & logistique */
+    {a:"Le transport public de marchandises et la logistique",k:['transport marchandise','transport marchandises','logistique','fret','livraison','messagerie','coursier']},
+    {a:"Le transport de personnes (VTC, taxi)",k:['vtc','taxi','transport de personne','transport de personnes','chauffeur','transport prive']},
+    {a:"Le déménagement et le transport de mobilier",k:['demenagement','demenageur','transport mobilier']},
+    /* Services numériques & conseil */
+    {a:"Le développement de logiciels, d'applications et de sites internet",k:['developpement','logiciel','application','appli','site internet','web','programmation','saas','informatique service']},
+    {a:"Le conseil en informatique et systèmes d'information",k:['conseil informatique','ssii','esn','systeme information','infogerance','maintenance informatique']},
+    {a:"Le conseil aux entreprises, en management et en stratégie",k:['conseil','consultant','management','strategie','accompagnement','conseil entreprise','coaching pro','consulting']},
+    {a:"La communication, le marketing et la publicité",k:['communication','marketing','publicite','agence','community','reseaux sociaux','branding','pub']},
+    {a:"La création graphique, le design et l'infographie",k:['graphisme','graphiste','design','infographie','illustration','ux','ui','logo']},
+    {a:"La production audiovisuelle, la photographie et la vidéo",k:['audiovisuel','photographie','photographe','video','videaste','montage','film','tournage']},
+    {a:"La formation professionnelle et l'enseignement",k:['formation','formateur','enseignement','cours','coaching','pedagogie','organisme de formation']},
+    /* Immobilier & finance */
+    {a:"L'acquisition, la gestion et la location de biens immobiliers",k:['immobilier','immobiliere','location','locative','sci','gestion locative','bien immobilier','patrimoine immobilier']},
+    {a:"La transaction immobilière et l'intermédiation (agence)",k:['agence immobiliere','transaction','agent immobilier','mandataire immobilier','vente immobiliere']},
+    {a:"Le marchand de biens et la promotion immobilière",k:['marchand de biens','promotion immobiliere','promoteur','lotissement']},
+    {a:"Le conseil financier, la gestion de patrimoine et le courtage",k:['finance','financier','patrimoine','courtage','courtier','assurance','gestion de patrimoine','cgp']},
+    {a:"L'expertise comptable, la tenue de comptabilité et la gestion",k:['comptabilite','comptable','gestion','paie','fiscalite','expertise comptable','tenue de compte']},
+    /* Beauté, santé & bien-être */
+    {a:"Les soins de coiffure (salon de coiffure)",k:['coiffure','coiffeur','salon coiffure','barbier']},
+    {a:"Les soins esthétiques, de beauté et l'institut",k:['esthetique','estheticienne','institut','beaute','onglerie','manucure','maquillage','epilation','spa']},
+    {a:"Les soins de bien-être, massage et relaxation",k:['massage','bien-etre','relaxation','spa','sauna','naturopathie','sophrologie']},
+    {a:"Les activités de santé, de soins et paramédicales",k:['sante','soin','infirmier','infirmiere','kine','osteopathe','medical','paramedical','cabinet']},
+    {a:"Les activités sportives, le coaching sportif et la remise en forme",k:['sport','sportif','coach sportif','fitness','musculation','salle de sport','remise en forme','yoga','pilates']},
+    /* Autres services */
+    {a:"La coiffure et l'esthétique à domicile",k:['a domicile','domicile beaute']},
+    {a:"Les services à la personne et l'aide à domicile",k:['service a la personne','aide a domicile','garde enfant','menage domicile','aide menagere','auxiliaire']},
+    {a:"L'organisation d'événements, de séminaires et de mariages",k:['evenementiel','evenement','wedding','mariage','seminaire','organisation','event']},
+    {a:"La sécurité privée, le gardiennage et la surveillance",k:['securite','gardiennage','surveillance','agent de securite','protection']},
+    {a:"L'exploitation agricole et la production agricole",k:['agricole','agriculture','ferme','elevage','exploitation agricole','maraichage','viticulture']},
+    {a:"L'artisanat d'art et la fabrication d'objets",k:['artisanat','artisan','fabrication','creation','fait main','artisanale']},
+    {a:"La location de matériel, de véhicules et d'équipements",k:['location materiel','location vehicule','location equipement','loueur','mise a disposition materiel']},
+    {a:"Le garage automobile, la réparation et l'entretien de véhicules",k:['garage','automobile','mecanique','reparation vehicule','carrosserie','entretien vehicule','voiture']}
+  ];
+
+  function norm(s){ return (''+s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+
+  function toks(s){ return norm(s).split(' ').filter(Boolean); }
+
+  /* Score d'une activité par rapport au texte saisi.
+     - mot-clé mono-mot : match EXACT sur un mot du texte (évite les faux positifs de sous-chaîne),
+       sinon match par PRÉFIXE sur le mot en cours de saisie (« plomb » → « plomberie »).
+     - mot-clé multi-mots (« vente a distance ») : présence de la locution dans le texte. */
+  function score(act, fragTokens, fullNorm, fullTokens){
+    var s=0, i, j, k;
+    for(i=0;i<act.k.length;i++){ k=act.k[i];
+      if(k.indexOf(' ')>=0){
+        if((' '+fullNorm+' ').indexOf(' '+k+' ')>=0) s+=k.length+3;
+        else if(fullNorm.indexOf(k)>=0) s+=k.length;
+      } else {
+        if(fullTokens.indexOf(k)>=0){ s+=k.length+3; }
+        else {
+          for(j=0;j<fragTokens.length;j++){ var ft=fragTokens[j];
+            if(ft.length>=3 && (k.indexOf(ft)===0 || ft.indexOf(k)===0)){ s+=Math.max(2,ft.length); break; }
+          }
+        }
+      }
+    }
+    return s;
+  }
+
+  window.objSocSuggest=function(text){
+    var raw=(''+(text||''));
+    var fullNorm=norm(raw), fullTokens=toks(raw);
+    /* fragment = ce qui est saisi après la dernière virgule / point-virgule / retour ligne */
+    var m=raw.split(/[,;\n]/); var last=m[m.length-1]||''; var fragTokens=toks(last);
+    if(fullNorm.length<2) return [];
+    var scored=[];
+    for(var i=0;i<ACT.length;i++){
+      var sc=score(ACT[i], fragTokens, fullNorm, fullTokens);
+      if(sc>0 && fullNorm.indexOf(norm(ACT[i].a))<0) scored.push({a:ACT[i].a,s:sc});
+    }
+    scored.sort(function(x,y){return y.s-x.s;});
+    return scored.slice(0,7).map(function(o){return o.a;});
+  };
+
+  function renderSug(){
+    var box=document.getElementById('fi-objet-sug'); var ta=document.getElementById('fi-objet');
+    if(!box||!ta) return;
+    var props=window.objSocSuggest(ta.value);
+    if(!props.length){ box.innerHTML=''; box.style.display='none'; return; }
+    box.style.display='';
+    box.innerHTML='<div class="objsug-t">Activités proposées — cliquez pour ajouter :</div><div class="objsug-chips">'
+      + props.map(function(a){ var e=(''+a).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); return '<button type="button" class="objsug-chip" onclick="objSocPick(&quot;'+e.replace(/"/g,'\\&quot;')+'&quot;)">'+e+'</button>'; }).join('')
+      + '</div>';
+  }
+
+  window.objSocInput=function(el){
+    try{ if(typeof window.formSet==='function') window.formSet('societe.objet', el.value); }catch(e){}
+    renderSug();
+  };
+
+  window.objSocPick=function(a){
+    var ta=document.getElementById('fi-objet'); if(!ta) return;
+    var cur=(ta.value||'').replace(/\s+$/,'');
+    /* si le fragment en cours (après dernière virgule) est un début de saisie, on le remplace ; sinon on ajoute */
+    var parts=cur.split(/([,;\n])/); /* garde les séparateurs */
+    var lastFrag=''; for(var i=parts.length-1;i>=0;i--){ if(/[,;\n]/.test(parts[i])) break; lastFrag=parts[i]+lastFrag; }
+    var base=cur;
+    if(lastFrag.trim().length>0 && lastFrag.trim().length<40){ base=cur.slice(0, cur.length-lastFrag.length).replace(/\s+$/,''); }
+    var sep = base.trim()==='' ? '' : (/[.,;]$/.test(base.trim())? ' ' : ', ');
+    ta.value = base + sep + a;
+    try{ if(typeof window.formSet==='function') window.formSet('societe.objet', ta.value); }catch(e){}
+    try{ if(typeof window.formUpdateGate==='function') window.formUpdateGate(); }catch(e){}
+    ta.focus();
+    renderSug();
+  };
+
+  /* Rendu du champ objet social (utilisé par le formulaire, ligne « Objet social (activités) ») */
+  window.fObjetSocial=function(cur){
+    var v=(''+(cur||'')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+    return '<textarea id="fi-objet" class="objta" rows="2" data-noia="1" oninput="objSocInput(this)" '
+      + 'placeholder="Décrivez l\'activité — ex. « vente de boissons », « travaux de plomberie », « conseil informatique »… les activités correspondantes vous sont proposées.">'+v+'</textarea>'
+      + '<div id="fi-objet-sug" class="objsug" style="display:none"></div>';
+  };
+
+  /* Ré-afficher les suggestions après chaque rendu du formulaire (si des mots-clés y figurent déjà) */
+  if(typeof window.render==='function'){ var _r=window.render; window.render=function(){ var o=_r.apply(this,arguments); try{ setTimeout(renderSug,0); }catch(e){} return o; }; }
+
+  /* Styles */
+  var st=document.createElement('style');
+  st.textContent=''
+    +'.objsug{margin-top:8px}'
+    +'.objsug-t{font-size:11.5px;color:#9aa0aa;margin-bottom:6px;letter-spacing:.2px}'
+    +'.objsug-chips{display:flex;flex-wrap:wrap;gap:7px}'
+    +'.objsug-chip{display:inline-flex;align-items:center;text-align:left;font-size:12.5px;line-height:1.3;color:#fff;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:7px 11px;cursor:pointer;transition:background .15s,border-color .15s,transform .08s}'
+    +'.objsug-chip:hover{background:rgba(93,140,255,.16);border-color:rgba(93,140,255,.55)}'
+    +'.objsug-chip:active{transform:translateY(1px)}'
+    +'.objta{width:100%}';
+  document.head.appendChild(st);
 })();
 </script>
 
