@@ -3233,7 +3233,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=517;
+var LAST_VER=518;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -25666,28 +25666,46 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function paint(fromClick){
     if(typeof state==='undefined' || state.page!=='formulaire') return;
     var wrap=document.querySelector('.fi-wrap'); if(!wrap) return;
-    var ss=stepsOf(wrap); if(ss.length<2){ wrap.classList.remove('wz4on'); return; }
+    var sections=stepsOf(wrap); if(sections.length<2){ wrap.classList.remove('wz4on'); return; }
     injectCSS(); wrap.classList.add('wz4on');
     // nettoyage d'un rendu précédent
     Array.prototype.forEach.call(wrap.querySelectorAll('.wz4-pills,.wz4-nav'), function(e){ e.remove(); });
-    var n=ss.length;
+    function esc2(s){ return (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    // --- regroupement en 6 étapes logiques (création) / sections naturelles (modification) ---
+    var GLAB=['Société','Dirigeant','Associés & capital','Dates & mentions','Notes & contact','Recommandation'];
+    function norm(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+    function gi(el){ try{ if(el.querySelector && el.querySelector('#fi-reco-live')) return 5; }catch(e){} var t=norm(title(el));
+      if(/societe/.test(t)) return 0;
+      if(/dirigeant|profil/.test(t)) return 1;
+      if(/titre|associe|associ|depot|apport|beneficiaire|conjoint|capital|banque/.test(t)) return 2;
+      if(/dates|mentions/.test(t)) return 3;
+      if(/note|contact|coherence|relecture/.test(t)) return 4;
+      return 4; }
+    var isModif=false; try{ isModif=!!(window.__formData && window.__formData.nature==='modification'); }catch(e){}
+    var groups;
+    if(isModif){ groups=sections.map(function(el){ return {label:title(el)||'Informations', els:[el]}; }); }
+    else{ var by={}; sections.forEach(function(el){ var k=gi(el); (by[k]=by[k]||[]).push(el); });
+      var order=Object.keys(by).map(Number).sort(function(a,b){return a-b;});
+      groups=order.map(function(k){ return {label:GLAB[k]||'Étape', els:by[k]}; }); }
+    var n=groups.length;
     if(window.__fiStep==null) window.__fiStep=0;
     if(window.__fiStep>n-1) window.__fiStep=n-1;
     if(window.__fiStep<0) window.__fiStep=0;
-    var cur=window.__fiStep, labels=ss.map(title);
+    var cur=window.__fiStep;
     // pastilles
     var pills=document.createElement('div'); pills.className='wz4-pills';
     var track='';
-    for(var i=0;i<n;i++){ var cls=i<cur?'done':(i===cur?'on':''); track+='<button type="button" class="wz4-pill '+cls+'" data-i="'+i+'" title="'+(labels[i]||('Étape '+(i+1)))+'">'+(i<cur?'✓':(i+1))+'</button>'; }
-    pills.innerHTML='<div class="wz4-track">'+track+'</div><div class="wz4-cap">Étape '+(cur+1)+' sur '+n+' · '+(labels[cur]||'')+'</div>';
-    ss[0].parentNode.insertBefore(pills, ss[0]);
-    // visibilité
-    ss.forEach(function(c,i){ c.style.display = (i===cur)?'':'none'; });
-    // navigation
+    for(var i=0;i<n;i++){ var cls=i<cur?'done':(i===cur?'on':''); track+='<button type="button" class="wz4-pill '+cls+'" data-i="'+i+'" title="'+esc2(groups[i].label)+'">'+(i<cur?'✓':(i+1))+'</button>'; }
+    pills.innerHTML='<div class="wz4-track">'+track+'</div><div class="wz4-cap">Étape '+(cur+1)+' sur '+n+' · '+esc2(groups[cur].label)+'</div>';
+    sections[0].parentNode.insertBefore(pills, sections[0]);
+    // visibilité : masquer toutes les sections, montrer celles du groupe courant
+    sections.forEach(function(el){ el.style.display='none'; });
+    groups[cur].els.forEach(function(el){ el.style.display=''; });
+    // navigation, ajoutée sous la dernière section visible du groupe
     var nav=document.createElement('div'); nav.className='wz4-nav';
     nav.innerHTML='<button type="button" class="btn" '+(cur===0?'disabled':'')+' data-prev>‹ Précédent</button>'
       + (cur<n-1 ? '<button type="button" class="btn btn-pri" data-next>Étape suivante ›</button>' : '<span class="wz4-last">Dernière étape — enregistrez ci-dessous</span>');
-    ss[cur].appendChild(nav);
+    groups[cur].els[groups[cur].els.length-1].appendChild(nav);
     // actions d'enregistrement uniquement sur la dernière étape
     var act=wrap.querySelector('.fi-actions'); if(act) act.style.display=(cur===n-1)?'':'none';
     // câblage (sans re-render complet → conserve la saisie & le focus)
