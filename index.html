@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=547;
+var LAST_VER=548;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -18205,6 +18205,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   window.pageEditions=function(){
     var docs=(DB.editionsLibres||[]);
     var cur=docs.filter(function(x){return x.id===state.edLibId;})[0]||null;
+    if(cur && cur.k==='duerp' && typeof window.duerpEditorHTML==='function'){ return window.duerpEditorHTML(cur); }
     if(!cur){
       var groups={};EDLIB_TYPES.forEach(function(t){if(EDHIDE[t.k])return;(groups[t.g]=groups[t.g]||[]).push(t);});
       var create=Object.keys(groups).map(function(g){
@@ -27743,6 +27744,257 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     '.edcl-acts .btn{width:100%;justify-content:center}',
     'html body .edcl-danger{background:#3a1618!important;border:1px solid #7a3a3a!important;color:#ffb4ac!important}',
     'html body .edcl-danger:hover{background:#4a1c1e!important}'
+  ].join(''); document.head.appendChild(st); }catch(e){}
+})();
+</script>
+
+
+<!-- ===== DUERP — Document Unique d'Évaluation des Risques (générateur + barre latérale + calculs auto) ===== -->
+<script>
+(function(){
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function doc(id){ return (typeof DB!=='undefined'&&DB.editionsLibres)?DB.editionsLibres.find(function(x){return x.id===id;}):null; }
+
+  /* Coefficients (issus de la légende du modèle) */
+  var GRAV=[['','—'],['1','1 — Blessure légère sans arrêt'],['10','10 — Blessure avec arrêt sans IPP'],['100','100 — Blessure avec arrêt avec IPP'],['1000','1000 — Blessure mortelle']];
+  var FREQ=[['','—'],['1','1 — Inférieure à 5 j / an'],['2','2 — Entre 5 et 30 j / an'],['3','3 — Entre 30 et 150 j / an'],['4','4 — Supérieure à 150 j / an']];
+  var PREV=[['','—'],['0.3','Bonne (paramètres maîtrisés)'],['0.7','Moyenne (actions à mener)'],['1','Mauvaise ou absente']];
+  function prevLabel(v){ if(v==='0.3')return 'Bonne'; if(v==='0.7')return 'Moyenne'; if(v==='1')return 'Mauvaise/absente'; return ''; }
+
+  /* Situations de danger BTP/maçonnerie (situation, danger, actions déjà existantes) — zones G/F/Prévention à vider */
+  var SEED=[
+    ["Déplacement sur sol encombré ou glissant","Chute de plain-pied","Chaussures de sécurité. Rangement régulier des chantiers. Panneau « sécurité sol glissant ». Nettoyage du sol."],
+    ["Déplacement sur sol encombré ou glissant","Heurt","Chaussures de sécurité. Rangement régulier des chantiers. Nettoyage du sol."],
+    ["Manutention matériels, matériaux","Écrasement / Heurt","Chaussures de sécurité & gants de manutention. Protection individuelle."],
+    ["Manutention de charges lourdes","Troubles musculo-squelettiques","Brouette, transpalette, port à plusieurs. Livraisons directes sur chantier. Formation gestes et postures. Salle de pause équipée de sièges."],
+    ["Nettoyage haute pression","Bruit","Protections auditives à disposition. Panneau « protection antibruit obligatoire »."],
+    ["Utilisation d'outils électroportatifs","Coupure / sectionnement","Carter de protection, gants, lunettes."],
+    ["Poste à responsabilités (techniques, financières, encadrement)","Charge mentale, stress","Organisation à plusieurs, planification des tâches, être organisé."],
+    ["Utilisation d'outillage électrique","Risque électrique","Matériel vérifié, disjoncteur différentiel, EPI."],
+    ["Circulation d'engins sur chantier","Heurt / écrasement","Plan de circulation, gilet haute-visibilité, CACES."],
+    ["Talochage, lissage, ragréage, enduisage, ponçage de surfaces","Troubles musculo-squelettiques","Ponceuse électrique, ragréage auto-lissant. Salle de pause équipée. Formation gestes et postures."],
+    ["Travail en espace restreint","Troubles musculo-squelettiques","Pauses, hydratation, alternance travail debout / assis. Formation gestes et postures."],
+    ["Travail en toutes positions","Troubles musculo-squelettiques","Tréteaux pour travailler à hauteur d'homme, protection des genoux. Formation gestes et postures. Pauses."],
+    ["Travail, circulation, accès en hauteur","Chute de hauteur","Échafaudage avec garde-corps, harnais."],
+    ["Travail en hauteur avec superposition de postes","Chute d'objets","Casques à disposition, plinthes sur échafaudage."],
+    ["Travaux avec port d'EPI respiratoires et vêtements étanches","Contraintes thermiques","Eau à disposition. Pauses. Protection individuelle."],
+    ["Vibrations (membres supérieurs) : perforation, tronçonnage, ponçage","Troubles musculo-squelettiques","Machines à poignées anti-vibratiles. Rotation des postes. Pauses."],
+    ["Déplacements professionnels","Risque routier","Véhicules entretenus, pas de surcharge, ceinture de sécurité. Vitesse adaptée. Code de la route respecté."],
+    ["Évacuation de déblais","Chute d'objets","Évacuation par sacs. Panneau « risque de chute d'objet »."],
+    ["Ruine des échafaudages et platelages provisoires","Effondrement","Pas de surcharge, pas de stockage."],
+    ["Travaux à proximité de fers en attente, planches à clous","Perforation","Clous retirés, chaussures de sécurité. Protection individuelle."],
+    ["Travaux sur routes ouvertes à la circulation","Risque routier","Demande d'arrêté en mairie, balisage. Panneau de prévention « danger »."],
+    ["Utilisation de machines et matériels électriques","Risque électrique","Machines et enrouleurs entretenus. EPI (gants, lunettes, casque)."],
+    ["Utilisation de machines-outils","Sectionnement","Protecteurs sur machines et gants."],
+    ["Utilisation de machines-outils portatives","Projection, rejet","Lunettes, carters sur machines. Protection individuelle."],
+    ["Utilisation de matériel d'échafaudage","Basculement, renversement","Échafaudage fixé. Formation au montage."],
+    ["Utilisation d'outils à main tranchants","Coupure","Gants. Panneau « risque de coupure de main »."],
+    ["Application de colles / résines","Colles et résines (agressivité, toxicité)","Obtenir les Fiches de Données de Sécurité. Protection individuelle."],
+    ["Application de peintures ou vernis","Peintures / vernis (agressivité, toxicité)","FDS à obtenir. Utilisation en milieu ventilé. Gants et masque de protection."],
+    ["Contact avec ciment gâché, béton et mortier frais","Atteinte de la peau et des muqueuses","Obtenir les FDS. Gants étanches. Protection individuelle."],
+    ["Intervention sur matériaux contenant de l'amiante","Poussières d'amiante","Entreprise non concernée (aucun travaux exposant à l'amiante)."],
+    ["Stockage des produits","Colles et résines (agressivité, toxicité)","Stock tampon et retour de chantier. Mesures d'hygiène. Formation au premier secours."],
+    ["Découpe de polystyrène","Fil chaud — brûlures","Carter de protection sur machine. Lunettes, respirateur."],
+    ["Soudage aux gaz","Brûlures / gaz et fumées","Panneau « danger de feu ». Masque de soudage. Travaux ventilés / extérieurs."],
+    ["Coffrage / décoffrage","Écrasement, heurt","Organisation des tâches, port du casque et gants."]
+  ];
+
+  function DUERP_SEED(){ return SEED.map(function(r){ return {situation:r[0],danger:r[1],g:'',f:'',prev:'',actions:r[2]}; }); }
+
+  window.duerpCalc=function(r){
+    var g=parseFloat(r.g)||0, f=parseFloat(r.f)||0, p=parseFloat(r.prev);
+    var est=(g&&f)?(g*f):null;
+    var hasP=(r.prev!=='' && !isNaN(p));
+    var evalv=(est!=null&&hasP)?Math.round(est*p*100)/100:null;
+    var prio,cls;
+    if(evalv==null){ prio='—'; cls='na'; }
+    else if(evalv>=800){ prio='À court terme (jours / semaines)'; cls='c'; }
+    else if(evalv>=300){ prio='À moyen terme (semaines / mois)'; cls='m'; }
+    else if(evalv>=50){ prio='À long terme (mois / années)'; cls='l'; }
+    else { prio='Risque non significatif'; cls='ns'; }
+    return {est:est,evalv:evalv,prio:prio,cls:cls};
+  };
+
+  function ident(d){ return (d.data&&d.data.ident)||{}; }
+  function rows(d){ if(!d.data)d.data={}; if(!d.data.rows)d.data.rows=DUERP_SEED(); return d.data.rows; }
+
+  window.duerpNew=function(){
+    DB.editionsLibres=DB.editionsLibres||[];
+    var d={id:'edl_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),k:'duerp',
+      titre:"DUERP — Document Unique d'Évaluation des Risques",titreBase:"DUERP",titreAuto:true,
+      data:{ident:{},rows:DUERP_SEED()},ts:Date.now(),updated:Date.now()};
+    DB.editionsLibres.unshift(d); try{save();}catch(e){} state.edLibId=d.id; state.edOpenType=''; render();
+  };
+
+  window.duerpSet=function(id,key,val){ var d=doc(id); if(!d)return; d.data=d.data||{}; d.data.ident=d.data.ident||{}; d.data.ident[key]=val;
+    if(key==='denomination'&&d.titreAuto!==false){ d.titre="DUERP — "+((''+val).trim()||"Document Unique"); }
+    d.updated=Date.now(); if(window._duT)clearTimeout(window._duT); window._duT=setTimeout(function(){try{save();}catch(e){}},400); duerpRepaint(id); };
+  window.duerpRowSet=function(id,i,key,val){ var d=doc(id); if(!d)return; var rs=rows(d); if(!rs[i])return; rs[i][key]=val; d.updated=Date.now();
+    if(window._duT)clearTimeout(window._duT); window._duT=setTimeout(function(){try{save();}catch(e){}},400); duerpRepaint(id); };
+  window.duerpRowAdd=function(id){ var d=doc(id); if(!d)return; rows(d).push({situation:'',danger:'',g:'',f:'',prev:'',actions:''}); try{save();}catch(e){} render(); };
+  window.duerpRowDel=function(id,i){ var d=doc(id); if(!d)return; var rs=rows(d); rs.splice(i,1); try{save();}catch(e){} render(); };
+  window.duerpPrefill=function(id){ var d=doc(id); if(!d)return; var s=(typeof DB!=='undefined'&&DB.societe)||{}; var cab=(DB.params&&DB.params.cabinet)||'';
+    d.data=d.data||{}; var it=d.data.ident=d.data.ident||{};
+    if(!it.denomination) it.denomination=s.denomination||cab||'';
+    if(!it.adresse) it.adresse=s.adresse||'';
+    if(!it.cp) it.cp=s.cp||'';
+    if(!it.ville) it.ville=s.ville||'';
+    if(!it.naf) it.naf=s.codeAPE||'';
+    if(!it.responsable) it.responsable=s.dirigeant||s.representant||'';
+    if(!it.dateMaj) it.dateMaj=new Date().toLocaleDateString('fr-FR');
+    if(d.titreAuto!==false && it.denomination) d.titre="DUERP — "+it.denomination;
+    try{save();}catch(e){} render(); if(typeof toast==='function')toast('Informations pré-remplies depuis la société.'); };
+
+  function duerpRepaint(id){ try{ var d=doc(id); if(!d)return; var host=document.getElementById('duerp-preview'); if(host)host.innerHTML=window.duerpDocHTML(d); }catch(e){} }
+
+  /* ---- Aperçu A4 (document reproduit) ---- */
+  window.duerpDocHTML=function(d){
+    var it=ident(d), rs=rows(d);
+    function v(x){ return x?esc(x):'<span class="du-blank"></span>'; }
+    var head='<div class="du-head">'
+      +'<div class="du-h-title">DOCUMENT UNIQUE D\'ÉVALUATION DES RISQUES PROFESSIONNELS (DUERP)</div>'
+      +'<table class="du-id"><tbody>'
+      +'<tr><td class="du-k">Raison sociale</td><td>'+v(it.denomination)+'</td><td class="du-k">Nature de l\'activité</td><td>'+v(it.activite)+'</td></tr>'
+      +'<tr><td class="du-k">Adresse</td><td>'+v(it.adresse)+'</td><td class="du-k">Code NAF</td><td>'+v(it.naf)+'</td></tr>'
+      +'<tr><td class="du-k">Code postal / Ville</td><td>'+v((it.cp||'')+' '+(it.ville||''))+'</td><td class="du-k">Date de création</td><td>'+v(it.dateCreation)+'</td></tr>'
+      +'<tr><td class="du-k">Téléphone</td><td>'+v(it.tel)+'</td><td class="du-k">Effectif</td><td>'+v(it.effectif)+'</td></tr>'
+      +'<tr><td class="du-k">E-mail</td><td>'+v(it.email)+'</td><td class="du-k">Responsable du Document Unique</td><td>'+v(it.responsable)+'</td></tr>'
+      +'<tr><td class="du-k">Mise à jour</td><td colspan="3">'+v(it.dateMaj)+' — Mise à jour annuelle ou en cas de changement significatif.</td></tr>'
+      +'</tbody></table></div>';
+    var leg='<div class="du-leg"><b>Mode de calcul :</b> ESTIMATION = GRAVITÉ × FRÉQUENCE&nbsp;&nbsp;•&nbsp;&nbsp;ÉVALUATION = ESTIMATION × PRÉVENTION</div>';
+    var body=rs.map(function(r){ var c=window.duerpCalc(r);
+      return '<tr>'
+        +'<td>'+v(r.situation)+'</td>'
+        +'<td>'+v(r.danger)+'</td>'
+        +'<td class="du-c">'+(r.g||'')+'</td>'
+        +'<td class="du-c">'+(r.f||'')+'</td>'
+        +'<td class="du-c du-est">'+(c.est!=null?c.est:'')+'</td>'
+        +'<td class="du-c">'+prevLabel(r.prev)+'</td>'
+        +'<td>'+v(r.actions)+'</td>'
+        +'<td class="du-c du-eval">'+(c.evalv!=null?c.evalv:'')+'</td>'
+        +'<td class="du-c du-prio du-p-'+c.cls+'">'+(c.evalv!=null?esc(c.prio):'')+'</td>'
+        +'</tr>';
+    }).join('');
+    var tbl='<table class="du-t"><thead><tr>'
+      +'<th>Situation de danger</th><th>Danger</th><th>Gravité</th><th>Fréquence d\'exposition</th><th>Estimation</th><th>Prévention</th><th>Actions déjà existantes</th><th>Évaluation</th><th>Priorité d\'action</th>'
+      +'</tr></thead><tbody>'+body+'</tbody></table>';
+    return '<div class="du-doc">'+head+leg+tbl+'</div>';
+  };
+
+  /* Impression / PDF */
+  window.duerpPrint=function(id){ var d=doc(id); if(!d)return; var w=window.open('','_blank'); if(!w){ if(typeof toast==='function')toast('Autorisez les fenêtres pop-up pour l\'impression.'); return; }
+    var css='body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;font-size:10px}'
+      +'.du-h-title{font-size:14px;font-weight:800;text-align:center;text-transform:uppercase;margin:0 0 12px}'
+      +'.du-id{width:100%;border-collapse:collapse;margin:0 0 12px;font-size:10px}.du-id td{border:1px solid #999;padding:4px 6px}.du-k{background:#eef1f6;font-weight:700;white-space:nowrap}'
+      +'.du-leg{font-size:10px;margin:0 0 10px;padding:6px 8px;border:1px solid #bbb;background:#f6f8fc}'
+      +'.du-t{width:100%;border-collapse:collapse;font-size:8.6px}.du-t th,.du-t td{border:1px solid #888;padding:3px 4px;vertical-align:top}.du-t th{background:#e8edf5;font-weight:700;text-align:center}'
+      +'.du-c{text-align:center}.du-est,.du-eval{font-weight:700}'
+      +'.du-p-c{background:#f6c6c6}.du-p-m{background:#f7d9b0}.du-p-l{background:#f6efb0}.du-p-ns{background:#c8e6c9}'
+      +'@page{size:A4 landscape;margin:10mm}';
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+esc(d.titre)+'</title><style>'+css+'</style></head><body>'+window.duerpDocHTML(d)+'</body></html>');
+    w.document.close(); setTimeout(function(){ try{w.focus();w.print();}catch(e){} },300);
+  };
+
+  /* ---- Éditeur (barre latérale de saisie minimale + aperçu) ---- */
+  window.duerpEditorHTML=function(d){
+    var it=ident(d), rs=rows(d);
+    var ICPRINT='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>';
+    var ICSAVE='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>';
+    var top='<div class="ed2-topbar">'
+      +'<button class="ed2-x-close" onclick="edCloseAsk(\''+d.id+'\')" title="Fermer la page" aria-label="Fermer">✕</button>'
+      +'<button class="btn btn-sm btn-ghost ed2-back" onclick="edCloseAsk(\''+d.id+'\')" title="Fermer / revenir aux Éditions">← Retour</button>'
+      +'<input class="ed2-title" id="edlib-title" value="'+esc(d.titre)+'" oninput="edLibRename(\''+d.id+'\',this.value)" aria-label="Titre">'
+      +'<span class="ed2-saved" id="edlib-saved">Enregistré</span>'
+      +'<span class="ed2-sp"></span>'
+      +'<button class="btn btn-sm ed2-tb-print" onclick="duerpPrint(\''+d.id+'\')" title="Imprimer">'+ICPRINT+'<span>Imprimer</span></button>'
+      +'<button class="btn btn-sm btn-pri ed2-tb-save" onclick="edLibSaveDoc(\''+d.id+'\')" title="Enregistrer le document">'+ICSAVE+'<span>Enregistrer</span></button>'
+      +'</div>';
+    function fld(k,lab,ph){ return '<label class="du-f"><span>'+esc(lab)+'</span><input value="'+esc(it[k]||'')+'"'+(ph?' placeholder="'+esc(ph)+'"':'')+' oninput="duerpSet(\''+d.id+'\',\''+k+'\',this.value)"></label>'; }
+    function sel(i,k,opts){ var cur=rs[i][k]; return '<select onchange="duerpRowSet(\''+d.id+'\','+i+',\''+k+'\',this.value)">'+opts.map(function(o){ return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+esc(o[1])+'</option>'; }).join('')+'</select>'; }
+    var idf='<div class="du-side-sec"><div class="du-side-h">Identité de l\'entreprise</div>'
+      +'<button class="btn btn-sm du-prefill" onclick="duerpPrefill(\''+d.id+'\')">⤵ Pré-remplir depuis la société</button>'
+      +fld('denomination','Raison sociale')+fld('activite','Nature de l\'activité','Ex. Maçonnerie')+fld('adresse','Adresse')
+      +'<div class="du-f2">'+fld('cp','Code postal')+fld('ville','Ville')+'</div>'
+      +'<div class="du-f2">'+fld('tel','Téléphone')+fld('naf','Code NAF')+'</div>'
+      +fld('email','E-mail')+fld('responsable','Responsable du Document Unique')
+      +'<div class="du-f2">'+fld('dateCreation','Date de création','jj/mm/aaaa')+fld('effectif','Effectif')+'</div>'
+      +fld('dateMaj','Date de mise à jour','jj/mm/aaaa')
+      +'</div>';
+    var rowsHTML=rs.map(function(r,i){ var c=window.duerpCalc(r);
+      var lbl=(r.danger||('Risque '+(i+1)));
+      return '<div class="du-row'+(c.evalv!=null?' du-row-ok':'')+'">'
+        +'<div class="du-row-h"><span class="du-row-t" title="'+esc(r.situation)+'">'+esc(lbl)+'</span>'
+          +'<span class="du-row-badge du-p-'+c.cls+'">'+(c.evalv!=null?('Éval '+c.evalv):'à évaluer')+'</span>'
+          +'<button class="du-row-x" title="Retirer" onclick="duerpRowDel(\''+d.id+'\','+i+')">×</button></div>'
+        +'<div class="du-row-sit">'+esc(r.situation)+'</div>'
+        +'<div class="du-3"><label><span>Gravité</span>'+sel(i,'g',GRAV)+'</label>'
+          +'<label><span>Fréquence</span>'+sel(i,'f',FREQ)+'</label>'
+          +'<label><span>Prévention</span>'+sel(i,'prev',PREV)+'</label></div>'
+        +'<div class="du-calc"><span>Estimation : <b>'+(c.est!=null?c.est:'—')+'</b></span><span>Évaluation : <b>'+(c.evalv!=null?c.evalv:'—')+'</b></span></div>'
+        +(c.evalv!=null?('<div class="du-prio-l du-p-'+c.cls+'">Priorité : '+esc(c.prio)+'</div>'):'')
+        +'</div>';
+    }).join('');
+    var side='<aside class="ed2-form du-side">'
+      +'<div class="ed2-form-t">Saisie rapide du DUERP</div>'
+      +'<div class="du-hint">Saisissez le <b>minimum</b> : pour chaque risque, choisissez <b>Gravité</b>, <b>Fréquence</b> et <b>Prévention</b>. L\'Estimation, l\'Évaluation et la Priorité sont <b>calculées automatiquement</b>.</div>'
+      +idf
+      +'<div class="du-side-sec"><div class="du-side-h">Risques évalués <span class="du-cnt">'+rs.length+'</span></div>'
+      +rowsHTML
+      +'<button class="btn btn-sm du-add" onclick="duerpRowAdd(\''+d.id+'\')">+ Ajouter un risque</button></div>'
+      +'</aside>';
+    var body='<div class="ed2-edit-body du-edit-body">'+side
+      +'<div class="ed2-preview" id="duerp-preview">'+window.duerpDocHTML(d)+'</div></div>';
+    return '<div class="ed2-edit">'+top+body+'</div>';
+  };
+
+  /* Bouton d'accueil dans Éditions ("Documents administratifs") */
+  try{ if(typeof window.pageEditions==='function' && !window.pageEditions.__duerp){ var _pe=window.pageEditions; window.pageEditions=function(){ var h=_pe.apply(this,arguments);
+    if(typeof h==='string' && h.indexOf('id="ed2-create"')>=0 && h.indexOf('duerpNew()')<0){
+      var grp='<div class="ed2-grp"><div class="ed2-grp-h">Documents administratifs</div><div class="ed2-grp-b">'
+        +'<button class="ed2-new" onclick="duerpNew()">DUERP — Document Unique d\'Évaluation des Risques</button>'
+        +'</div></div>';
+      h=h.replace('<div class="ed2-create" id="ed2-create">','<div class="ed2-create" id="ed2-create">'+grp);
+    }
+    return h; }; window.pageEditions.__duerp=1; } }catch(e){}
+
+  /* Impression DUERP-aware (délègue au générique sinon) */
+  try{ var _elp=window.edLibPrint; window.edLibPrint=function(id){ var d=doc(id); if(d&&d.k==='duerp'){ return window.duerpPrint(id); } return _elp?_elp.apply(this,arguments):null; }; }catch(e){}
+
+  /* Styles */
+  try{ var st=document.createElement('style'); st.id='duerp-css'; st.textContent=[
+    '.du-side{display:flex;flex-direction:column;gap:12px}',
+    '.du-hint{font-size:11px;line-height:1.5;color:#9fb0cc;background:#111826;border:1px solid #24344f;border-radius:9px;padding:8px 10px}',
+    '.du-hint b{color:#cfe0ff}',
+    '.du-side-sec{border-top:1px solid #23232b;padding-top:10px;display:flex;flex-direction:column;gap:7px}',
+    '.du-side-h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#8a8a92;display:flex;align-items:center;gap:6px}',
+    '.du-cnt{background:#1c1c22;border:1px solid #2c2c33;border-radius:999px;padding:0 7px;font-size:10px;color:#b9b9c2}',
+    'html body.dark:not(#mq):not(#mq) .du-prefill,html body.dark:not(#mq):not(#mq) .du-add{background:#14202f!important;border:1px solid #2a4a6f!important;color:#cfe0ff!important}',
+    '.du-f{display:flex;flex-direction:column;gap:3px}.du-f>span{font-size:10.5px;color:#8a8a92}',
+    '.du-f input{background:#161619;border:1px solid #262630;border-radius:7px;color:#e7e7ec;font-size:12px;padding:5px 8px}',
+    '.du-f2{display:grid;grid-template-columns:1fr 1fr;gap:7px}',
+    '.du-row{border:1px solid #23232b;border-radius:10px;padding:8px;background:#111114;display:flex;flex-direction:column;gap:6px}',
+    '.du-row-ok{border-color:#2a4a6f}',
+    '.du-row-h{display:flex;align-items:center;gap:6px}',
+    '.du-row-t{font-size:12px;font-weight:700;color:#e2e2e8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.du-row-badge{font-size:9.5px;font-weight:700;border-radius:999px;padding:1px 7px;color:#111;background:#8899aa}',
+    '.du-row-x{background:none;border:0;color:#8a8a92;font-size:16px;cursor:pointer;line-height:1;padding:0 2px}.du-row-x:hover{color:#e07a7a}',
+    '.du-row-sit{font-size:10.5px;color:#8a94a8;line-height:1.4}',
+    '.du-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}',
+    '.du-3 label{display:flex;flex-direction:column;gap:2px}.du-3 span{font-size:9.5px;color:#8a8a92}',
+    'html body.dark:not(#mq):not(#mq) .du-3 select,html body.dark:not(#mq):not(#mq) .du-side select{background:#161619!important;border:1px solid #2a3550!important;color:#e7e7ec!important;font-size:11px;border-radius:7px;padding:4px 4px}',
+    '.du-calc{display:flex;gap:12px;font-size:10.5px;color:#9fb0cc}.du-calc b{color:#cfe0ff}',
+    '.du-prio-l{font-size:10px;font-weight:700;border-radius:6px;padding:3px 7px;color:#111}',
+    '.du-p-c{background:#f6a6a6}.du-p-m{background:#f4c78a}.du-p-l{background:#eede8a}.du-p-ns{background:#a9dcae}.du-p-na{background:#8899aa}',
+    '.du-add{margin-top:4px}',
+    /* aperçu */
+    '.du-edit-body{grid-template-columns:380px 1fr!important}',
+    '.du-doc{background:#fff;color:#111;border-radius:8px;padding:16px 16px 22px;font-family:Arial,Helvetica,sans-serif;font-size:10px;overflow:auto}',
+    '.du-h-title{font-size:13px;font-weight:800;text-align:center;text-transform:uppercase;margin:0 0 12px;color:#111}',
+    '.du-id{width:100%;border-collapse:collapse;margin:0 0 12px}.du-id td{border:1px solid #999;padding:4px 6px;color:#111}.du-k{background:#eef1f6;font-weight:700;white-space:nowrap}',
+    '.du-blank{display:inline-block;min-width:60px;border-bottom:1px dotted #bbb;height:11px}',
+    '.du-leg{font-size:10px;margin:0 0 10px;padding:6px 8px;border:1px solid #bbb;background:#f6f8fc;color:#111;border-radius:5px}',
+    '.du-t{width:100%;border-collapse:collapse;font-size:8.4px}.du-t th,.du-t td{border:1px solid #888;padding:3px 4px;vertical-align:top;color:#111}.du-t th{background:#e8edf5;font-weight:700;text-align:center}',
+    '.du-t .du-c{text-align:center}.du-est,.du-eval{font-weight:700}.du-prio{font-weight:700}'
   ].join(''); document.head.appendChild(st); }catch(e){}
 })();
 </script>
