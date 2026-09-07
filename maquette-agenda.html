@@ -1,0 +1,187 @@
+<!doctype html><meta charset="utf-8"><title>Maquette Agenda · Mar'q</title>
+<style>
+:root{
+  --bg:#000; --card:#0b0b0b; --card-2:#101012; --card-3:#141416;
+  --line:#1e1e1e; --line-2:#262629; --line-soft:#171719;
+  --ink:#f4f6fa; --ink-2:#a8adb5; --ink-3:#71767e; --ink-4:#54585f;
+  --gold:#caa24a; --gold-soft:rgba(201,162,74,.14); --gold-line:rgba(201,162,74,.4);
+  --grn:#5ca97a; --grn-soft:rgba(92,169,122,.14);
+  --blu:#5b8fc9; --blu-soft:rgba(91,143,201,.14);
+  --amb:#c9a24a; --amb-soft:rgba(201,162,74,.12);
+  --red:#c0563f; --red-soft:rgba(192,86,63,.14);
+  --sans:Inter,'Helvetica Neue','Segoe UI',Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:12px;-webkit-font-smoothing:antialiased}
+.app{display:grid;grid-template-columns:210px 1fr;min-height:100vh}
+/* ---- sidebar (réel) ---- */
+.side{border-right:1px solid var(--line);padding:22px 14px 20px;background:#000}
+.logo{font-size:30px;font-weight:800;letter-spacing:-1px;margin:0 0 2px}
+.logo-sub{font-size:8.5px;letter-spacing:3px;color:var(--ink-3);font-weight:600;margin-bottom:22px}
+.nsec{font-size:9px;letter-spacing:2px;color:var(--ink-4);font-weight:700;margin:16px 0 7px 6px}
+.nav{display:flex;flex-direction:column;gap:1px}
+.ni{padding:8px 11px;border-radius:9px;color:var(--ink-2);font-size:12px;font-weight:500;display:flex;align-items:center;gap:8px}
+.ni.on{background:rgba(255,255,255,.09);color:#fff}
+.ni.on::before{content:"";width:3px;height:14px;border-radius:2px;background:var(--gold);margin-left:-6px}
+/* ---- main ---- */
+.main{padding:0}
+.top{display:flex;align-items:flex-start;justify-content:space-between;padding:20px 26px 16px;border-bottom:1px solid var(--line-soft)}
+.h1{font-size:17px;font-weight:800;margin:0}
+.h1s{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.sync{display:inline-flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:11px;color:var(--ink-2);white-space:nowrap;flex:none;align-self:flex-start}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--grn);box-shadow:0 0 0 3px var(--grn-soft);flex:none}
+.wrap{padding:18px 26px 60px}
+/* ---- kpi row ---- */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.kpi .n{font-size:26px;font-weight:800;letter-spacing:-.5px}
+.kpi .l{font-size:10px;letter-spacing:1.5px;color:var(--ink-3);font-weight:600;text-transform:uppercase;margin-top:3px}
+.kpi.acc .n{color:var(--gold)}
+/* ---- toolbar ---- */
+.bar{display:flex;align-items:center;align-content:center;gap:12px;margin-bottom:14px;height:38px}
+.bar>*{align-self:center;flex:0 0 auto;height:auto}
+.seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px}
+.seg button{border:0;background:transparent;color:var(--ink-2);font:600 11.5px var(--sans);padding:6px 14px;border-radius:7px;cursor:pointer}
+.seg button.on{background:var(--gold);color:#1a150a}
+.mnav{display:flex;align-items:center;gap:8px}
+.rbtn{width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:14px;cursor:pointer}
+.month{font-size:15px;font-weight:800;min-width:150px;text-align:center}
+.filters{display:flex;gap:6px;margin-left:auto;align-items:center;align-content:center;flex-wrap:nowrap;justify-content:flex-end;height:38px}
+.chip{display:inline-flex;align-items:center;align-self:center;gap:6px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);font-size:10.5px;color:var(--ink-2);cursor:pointer;flex:0 0 auto}
+.chip i{display:inline-block;width:8px;height:8px;border-radius:2px;flex:none}
+.chip.rdv i{background:var(--blu)} .chip.ech i{background:var(--amb)} .chip.rel i{background:var(--red)} .chip.apl i{background:var(--grn)}
+.pri{background:var(--gold);color:#1a150a;border:0;border-radius:9px;font:700 11.5px var(--sans);padding:8px 14px;cursor:pointer}
+/* ---- layout cal + rail ---- */
+.grid2{display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start}
+.cal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+.dow span{font-size:9.5px;letter-spacing:1.5px;color:var(--ink-3);font-weight:700;text-align:center;text-transform:uppercase}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{aspect-ratio:1/.92;border:1px solid var(--line-soft);border-radius:10px;padding:7px 8px;position:relative;background:var(--card-2);overflow:hidden}
+.day.out{opacity:.32}
+.day.today{border-color:var(--gold-line);background:var(--gold-soft)}
+.dnum{font-size:11px;font-weight:700;color:var(--ink-2)}
+.day.today .dnum{color:var(--gold)}
+.ev{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:9.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev b{width:6px;height:6px;border-radius:2px;flex:none}
+.ev.rdv b{background:var(--blu)} .ev.ech b{background:var(--amb)} .ev.rel b{background:var(--red)} .ev.apl b{background:var(--grn)}
+.more{font-size:9px;color:var(--ink-3);margin-top:3px}
+/* ---- right rail ---- */
+.rail{display:flex;flex-direction:column;gap:14px}
+.rc{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 15px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.rc h3{margin:0 0 2px;font-size:12.5px;font-weight:800}
+.rc .sub{font-size:10.5px;color:var(--ink-3);margin-bottom:11px}
+.tl{display:flex;flex-direction:column;gap:0}
+.slot{display:grid;grid-template-columns:44px 1fr;gap:10px;padding:8px 0;border-top:1px solid var(--line-soft)}
+.slot:first-child{border-top:0}
+.hr{font-size:10.5px;color:var(--ink-3);font-weight:600;padding-top:2px}
+.appt{border-left:2px solid var(--blu);padding:6px 10px;border-radius:8px;background:var(--card-2)}
+.appt.ech{border-color:var(--amb)} .appt.rel{border-color:var(--red)}
+.appt .t{font-size:11.5px;font-weight:700}
+.appt .m{font-size:10px;color:var(--ink-3);margin-top:1px}
+.up{display:grid;grid-template-columns:32px 1fr auto;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line-soft)}
+.up:first-child{border-top:0}
+.up>div{min-width:0}
+.av{width:32px;height:32px;border-radius:10px;background:linear-gradient(140deg,#232326,#151517);border:1px solid var(--line-2);display:grid;place-items:center;font-size:11px;font-weight:800;color:var(--ink-2);flex:none}
+.up .who{font-size:11.5px;font-weight:700}
+.up .meta{font-size:10px;color:var(--ink-3);margin-top:1px;line-height:1.5}
+.tag{display:inline-block;vertical-align:middle;font-size:8.5px;padding:2px 6px;border-radius:5px;font-weight:700;letter-spacing:.3px;margin-right:4px}
+.tag.rdv{background:var(--blu-soft);color:#9ec3ea} .tag.apl{background:var(--grn-soft);color:#8fd3ac}
+.when{margin-left:auto;text-align:right;font-size:10.5px;color:var(--ink-2);font-weight:700}
+.when small{display:block;color:var(--ink-3);font-weight:500;font-size:9px}
+.gcal{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--card-2);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+.gcal .l{font-size:11px;color:var(--ink-2)} .gcal .l b{color:var(--ink)}
+.gcal a{color:var(--gold);text-decoration:none;font-weight:700;font-size:11px}
+</style>
+<div class="app">
+  <aside class="side">
+    <div class="logo">Mar'q</div><div class="logo-sub">LOGICIEL INTERNE</div>
+    <div class="nsec">ACTIVITÉ</div>
+    <div class="nav">
+      <div class="ni">▦ Demandes</div>
+      <div class="ni">▤ Traitement</div>
+      <div class="ni">✔ Conformité</div>
+      <div class="ni">◫ Formulaire</div>
+      <div class="ni">🖨 Éditions</div>
+      <div class="ni on">▦ Agenda</div>
+      <div class="ni">◍ Clients</div>
+    </div>
+    <div class="nsec">SYSTÈME</div>
+    <div class="nav">
+      <div class="ni">€ Factures prestataires</div>
+      <div class="ni">◆ Services</div>
+      <div class="ni">⚙ Paramètres</div>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="top">
+      <div><div class="h1">Agenda</div><div class="h1s">Rendez-vous clients & échéances — synchronisé Google Agenda</div></div>
+      <div class="sync"><span class="dot"></span> Google Agenda connecté · aemconseil.sas@gmail.com</div>
+    </div>
+    <div class="wrap">
+      <div class="kpis">
+        <div class="kpi acc"><div class="n">3</div><div class="l">Aujourd'hui</div></div>
+        <div class="kpi"><div class="n">11</div><div class="l">Cette semaine</div></div>
+        <div class="kpi"><div class="n">24</div><div class="l">À venir</div></div>
+        <div class="kpi"><div class="n">2</div><div class="l">À confirmer</div></div>
+      </div>
+      <div class="bar">
+        <div class="seg"><button class="on">Mois</button><button>Semaine</button><button>Jour</button></div>
+        <div class="mnav"><button class="rbtn">‹</button><div class="month">Septembre 2026</div><button class="rbtn">›</button></div>
+        <div class="filters">
+          <span class="chip rdv"><i></i>RDV client</span>
+          <span class="chip ech"><i></i>Échéance fiscale</span>
+          <span class="chip rel"><i></i>Relance</span>
+          <span class="chip apl"><i></i>Appel</span>
+          <button class="pri">+ Rendez-vous</button>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="cal">
+          <div class="dow"><span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span></div>
+          <div class="days" id="days"></div>
+        </div>
+        <div class="rail">
+          <div class="rc">
+            <h3>Aujourd'hui — lundi 7</h3><div class="sub">3 rendez-vous · 1 échéance</div>
+            <div class="tl">
+              <div class="slot"><div class="hr">09:30</div><div class="appt rdv"><div class="t">Point mensuel — MARCHAND CONSEIL</div><div class="m">Visio · bilan de conformité</div></div></div>
+              <div class="slot"><div class="hr">11:00</div><div class="appt"><div class="t">Appel — A. Bernard</div><div class="m">Attestation de régularité fiscale</div></div></div>
+              <div class="slot"><div class="hr">14:00</div><div class="appt ech"><div class="t">Échéance — TVA CA3 août</div><div class="m">Dépôt avant 24/09 · 3 dossiers</div></div></div>
+              <div class="slot"><div class="hr">16:30</div><div class="appt rel"><div class="t">Relance — OKONKWO NÉGOCE</div><div class="m">Pièces manquantes bilan</div></div></div>
+            </div>
+          </div>
+          <div class="rc">
+            <h3>Prochains rendez-vous</h3><div class="sub">7 prochains jours</div>
+            <div class="up"><div class="av">MC</div><div><div class="who">MARCHAND CONSEIL</div><div class="meta"><span class="tag rdv">RDV</span> Révision statuts</div></div><div class="when">Mar 8<small>10:00</small></div></div>
+            <div class="up"><div class="av">AB</div><div><div class="who">A. Bernard</div><div class="meta"><span class="tag apl">Appel</span> Point DSN</div></div><div class="when">Mer 9<small>15:30</small></div></div>
+            <div class="up"><div class="av">ON</div><div><div class="who">OKONKWO NÉGOCE</div><div class="meta"><span class="tag rdv">RDV</span> Bilan prévisionnel</div></div><div class="when">Jeu 10<small>09:00</small></div></div>
+          </div>
+          <div class="rc" style="padding:12px 13px">
+            <div class="gcal"><div class="l">Agenda du site <b>aemconseil.eu</b> — synchro à double sens active</div><a href="#">Ouvrir ↗</a></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+// build month grid (Sept 2026, starts Monday). Events on some days.
+var EV={
+ 1:[['ech','TVA CA3']],3:[['rdv','Point BERNARD']],
+ 7:[['rdv','MARCHAND'],['ech','TVA CA3'],['rel','OKONKWO'],['apl','Appel']],
+ 8:[['rdv','MARCHAND']],9:[['apl','DSN']],10:[['rdv','Bilan prév.']],
+ 15:[['ech','Acompte IS']],18:[['rdv','R. statuts']],22:[['rel','Relance']],24:[['ech','Dépôt CA3'],['apl','Confirmation']],29:[['rdv','Clôture']]
+};
+var d=new Date(2026,8,1); var startDow=(d.getDay()+6)%7; // Mon=0
+var cells=[]; for(var i=0;i<startDow;i++)cells.push(null);
+for(var day=1;day<=30;day++)cells.push(day);
+while(cells.length%7)cells.push(null);
+var html=cells.map(function(n){
+  if(!n)return '<div class="day out"></div>';
+  var evs=EV[n]||[]; var shown=evs.slice(0,2).map(function(e){return '<div class="ev '+e[0]+'"><b></b>'+e[1]+'</div>';}).join('');
+  var more=evs.length>2?'<div class="more">+'+(evs.length-2)+' autre(s)</div>':'';
+  return '<div class="day'+(n===7?' today':'')+'"><div class="dnum">'+n+'</div>'+shown+more+'</div>';
+}).join('');
+document.getElementById('days').innerHTML=html;
+</script>

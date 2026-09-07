@@ -1,0 +1,552 @@
+<title>Notifications Mar'q</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Mar'q — planche de notifications. Univers sombre assumé (le produit est sombre) :
+   fond, couleurs et texte peints explicitement pour tenir sur n'importe quel hôte. */
+:root{
+  --bg:#090b0f; --bg-grad:#0c0f15;
+  --stage:#0e1218; --surface:#161b23; --surface-2:#1b212b; --elev:#212834;
+  --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+  --tx:#eaeef5; --dim:#98a3b4; --faint:#69727f;
+  --brand:#4c8dff; --brand-2:#6ba0ff; --brand-ink:#08172e;
+  --ok:#37c680; --ok-soft:rgba(55,198,128,.14);
+  --err:#f4635a; --err-soft:rgba(244,99,90,.15);
+  --warn:#e6ab3f; --warn-soft:rgba(230,171,63,.14);
+  --info:#4c8dff; --info-soft:rgba(76,141,255,.15);
+  --shadow:0 24px 60px -22px rgba(0,0,0,.75);
+  --r:16px;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --ui:"Manrope",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  --disp:"Bricolage Grotesque","Manrope",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:
+    radial-gradient(1100px 620px at 78% -8%, #16223d 0%, rgba(22,34,61,0) 60%),
+    linear-gradient(180deg,var(--bg-grad),var(--bg) 42%);
+  color:var(--tx); font-family:var(--ui); font-size:15px; line-height:1.55;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  background-attachment:fixed;
+}
+.wrap{max-width:1120px; margin:0 auto; padding:clamp(28px,5vw,64px) clamp(18px,4vw,44px) 96px}
+
+/* ---- En-tête ---- */
+.eyebrow{font-family:var(--mono); font-size:11.5px; letter-spacing:.22em; text-transform:uppercase; color:var(--brand-2); margin:0 0 14px; display:flex; align-items:center; gap:10px}
+.eyebrow::before{content:""; width:22px; height:1px; background:var(--brand); display:inline-block}
+h1{font-family:var(--disp); font-weight:700; font-size:clamp(34px,6vw,58px); line-height:1.02; letter-spacing:-.02em; margin:0 0 16px; text-wrap:balance; max-width:16ch}
+h1 .q{color:var(--brand-2)}
+.lede{color:var(--dim); font-size:clamp(15px,2.1vw,17px); max-width:60ch; margin:0}
+.head{display:flex; flex-wrap:wrap; gap:36px 48px; align-items:flex-end; justify-content:space-between; padding-bottom:34px; border-bottom:1px solid var(--line); margin-bottom:48px}
+
+/* Légende du système (icônes + couleurs sémantiques) */
+.legend{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 22px; min-width:280px}
+.leg{display:flex; align-items:center; gap:11px; font-size:13px; color:var(--dim)}
+.leg b{color:var(--tx); font-weight:600}
+.chip{width:26px; height:26px; border-radius:8px; flex:none; display:grid; place-items:center; font-weight:800; font-size:13px; color:#fff; box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+.chip.ok{background:var(--ok)} .chip.err{background:var(--err)} .chip.warn{background:var(--warn); color:#231a05} .chip.info{background:var(--info)}
+
+/* ---- Sections ---- */
+.section{margin-top:56px}
+.sec-head{display:flex; align-items:baseline; gap:16px; margin-bottom:8px}
+.sec-head h2{font-family:var(--disp); font-weight:600; font-size:22px; letter-spacing:-.01em; margin:0}
+.sec-head .num{font-family:var(--mono); font-size:12px; color:var(--faint); letter-spacing:.1em}
+.sec-desc{color:var(--dim); font-size:14px; margin:0 0 26px; max-width:64ch}
+.sec-rule{height:1px; background:linear-gradient(90deg,var(--line-2),transparent); margin:14px 0 26px}
+
+.grid{display:grid; gap:20px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:720px){.g2{grid-template-columns:1fr}}
+
+/* Un « specimen » = scène sombre (l'app) + composant + légende */
+.spec{display:flex; flex-direction:column}
+.stage{
+  position:relative; background:
+    radial-gradient(120% 100% at 50% 0%, #12161d 0%, var(--stage) 70%);
+  border:1px solid var(--line); border-radius:var(--r);
+  padding:30px 26px; min-height:132px; display:grid; place-items:center;
+  overflow:hidden; transition:border-color .25s, transform .25s;
+}
+.stage::after{content:""; position:absolute; inset:0; background:
+  linear-gradient(180deg, rgba(255,255,255,.03), transparent 30%); pointer-events:none}
+.spec:hover .stage{border-color:var(--line-2); transform:translateY(-2px)}
+.cap{display:flex; align-items:baseline; justify-content:space-between; gap:14px; margin-top:14px}
+.cap .name{font-weight:600; font-size:14.5px; color:var(--tx)}
+.cap .meta{font-family:var(--mono); font-size:11px; color:var(--faint); letter-spacing:.02em; text-align:right; white-space:nowrap}
+
+/* ===== TOAST ===== */
+.tst{
+  --c:var(--info); --c-soft:var(--info-soft);
+  width:min(360px,100%); display:flex; align-items:flex-start; gap:12px;
+  background:linear-gradient(180deg,var(--surface),var(--surface-2));
+  border:1px solid var(--line-2); border-left:3px solid var(--c);
+  border-radius:13px; padding:13px 12px 13px 14px; box-shadow:var(--shadow);
+  position:relative;
+}
+.tst::before{content:""; position:absolute; left:0; top:0; bottom:0; width:60px;
+  background:linear-gradient(90deg,var(--c-soft),transparent); border-radius:13px 0 0 13px; pointer-events:none}
+.tst-ic{flex:none; width:26px; height:26px; border-radius:8px; background:var(--c); color:#fff;
+  display:grid; place-items:center; font-weight:800; font-size:14px; position:relative;
+  box-shadow:0 0 0 4px var(--c-soft)}
+.tst.warn .tst-ic{color:#231a05}
+.tst-tx{flex:1; min-width:0; font-size:13.5px; line-height:1.4; color:var(--tx); padding-top:2px}
+.tst-tx .sub{display:block; color:var(--dim); font-size:12.5px; margin-top:2px}
+.tst-x{flex:none; background:none; border:0; color:var(--faint); font-size:18px; line-height:1;
+  cursor:pointer; padding:2px 4px; border-radius:6px; transition:color .15s,background .15s}
+.tst-x:hover{color:var(--tx); background:rgba(255,255,255,.06)}
+.tst.ok{--c:var(--ok); --c-soft:var(--ok-soft)}
+.tst.err{--c:var(--err); --c-soft:var(--err-soft)}
+.tst.warn{--c:var(--warn); --c-soft:var(--warn-soft)}
+.tst.info{--c:var(--info); --c-soft:var(--info-soft)}
+.tst-act{display:flex; gap:8px; margin-top:9px}
+.mini{font-family:var(--ui); font-weight:700; font-size:12px; letter-spacing:.01em; border-radius:8px;
+  padding:6px 12px; cursor:pointer; border:1px solid var(--line-2); background:rgba(255,255,255,.04); color:var(--tx); transition:background .15s,border-color .15s}
+.mini:hover{background:rgba(255,255,255,.09)}
+.mini.accent{background:var(--brand); border-color:transparent; color:#06132a}
+.mini.accent:hover{background:var(--brand-2)}
+
+/* bouton rejouer l'animation */
+.replay{position:absolute; top:10px; right:12px; z-index:3; width:28px; height:28px; border-radius:8px;
+  border:1px solid var(--line); background:rgba(255,255,255,.03); color:var(--dim); cursor:pointer;
+  display:grid; place-items:center; font-size:14px; transition:.15s}
+.replay:hover{color:var(--tx); border-color:var(--line-2); background:rgba(255,255,255,.07)}
+.playing{animation:slideIn .5s cubic-bezier(.18,.9,.28,1.2) both}
+@keyframes slideIn{from{opacity:0; transform:translateY(14px) scale(.98)} to{opacity:1; transform:none}}
+
+/* ===== BANNIÈRE PWA / MAJ / SAUVEGARDE ===== */
+.banner{width:min(440px,100%); display:flex; align-items:center; gap:14px;
+  background:linear-gradient(180deg,var(--surface),var(--surface-2));
+  border:1px solid var(--line-2); border-radius:15px; padding:14px 14px 14px 16px; box-shadow:var(--shadow)}
+.b-logo{flex:none; width:42px; height:42px; border-radius:12px; display:grid; place-items:center;
+  background:linear-gradient(150deg,#2a63c8,#4c8dff); color:#fff; font-family:var(--disp); font-weight:700; font-size:19px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35), 0 6px 16px -6px rgba(76,141,255,.6)}
+.b-tx{flex:1; min-width:0}
+.b-tx .t{font-weight:700; font-size:14px; color:var(--tx)}
+.b-tx .s{font-size:12.5px; color:var(--dim); margin-top:1px}
+.b-actions{display:flex; gap:8px; flex:none}
+.b-actions .mini{padding:8px 14px}
+.ghost{background:none; border:1px solid var(--line-2); color:var(--dim)}
+.ghost:hover{color:var(--tx); background:rgba(255,255,255,.05)}
+
+/* Bannière mise à jour : liseré animé */
+.banner.update{border-color:rgba(76,141,255,.4)}
+.banner.update .b-logo{background:linear-gradient(150deg,#1f8f5c,#37c680)}
+.updbar{position:absolute; left:0; right:0; bottom:0; height:2px; overflow:hidden; border-radius:0 0 15px 15px}
+.updbar::before{content:""; position:absolute; inset:0; width:40%; background:linear-gradient(90deg,transparent,var(--brand),transparent); animation:sweep 1.4s linear infinite}
+@keyframes sweep{from{transform:translateX(-100%)} to{transform:translateX(350%)}}
+.banner{position:relative}
+
+/* Bannière sauvegarde (ambre) */
+.banner.save{border-color:rgba(230,171,63,.42); background:linear-gradient(180deg,#211d14,#1b1810)}
+.banner.save .b-logo{background:linear-gradient(150deg,#c98d24,#e6ab3f); color:#231a05}
+
+/* ===== CHIPS D'ÉTAT (connexion) ===== */
+.status{display:inline-flex; align-items:center; gap:10px; font-size:13px; font-weight:600;
+  padding:9px 15px 9px 12px; border-radius:999px; box-shadow:var(--shadow);
+  background:linear-gradient(180deg,var(--surface),var(--surface-2)); border:1px solid var(--line-2); color:var(--tx)}
+.dot{width:9px; height:9px; border-radius:50%; flex:none}
+.status.off .dot{background:var(--faint); box-shadow:0 0 0 4px rgba(105,114,127,.18)}
+.status.on .dot{background:var(--ok); box-shadow:0 0 0 4px var(--ok-soft); animation:pulse 1.8s ease-in-out infinite}
+.status .sub{color:var(--dim); font-weight:500}
+.spin{width:13px; height:13px; border-radius:50%; border:2px solid rgba(255,255,255,.18); border-top-color:var(--brand); animation:spin .8s linear infinite; flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 4px var(--ok-soft)} 50%{box-shadow:0 0 0 7px rgba(55,198,128,.05)}}
+
+/* ===== CONFIRMATION (modale) ===== */
+.modal{width:min(400px,100%); background:linear-gradient(180deg,var(--surface),var(--surface-2));
+  border:1px solid var(--line-2); border-radius:18px; padding:22px 22px 18px; box-shadow:var(--shadow); text-align:left}
+.m-ic{width:44px; height:44px; border-radius:13px; display:grid; place-items:center; font-size:20px; margin-bottom:14px}
+.m-ic.danger{background:var(--err-soft); color:var(--err); box-shadow:inset 0 0 0 1px rgba(244,99,90,.3)}
+.m-ic.lock{background:var(--info-soft); color:var(--brand-2); box-shadow:inset 0 0 0 1px rgba(76,141,255,.3)}
+.m-t{font-family:var(--disp); font-weight:600; font-size:18px; margin:0 0 6px; letter-spacing:-.01em}
+.m-s{font-size:13.5px; color:var(--dim); margin:0 0 18px; line-height:1.5}
+.m-field{width:100%; background:#0d1117; border:1px solid var(--line-2); border-radius:10px; padding:11px 13px;
+  color:var(--tx); font-family:var(--ui); font-size:14px; margin-bottom:16px; letter-spacing:.15em}
+.m-field:focus{outline:2px solid var(--brand); outline-offset:1px; border-color:var(--brand)}
+.m-actions{display:flex; gap:10px; justify-content:flex-end}
+.m-actions .mini{padding:9px 16px}
+.mini.danger{background:var(--err); border-color:transparent; color:#fff}
+.mini.danger:hover{background:#ff756c}
+.mini.wide{flex:1; text-align:center; padding:11px}
+
+.foot{margin-top:72px; padding-top:26px; border-top:1px solid var(--line); color:var(--faint); font-size:12.5px; font-family:var(--mono); display:flex; flex-wrap:wrap; gap:8px 20px; justify-content:space-between}
+a{color:var(--brand-2)}
+:focus-visible{outline:2px solid var(--brand); outline-offset:2px; border-radius:6px}
+/* ===== Téléchargement (pilule morphante : repos → progression → terminé) ===== */
+.dl{display:inline-flex; align-items:center; gap:11px; background:#0c1017; border:1px solid var(--brand);
+  border-radius:999px; padding:8px 9px 8px 15px; box-shadow:var(--shadow); cursor:pointer;
+  transition:padding .38s cubic-bezier(.16,1,.3,1),border-radius .38s,border-color .3s,gap .38s}
+.dl:hover{box-shadow:0 16px 40px -14px rgba(76,141,255,.4)}
+.dl-ic{position:relative; width:20px; height:20px; flex:none; color:var(--brand-2)}
+.dl-ic svg{position:absolute; inset:0; margin:auto; transition:opacity .3s, transform .45s cubic-bezier(.16,1,.3,1)}
+.dl-ring{opacity:0; transform:scale(.5) rotate(-90deg); animation:spin 1s linear infinite; animation-play-state:paused}
+.dl-check{opacity:0; transform:scale(.4); color:var(--ok)}
+.dl-btn{position:relative; overflow:hidden; border:1px solid var(--brand); border-radius:999px; background:transparent;
+  color:var(--brand-2); font:800 12.5px/1 var(--ui); letter-spacing:.3px; padding:8px 16px; white-space:nowrap; cursor:pointer;
+  transition:width .42s cubic-bezier(.16,1,.3,1),border-radius .42s,padding .42s,color .3s,background .3s,height .42s}
+.dl-btn .lbl{position:relative; z-index:2}
+.dl-fill{position:absolute; inset:0; width:0; z-index:1; background:linear-gradient(90deg,var(--brand-2),var(--brand)); transition:width .2s linear}
+.dl-x{background:none; border:0; color:var(--faint); cursor:pointer; font-size:16px; line-height:1; padding:0 4px; transition:opacity .28s,width .28s,margin .28s}
+.dl-x:hover{color:var(--tx)}
+.dl.loading{padding:10px 16px; border-radius:15px; gap:13px; cursor:default; border-color:var(--line-2)}
+.dl.loading .dl-ic{width:22px; height:22px; color:#fff}
+.dl.loading .dl-arrow{opacity:0; transform:scale(.5) rotate(90deg)}
+.dl.loading .dl-ring{opacity:1; transform:scale(1) rotate(0); animation-play-state:running}
+.dl.loading .dl-btn{width:196px; height:22px; padding:0; border-color:var(--line-2); background:#1b212b; display:flex; align-items:center; justify-content:center}
+.dl.loading .dl-btn .lbl{color:#fff; font-size:11px; letter-spacing:.4px}
+.dl.loading .dl-x{opacity:0; width:0; margin-left:-13px; pointer-events:none}
+.dl.done{border-color:rgba(55,198,128,.5)}
+.dl.done .dl-ic{color:var(--ok)}
+.dl.done .dl-ring{opacity:0; animation-play-state:paused}
+.dl.done .dl-check{opacity:1; transform:scale(1)}
+.dl.done .dl-btn{background:var(--ok-soft); border-color:rgba(55,198,128,.4)}
+.dl.done .dl-btn .lbl{color:#bff0d4}
+.dl.done .dl-fill{background:var(--ok)}
+
+/* ===== Carte de progression (dépôt / génération) ===== */
+.prog{width:min(360px,100%); background:linear-gradient(180deg,var(--surface),var(--surface-2)); border:1px solid var(--line-2);
+  border-radius:14px; padding:14px 15px; box-shadow:var(--shadow)}
+.prog-h{display:flex; align-items:center; gap:11px}
+.prog-ic{width:32px; height:32px; border-radius:9px; flex:none; display:grid; place-items:center; background:var(--info-soft); color:var(--brand-2); font-size:16px}
+.prog-h .t{font-weight:600; font-size:13.5px; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.prog-h .pct{font-family:var(--mono); font-size:12px; color:var(--dim)}
+.prog-bar{height:6px; border-radius:99px; background:rgba(255,255,255,.08); margin-top:12px; overflow:hidden}
+.prog-bar i{display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,var(--brand),var(--brand-2))}
+.prog-s{font-size:12px; color:var(--dim); margin-top:9px; display:flex; align-items:center; gap:7px}
+.prog.ok .prog-ic{background:var(--ok-soft); color:var(--ok)}
+.prog.ok .prog-bar i{background:var(--ok)}
+
+/* Retours instantanés (petits chips) */
+.chips-col{display:flex; flex-direction:column; gap:12px; align-items:flex-start}
+.saveind,.copied{display:inline-flex; align-items:center; gap:9px; font-size:12.5px; font-weight:600;
+  background:rgba(255,255,255,.03); border:1px solid var(--line-2); border-radius:99px; padding:7px 14px 7px 9px; color:var(--dim); box-shadow:var(--shadow)}
+.saveind .k,.copied .k{width:20px; height:20px; border-radius:7px; display:grid; place-items:center; font-size:12px; font-weight:800; flex:none}
+.saveind .k{background:var(--ok-soft); color:var(--ok)} .saveind b{color:var(--tx); font-weight:600; font-family:var(--mono); font-size:12px}
+.copied .k{background:var(--info-soft); color:var(--brand-2)} .copied b{color:var(--tx); font-weight:600}
+
+/* Rappel d'échéance */
+.remind{width:min(400px,100%); display:flex; gap:13px; align-items:flex-start; background:linear-gradient(180deg,var(--surface),var(--surface-2));
+  border:1px solid var(--line-2); border-left:3px solid var(--warn); border-radius:14px; padding:14px; box-shadow:var(--shadow)}
+.remind .ri{width:36px; height:36px; border-radius:10px; flex:none; display:grid; place-items:center; background:var(--warn-soft); color:var(--warn); font-size:18px}
+.remind .rt{flex:1}
+.remind .rt .t{font-weight:700; font-size:13.5px; color:var(--tx)}
+.remind .rt .s{font-size:12.5px; color:var(--dim); margin-top:2px}
+.remind .rt .d{margin-top:10px}
+
+/* Badge nouvelle demande */
+.newmsg{display:inline-flex; align-items:center; gap:13px; background:linear-gradient(180deg,var(--surface),var(--surface-2));
+  border:1px solid var(--line-2); border-radius:13px; padding:12px 15px 12px 12px; box-shadow:var(--shadow)}
+.newmsg .nb{position:relative; width:36px; height:36px; border-radius:10px; background:var(--info-soft); color:var(--brand-2); display:grid; place-items:center; font-size:18px}
+.newmsg .nb .ct{position:absolute; top:-7px; right:-7px; min-width:19px; height:19px; padding:0 4px; border-radius:99px; background:var(--err); color:#fff; font-size:11px; font-weight:800; display:grid; place-items:center; box-shadow:0 0 0 2px var(--surface)}
+.newmsg .nt{font-size:13px; color:var(--tx)} .newmsg .nt b{font-weight:700} .newmsg .nt span{display:block; color:var(--dim); font-size:12px; margin-top:1px}
+
+@media(prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div>
+      <p class="eyebrow">Mar'q · Système d'interface</p>
+      <h1>Messages système de <span class="q">Mar'q</span></h1>
+      <p class="lede">Planche des notifications de l'application : toasts transitoires, bannières persistantes, états de connexion et fenêtres de confirmation. Chaque maquette reprend le vocabulaire réel du cabinet — dossiers, formalités, dépôts, factures — dans l'habillage sombre de Mar'q.</p>
+    </div>
+    <div class="legend" aria-label="Système d'icônes et couleurs">
+      <div class="leg"><span class="chip ok">✓</span><span><b>Succès</b> · action réussie</span></div>
+      <div class="leg"><span class="chip err">✕</span><span><b>Erreur</b> · échec / blocage</span></div>
+      <div class="leg"><span class="chip warn">!</span><span><b>Avertissement</b> · à vérifier</span></div>
+      <div class="leg"><span class="chip info">i</span><span><b>Information</b> · neutre</span></div>
+    </div>
+  </header>
+
+  <!-- ============ TOASTS ============ -->
+  <section class="section">
+    <div class="sec-head"><span class="num">01</span><h2>Toasts</h2></div>
+    <p class="sec-desc">Message court apparaissant en bas de l'écran puis disparaissant seul (≈ 3,4 s). Bandeau coloré à gauche + pastille d'icône selon la nature. La couleur est déduite automatiquement du texte (« enregistré », « échec », « vérifiez »…).</p>
+    <div class="sec-rule"></div>
+    <div class="grid g2">
+
+      <div class="spec">
+        <div class="stage">
+          <button class="replay" title="Rejouer l'animation" aria-label="Rejouer">↻</button>
+          <div class="tst ok playing">
+            <span class="tst-ic">✓</span>
+            <div class="tst-tx">Dossier enregistré<span class="sub">SARL BATIPRO — modifications sauvegardées.</span></div>
+            <button class="tst-x" aria-label="Fermer">×</button>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Succès</span><span class="meta">succès · 3,4 s · bas centre</span></div>
+      </div>
+
+      <div class="spec">
+        <div class="stage">
+          <button class="replay" title="Rejouer l'animation" aria-label="Rejouer">↻</button>
+          <div class="tst err playing">
+            <span class="tst-ic">✕</span>
+            <div class="tst-tx">Échec de l'envoi<span class="sub">Vérifiez votre connexion, puis réessayez.</span></div>
+            <button class="tst-x" aria-label="Fermer">×</button>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Erreur</span><span class="meta">erreur · 5 s · bas centre</span></div>
+      </div>
+
+      <div class="spec">
+        <div class="stage">
+          <button class="replay" title="Rejouer l'animation" aria-label="Rejouer">↻</button>
+          <div class="tst warn playing">
+            <span class="tst-ic">!</span>
+            <div class="tst-tx">Champs obligatoires manquants<span class="sub">Renseignez le SIREN et la forme juridique.</span></div>
+            <button class="tst-x" aria-label="Fermer">×</button>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Avertissement</span><span class="meta">warn · 4,5 s · bas centre</span></div>
+      </div>
+
+      <div class="spec">
+        <div class="stage">
+          <button class="replay" title="Rejouer l'animation" aria-label="Rejouer">↻</button>
+          <div class="tst info playing">
+            <span class="tst-ic">i</span>
+            <div class="tst-tx">Prestation supprimée
+              <div class="tst-act"><button class="mini accent">Annuler</button></div>
+            </div>
+            <button class="tst-x" aria-label="Fermer">×</button>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Info + action « Annuler »</span><span class="meta">toastUndo · 7 s</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ BANNIÈRES ============ -->
+  <section class="section">
+    <div class="sec-head"><span class="num">02</span><h2>Bannières</h2></div>
+    <p class="sec-desc">Message persistant, ancré en bas ou en tête d'écran, qui demande une décision et reste jusqu'à l'action ou la fermeture.</p>
+    <div class="sec-rule"></div>
+    <div class="grid g2">
+
+      <div class="spec">
+        <div class="stage">
+          <div class="banner">
+            <span class="b-logo">M</span>
+            <div class="b-tx"><div class="t">Installer Mar'q</div><div class="s">Accédez à l'app depuis votre écran d'accueil, hors ligne.</div></div>
+            <div class="b-actions"><button class="mini accent">Installer</button><button class="mini ghost">Plus tard</button></div>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Installation (PWA) — redessinée</span><span class="meta">beforeinstallprompt</span></div>
+      </div>
+
+      <div class="spec">
+        <div class="stage">
+          <div class="banner update">
+            <span class="b-logo">↑</span>
+            <div class="b-tx"><div class="t">Nouvelle version disponible</div><div class="s">Mise à jour vers la dernière version de Mar'q…</div></div>
+            <div class="b-actions"><button class="mini accent">Mettre à jour</button></div>
+            <div class="updbar"></div>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Mise à jour</span><span class="meta">version.json · auto</span></div>
+      </div>
+
+      <div class="spec" style="grid-column:1 / -1">
+        <div class="stage">
+          <div class="banner save" style="width:min(560px,100%)">
+            <span class="b-logo">!</span>
+            <div class="b-tx"><div class="t">Pensez à sauvegarder vos données</div><div class="s">Dernière sauvegarde il y a 8 jours — vos données ne sont enregistrées que sur cet appareil.</div></div>
+            <div class="b-actions"><button class="mini accent" style="background:var(--warn);color:#231a05">Sauvegarder maintenant</button><button class="mini ghost">Fermer</button></div>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Rappel de sauvegarde</span><span class="meta">≥ 7 jours · bandeau tableau de bord</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ ÉTATS DE CONNEXION ============ -->
+  <section class="section">
+    <div class="sec-head"><span class="num">03</span><h2>États de connexion</h2></div>
+    <p class="sec-desc">Pastilles discrètes signalant la disponibilité réseau. Mar'q reste utilisable hors ligne : les modifications sont conservées localement puis synchronisées au retour.</p>
+    <div class="sec-rule"></div>
+    <div class="grid g2">
+
+      <div class="spec">
+        <div class="stage">
+          <span class="status off"><span class="dot"></span>Hors ligne<span class="sub">— modifications enregistrées localement</span></span>
+        </div>
+        <div class="cap"><span class="name">Hors ligne</span><span class="meta">offToast · persistant</span></div>
+      </div>
+
+      <div class="spec">
+        <div class="stage">
+          <span class="status on"><span class="dot"></span>De nouveau en ligne<span class="sub">— synchronisation</span><span class="spin"></span></span>
+        </div>
+        <div class="cap"><span class="name">Reconnecté</span><span class="meta">online · 2,5 s</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ CONFIRMATIONS ============ -->
+  <section class="section">
+    <div class="sec-head"><span class="num">04</span><h2>Confirmations</h2></div>
+    <p class="sec-desc">Fenêtre centrale bloquante pour une décision engageante. L'action destructive est isolée en rouge ; la validation neutre reste en accent bleu. Échap ou clic à l'extérieur = Annuler.</p>
+    <div class="sec-rule"></div>
+    <div class="grid g2">
+
+      <div class="spec">
+        <div class="stage" style="min-height:220px">
+          <div class="modal">
+            <div class="m-ic danger">🗑</div>
+            <p class="m-t">Supprimer ce dossier ?</p>
+            <p class="m-s">« SARL BATIPRO » et toutes ses formalités seront définitivement supprimés. Cette action est irréversible.</p>
+            <div class="m-actions"><button class="mini ghost">Annuler</button><button class="mini danger">Supprimer</button></div>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Confirmation destructive</span><span class="meta">modale · bloquante</span></div>
+      </div>
+
+      <div class="spec">
+        <div class="stage" style="min-height:220px">
+          <div class="modal">
+            <div class="m-ic lock">🔒</div>
+            <p class="m-t">Session verrouillée</p>
+            <p class="m-s">Entrez votre mot de passe pour reprendre là où vous en étiez.</p>
+            <input class="m-field" type="password" value="••••••••••••" readonly aria-label="Mot de passe">
+            <div class="m-actions"><button class="mini accent wide">Continuer</button></div>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Session verrouillée</span><span class="meta">inactivité · accès</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ ACTIONS & PROGRESSION ============ -->
+  <section class="section">
+    <div class="sec-head"><span class="num">05</span><h2>Actions &amp; progression</h2></div>
+    <p class="sec-desc">Retour visuel d'une action en cours : la commande se transforme elle-même en indicateur d'avancement, puis en état terminé. Le téléchargement reprend la micro-interaction « pilule morphante » (repos → anneau → barre → ✓).</p>
+    <div class="sec-rule"></div>
+    <div class="grid g2">
+
+      <div class="spec">
+        <div class="stage">
+          <button class="replay" id="dl-replay" title="Relancer" aria-label="Relancer">↻</button>
+          <div class="dl" id="dlq" role="button" tabindex="0" aria-label="Télécharger la sauvegarde">
+            <span class="dl-ic" aria-hidden="true">
+              <svg class="dl-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>
+              <svg class="dl-ring" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
+              <svg class="dl-check" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;inset:0;margin:auto;transition:opacity .3s,transform .4s cubic-bezier(.16,1,.3,1)"><path d="m20 6-11 11-5-5"/></svg>
+            </span>
+            <button class="dl-btn"><span class="dl-fill"></span><span class="lbl">Télécharger</span></button>
+            <button class="dl-x" aria-label="Fermer">×</button>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Téléchargement</span><span class="meta">clique la pilule · repos → ✓</span></div>
+      </div>
+
+      <div class="spec">
+        <div class="stage">
+          <div class="prog">
+            <div class="prog-h"><span class="prog-ic">↥</span><span class="t">K-bis_BATIPRO.pdf</span><span class="pct">64 %</span></div>
+            <div class="prog-bar"><i style="width:64%"></i></div>
+            <div class="prog-s">Dépôt de la pièce — 3,2 Mo / 5,0 Mo</div>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Dépôt d'une pièce</span><span class="meta">upload · progression</span></div>
+      </div>
+
+      <div class="spec">
+        <div class="stage">
+          <div class="prog ok">
+            <div class="prog-h"><span class="prog-ic">✓</span><span class="t">Bilan prévisionnel.pdf</span><span class="pct">100 %</span></div>
+            <div class="prog-bar"><i style="width:100%"></i></div>
+            <div class="prog-s">Document généré · <a href="#" onclick="return false" style="color:var(--brand-2);font-weight:700">Ouvrir</a></div>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Génération du document</span><span class="meta">PDF · terminé + Ouvrir</span></div>
+      </div>
+
+      <div class="spec">
+        <div class="stage">
+          <div class="chips-col">
+            <span class="saveind"><span class="k">✓</span>Enregistré · <b>14:32:07</b></span>
+            <span class="copied"><span class="k">⧉</span>Lien de partage <b>copié</b></span>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Retours instantanés</span><span class="meta">save auto · copié</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ RAPPELS & BADGES ============ -->
+  <section class="section">
+    <div class="sec-head"><span class="num">06</span><h2>Rappels &amp; badges</h2></div>
+    <p class="sec-desc">Notifications non transitoires liées à l'activité du cabinet : échéances de formalités à ne pas manquer et nouvelles demandes clients.</p>
+    <div class="sec-rule"></div>
+    <div class="grid g2">
+
+      <div class="spec">
+        <div class="stage" style="min-height:150px">
+          <div class="remind">
+            <span class="ri">⏱</span>
+            <div class="rt">
+              <div class="t">Échéance dans 3 jours</div>
+              <div class="s">Dépôt des comptes au greffe — SARL BATIPRO, avant le 30/09.</div>
+              <div class="d"><button class="mini accent">Traiter</button> <button class="mini ghost">Reporter</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Rappel d'échéance</span><span class="meta">formalité · agenda</span></div>
+      </div>
+
+      <div class="spec">
+        <div class="stage" style="min-height:150px">
+          <div class="newmsg">
+            <span class="nb">✉<span class="ct">2</span></span>
+            <div class="nt"><b>2 nouvelles demandes</b><span>Transmises par vos clients aujourd'hui.</span></div>
+            <button class="mini accent" style="margin-left:6px">Ouvrir</button>
+          </div>
+        </div>
+        <div class="cap"><span class="name">Nouvelle demande</span><span class="meta">messagerie · badge</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>Mar'q — cabinet AEM Conseil</span>
+    <span>6 familles · 19 maquettes · habillage sombre</span>
+  </footer>
+</div>
+
+<script>
+// Rejouer l'animation d'entrée d'un toast (utile pour revoir le mouvement).
+document.querySelectorAll('.replay').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var t=btn.parentElement.querySelector('.tst'); if(!t)return;
+    t.classList.remove('playing'); void t.offsetWidth; t.classList.add('playing');
+  });
+});
+// Fermeture visuelle des × (démo).
+document.querySelectorAll('.tst-x, .ghost').forEach(function(x){
+  x.addEventListener('click',function(){ var t=x.closest('.tst,.banner,.modal'); if(t){t.style.transition='opacity .25s, transform .25s'; t.style.opacity=.25; t.style.transform='scale(.97)'; setTimeout(function(){t.style.opacity=1;t.style.transform='none';},650);} });
+});
+// Téléchargement : pilule morphante (repos -> progression -> terminé -> repos)
+(function(){
+  var dl=document.getElementById('dlq'); if(!dl)return;
+  var fill=dl.querySelector('.dl-fill'), lbl=dl.querySelector('.lbl'), busy=false, tm=[];
+  function cl(){tm.forEach(clearTimeout);tm=[];}
+  function T(f,m){tm.push(setTimeout(f,m));}
+  function reset(){cl();busy=false;dl.classList.remove('loading','done');fill.style.transition='none';fill.style.width='0';lbl.textContent='Télécharger';void fill.offsetWidth;fill.style.transition='';}
+  function start(){if(busy)return;busy=true;dl.classList.remove('done');dl.classList.add('loading');lbl.textContent='Téléchargement…';fill.style.width='0';
+    T(function(){fill.style.transition='width 2.1s cubic-bezier(.25,.6,.3,1)';fill.style.width='100%';},60);
+    T(function(){dl.classList.remove('loading');dl.classList.add('done');lbl.textContent='Terminé';fill.style.transition='none';fill.style.width='100%';},2400);
+    T(reset,4100);}
+  dl.addEventListener('click',function(e){ if(e.target.closest('.dl-x')){e.stopPropagation();return;} start(); });
+  dl.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){e.preventDefault();start();} });
+  var rp=document.getElementById('dl-replay'); if(rp) rp.addEventListener('click',function(e){e.stopPropagation();reset();T(start,80);});
+})();
+</script>

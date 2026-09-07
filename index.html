@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=535;
+var LAST_VER=536;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -15046,6 +15046,42 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     }).catch(function(){ fin('Recherche indisponible (connexion requise).'); }); }
     catch(e){ fin('Recherche impossible.'); }
   };
+  /* Champ SIRET + auto-complétion (société existante) : le SIRET récupère TOUTES les
+     informations de la société depuis les registres officiels (INSEE + INPI/RNE via
+     l'API publique recherche-entreprises.api.gouv.fr) et pré-remplit le Formulaire —
+     qui alimente ensuite la fiche Client à la création du dossier. */
+  function fSiret(){return '<div class="fi-siren"><input value="'+esc(get('societe.siret'))+'" oninput="formSet(\'societe.siret\',this.value)" placeholder="14 chiffres" onkeydown="if(event.key===\'Enter\'){event.preventDefault();formSiretLookup();}"><button type="button" class="btn btn-sm btn-ghost fi-siret-btn" onclick="formSiretLookup()">Rechercher</button></div>';}
+  window.formSiretLookup=function(){
+    var siret=(''+(get('societe.siret')||'')).replace(/\D/g,'').slice(0,14);
+    if(siret.length!==14){ if(typeof toast==='function')toast('Renseignez un SIRET à 14 chiffres.'); return; }
+    var siren=siret.slice(0,9);
+    var btn=document.querySelector('.fi-siret-btn'); if(btn){btn.disabled=true;btn.textContent='Recherche…';}
+    function fin(msg){ if(btn){btn.disabled=false;btn.textContent='Rechercher';} if(msg&&typeof toast==='function')toast(msg); }
+    /* Recherche par SIRET → renvoie l'entreprise + l'établissement précis (matching_etablissements) */
+    var url='https://recherche-entreprises.api.gouv.fr/search?q='+siret+'&page=1&per_page=1';
+    try{ fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+      var res=j&&j.results&&j.results[0];
+      if(!res){ fin('Aucune entreprise trouvée pour ce SIRET.'); return; }
+      var o=FD(),s=(o.societe=o.societe||{}),si=(o.siege=o.siege||{});
+      s.siren=siren; s.siret=siret;
+      if(res.nom_raison_sociale||res.nom_complet)s.denomination=res.nom_raison_sociale||res.nom_complet;
+      s.tvaIntra=frTva(siren);
+      if(res.activite_principale)s.codeApe=res.activite_principale;
+      if(res.nature_juridique&&NJ[res.nature_juridique])o.type=NJ[res.nature_juridique];
+      /* établissement correspondant au SIRET saisi, sinon le siège */
+      var etab=null,ml=res.matching_etablissements||[];
+      for(var i=0;i<ml.length;i++){ if((''+(ml[i]&&ml[i].siret)).replace(/\D/g,'')===siret){ etab=ml[i]; break; } }
+      var sg=etab||res.siege||{};
+      var street=[sg.numero_voie,sg.type_voie,sg.libelle_voie].filter(Boolean).join(' ').trim();
+      if(!street&&sg.adresse){ street=(''+sg.adresse).replace(new RegExp('\\s*'+(sg.code_postal||'')+'.*$'),'').trim(); }
+      if(street)si.rue=street;
+      if(sg.code_postal)si.cp=sg.code_postal;
+      if(sg.libelle_commune)si.ville=sg.libelle_commune;
+      if(typeof render==='function')render();
+      fin('Société pré-remplie depuis le SIRET'+(s.denomination?(' — '+s.denomination):'')+'.');
+    }).catch(function(){ fin('Recherche indisponible (connexion requise).'); }); }
+    catch(e){ fin('Recherche impossible.'); }
+  };
   /* Contrôles de cohérence (partagés Formulaire ↔ dossier) : Σ apports = capital,
      apports numéraire+nature = capital, nb titres = capital ÷ nominale, Σ parts = total des titres */
   window.coherenceItems=function(src){
@@ -15179,7 +15215,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +r2('Code postal',fI('siege.cp'),'Ville',fI('siege.ville'))
       +r2('Type de local',fSel('siege.type',[['','—'],['Local commercial','Local commercial'],['Domiciliation','Société de domiciliation'],['Domicile du dirigeant','Domicile du dirigeant']],get('siege.type')),'Date de début d\'activité',fD('societe.debut'))
       +r2('Bailleur (si location)',fI('siege.bailleur'),'Domiciliataire (si domiciliation)',fI('siege.domiciliataire'))
-      +r2('SIREN (si déjà immatriculée)',fSiren(),'SIRET',fI('societe.siret'))
+      +r2('SIREN (si déjà immatriculée)',fSiren(),'SIRET (société existante)',fSiret())
       +r1('Enseigne (si différente)',fI('societe.enseigne')));
     /* Dirigeant */
     var dir=grp((t==='sas'||t==='sasu'?'Dirigeant (Président)':'Dirigeant (Gérant)'),
