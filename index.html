@@ -1962,6 +1962,7 @@ function espDocToggleReq(id,k){var d=espDoss().find(function(x){return x.id===id
 function espDocsTotal(d){return ESP_DOCS.filter(function(dc){return espDocReq(d,dc.k);}).reduce(function(s,dc){return s+(+dc.prix||0);},0);}
 function espDemandeDe(d){return (DB.demandes||[]).find(function(x){return x.dossierId===d.id;});}
 function espDoss(){return (DB.dossiers||[]);}
+window.espStep=function(delta){ var list=espDoss().filter(function(x){return !x.archived;}); if(!list.length)return; var id=state.espaceDossier,i=-1; for(var k=0;k<list.length;k++){if(list[k].id===id){i=k;break;}} if(i<0)i=0; i=(i+delta+list.length)%list.length; state.espaceDossier=list[i].id; if(typeof render==='function')render(); };
 function pageEspace(){
   const list=espDoss().filter(function(d){return !d.archived;});
   if(!list.length) return '<div class="card"><div class="card-b"><div class="empty">Aucun dossier à traiter.<br>Les dossiers sont créés automatiquement après le <b>tri des demandes</b> reçues par mail, ou <b>manuellement</b> via le <b>Formulaire</b>.<div style="margin-top:14px"><button class="btn btn-pri" onclick="go(\'formulaire\')">'+(typeof svg==='function'&&typeof IC!=='undefined'?svg(IC.plus):'+')+'Concevoir un dossier manuellement</button></div></div></div></div>'+espArchivesCard();
@@ -1970,7 +1971,7 @@ function pageEspace(){
   return espPanel(d,list,id);
 }
 function espDlist(list,id){
-  return '<div class="card esp-side"><div class="card-h"><h2>Dossiers</h2><button class="btn btn-sm btn-pri" style="margin-left:auto" title="Concevoir un dossier manuellement (Formulaire)" onclick="go(\'formulaire\')">'+(typeof svg==='function'&&typeof IC!=='undefined'?svg(IC.plus):'+')+'Concevoir</button><span class="sub" style="margin-left:8px">'+list.length+'</span></div>'
+  return '<div class="card esp-side"><div class="card-h"><h2>Dossiers</h2>'+(list.length>1?('<span class="esp-nav">'+window.mqNav('prev','espStep(-1)',{cls:'mq-nav-sm',label:'Dossier précédent'})+window.mqNav('next','espStep(1)',{cls:'mq-nav-sm',label:'Dossier suivant'})+'</span>'):'')+'<button class="btn btn-sm btn-pri" style="margin-left:auto" title="Concevoir un dossier manuellement (Formulaire)" onclick="go(\'formulaire\')">'+(typeof svg==='function'&&typeof IC!=='undefined'?svg(IC.plus):'+')+'Concevoir</button><span class="sub" style="margin-left:8px">'+list.length+'</span></div>'
    +'<div class="card-b esp-dlist">'
    +list.map(function(x){var c=statColor(x.statut);
       return '<button class="esp-dl '+(x.id===id?'on':'')+'" onclick="state.espaceDossier=\''+x.id+'\';render()">'
@@ -2127,7 +2128,7 @@ function espMiniList(list,id){
       +arch.map(function(x){return '<div class="esp-arch-row"><span class="esp-arch-nm">'+esc(dossierClients(x))+' · '+esc(x.ref)+'</span><button class="esp-arch-restore" title="Restaurer" onclick="espDesarchiver(\''+x.id+'\')">↩</button></div>';}).join('')
       +'</details>';
   }
-  return '<aside class="esp-mini"><div class="esp-mini-h">Dossiers<span class="esp-mini-n">'+list.length+'</span></div>'
+  return '<aside class="esp-mini"><div class="esp-mini-h">Dossiers'+(list.length>1?('<span class="esp-nav">'+window.mqNav('prev','espStep(-1)',{cls:'mq-nav-sm',label:'Dossier précédent'})+window.mqNav('next','espStep(1)',{cls:'mq-nav-sm',label:'Dossier suivant'})+'</span>'):'')+'<span class="esp-mini-n">'+list.length+'</span></div>'
    +'<button class="btn btn-sm btn-pri esp-mini-new" style="margin:8px 10px" title="Concevoir un dossier manuellement (Formulaire)" onclick="go(\'formulaire\')">'+(typeof svg==='function'&&typeof IC!=='undefined'?svg(IC.plus):'+')+'Concevoir un dossier</button>'
    +'<div class="esp-mini-list">'
    +list.map(function(x){return espMiniItem(x,id);}).join('')
@@ -3233,7 +3234,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=523;
+var LAST_VER=524;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -20715,7 +20716,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.cli-abr{display:flex;align-items:center;justify-content:space-between;font-size:11.5px;padding:7px 0;border-top:1px solid var(--line-soft,#151517)}.cli-abr:first-of-type{border-top:0}.cli-abr .k{color:var(--ink-3)}.cli-abr .v{font-weight:700;color:var(--ink)}',
     '.cli-abo-pill{font-size:9px;font-weight:800;padding:3px 8px;border-radius:6px;background:rgba(92,169,122,.14);color:#8fd3ac;letter-spacing:.4px}',
     '.cli-abo-act{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}',
-    '.cli-cf-nonabo{background:var(--card,#0b0b0b);border:1px dashed var(--line-2,#262629);border-radius:13px;padding:13px 15px;margin:0 0 16px;font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}'
+    '.cli-cf-nonabo{background:var(--card,#0b0b0b);border:1px dashed var(--line-2,#262629);border-radius:13px;padding:13px 15px;margin:0 0 16px;font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}',
+    '.cli-nav{display:inline-flex;align-items:center;gap:7px;margin-right:8px}',
+    '.cli-nav-pos{font-size:11px;color:var(--ink-3);min-width:32px;text-align:center;white-space:nowrap}'
   ].join(''); document.head.appendChild(s); }
   function cliConfBlock(c){
     cliCfCss();
@@ -20747,6 +20750,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<div class="cli-abo-act"><button class="cli-b" onclick="cfOpen(\''+a.id+'\')">Ouvrir la conformité →</button><button class="cli-b" onclick="cfCommander(\''+a.id+'\')">Commander un service</button></div></div>';
     return facts+strip+abo;
   }
+  function cliVisible(){ var q=window.__cliQ||'',ft=window.__cliType||''; return (DB.clients||[]).filter(function(c){var t=cliIsPart(c)?'particulier':'entreprise';if(ft&&t!==ft)return false;return !q||(cliName(c)+' '+(c.ville||'')+' '+(c.email||'')).toLowerCase().indexOf(q)>-1;}); }
+  window.cliStep=function(d){ var L=cliVisible(); if(!L.length)return; var i=-1; for(var k=0;k<L.length;k++){if(L[k].id===state.cliSel){i=k;break;}} if(i<0)i=0; i=(i+d+L.length)%L.length; state.cliSel=L[i].id; if(typeof render==='function')render(); };
+  function cliNavHTML(c){ cliCfCss(); var L=cliVisible(); if(L.length<2)return ''; var idx=0; for(var k=0;k<L.length;k++){if(L[k].id===c.id){idx=k;break;}} return '<div class="cli-nav">'+window.mqNav('prev','cliStep(-1)',{cls:'mq-nav-sm',label:'Client précédent'})+'<span class="cli-nav-pos">'+(idx+1)+' / '+L.length+'</span>'+window.mqNav('next','cliStep(1)',{cls:'mq-nav-sm',label:'Client suivant'})+'</div>'; }
   function cliFiche(id){
     var c=clientById(id);if(!c)return '<div class="cli-empty">Sélectionnez un client dans la liste, ou créez-en un.</div>';
     var id2=c.id;
@@ -20758,7 +20764,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var tog='<div class="cli-typetog">'+['entreprise','particulier'].map(function(t){var on=(((c.clientType==='particulier')?'particulier':'entreprise')===t)?' on':'';return '<button class="cli-tt'+on+'" onclick="cliSetType(\''+id2+'\',\''+t+'\')">'+(t==='entreprise'?'Entreprise':'Particulier')+'</button>';}).join('')+'</div>';
     var sub=cliIsPart(c)?'Particulier':(E(c.forme||'—')+' · '+E(c.ville||'—'));
     var head='<div class="cli-fiche-head"><div><div class="cli-fiche-nom">'+E(cliName(c))+'</div><div class="cli-fiche-sub">'+sub+'</div></div>'
-      +'<div class="cli-fiche-act">'+tog+'<button class="cli-b" onclick="go(\'editions\')">Créer un document →</button><button class="cli-b cli-b-x" onclick="cliDel(\''+id2+'\')">Supprimer</button></div></div>';
+      +'<div class="cli-fiche-act">'+cliNavHTML(c)+tog+'<button class="cli-b" onclick="go(\'editions\')">Créer un document →</button><button class="cli-b cli-b-x" onclick="cliDel(\''+id2+'\')">Supprimer</button></div></div>';
     if(cliIsPart(c)){
       var pid=grp('Identité',fld(id2,'civilite','Civilité','sel',['','M.','Mme'])+fld(id2,'prenom','Prénom')+fld(id2,'nom','Nom')+fld(id2,'dateNaissance','Date de naissance','date')+fld(id2,'lieuNaissance','Lieu de naissance')+fld(id2,'nationalite','Nationalité')+fld(id2,'numPiece','N° pièce d\'identité'));
       var pco=grp('Coordonnées',fld(id2,'adresse','Adresse')+fld(id2,'cp','Code postal')+fld(id2,'ville','Ville')+fld(id2,'email','E-mail')+fld(id2,'tel','Téléphone'));
@@ -21522,9 +21528,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     }
     return '<div class="ag-month">'
       +'<div class="ag-month-h">'
-        +'<div class="ag-month-nav"><button class="ag-navb" onclick="agNav(-1)" title="Mois précédent">‹</button>'
+        +'<div class="ag-month-nav">'+window.mqNav('prev','agNav(-1)',{label:'Mois précédent'})
         +'<span class="ag-mtitle">'+MOIS[c.m]+' '+c.y+'</span>'
-        +'<button class="ag-navb" onclick="agNav(1)" title="Mois suivant">›</button></div>'
+        +window.mqNav('next','agNav(1)',{label:'Mois suivant'})+'</div>'
         +'<span class="ag-month-count">'+nbEv+' rendez-vous ce mois</span>'
         +'<div class="ag-month-act"><button class="btn btn-sm ag-ghost" onclick="agToday()">Aujourd\'hui</button>'
         +'<button class="btn btn-sm ag-pri" onclick="agEdit(\'\')">+ Rendez-vous</button></div>'
@@ -25858,8 +25864,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     groups[cur].els.forEach(function(el){ el.style.display=''; });
     // navigation, ajoutée sous la dernière section visible du groupe
     var nav=document.createElement('div'); nav.className='wz4-nav';
-    nav.innerHTML='<button type="button" class="btn" '+(cur===0?'disabled':'')+' data-prev>‹ Précédent</button>'
-      + (cur<n-1 ? '<button type="button" class="btn btn-pri" data-next>Étape suivante ›</button>' : '<span class="wz4-last">Dernière étape — enregistrez ci-dessous</span>');
+    nav.innerHTML='<button type="button" class="mq-nav" '+(cur===0?'disabled':'')+' data-prev title="Étape précédente" aria-label="Étape précédente">'+window.MQ_NAV_PREV+'</button>'
+      + (cur<n-1 ? '<button type="button" class="mq-nav" data-next title="Étape suivante" aria-label="Étape suivante">'+window.MQ_NAV_NEXT+'</button>' : '<span class="wz4-last">Dernière étape — enregistrez ci-dessous</span>');
     groups[cur].els[groups[cur].els.length-1].appendChild(nav);
     // actions d'enregistrement uniquement sur la dernière étape
     var act=wrap.querySelector('.fi-actions, .wz-actions'); if(act) act.style.display=(cur===n-1)?'':'none';
@@ -25894,7 +25900,27 @@ html body #print-area,html body #print-area *,html body #fv-printarea,html body 
 html body .lp-doc,html body .lp-doc *,html body .ct-doc,html body .ct-doc *{color:#111!important;-webkit-text-fill-color:#111!important}
 /* les champs de saisie sur le document (fond blanc) restent en placeholder gris */
 html body .pf-f::placeholder,html body .pfs-i.pf-f::placeholder{color:#8a8f98!important;-webkit-text-fill-color:#8a8f98!important}
+/* boutons de navigation ronds (flèches) : icône explicite, non affectée par la règle blanche */
+html body .mq-nav{display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;background:none;cursor:pointer;line-height:0;width:34px;height:34px;flex:none;border-radius:50%;transition:transform .12s,opacity .12s;vertical-align:middle}
+html body .mq-nav .mq-nav-svg{width:100%;height:100%;display:block}
+html body .mq-nav:hover:not([disabled]){transform:scale(1.09)}
+html body .mq-nav:active:not([disabled]){transform:scale(.93)}
+html body .mq-nav[disabled]{opacity:.3;cursor:default;pointer-events:none}
+html body .mq-nav-sm{width:28px;height:28px}
+html body .mq-nav-lg{width:42px;height:42px}
+html body .esp-nav{display:inline-flex;align-items:center;gap:6px;margin-left:10px}
 </style>
+<script>
+/* ===== Boutons de navigation universels (flèche ronde) — précédent / suivant ===== */
+(function(){
+  var CIRC='<circle cx="12" cy="12" r="11.2" fill="#0b0b0d" stroke="rgba(255,255,255,.26)" stroke-width="1.2"/>';
+  var ARR_N='<g fill="none" stroke="#fff" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"><path d="M6.6 12h7.3"/><path d="M11.7 7.5 16.2 12l-4.5 4.5"/></g>';
+  var ARR_P='<g fill="none" stroke="#fff" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"><path d="M17.4 12H10.1"/><path d="M12.3 7.5 7.8 12l4.5 4.5"/></g>';
+  window.MQ_NAV_NEXT='<svg class="mq-nav-svg" viewBox="0 0 24 24" aria-hidden="true">'+CIRC+ARR_N+'</svg>';
+  window.MQ_NAV_PREV='<svg class="mq-nav-svg" viewBox="0 0 24 24" aria-hidden="true">'+CIRC+ARR_P+'</svg>';
+  window.mqNav=function(dir,onclick,opts){ opts=opts||{}; var dis=opts.disabled?' disabled':''; var cls='mq-nav'+(opts.cls?(' '+opts.cls):''); var lbl=opts.label||(dir==='prev'?'Précédent':'Suivant'); var oc=(onclick||'').replace(/"/g,'&quot;'); return '<button type="button" class="'+cls+'"'+dis+' onclick="'+oc+'" title="'+lbl+'" aria-label="'+lbl+'">'+(dir==='prev'?window.MQ_NAV_PREV:window.MQ_NAV_NEXT)+'</button>'; };
+})();
+</script>
 
 </body>
 </html>
