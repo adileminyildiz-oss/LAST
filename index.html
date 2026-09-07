@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=548;
+var LAST_VER=549;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -25147,9 +25147,13 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function ui(){ window.__invUI=window.__invUI||{tab:'new',hidePrev:false}; return window.__invUI; }
 
   function draft(){ if(!window.__invDraft){ var em=emetteurDef(); var d0=iso();
-    window.__invDraft={ id:'', modele:'qonto', emNom:em.nom, emMail:em.mail, emAdr:em.adr, emSiren:em.siren, emTva:em.tva, emIban:em.iban, emBic:em.bic,
-      clNom:'', clMail:'', clAdr:'', numero:nextNum(), devise:'EUR',
-      dateEmise:d0, dateEch:addDays(d0,30), tva:20, remise:0,
+    window.__invDraft={ id:'', statut:'brouillon', modele:'qonto', emNom:em.nom, emMail:em.mail, emAdr:em.adr, emSiren:em.siren, emTva:em.tva, emIban:em.iban, emBic:em.bic,
+      emForme:em.forme||'', emCapital:em.capital||'', emSiret:em.siret||'', emRcs:em.rcs||'', emApe:em.ape||'', emTel:em.tel||'',
+      clNom:'', clMail:'', clAdr:'', clSiret:'', clTva:'',
+      numero:nextNum(), devise:'EUR',
+      dateEmise:d0, dateEch:addDays(d0,30), datePresta:'', bonCmd:'', tva:20, remise:0,
+      condReg:'Paiement à réception', penalites:'3 fois le taux d’intérêt légal', assurance:'',
+      franchiseTVA:false, autoliq:false, escompte:false, oga:false, showAssur:false,
       note:'Merci pour votre confiance. Nous restons à votre disposition pour toute question.',
       lignes:[{des:'',qte:1,pu:0}] }; }
     return window.__invDraft; }
@@ -25157,26 +25161,53 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
 
   /* ---- Lecture du formulaire dans le brouillon ---- */
   window.invRead=function(){ var d=draft(); var g=function(id){var e=document.getElementById(id);return e?e.value:'';};
-    ['modele','emNom','emMail','emAdr','emSiren','emTva','emIban','emBic','clNom','clMail','clAdr','numero','devise','dateEmise','dateEch','note'].forEach(function(k){ var e=document.getElementById('inv-'+k); if(e)d[k]=e.value; });
+    ['modele','emNom','emForme','emCapital','emMail','emAdr','emTel','emSiren','emSiret','emRcs','emApe','emTva','emIban','emBic','clNom','clMail','clAdr','clSiret','clTva','numero','devise','dateEmise','dateEch','datePresta','bonCmd','condReg','penalites','assurance','note'].forEach(function(k){ var e=document.getElementById('inv-'+k); if(e)d[k]=e.value; });
+    ['franchiseTVA','autoliq','escompte','oga','showAssur'].forEach(function(k){ var e=document.getElementById('inv-'+k); if(e)d[k]=!!e.checked; });
     var t=document.getElementById('inv-tva'); if(t)d.tva=parseFloat(t.value)||0;
     var r=document.getElementById('inv-remise'); if(r)d.remise=parseFloat(r.value)||0;
     d.lignes.forEach(function(l,i){ var des=document.getElementById('inv-l-des-'+i),qt=document.getElementById('inv-l-qte-'+i),pu=document.getElementById('inv-l-pu-'+i);
       if(des)l.des=des.value; if(qt)l.qte=parseFloat(qt.value)||0; if(pu)l.pu=parseFloat(pu.value)||0; });
     /* mémorise l'émetteur */
-    try{ var em=emetteurDef(); em.nom=d.emNom; em.mail=d.emMail; em.adr=d.emAdr; em.siren=d.emSiren; em.tva=d.emTva; em.iban=d.emIban; em.bic=d.emBic; }catch(e){}
+    try{ var em=emetteurDef(); em.nom=d.emNom; em.forme=d.emForme; em.capital=d.emCapital; em.mail=d.emMail; em.adr=d.emAdr; em.tel=d.emTel; em.siren=d.emSiren; em.siret=d.emSiret; em.rcs=d.emRcs; em.ape=d.emApe; em.tva=d.emTva; em.iban=d.emIban; em.bic=d.emBic; }catch(e){}
     return d; };
 
   function calc(d){ var st=0; (d.lignes||[]).forEach(function(l){ st+=(+l.qte||0)*(+l.pu||0); });
-    st=Math.round(st*100)/100; var tva=Math.round(st*(+d.tva||0))/100; var rem=+d.remise||0;
-    var total=Math.round((st+tva-rem)*100)/100; return {sousTotal:st,tva:tva,remise:rem,total:total}; }
+    st=Math.round(st*100)/100; var rate=(d.franchiseTVA||d.autoliq)?0:(+d.tva||0); var tva=Math.round(st*rate)/100; var rem=+d.remise||0;
+    var total=Math.round((st+tva-rem)*100)/100; return {sousTotal:st,tva:tva,tvaRate:rate,remise:rem,total:total}; }
   window.invCalc=calc;
 
+  /* ---- Mentions légales obligatoires (communes à tous les modèles) ---- */
+  function emetIdentLine(d){
+    return [E(d.emNom), d.emForme?E(d.emForme):'', d.emCapital?('capital '+E(d.emCapital)):'',
+      d.emSiret?('SIRET '+E(d.emSiret)):(d.emSiren?('SIREN '+E(d.emSiren)):''),
+      d.emRcs?('RCS '+E(d.emRcs)):'', d.emApe?('APE '+E(d.emApe)):'', d.emTva?('N° TVA '+E(d.emTva)):''
+    ].filter(Boolean).join(' · ');
+  }
+  function factMentions(d){
+    var out=[];
+    if(d.franchiseTVA) out.push('TVA non applicable, art. 293 B du CGI.');
+    if(d.autoliq) out.push('Autoliquidation de la TVA par le preneur — art. 283-2 nonies du CGI.');
+    out.push('En cas de retard de paiement : pénalité de '+ (E(d.penalites)||'3 fois le taux d’intérêt légal') +' et indemnité forfaitaire de 40 € pour frais de recouvrement (art. L441-10 et D441-5 du Code de commerce).');
+    out.push(d.escompte ? 'Escompte pour paiement anticipé : selon conditions convenues.' : 'Pas d’escompte pour paiement anticipé.');
+    if(d.oga) out.push('Membre d’une association agréée — le règlement des honoraires par chèque et par carte bancaire est accepté.');
+    if(d.showAssur && d.assurance) out.push('Assurance décennale / responsabilité civile professionnelle : '+E(d.assurance)+'.');
+    var id=emetIdentLine(d); if(id) out.push(id);
+    return out;
+  }
+  function mentionsBlock(d,cls){ return '<div class="'+(cls||'inv-p-mentions')+'">'+factMentions(d).join('<br>')+'</div>'; }
+  function condLine(d){ var l=[]; if(d.condReg) l.push('Conditions de règlement : '+E(d.condReg)+'.'); l.push('Paiement au plus tard le '+frDate(d.dateEch)+'.'); if(d.datePresta) l.push('Date de la prestation : '+frDate(d.datePresta)+'.'); if(d.bonCmd) l.push('Bon de commande : '+E(d.bonCmd)+'.'); return l.join(' '); }
+
   /* ---- Aperçu A4 ---- */
-  function previewHTML(d){ return (d.modele==='qonto')?qontoPreviewHTML(d):standardPreviewHTML(d); }
+  function previewHTML(d){
+    if(d.modele==='standard') return standardPreviewHTML(d);
+    if(d.modele==='moderne') return modernePreviewHTML(d);
+    if(d.modele==='classique') return classiquePreviewHTML(d);
+    return qontoPreviewHTML(d);
+  }
   function qontoPreviewHTML(d){ var c=calc(d); var dev=d.devise;
     var lignes=(d.lignes||[]).filter(function(l){return (l.des||'')||l.qte||l.pu;});
     var rows=lignes.length?lignes.map(function(l){ var q=+l.qte||0,pu=+l.pu||0,tot=q*pu;
-      return '<tr><td class="q-desc">'+(E(l.des)||'<span class="inv-mute">Prestation</span>')+'</td><td class="r">'+q+'</td><td class="r">'+money(pu,dev)+'</td><td class="r">'+(+d.tva||0)+' %</td><td class="r">'+money(tot,dev)+'</td></tr>'; }).join('')
+      return '<tr><td class="q-desc">'+(E(l.des)||'<span class="inv-mute">Prestation</span>')+'</td><td class="r">'+q+'</td><td class="r">'+money(pu,dev)+'</td><td class="r">'+c.tvaRate+' %</td><td class="r">'+money(tot,dev)+'</td></tr>'; }).join('')
       :'<tr><td colspan="5" class="inv-mute" style="text-align:center;padding:18px 0">Ajoutez une prestation…</td></tr>';
     var sell=[E(d.emAdr),E(d.emMail),(d.emSiren?('SIREN '+E(d.emSiren)):''),(d.emTva?('N° TVA '+E(d.emTva)):'')].filter(Boolean).map(function(x){return '<div>'+x+'</div>';}).join('');
     return '<div class="inv-paper q-mode">'
@@ -25187,19 +25218,18 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
         +'<div class="q-mrow"><span>Date d’émission</span><b>'+frDate(d.dateEmise)+'</b></div>'
         +'<div class="q-mrow"><span>Date d’échéance</span><b>'+frDate(d.dateEch)+'</b></div></div>'
       +'</div></div>'
-      +'<div class="q-billto"><div class="q-lbl">Facturé à</div><div class="q-bt-nom">'+(E(d.clNom)||'Client')+'</div>'+(E(d.clAdr)?('<div class="q-bt-sm">'+E(d.clAdr)+'</div>'):'')+(E(d.clMail)?('<div class="q-bt-sm">'+E(d.clMail)+'</div>'):'')+'</div>'
+      +'<div class="q-billto"><div class="q-lbl">Facturé à</div><div class="q-bt-nom">'+(E(d.clNom)||'Client')+'</div>'+(E(d.clAdr)?('<div class="q-bt-sm">'+E(d.clAdr)+'</div>'):'')+(E(d.clMail)?('<div class="q-bt-sm">'+E(d.clMail)+'</div>'):'')+(E(d.clSiret)?('<div class="q-bt-sm">SIRET '+E(d.clSiret)+'</div>'):'')+(E(d.clTva)?('<div class="q-bt-sm">N° TVA '+E(d.clTva)+'</div>'):'')+'</div>'
       +'<table class="q-tbl"><thead><tr><th class="q-desc">Description</th><th class="r">Qté</th><th class="r">Prix unitaire</th><th class="r">TVA</th><th class="r">Total HT</th></tr></thead><tbody>'+rows+'</tbody></table>'
       +'<div class="q-tot"><div class="q-trow"><span>Total HT</span><b>'+money(c.sousTotal,dev)+'</b></div>'
-        +'<div class="q-trow"><span>TVA ('+(+d.tva||0)+' %)</span><b>'+money(c.tva,dev)+'</b></div>'
+        +'<div class="q-trow"><span>TVA ('+c.tvaRate+' %)</span><b>'+money(c.tva,dev)+'</b></div>'
         +(c.remise?('<div class="q-trow"><span>Remise</span><b>-'+money(c.remise,dev)+'</b></div>'):'')
         +'<div class="q-trow q-grand"><span>Total TTC</span><b>'+money(c.total,dev)+'</b></div></div>'
       +'<div class="inv-p-spacer"></div>'
       +'<div class="q-pay">'
       +((d.emIban||d.emBic)?('<div class="q-pay-c"><div class="q-lbl">Coordonnées bancaires</div>'+(d.emIban?('<div class="q-bt-sm">IBAN '+E(d.emIban)+'</div>'):'')+(d.emBic?('<div class="q-bt-sm">BIC '+E(d.emBic)+'</div>'):'')+'</div>'):'')
-      +'<div class="q-pay-c"><div class="q-lbl">Conditions de règlement</div><div class="q-bt-sm">Paiement à réception, au plus tard le '+frDate(d.dateEch)+'.</div>'+(d.note?('<div class="q-bt-sm">'+E(d.note)+'</div>'):'')+'</div>'
+      +'<div class="q-pay-c"><div class="q-lbl">Conditions de règlement</div><div class="q-bt-sm">'+E(condLine(d))+'</div>'+(d.note?('<div class="q-bt-sm">'+E(d.note)+'</div>'):'')+'</div>'
       +'</div>'
-      +'<div class="q-legal">Pénalités de retard : taux légal en vigueur. Indemnité forfaitaire pour frais de recouvrement : 40 € (art. L441-10 C. com.). Pas d’escompte pour paiement anticipé.'
-      +((d.emNom||d.emSiren||d.emTva)?('<br>'+[E(d.emNom),d.emSiren?('SIREN '+E(d.emSiren)):'',d.emTva?('N° TVA '+E(d.emTva)):''].filter(Boolean).join(' · ')):'')+'</div>'
+      +'<div class="q-legal">'+factMentions(d).join('<br>')+'</div>'
       +'</div>';
   }
   function standardPreviewHTML(d){ var c=calc(d); var dev=d.devise;
@@ -25212,19 +25242,55 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<div class="inv-p-cachet">AEM</div></div>'
       +'<div class="inv-p-parties">'
       +'<div><div class="inv-p-lbl">Émis par</div><div class="inv-p-nom">'+(E(d.emNom)||'—')+'</div><div class="inv-p-sm">'+E(d.emMail)+'</div><div class="inv-p-sm">'+E(d.emAdr)+'</div></div>'
-      +'<div><div class="inv-p-lbl">Émis à</div><div class="inv-p-nom">'+(E(d.clNom)||'Client')+'</div><div class="inv-p-sm">'+E(d.clMail)+'</div><div class="inv-p-sm">'+E(d.clAdr)+'</div></div>'
+      +'<div><div class="inv-p-lbl">Émis à</div><div class="inv-p-nom">'+(E(d.clNom)||'Client')+'</div><div class="inv-p-sm">'+E(d.clMail)+'</div><div class="inv-p-sm">'+E(d.clAdr)+'</div>'+(E(d.clSiret)?('<div class="inv-p-sm">SIRET '+E(d.clSiret)+'</div>'):'')+(E(d.clTva)?('<div class="inv-p-sm">N° TVA '+E(d.clTva)+'</div>'):'')+'</div>'
       +'</div>'
-      +'<div class="inv-p-dates"><div><span>Date d’émission</span><b>'+frDate(d.dateEmise)+'</b></div><div><span>Date d’échéance</span><b>'+frDate(d.dateEch)+'</b></div></div>'
+      +'<div class="inv-p-dates"><div><span>Date d’émission</span><b>'+frDate(d.dateEmise)+'</b></div><div><span>Date d’échéance</span><b>'+frDate(d.dateEch)+'</b></div>'+(d.datePresta?('<div><span>Date de prestation</span><b>'+frDate(d.datePresta)+'</b></div>'):'')+'</div>'
       +'<table class="inv-p-tbl"><thead><tr><th>Prestation</th><th class="r">Qté</th><th class="r">Prix</th><th class="r">Total</th></tr></thead><tbody>'+rows+'</tbody></table>'
       +'<div class="inv-p-tot"><div><span>Sous-total</span><b>'+money(c.sousTotal,dev)+'</b></div>'
-      +'<div><span>TVA ('+(+d.tva||0)+' %)</span><b>'+money(c.tva,dev)+'</b></div>'
+      +'<div><span>TVA ('+c.tvaRate+' %)</span><b>'+money(c.tva,dev)+'</b></div>'
       +(c.remise?('<div><span>Remise</span><b>-'+money(c.remise,dev)+'</b></div>'):'')
       +'<div class="inv-p-grand"><span>Total TTC</span><b>'+money(c.total,dev)+'</b></div></div>'
       +'<div class="inv-p-spacer"></div>'
       +'<div class="inv-p-foot">'
       +(d.note?('<div class="inv-p-note">'+E(d.note)+'</div>'):'')
-      +'<div class="inv-p-mentions">Règlement au plus tard le '+frDate(d.dateEch)+'. En cas de retard : pénalités au taux légal en vigueur et indemnité forfaitaire de 40 € pour frais de recouvrement (art. L441-10 C. com.). Pas d’escompte pour paiement anticipé.</div>'
+      +'<div class="inv-p-mentions">'+E(condLine(d))+'</div>'
+      +mentionsBlock(d)
       +'</div>'
+      +'</div>';
+  }
+
+  /* ---- Modèle « Moderne » : bandeau accentué ---- */
+  function modernePreviewHTML(d){ var c=calc(d); var dev=d.devise;
+    var lignes=(d.lignes||[]).filter(function(l){return (l.des||'')||l.qte||l.pu;});
+    var rows=lignes.length?lignes.map(function(l){ var tot=(+l.qte||0)*(+l.pu||0);
+      return '<tr><td>'+(E(l.des)||'<span class="inv-mute">Désignation</span>')+'</td><td class="r">'+(+l.qte||0)+'</td><td class="r">'+money(l.pu,dev)+'</td><td class="r">'+c.tvaRate+' %</td><td class="r">'+money(tot,dev)+'</td></tr>'; }).join('')
+      :'<tr><td colspan="5" class="inv-mute" style="text-align:center;padding:14px 0">Ajoutez une prestation…</td></tr>';
+    return '<div class="inv-paper m-mode">'
+      +'<div class="m-band"><div class="m-band-l"><div class="m-title">FACTURE</div><div class="m-num">'+E(d.numero||'')+'</div></div>'
+        +'<div class="m-band-r"><div class="m-em-nom">'+(E(d.emNom)||'—')+'</div><div class="m-em-sm">'+[E(d.emAdr),E(d.emMail)].filter(Boolean).join(' · ')+'</div></div></div>'
+      +'<div class="m-info"><div class="m-info-c"><div class="m-lbl">Facturé à</div><div class="m-nom">'+(E(d.clNom)||'Client')+'</div><div class="m-sm">'+[E(d.clAdr),E(d.clMail),(d.clSiret?('SIRET '+E(d.clSiret)):''),(d.clTva?('N° TVA '+E(d.clTva)):'')].filter(Boolean).join('<br>')+'</div></div>'
+        +'<div class="m-info-c m-info-dates"><div><span>Émission</span><b>'+frDate(d.dateEmise)+'</b></div><div><span>Échéance</span><b>'+frDate(d.dateEch)+'</b></div>'+(d.datePresta?('<div><span>Prestation</span><b>'+frDate(d.datePresta)+'</b></div>'):'')+(d.bonCmd?('<div><span>Bon de cmd</span><b>'+E(d.bonCmd)+'</b></div>'):'')+'</div></div>'
+      +'<table class="m-tbl"><thead><tr><th>Désignation</th><th class="r">Qté</th><th class="r">P.U.</th><th class="r">TVA</th><th class="r">Total HT</th></tr></thead><tbody>'+rows+'</tbody></table>'
+      +'<div class="m-tot"><div><span>Total HT</span><b>'+money(c.sousTotal,dev)+'</b></div><div><span>TVA ('+c.tvaRate+' %)</span><b>'+money(c.tva,dev)+'</b></div>'+(c.remise?('<div><span>Remise</span><b>-'+money(c.remise,dev)+'</b></div>'):'')+'<div class="m-grand"><span>Total TTC</span><b>'+money(c.total,dev)+'</b></div></div>'
+      +'<div class="inv-p-spacer"></div>'
+      +'<div class="m-foot"><div class="m-cond">'+E(condLine(d))+((d.emIban)?(' · IBAN '+E(d.emIban)):'')+(d.note?('<div class="m-note">'+E(d.note)+'</div>'):'')+'</div>'+mentionsBlock(d,'m-mentions')+'</div>'
+      +'</div>';
+  }
+
+  /* ---- Modèle « Classique » : encadré sobre ---- */
+  function classiquePreviewHTML(d){ var c=calc(d); var dev=d.devise;
+    var lignes=(d.lignes||[]).filter(function(l){return (l.des||'')||l.qte||l.pu;});
+    var rows=lignes.length?lignes.map(function(l){ var tot=(+l.qte||0)*(+l.pu||0);
+      return '<tr><td>'+(E(l.des)||'<span class="inv-mute">Désignation</span>')+'</td><td class="r">'+(+l.qte||0)+'</td><td class="r">'+money(l.pu,dev)+'</td><td class="r">'+c.tvaRate+' %</td><td class="r">'+money(tot,dev)+'</td></tr>'; }).join('')
+      :'<tr><td colspan="5" class="inv-mute" style="text-align:center;padding:14px 0">Ajoutez une prestation…</td></tr>';
+    return '<div class="inv-paper c-mode">'
+      +'<div class="c-head"><div class="c-em"><div class="c-em-nom">'+(E(d.emNom)||'—')+'</div><div class="c-em-sm">'+[E(d.emAdr),E(d.emMail),(d.emSiret?('SIRET '+E(d.emSiret)):(d.emSiren?('SIREN '+E(d.emSiren)):'')),(d.emTva?('N° TVA '+E(d.emTva)):'')].filter(Boolean).join('<br>')+'</div></div>'
+        +'<div class="c-doc"><div class="c-doc-t">FACTURE</div><div class="c-doc-m"><div>N° <b>'+E(d.numero||'')+'</b></div><div>Le <b>'+frDate(d.dateEmise)+'</b></div><div>Échéance <b>'+frDate(d.dateEch)+'</b></div></div></div></div>'
+      +'<div class="c-cli"><div class="c-cli-l">Doit :</div><div class="c-cli-b"><b>'+(E(d.clNom)||'Client')+'</b><br>'+[E(d.clAdr),(d.clSiret?('SIRET '+E(d.clSiret)):''),(d.clTva?('N° TVA '+E(d.clTva)):'')].filter(Boolean).join('<br>')+'</div></div>'
+      +'<table class="c-tbl"><thead><tr><th>Désignation</th><th class="r">Qté</th><th class="r">P.U. HT</th><th class="r">TVA</th><th class="r">Montant HT</th></tr></thead><tbody>'+rows+'</tbody></table>'
+      +'<div class="c-tot"><div><span>Total HT</span><b>'+money(c.sousTotal,dev)+'</b></div><div><span>TVA ('+c.tvaRate+' %)</span><b>'+money(c.tva,dev)+'</b></div>'+(c.remise?('<div><span>Remise</span><b>-'+money(c.remise,dev)+'</b></div>'):'')+'<div class="c-grand"><span>Net à payer TTC</span><b>'+money(c.total,dev)+'</b></div></div>'
+      +'<div class="inv-p-spacer"></div>'
+      +'<div class="c-foot"><div class="c-cond">'+E(condLine(d))+(d.note?('<div class="c-note">'+E(d.note)+'</div>'):'')+'</div>'+mentionsBlock(d,'c-mentions')+'</div>'
       +'</div>';
   }
 
@@ -25247,16 +25313,19 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.invSave=function(status){ var d=invRead(); var c=calc(d);
     if(!(d.clNom||'').trim() && !(d.lignes||[]).some(function(l){return (l.des||'').trim();})){ if(typeof toast==='function')toast('Renseignez au moins le client ou une prestation.'); return; }
     var rec={ id:d.id||uid2(), numero:d.numero, statut:status||'brouillon', modele:d.modele||'qonto',
-      emNom:d.emNom,emMail:d.emMail,emAdr:d.emAdr,emSiren:d.emSiren,emTva:d.emTva,emIban:d.emIban,emBic:d.emBic,
-      clNom:d.clNom,clMail:d.clMail,clAdr:d.clAdr,
-      devise:d.devise, dateEmise:d.dateEmise, dateEch:d.dateEch, tva:d.tva, remise:d.remise, note:d.note,
+      emNom:d.emNom,emForme:d.emForme,emCapital:d.emCapital,emMail:d.emMail,emAdr:d.emAdr,emTel:d.emTel,emSiren:d.emSiren,emSiret:d.emSiret,emRcs:d.emRcs,emApe:d.emApe,emTva:d.emTva,emIban:d.emIban,emBic:d.emBic,
+      clNom:d.clNom,clMail:d.clMail,clAdr:d.clAdr,clSiret:d.clSiret,clTva:d.clTva,
+      devise:d.devise, dateEmise:d.dateEmise, dateEch:d.dateEch, datePresta:d.datePresta, bonCmd:d.bonCmd, tva:d.tva, remise:d.remise, note:d.note,
+      condReg:d.condReg, penalites:d.penalites, assurance:d.assurance,
+      franchiseTVA:!!d.franchiseTVA, autoliq:!!d.autoliq, escompte:!!d.escompte, oga:!!d.oga, showAssur:!!d.showAssur,
       lignes:JSON.parse(JSON.stringify(d.lignes||[])), total:c.total, ts:Date.now() };
     var arr=store(); var ix=arr.findIndex(function(x){return x.id===rec.id;}); if(ix>=0)arr[ix]=rec; else arr.push(rec);
     try{save();}catch(e){}
     if(typeof toast==='function')toast(status==='emise'?('Facture '+rec.numero+' émise.'):('Brouillon '+rec.numero+' enregistré.'));
-    newDraft(); render(); };
+    /* On conserve la facture à l'écran : le bouton « ＋ » ne s'active qu'après l'émission. */
+    d.id=rec.id; d.statut=status||'brouillon'; render(); };
   window.invEmettre=function(){ invSave('emise'); };
-  window.invNew=function(){ newDraft(); ui().tab='new'; render(); };
+  window.invNew=function(){ if(draft().statut!=='emise'){ if(typeof toast==='function')toast('Émettez d’abord la facture en cours pour en créer une nouvelle.'); return; } newDraft(); ui().tab='new'; render(); };
 
   window.invVoir=function(id){ var f=store().find(function(x){return x.id===id;}); if(!f)return; window.__invDraft=JSON.parse(JSON.stringify(f)); if(!window.__invDraft.lignes||!window.__invDraft.lignes.length)window.__invDraft.lignes=[{des:'',qte:1,pu:0}]; ui().tab='new'; render(); if(typeof toast==='function')toast('Facture '+ (f.numero||'')+' ouverte pour édition.'); };
   window.invDup=function(id){ var f=store().find(function(x){return x.id===id;}); if(!f)return; var d=JSON.parse(JSON.stringify(f)); d.id=''; d.numero=nextNum(); d.statut='brouillon'; window.__invDraft=d; ui().tab='new'; render(); if(typeof toast==='function')toast('Copie créée : '+d.numero); };
@@ -25282,7 +25351,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'.q-billto{margin:30px 0 22px}.q-lbl{font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;color:#8c8c8c;font-weight:600;margin-bottom:6px}.q-bt-nom{font-size:14.5px;font-weight:700}.q-bt-sm{font-size:12px;color:#6d6d6d;line-height:1.55}'
       +'.q-tbl{width:100%;border-collapse:collapse;font-size:12.5px}.q-tbl th{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:#8c8c8c;font-weight:600;padding:0 5px 11px;border-bottom:1.5px solid #1a1a1a;text-align:left}.q-tbl th.r{text-align:right}.q-tbl td{padding:14px 5px;border-bottom:1px solid #ededed;text-align:left}.q-tbl td.r{text-align:right}.q-tbl .q-desc{width:46%}'
       +'.q-tot{margin:18px 0 0 auto;width:300px}.q-trow{display:flex;justify-content:space-between;padding:6px 5px;font-size:13px}.q-trow span{color:#6d6d6d}.q-trow b{font-weight:600}.q-grand{margin-top:6px;border-top:1.5px solid #1a1a1a;padding-top:11px;font-weight:700;font-size:16px}'
-      +'.q-pay{display:flex;gap:34px;border-top:1px solid #ededed;padding-top:17px}.q-pay-c{flex:1}.q-legal{margin-top:16px;font-size:9.5px;color:#a6a6a6;line-height:1.6}</style>'
+      +'.q-pay{display:flex;gap:34px;border-top:1px solid #ededed;padding-top:17px}.q-pay-c{flex:1}.q-legal{margin-top:16px;font-size:9.5px;color:#a6a6a6;line-height:1.6}'
+      +'.inv-paper.m-mode{padding:0 0 20px;font-family:"Inter",Arial,sans-serif}.m-band{display:flex;justify-content:space-between;gap:20px;background:#0f2740;color:#fff;padding:24px 30px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.m-title{font-size:26px;font-weight:800;letter-spacing:.06em}.m-num{font-size:12px;opacity:.85;margin-top:4px}.m-band-r{text-align:right}.m-em-nom{font-size:15px;font-weight:700}.m-em-sm{font-size:10.5px;opacity:.85;margin-top:3px}.m-mode .m-info,.m-mode .m-tbl,.m-mode .m-tot,.m-mode .m-foot{margin-left:30px;margin-right:30px}.m-info{display:flex;justify-content:space-between;gap:26px;margin-top:22px}.m-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#8c8c8c;font-weight:700;margin-bottom:5px}.m-nom{font-size:13.5px;font-weight:700}.m-sm{font-size:11px;color:#6d6d6d;line-height:1.6;margin-top:2px}.m-info-dates{text-align:right}.m-info-dates span{font-size:9px;text-transform:uppercase;color:#8c8c8c;font-weight:700;margin-right:8px}.m-info-dates b{font-size:12px}.m-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:20px}.m-tbl th{font-size:9px;text-transform:uppercase;color:#8c8c8c;font-weight:700;padding:0 5px 9px;border-bottom:2px solid #0f2740;text-align:left}.m-tbl th.r{text-align:right}.m-tbl td{padding:11px 5px;border-bottom:1px solid #ededed}.m-tbl td.r{text-align:right}.m-tot{width:280px;margin:16px 0 0 auto}.m-tot>div{display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px}.m-tot span{color:#6d6d6d}.m-grand{border-top:2px solid #0f2740;margin-top:5px;padding-top:9px!important;font-weight:800;font-size:15px}.m-foot{margin-top:16px;border-top:1px solid #ededed;padding-top:14px}.m-cond{font-size:11px;color:#5a6270;line-height:1.55}.m-note{font-style:italic;margin-top:4px}.m-mentions{margin-top:9px;font-size:9px;color:#a6a6a6;line-height:1.6}'
+      +'.inv-paper.c-mode{font-family:Georgia,"Times New Roman",serif;color:#1c1c1c}.c-head{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #1c1c1c;padding-bottom:14px}.c-em-nom{font-size:16px;font-weight:700}.c-em-sm{font-size:11px;color:#4a4a4a;line-height:1.6;margin-top:4px}.c-doc{text-align:right}.c-doc-t{font-size:22px;font-weight:700;letter-spacing:.08em}.c-doc-m{font-size:11.5px;color:#333;margin-top:8px;line-height:1.7}.c-cli{margin:18px 0;font-size:12px}.c-cli-l{font-size:10px;text-transform:uppercase;color:#777;font-weight:700}.c-cli-b{margin-top:4px;line-height:1.6}.c-tbl{width:100%;border-collapse:collapse;font-size:12px}.c-tbl th,.c-tbl td{border:1px solid #cfcfcf;padding:8px;text-align:left}.c-tbl th{background:#f2f2f2;font-size:10px;text-transform:uppercase;color:#555;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}.c-tbl th.r,.c-tbl td.r{text-align:right}.c-tot{width:270px;margin:14px 0 0 auto}.c-tot>div{display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;border-bottom:1px solid #eee}.c-tot span{color:#555}.c-grand{border:none;border-top:2px solid #1c1c1c!important;margin-top:4px;padding-top:8px!important;font-weight:700;font-size:14.5px}.c-foot{margin-top:16px;border-top:1px solid #ccc;padding-top:12px}.c-cond{font-size:11px;color:#444;line-height:1.55}.c-note{font-style:italic;margin-top:4px}.c-mentions{margin-top:9px;font-size:9px;color:#888;line-height:1.6}</style>'
       +'<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></head><body>'
       +previewHTML(d)+'</body></html>';
     var w=window.open('','_blank'); if(w){ w.document.write(html); w.document.close(); setTimeout(function(){ try{w.print();}catch(e){} },250); }
@@ -25307,27 +25378,34 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<button class="inv-sb '+(u.tab==='hist'?'on':'')+'" onclick="invSetTab(\'hist\')">📋 Factures émises'+(store().length?(' ('+store().length+')'):'')+'</button></div>';
     if(u.tab==='hist'){ return '<div class="inv-wrap">'+seg+'<div class="card"><div class="card-b">'+histHTML()+'</div></div></div>'; }
 
+    var canNew=(d.statut==='emise');
     var toolbar='<div class="inv-toolbar">'
+      +'<button class="inv-tb inv-plus'+(canNew?'':' disabled')+'" onclick="invNew()"'+(canNew?'':' disabled')+' title="'+(canNew?'Nouvelle facture':'Émettez d’abord la facture en cours pour en créer une nouvelle')+'" aria-label="Nouvelle facture">＋</button>'
       +'<button class="inv-tb" onclick="invTogglePreview()">'+(u.hidePrev?'👁 Afficher l’aperçu':'👁 Masquer l’aperçu')+'</button>'
-      +'<button class="inv-tb" onclick="invNew()">↺ Nouvelle</button>'
       +'<button class="inv-tb" onclick="invPrint()">⎙ Imprimer / PDF</button>'
       +'<button class="inv-tb ghost" onclick="invSave(\'brouillon\')">💾 Enregistrer le brouillon</button>'
       +'<button class="inv-tb pri" onclick="invEmettre()">✈ Émettre la facture</button></div>';
 
     var inp=function(id,lbl,val,ph,type,full){ return '<label class="'+(full?'full':'')+'">'+E(lbl)+'<input id="inv-'+id+'"'+(type?(' type="'+type+'"'):'')+' value="'+E(val==null?'':val)+'"'+(ph?(' placeholder="'+E(ph)+'"'):'')+' oninput="invRefresh()"></label>'; };
     var devSel=function(){ var o=Object.keys(DEV).map(function(k){return '<option value="'+k+'"'+(d.devise===k?' selected':'')+'>'+k+' ('+DEV[k]+')</option>';}).join(''); return '<label>Devise<select id="inv-devise" onchange="invRefresh()">'+o+'</select></label>'; };
-    var modSel=function(){ var opts=[['qonto','Qonto (épuré)'],['standard','Standard']].map(function(m){return '<option value="'+m[0]+'"'+((d.modele||'qonto')===m[0]?' selected':'')+'>'+m[1]+'</option>';}).join(''); return '<label>Modèle de facture<select id="inv-modele" onchange="invRefresh()">'+opts+'</select></label>'; };
+    var modSel=function(){ var opts=[['qonto','Qonto (épuré)'],['standard','Standard'],['moderne','Moderne (bandeau)'],['classique','Classique (encadré)']].map(function(m){return '<option value="'+m[0]+'"'+((d.modele||'qonto')===m[0]?' selected':'')+'>'+m[1]+'</option>';}).join(''); return '<label>Modèle de facture<select id="inv-modele" onchange="invRefresh()">'+opts+'</select></label>'; };
+    var chk=function(id,lbl){ return '<label class="inv-chk"><input type="checkbox" id="inv-'+id+'"'+(d[id]?' checked':'')+' onchange="invRefresh()"><span>'+E(lbl)+'</span></label>'; };
 
     var form='<div class="inv-col-form">'
       +'<div class="card"><div class="card-h"><h2>Détails de la facture</h2></div><div class="card-b">'
       +'<div class="inv-grid" style="margin-bottom:6px">'+modSel()+'</div>'
       +'<details class="inv-sec"><summary class="inv-sec-h">Émetteur (votre cabinet)</summary>'
-      +'<div class="inv-grid" style="margin-top:8px">'+inp('emNom','Dénomination',d.emNom,'',null,true)+inp('emMail','E-mail',d.emMail,'',null)+inp('emAdr','Adresse',d.emAdr,'',null,true)
-      +inp('emSiren','SIREN',d.emSiren,'')+inp('emTva','N° TVA intracom.',d.emTva,'')+inp('emIban','IBAN',d.emIban,'')+inp('emBic','BIC',d.emBic,'')+'</div></details>'
+      +'<div class="inv-grid" style="margin-top:8px">'+inp('emNom','Dénomination',d.emNom,'',null,true)+inp('emForme','Forme juridique',d.emForme,'SARL, SAS…')+inp('emCapital','Capital social',d.emCapital,'Ex : 10 000 €')+inp('emAdr','Adresse',d.emAdr,'',null,true)+inp('emTel','Téléphone',d.emTel,'')+inp('emMail','E-mail',d.emMail,'',null)
+      +inp('emSiren','SIREN',d.emSiren,'')+inp('emSiret','SIRET',d.emSiret,'')+inp('emRcs','RCS / RM (ville)',d.emRcs,'')+inp('emApe','Code APE/NAF',d.emApe,'')+inp('emTva','N° TVA intracom.',d.emTva,'')+inp('emIban','IBAN',d.emIban,'')+inp('emBic','BIC',d.emBic,'')+'</div></details>'
       +'<details class="inv-sec" open><summary class="inv-sec-h">Client (destinataire)</summary>'
-      +'<div class="inv-grid" style="margin-top:8px">'+inp('clNom','Nom du client',d.clNom,'Ex : SARL Dupont',null,true)+inp('clMail','E-mail',d.clMail,'',null)+inp('clAdr','Adresse',d.clAdr,'',null,true)+'</div></details>'
+      +'<div class="inv-grid" style="margin-top:8px">'+inp('clNom','Nom du client',d.clNom,'Ex : SARL Dupont',null,true)+inp('clMail','E-mail',d.clMail,'',null)+inp('clAdr','Adresse',d.clAdr,'',null,true)+inp('clSiret','SIRET client',d.clSiret,'')+inp('clTva','N° TVA client',d.clTva,'')+'</div></details>'
       +'<details class="inv-sec"><summary class="inv-sec-h">Références</summary>'
-      +'<div class="inv-grid" style="margin-top:8px">'+inp('numero','N° de facture',d.numero,'',null)+devSel()+inp('dateEmise','Date d’émission',d.dateEmise,'','date')+inp('dateEch','Date d’échéance',d.dateEch,'','date')+'</div></details>'
+      +'<div class="inv-grid" style="margin-top:8px">'+inp('numero','N° de facture',d.numero,'',null)+devSel()+inp('dateEmise','Date d’émission',d.dateEmise,'','date')+inp('dateEch','Date d’échéance',d.dateEch,'','date')+inp('datePresta','Date de la prestation / livraison',d.datePresta,'','date')+inp('bonCmd','N° de bon de commande',d.bonCmd,'')+'</div></details>'
+      +'<details class="inv-sec"><summary class="inv-sec-h">Mentions légales obligatoires</summary>'
+      +'<div class="inv-grid" style="margin-top:8px">'+inp('condReg','Conditions de règlement',d.condReg,'Paiement à réception',null,true)+inp('penalites','Taux des pénalités de retard',d.penalites,'3 fois le taux d’intérêt légal',null,true)+inp('assurance','Assurance décennale / RC pro',d.assurance,'Assureur · n° contrat',null,true)+'</div>'
+      +'<div class="inv-chks">'+chk('franchiseTVA','TVA non applicable — art. 293 B du CGI (franchise en base)')+chk('autoliq','Autoliquidation de la TVA (sous-traitance BTP — art. 283-2 nonies)')+chk('escompte','Escompte en cas de paiement anticipé (sinon « Pas d’escompte »)')+chk('oga','Membre d’une association agréée (règlement par chèque/CB accepté)')+chk('showAssur','Afficher l’assurance décennale / RC pro (BTP)')+'</div>'
+      +'<div class="inv-legal-note">Les pénalités de retard et l’indemnité forfaitaire de 40 € sont ajoutées automatiquement (obligation légale entre professionnels).</div>'
+      +'</details>'
       +'</div></div>'
       +'<div class="card"><div class="card-h"><h2>Prestations</h2></div><div class="card-b">'
       +'<div class="inv-lhead"><span>Désignation</span><span>Qté</span><span>Prix unitaire</span><span>Total</span><span></span></div>'
@@ -25436,7 +25514,38 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.inv-empty{text-align:center;color:var(--ink-3,#8494aa);padding:26px 0}',
     '.inv-tbwrap{overflow-x:auto}.inv-htbl{width:100%;border-collapse:collapse;font-size:12.5px}.inv-htbl th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3,#8494aa);font-weight:700;padding:9px 11px;border-bottom:1px solid var(--line-2,#2c384b);white-space:nowrap}.inv-htbl td{padding:9px 11px;border-bottom:1px solid var(--line-soft,#1b2432);color:var(--ink,#f5f9fe);white-space:nowrap}.inv-htbl td.r,.inv-htbl th.r{text-align:right}.inv-htbl tbody tr:hover{background:rgba(255,255,255,.03)}.inv-htbl tfoot td{font-weight:800;border-top:2px solid var(--line-2,#2c384b);padding:10px 11px}',
     '.inv-badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:20px}.inv-badge.emise{background:rgba(91,191,138,.16);color:#5bbf8a}.inv-badge.draft{background:rgba(255,255,255,.09);color:#b6c3d6}',
-    '.inv-ic{background:none;border:1px solid var(--line-2,#2c384b);border-radius:7px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--ink-2,#b6c3d6);margin-left:5px}.inv-ic:hover{border-color:var(--accent,#4f9dff)}.inv-ic.danger:hover{border-color:#e0674f;color:#e0674f}.inv-h-act{white-space:nowrap}'
+    '.inv-ic{background:none;border:1px solid var(--line-2,#2c384b);border-radius:7px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--ink-2,#b6c3d6);margin-left:5px}.inv-ic:hover{border-color:var(--accent,#4f9dff)}.inv-ic.danger:hover{border-color:#e0674f;color:#e0674f}.inv-h-act{white-space:nowrap}',
+    /* + (Nouvelle) */
+    '.inv-plus{font-size:17px;font-weight:800;line-height:1;padding:6px 13px;min-width:40px}.inv-plus.disabled{opacity:.4;cursor:not-allowed}.inv-plus:not(.disabled):hover{border-color:var(--accent,#4f9dff);color:var(--ink,#f5f9fe)}',
+    /* Cases à cocher — mentions obligatoires */
+    '.inv-chks{display:flex;flex-direction:column;gap:8px;padding:2px 2px 4px}',
+    '.inv-chk{display:flex;align-items:flex-start;gap:9px;font-size:12px;color:var(--ink-2,#b6c3d6);cursor:pointer;line-height:1.4}.inv-chk input{margin-top:1px;width:15px;height:15px;accent-color:var(--accent,#4f9dff);flex:none}.inv-chk span{font-weight:500}',
+    '.inv-legal-note{font-size:10.5px;color:var(--ink-3,#8494aa);line-height:1.5;margin-top:8px;padding:8px 10px;border-left:2px solid var(--accent,#4f9dff);background:rgba(79,157,255,.06);border-radius:0 6px 6px 0}',
+    /* Modèle Moderne */
+    '.inv-paper.m-mode{padding:0 0 30px;overflow:hidden;font-family:"Inter","Helvetica Neue",Arial,sans-serif}',
+    '.m-band{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;background:#0f2740;color:#fff;padding:26px 34px}.m-title{font-size:26px;font-weight:800;letter-spacing:.06em}.m-num{font-size:12px;opacity:.85;margin-top:4px}.m-band-r{text-align:right}.m-em-nom{font-size:15px;font-weight:700}.m-em-sm{font-size:10.5px;opacity:.85;margin-top:3px}',
+    '.m-mode .m-info,.m-mode .m-tbl,.m-mode .m-tot,.m-mode .m-foot{margin-left:34px;margin-right:34px}',
+    '.m-info{display:flex;justify-content:space-between;gap:26px;margin-top:22px}.m-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#8c8c8c;font-weight:700;margin-bottom:5px}.m-nom{font-size:13.5px;font-weight:700;color:#1a1a1a}.m-sm{font-size:11px;color:#6d6d6d;line-height:1.6;margin-top:2px}.m-info-dates{text-align:right}.m-info-dates>div{margin-bottom:4px}.m-info-dates span{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#8c8c8c;font-weight:700;margin-right:8px}.m-info-dates b{font-size:12px;color:#1a1a1a}',
+    '.m-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:20px}.m-tbl th{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#8c8c8c;font-weight:700;padding:0 5px 9px;border-bottom:2px solid #0f2740;text-align:left}.m-tbl th.r{text-align:right}.m-tbl td{padding:11px 5px;border-bottom:1px solid #ededed;color:#1a1a1a}.m-tbl td.r{text-align:right}',
+    '.m-tot{width:56%;max-width:280px;margin:16px 0 0 auto}.m-tot>div{display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px}.m-tot span{color:#6d6d6d}.m-tot b{color:#1a1a1a}.m-grand{border-top:2px solid #0f2740;margin-top:5px;padding-top:9px!important;font-weight:800;font-size:15px}',
+    '.m-foot{margin-top:16px;border-top:1px solid #ededed;padding-top:14px}.m-cond{font-size:11px;color:#5a6270;line-height:1.55}.m-note{font-style:italic;margin-top:4px}.m-mentions{margin-top:9px;font-size:9px;color:#a6a6a6;line-height:1.6}',
+    /* Modèle Classique */
+    '.inv-paper.c-mode{font-family:Georgia,"Times New Roman",serif;color:#1c1c1c}',
+    '.c-head{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #1c1c1c;padding-bottom:14px}.c-em-nom{font-size:16px;font-weight:700}.c-em-sm{font-size:11px;color:#4a4a4a;line-height:1.6;margin-top:4px}.c-doc{text-align:right}.c-doc-t{font-size:22px;font-weight:700;letter-spacing:.08em}.c-doc-m{font-size:11.5px;color:#333;margin-top:8px;line-height:1.7}',
+    '.c-cli{margin:18px 0;font-size:12px}.c-cli-l{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#777;font-weight:700}.c-cli-b{margin-top:4px;line-height:1.6;color:#1c1c1c}',
+    '.c-tbl{width:100%;border-collapse:collapse;font-size:12px}.c-tbl th,.c-tbl td{border:1px solid #cfcfcf;padding:8px 8px;text-align:left}.c-tbl th{background:#f2f2f2;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#555;font-weight:700}.c-tbl th.r,.c-tbl td.r{text-align:right}',
+    '.c-tot{width:56%;max-width:270px;margin:14px 0 0 auto}.c-tot>div{display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;border-bottom:1px solid #eee}.c-tot span{color:#555}.c-grand{border:none!important;border-top:2px solid #1c1c1c!important;margin-top:4px;padding-top:8px!important;font-weight:700;font-size:14.5px}',
+    '.c-foot{margin-top:16px;border-top:1px solid #ccc;padding-top:12px}.c-cond{font-size:11px;color:#444;line-height:1.55}.c-note{font-style:italic;margin-top:4px}.c-mentions{margin-top:9px;font-size:9px;color:#888;line-height:1.6}',
+    /* Isolation thème sombre pour les nouveaux modèles */
+    'html body:not(#mq):not(#mq) #inv-prev .inv-paper .m-band{background:#0f2740!important}',
+    'html body:not(#mq):not(#mq) #inv-prev .inv-paper .m-band *{color:#fff!important;background:transparent!important}',
+    'html body:not(#mq):not(#mq) #inv-prev .inv-paper .m-tbl th{border-bottom:2px solid #0f2740!important;color:#8c8c8c!important}',
+    'html body:not(#mq):not(#mq) #inv-prev .inv-paper .m-grand{border-top:2px solid #0f2740!important}',
+    'html body:not(#mq):not(#mq) #inv-prev .inv-paper.c-mode{color:#1c1c1c!important}',
+    'html body:not(#mq):not(#mq) #inv-prev .inv-paper .c-tbl th{background:#f2f2f2!important;border:1px solid #cfcfcf!important;color:#555!important}',
+    'html body:not(#mq):not(#mq) #inv-prev .inv-paper .c-tbl td{border:1px solid #cfcfcf!important;color:#1c1c1c!important}',
+    'html body:not(#mq):not(#mq) #inv-prev .inv-paper .c-head{border-bottom:2px solid #1c1c1c!important}',
+    'html body:not(#mq):not(#mq) #inv-prev .inv-paper .c-grand{border-top:2px solid #1c1c1c!important}'
   ].join(''); document.head.appendChild(st); } }catch(e){}
 })();</script>
 
