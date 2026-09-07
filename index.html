@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=536;
+var LAST_VER=537;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -26749,6 +26749,243 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
       return r;
     };
   }
+})();
+</script>
+
+<!-- ===== Sous-module « Étude de Marché » (sous le module Formulaire) ===== -->
+<script>
+(function(){
+  /* Lecture/écriture dans le brouillon de dossier courant (window.__formData),
+     donc l'étude voyage avec le dossier et se sauvegarde avec le brouillon. */
+  function FD(){ if(!window.__formData||typeof window.__formData!=='object')window.__formData={}; return window.__formData; }
+  function E(path){ var o=FD(),ks=path.split('.'); for(var i=0;i<ks.length;i++){ o=(o&&o[ks[i]]); if(o==null)return ''; } return o; }
+  function S(path,val){ if(typeof window.formSet==='function')window.formSet(path,val); else { var o=FD(),ks=path.split('.'); for(var i=0;i<ks.length-1;i++){o[ks[i]]=o[ks[i]]||{};o=o[ks[i]];} o[ks[ks.length-1]]=val; } }
+  function esc(s){return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function num(v){ v=(''+(v==null?'':v)).replace(/[^0-9.,-]/g,'').replace(',','.'); var n=parseFloat(v); return isNaN(n)?null:n; }
+  function fmt(n){ try{ return (Math.round(n*100)/100).toLocaleString('fr-FR'); }catch(e){ return ''+n; } }
+
+  /* ---- Constructeurs de champs (mêmes classes que le Formulaire) ---- */
+  function eI(path,ph){ return '<input value="'+esc(E(path))+'" data-em="'+esc(path)+'" oninput="emSet(this)" placeholder="'+esc(ph||'')+'">'; }
+  function eN(path,ph){ return '<input inputmode="decimal" value="'+esc(E(path))+'" data-em="'+esc(path)+'" oninput="emSet(this)" placeholder="'+esc(ph||'')+'">'; }
+  function eT(path,ph,rows){ return '<textarea rows="'+(rows||2)+'" data-em="'+esc(path)+'" oninput="emSet(this)" placeholder="'+esc(ph||'')+'">'+esc(E(path))+'</textarea>'; }
+  function eSel(path,opts,cur){ return '<select data-em="'+esc(path)+'" onchange="emSetR(this)">'+opts.map(function(o){var v=(o instanceof Array)?o[0]:o,l=(o instanceof Array)?o[1]:o;return '<option value="'+esc(v)+'"'+((''+cur)===(''+v)?' selected':'')+'>'+esc(l)+'</option>';}).join('')+'</select>'; }
+  function r1(l,inp,adv){ return '<label>'+esc(l)+'</label>'+inp+(adv||''); }
+  function r2(l1,i1,l2,i2){ return '<div class="frow"><div><label>'+esc(l1)+'</label>'+i1+'</div><div><label>'+esc(l2)+'</label>'+i2+'</div></div>'; }
+  function grp(t,inner,note){ return '<div class="card fi-card"><div class="card-h"><h2>'+esc(t)+'</h2>'+(note?'<span class="sub" style="margin-left:auto">'+esc(note)+'</span>':'')+'</div><div class="card-b">'+inner+'</div></div>'; }
+  /* Conseil discret (réutilise le style .fx-adv du Formulaire) — uniquement sous les cases stratégiques */
+  function adv(html){ return html?('<div class="fx-adv">'+html+'</div>'):''; }
+
+  /* Écriture (input texte/nombre) : pas de re-render → garde le focus, met à jour la synthèse */
+  window.emSet=function(el){ try{ S(el.getAttribute('data-em'),el.value); }catch(e){} try{ emRecalc(); }catch(e){} };
+  /* Écriture (select) : re-render pour rafraîchir les conseils sous la case */
+  window.emSetR=function(el){ try{ S(el.getAttribute('data-em'),el.value); }catch(e){} if(typeof render==='function')render(); };
+
+  /* ---- Concurrents (liste dynamique) ---- */
+  function concList(){ var o=FD(); o.etude=o.etude||{}; if(!Array.isArray(o.etude.concurrents))o.etude.concurrents=[]; return o.etude.concurrents; }
+  window.emConcAdd=function(){ concList().push({nom:'',force:'',faiblesse:''}); if(typeof render==='function')render(); };
+  window.emConcDel=function(i){ var l=concList(); if(i>=0&&i<l.length)l.splice(i,1); if(typeof render==='function')render(); };
+  window.emConcSet=function(i,key,el){ var l=concList(); if(l[i]){ l[i][key]=el.value; } };
+
+  /* ---- Synthèse SWOT auto-proposée (heuristique légère) ---- */
+  window.emSwotAuto=function(){
+    var o=FD(),e=o.etude||{};
+    function set(p,v){ if(!E(p))S(p,v); }
+    var av=e.avantage||''; if(av)set('etude.swot.forces',av);
+    if(e.nivConcurrence==='forte')set('etude.swot.menaces','Concurrence forte sur le secteur — nécessité de se différencier.');
+    if(e.stade==='croissance')set('etude.swot.opportunites','Marché en croissance — fenêtre favorable pour se positionner.');
+    if(e.stade==='declin')set('etude.swot.menaces','Marché en déclin — vigilance sur la demande à moyen terme.');
+    if(!e.avantage)set('etude.swot.faiblesses','Avantage concurrentiel à préciser.');
+    if(typeof render==='function')render();
+    if(typeof toast==='function')toast('Synthèse SWOT proposée — ajustez librement.');
+  };
+
+  /* ---- Recalcul en direct de la carte « Marché potentiel » (sans re-render) ---- */
+  window.emRecalc=function(){
+    var box=document.getElementById('em-calc'); if(!box)return;
+    box.innerHTML=emCalcInner();
+  };
+  function emCalcInner(){
+    var e=(FD().etude||{});
+    var nb=num(e.nbClients),pan=num(e.panier),part=num(e.partVisee);
+    var adressable=(nb!=null&&pan!=null)?(nb*pan):null;
+    var ca=(adressable!=null&&part!=null)?(adressable*(part/100)):null;
+    /* Complétude : champs clés renseignés */
+    var keys=['secteur','marche','stade','zone','cibleType','besoin','nbClients','panier','partVisee','avantage','offre','prix','canaux'];
+    var done=0; keys.forEach(function(k){ if((''+(e[k]==null?'':e[k])).trim()!=='')done++; });
+    var pct=Math.round(done/keys.length*100);
+    function kpi(lbl,val,unit){ return '<div class="em-kpi"><div class="em-kpi-l">'+esc(lbl)+'</div><div class="em-kpi-v">'+(val==null?'<span class="em-na">à renseigner</span>':(fmt(val)+(unit||''))) +'</div></div>'; }
+    return '<div class="em-kpis">'
+      +kpi('Marché adressable (clients × panier)',adressable,' €')
+      +kpi('Part de marché visée (an 1)',part,' %')
+      +kpi('Chiffre d\'affaires potentiel (an 1)',ca,' €')
+      +'</div>'
+      +'<div class="em-prog"><div class="em-prog-h"><span>Complétude de l\'étude</span><span>'+done+'/'+keys.length+' · '+pct+'%</span></div><div class="em-prog-bar"><i style="width:'+pct+'%"></i></div></div>'
+      +'<div class="em-calc-note">Estimation indicative : CA potentiel = clients potentiels × panier moyen × part de marché visée. Ces montants alimentent le raisonnement du bilan prévisionnel.</div>';
+  }
+
+  /* ---- Barre d'onglets « Formulaire · Étude de marché » (sous-module) ---- */
+  function tabsHTML(active){
+    function tab(id,lbl){ return '<button type="button" class="fi-subtab'+(active===id?' on':'')+'" onclick="go(\''+id+'\')">'+esc(lbl)+'</button>'; }
+    return '<div class="fi-subtabs-in">'+tab('formulaire','Formulaire')+tab('etudemarche','Étude de marché')+'</div>'
+      +'<div class="fi-subtabs-sub">Étude de marché — sous-module du Formulaire (rattachée au dossier en cours)</div>';
+  }
+  window.__emTabsHTML=tabsHTML;
+
+  /* ---- Page « Étude de marché » ---- */
+  function pageEtudeMarche(){
+    var e=(FD().etude||{});
+    var refresh=(window.mqRefresh?'<button class="mq-ib" onclick="mqRefresh(this)" title="Actualiser la page" aria-label="Actualiser">'+((window.MQ_ICONS&&window.MQ_ICONS.refresh)||'↻')+'</button>':'');
+    var hero='<div class="em-hero"><div><h2 class="em-hero-t">Étude de marché</h2>'
+      +'<div class="em-hero-s">Analyse du marché du projet client : secteur, clientèle cible, concurrence, offre &amp; prix, prévisions. Les informations complètent le dossier et éclairent le bilan prévisionnel.</div></div>'
+      +'<div class="em-hero-r">'+refresh+'</div></div>';
+
+    /* 1. Projet & marché */
+    var advStade=adv((function(){var m={emergent:'Marché émergent : fort potentiel mais demande à confirmer — prévoir une phase de test et un besoin de trésorerie initial.',croissance:'Marché en croissance : fenêtre favorable — soigner l\'acquisition pour capter des parts rapidement.',mature:'Marché mature : la différenciation et la fidélisation priment sur la conquête.',declin:'Marché en déclin : vérifier la pérennité de la demande et envisager une niche ou une diversification.'};return m[e.stade]||'';})());
+    var advZone=adv(e.zone?'Zone de chalandise renseignée — estimez la demande locale (population, entreprises, flux) pour dimensionner le prévisionnel.':'');
+    var g1=grp('Projet & marché',
+      r1('Secteur d\'activité',eI('etude.secteur','ex. Restauration rapide, BTP second œuvre, e-commerce…'))
+      +r1('Description du marché',eT('etude.marche','Nature du marché, dynamique générale, acteurs en présence…'))
+      +r2('Stade du marché',eSel('etude.stade',[['','—'],['emergent','Émergent'],['croissance','En croissance'],['mature','Mature'],['declin','En déclin']],e.stade),'Zone de chalandise / périmètre',eI('etude.zone','ex. Locale (10 km), régionale, nationale, en ligne'))
+      +(advStade||advZone?('<div class="em-advrow">'+advStade+advZone+'</div>'):'')
+      +r1('Taille estimée du marché',eI('etude.taille','ex. 500 clients potentiels dans la zone / marché national de X M€')));
+
+    /* 2. Clientèle cible */
+    var advCible=adv('Définir précisément la cible (B2C/B2B, profil) conditionne le message commercial, les canaux et le panier moyen — donc le prévisionnel.');
+    var g2=grp('Clientèle cible',
+      r2('Type de clientèle',eSel('etude.cibleType',[['','—'],['B2C','Particuliers (B2C)'],['B2B','Entreprises (B2B)'],['mixte','Mixte (B2C + B2B)'],['public','Secteur public / collectivités']],e.cibleType),'Nombre de clients potentiels',eN('etude.nbClients','ex. 500'))
+      +advCible
+      +r1('Profil des clients cibles',eT('etude.cibleProfil','Âge, CSP, localisation, habitudes, taille d\'entreprise…'))
+      +r1('Besoin / problème résolu',eT('etude.besoin','Quel besoin concret votre offre satisfait-elle ?')));
+
+    /* 3. Concurrence */
+    var cl=concList();
+    var concRows=cl.map(function(c,i){ return '<div class="em-conc"><button type="button" class="fi-ax" title="Retirer" onclick="emConcDel('+i+')">×</button>'
+      +'<div class="em-conc-t">Concurrent '+(i+1)+'</div>'
+      +'<label>Nom</label><input value="'+esc(c.nom||'')+'" oninput="emConcSet('+i+',\'nom\',this)" placeholder="Nom du concurrent">'
+      +'<div class="frow"><div><label>Point fort</label><input value="'+esc(c.force||'')+'" oninput="emConcSet('+i+',\'force\',this)" placeholder="Ce qu\'il fait bien"></div>'
+      +'<div><label>Point faible</label><input value="'+esc(c.faiblesse||'')+'" oninput="emConcSet('+i+',\'faiblesse\',this)" placeholder="Sa faiblesse = votre opportunité"></div></div>'
+      +'</div>'; }).join('');
+    var advConc=adv((function(){if(e.nivConcurrence==='forte')return 'Concurrence forte : la différenciation (offre, prix, service, image) est décisive — précisez votre avantage ci-dessous.';if(e.nivConcurrence==='faible')return 'Peu de concurrence : vérifiez que la demande existe réellement (un marché vide peut cacher une demande faible).';return '';})());
+    var g3=grp('Concurrence',
+      r2('Niveau de concurrence',eSel('etude.nivConcurrence',[['','—'],['faible','Faible'],['moyenne','Moyenne'],['forte','Forte']],e.nivConcurrence),'Avantage concurrentiel',eI('etude.avantage','Ce qui vous distingue durablement'))
+      +advConc
+      +'<div class="em-conc-list">'+(concRows||'<div class="hint">Aucun concurrent listé.</div>')+'</div>'
+      +'<button type="button" class="btn btn-sm btn-ghost em-add" onclick="emConcAdd()">+ Ajouter un concurrent</button>');
+
+    /* 4. Offre & prix */
+    var advPrix=adv('Le positionnement prix (entrée / milieu / haut de gamme) doit être cohérent avec la cible et la marge : un prix trop bas fragilise la rentabilité, trop haut réduit le volume.');
+    var g4=grp('Offre & prix',
+      r1('Produits / services proposés',eT('etude.offre','Détaillez l\'offre principale et les offres connexes…'))
+      +r2('Politique de prix',eI('etude.prix','ex. Prix moyen 25 € · abonnement 49 €/mois'),'Positionnement',eSel('etude.gamme',[['','—'],['entree','Entrée de gamme'],['milieu','Milieu de gamme'],['haut','Haut de gamme']],e.gamme))
+      +advPrix
+      +r1('Canaux de distribution / acquisition',eT('etude.canaux','ex. Boutique, site web, réseaux sociaux, bouche-à-oreille, apporteurs…')));
+
+    /* 5. Prévisions & objectifs */
+    var advPart=adv('Restez réaliste : une part de marché atteinte en année 1 est généralement modeste. Un objectif prudent crédibilise le prévisionnel auprès des financeurs.');
+    var g5=grp('Prévisions & objectifs',
+      r2('Panier moyen estimé (€)',eN('etude.panier','ex. 40'),'Part de marché visée an 1 (%)',eN('etude.partVisee','ex. 5'))
+      +advPart
+      +r2('Saisonnalité',eI('etude.saison','ex. Pics en été / activité régulière'),'Chiffre d\'affaires visé an 1 (€)',eN('etude.caVise','optionnel — sinon estimé ci-dessous')));
+
+    /* Carte calculée */
+    var calc='<div class="card fi-card"><div class="card-h"><h2>Marché potentiel</h2><span class="sub" style="margin-left:auto">Estimation en direct</span></div><div class="card-b"><div id="em-calc">'+emCalcInner()+'</div></div></div>';
+
+    /* 6. Environnement */
+    var g6=grp('Environnement du marché',
+      r1('Réglementation / contraintes',eT('etude.regl','Autorisations, normes, diplômes, assurances obligatoires…'))
+      +r2('Fournisseurs clés',eI('etude.fournisseurs','Principaux fournisseurs / dépendances'),'Tendances & opportunités',eI('etude.tendances','Évolutions favorables du marché'))
+      +r1('Risques identifiés',eT('etude.risques','Ce qui pourrait freiner le projet')));
+
+    /* 7. SWOT */
+    var g7='<div class="card fi-card"><div class="card-h"><h2>Synthèse (SWOT)</h2><button type="button" class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="emSwotAuto()">Proposer une synthèse</button></div><div class="card-b">'
+      +'<div class="frow"><div><label>Forces</label>'+eT('etude.swot.forces','Atouts internes',3)+'</div><div><label>Faiblesses</label>'+eT('etude.swot.faiblesses','Points faibles internes',3)+'</div></div>'
+      +'<div class="frow"><div><label>Opportunités</label>'+eT('etude.swot.opportunites','Facteurs externes favorables',3)+'</div><div><label>Menaces</label>'+eT('etude.swot.menaces','Facteurs externes défavorables',3)+'</div></div>'
+      +'</div></div>';
+
+    return '<div class="fi-wrap em-wrap"><div class="fi-subtabs">'+tabsHTML('etudemarche')+'</div>'
+      +hero+g1+g2+g3+g4+g5+calc+g6+g7+'</div>';
+  }
+  window.pageEtudeMarche=pageEtudeMarche;
+
+  /* ---- Enregistrement de la page dans le routage (juste après « formulaire ») ---- */
+  try{ if(typeof PAGES!=='undefined' && !PAGES.some(function(p){return p.id==='etudemarche';})){
+    var iF=PAGES.findIndex(function(p){return p.id==='formulaire';});
+    var entry={id:'etudemarche',lbl:'Étude de marché',ic:'trend',sub:'Analyse du marché du projet client'};
+    if(iF>=0)PAGES.splice(iF+1,0,entry);else PAGES.push(entry);
+  } }catch(e){}
+
+  /* ---- Bouton de navigation « Étude de marché » (sous « Formulaire », indenté = sous-module) ---- */
+  function injectEtudeBtn(){
+    var nav=document.getElementById('nav'); if(!nav)return;
+    if(nav.querySelector('[data-etudebtn]'))return;
+    var form=nav.querySelector('[data-formbtn]'); if(!form)return; /* attend l'injection du bouton Formulaire */
+    var on=(typeof state!=='undefined'&&state.page==='etudemarche')?' on':'';
+    var ico=(typeof svg==='function'&&typeof IC!=='undefined'&&IC.trend)?svg(IC.trend):'';
+    var b=document.createElement('button');
+    b.className='nav-btn nav-sub-btn'+on; b.setAttribute('data-etudebtn','1'); b.setAttribute('onclick',"go('etudemarche')");
+    b.innerHTML=ico+'<span class="nav-btn-lbl">Étude de marché</span>';
+    if(form.parentNode)form.parentNode.insertBefore(b,form.nextSibling); else nav.appendChild(b);
+  }
+  try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){ var r=_bn.apply(this,arguments); try{injectEtudeBtn();}catch(e){} return r; }; } }catch(e){}
+
+  /* ---- Rendu de la page « Étude de marché » + onglets sur la page Formulaire ---- */
+  try{ var _rd=window.render; if(typeof _rd==='function'){ window.render=function(){
+    if(typeof state!=='undefined'&&state.page==='etudemarche'){
+      try{buildNav();}catch(e){}
+      try{document.body.dataset.page='etudemarche';}catch(e){}
+      var p=(typeof PAGES!=='undefined')?PAGES.find(function(x){return x.id==='etudemarche';}):null;
+      try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Étude de marché';}catch(e){}
+      try{document.getElementById('psub').textContent=(p&&p.sub)||'';}catch(e){}
+      var V=document.getElementById('view'); if(V)V.innerHTML=pageEtudeMarche();
+      try{ if(typeof window.fiBarAlign==='function')requestAnimationFrame(window.fiBarAlign); }catch(e){}
+      return;
+    }
+    var res=_rd.apply(this,arguments);
+    /* Injecte la barre d'onglets en tête du Formulaire (pour naviguer vers le sous-module) */
+    try{ if(typeof state!=='undefined'&&state.page==='formulaire'){
+      var wrap=document.querySelector('#view .fi-wrap');
+      if(wrap && !wrap.querySelector('.fi-subtabs')){
+        var bar=document.createElement('div'); bar.className='fi-subtabs'; bar.innerHTML=tabsHTML('formulaire');
+        wrap.insertBefore(bar,wrap.firstChild);
+      }
+    } }catch(e){}
+    return res;
+  }; } }catch(e){}
+
+  /* ---- Styles ---- */
+  try{ var st=document.createElement('style'); st.id='em-css'; st.textContent=[
+    '.em-wrap{padding-bottom:40px}',
+    '.fi-subtabs{margin:2px 0 8px;padding:10px 12px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.02)}',
+    '.fi-subtabs-in{display:inline-flex;gap:4px;background:#0c0c0f;border:1px solid #232326;border-radius:11px;padding:4px}',
+    '.fi-subtab{appearance:none;border:0;background:transparent;color:#b7b7c0;font-weight:700;font-size:12.5px;padding:7px 15px;border-radius:8px;cursor:pointer;transition:.15s ease}',
+    '.fi-subtab:hover{color:#fff}',
+    '.fi-subtab.on{background:linear-gradient(180deg,#2b6cff,#1e57e6);color:#fff;box-shadow:0 2px 10px -4px rgba(43,108,255,.8)}',
+    '.fi-subtabs-sub{font-size:11px;color:#8b8b95;margin-top:7px}',
+    '.nav-sub-btn .nav-btn-lbl{opacity:.95}',
+    'aside .nav-sub-btn{padding-left:22px!important;position:relative}',
+    'aside .nav-sub-btn::before{content:"";position:absolute;left:12px;top:50%;width:5px;height:5px;border-radius:50%;background:#5b6070;transform:translateY(-50%)}',
+    'aside .nav-sub-btn.on::before{background:#2b6cff}',
+    '.em-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:2px 0 4px}',
+    '.em-hero-t{font-size:21px;font-weight:800;margin:0;letter-spacing:.2px;color:#f4f6fa}',
+    '.em-hero-s{font-size:12.5px;line-height:1.55;color:#a9a9b2;margin-top:4px;max-width:640px}',
+    '.em-hero-r{display:flex;gap:8px;flex:none}',
+    '.em-advrow{display:flex;flex-direction:column;gap:6px;margin-top:2px}',
+    '.em-conc{position:relative;border:1px solid #232326;border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#0a0a0c}',
+    '.em-conc-t{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#8f8f98;font-weight:700;margin-bottom:8px}',
+    '.em-conc-list{margin-top:4px}',
+    '.em-add{margin-top:2px}',
+    '.em-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}',
+    '@media(max-width:680px){.em-kpis{grid-template-columns:1fr}}',
+    '.em-kpi{border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 13px;background:rgba(255,255,255,.02)}',
+    '.em-kpi-l{font-size:11px;color:#9a9aa4;font-weight:600;line-height:1.35}',
+    '.em-kpi-v{font-size:18px;font-weight:800;color:#f4f6fa;margin-top:6px}',
+    '.em-na{font-size:12px;font-weight:600;color:#7a7a84}',
+    '.em-prog{margin-top:12px}',
+    '.em-prog-h{display:flex;justify-content:space-between;font-size:11.5px;color:#9a9aa4;font-weight:600;margin-bottom:5px}',
+    '.em-prog-bar{height:8px;border-radius:6px;background:#17171b;overflow:hidden}',
+    '.em-prog-bar>i{display:block;height:100%;background:linear-gradient(90deg,#2b6cff,#4d8bff);transition:width .25s ease}',
+    '.em-calc-note{font-size:11px;color:#8b8b95;margin-top:10px;line-height:1.5}'
+  ].join(''); document.head.appendChild(st); }catch(e){}
 })();
 </script>
 
