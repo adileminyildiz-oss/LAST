@@ -751,6 +751,7 @@ const nivTag=n=>`<span class="tag ${n==='chaud'?'hot':n==='tiède'?'warm':'mut'}
 const PAGES=[
   {id:'demandes',lbl:'Demandes',ic:'inbox',sub:'Réception & qualification IA'},
   {id:'espace',lbl:'Traitement',ic:'espace',sub:'Travail & génération des dossiers'},
+  {id:'conformite',lbl:'Conformité',ic:'dash',sub:'Abonnés — tout à jour'},
   {id:'editions',lbl:'Éditions',ic:'doc',sub:'Documents générés & prêts à éditer'},
   {id:'pilotage',lbl:'Pilotage',ic:'dash',sub:'Tableau de bord temps réel',hidden:true},
   {id:'params',lbl:'Paramètres',ic:'gear',sub:'Équipe & réglages'}
@@ -845,7 +846,7 @@ function render(){
   document.getElementById('psub').textContent=p.sub;
   const V=document.getElementById('view');
   var __bb=(typeof backupBannerHTML==='function')?backupBannerHTML():'';
-  V.innerHTML=__bb+({demandes:pageDemandes,espace:pageEspace,params:pageParams,editions:(typeof pageEditions==='function'?pageEditions:pageDemandes),pilotage:(typeof pagePilotage==='function'?pagePilotage:pageDemandes)}[state.page]||pageDemandes)();
+  V.innerHTML=__bb+({demandes:pageDemandes,espace:pageEspace,params:pageParams,conformite:(typeof pageConformite==='function'?pageConformite:pageDemandes),editions:(typeof pageEditions==='function'?pageEditions:pageDemandes),pilotage:(typeof pagePilotage==='function'?pagePilotage:pageDemandes)}[state.page]||pageDemandes)();
   wireCards();
 }
 
@@ -3232,7 +3233,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=515;
+var LAST_VER=516;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -25165,6 +25166,465 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     window.edLibOpen=function(id){ try{ var d=(DB.editionsLibres||[]).find(function(x){return x.id===id;}); if(d&&d.k==='factnorm'){ if(openInvoice())return; } }catch(e){} return _o.apply(this,arguments); };
     window.edLibOpen.__factQonto=1;
   } }catch(e){}
+})();
+</script>
+
+<script>
+/* ===================================================================
+   MAR'Q — Module CONFORMITÉ (Phase 1)
+   Abonnés + moteur d'échéances (fiscal / social / facturation) + attestation.
+   100% additif — aucune modification du design existant.
+   =================================================================== */
+(function(){
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function euro(n){ try{ if(typeof eur==='function' && eur(1)!=='—') return eur(n); }catch(e){} n=Math.round((+n||0)*100)/100; try{return n.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';}catch(_){return n+' €';} }
+  function uid2(p){ return (p||'ab')+'-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function ymd(dt){ return dt.getFullYear()+'-'+pad(dt.getMonth()+1)+'-'+pad(dt.getDate()); }
+  function todayISO(){ return ymd(new Date()); }
+  function frDate(iso){ if(!iso)return '—'; var p=(''+iso).split('T')[0].split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso; }
+  function d0(iso){ var d=new Date((iso||todayISO())+'T00:00:00'); d.setHours(0,0,0,0); return d; }
+  function saveNow(){ try{ if(typeof save==='function') save(); }catch(e){} }
+  function rerender(){ try{ if(typeof render==='function' && window.state && state.page==='conformite') render(); }catch(e){} }
+
+  /* ---- moteur d'échéances -------------------------------------------------- */
+  function monthly(day){ var a=[]; for(var m=1;m<=12;m++) a.push({m:m,d:day}); return a; }
+  function nextAnchor(anchors, fromISO){
+    var t=d0(fromISO); var best=null;
+    for(var yy=0; yy<=1; yy++){ var y=t.getFullYear()+yy;
+      anchors.forEach(function(a){ var dt=new Date(y,a.m-1,a.d); dt.setHours(0,0,0,0); if(dt>=t && (!best||dt<best)) best=dt; }); }
+    if(!best){ var a0=anchors[0]; best=new Date(t.getFullYear()+1,a0.m-1,a0.d); }
+    return ymd(best);
+  }
+  function cadenceLbl(n){ return ({12:'Mensuelle',6:'Bimestrielle',4:'Trimestrielle',2:'Semestrielle',1:'Annuelle'})[n]||'Périodique'; }
+  // solde IS = 15 du 4e mois après la clôture ; liasse ~ même échéance (mi-mai pour clôture déc.)
+  function moisApres(clot, k){ var m=((clot-1+k)%12)+1; return m; }
+
+  function modeleObligations(a){
+    var L=[], clot=+a.clotureMois||12;
+    function O(code,label,cat,anchors){ L.push({code:code,label:label,cat:cat,anchors:anchors}); }
+    // ---- TVA ----
+    if(a.tva==='ca3-mensuel')      O('tva','TVA — CA3 (déclaration mensuelle)','fiscal',monthly(24));
+    else if(a.tva==='ca3-trimestriel') O('tva','TVA — CA3 (déclaration trimestrielle)','fiscal',[{m:1,d:24},{m:4,d:24},{m:7,d:24},{m:10,d:24}]);
+    else if(a.tva==='ca12'){ O('tva','TVA — CA12 (déclaration annuelle)','fiscal',[{m:5,d:3}]); O('tva-ac','TVA — acomptes semestriels','fiscal',[{m:7,d:24},{m:12,d:24}]); }
+    // ---- résultat / revenus ----
+    if(a.fiscal==='IS'){
+      O('is-ac','Impôt sur les sociétés — acomptes','fiscal',[{m:3,d:15},{m:6,d:15},{m:9,d:15},{m:12,d:15}]);
+      O('is-solde','IS — solde (relevé de solde)','fiscal',[{m:moisApres(clot,4),d:15}]);
+      O('liasse','Liasse fiscale (2065 + annexes)','fiscal',[{m:(clot===12?5:moisApres(clot,3)),d:(clot===12?18:15)}]);
+      O('cfe','CFE — solde','fiscal',[{m:12,d:15}]);
+    } else if(a.fiscal==='micro'){
+      O('micro-ca','Déclaration de chiffre d\'affaires (URSSAF micro)','social',monthly(30));
+      O('2042','Déclaration de revenus (2042 / 2042-C-PRO)','fiscal',[{m:5,d:25}]);
+      O('cfe','CFE — solde','fiscal',[{m:12,d:15}]);
+    } else if(a.fiscal==='reel-IR'){
+      O('liasse-ir','Liasse BNC/BIC (2035 / 2031)','fiscal',[{m:5,d:18}]);
+      O('2042','Déclaration de revenus (2042 / 2042-C-PRO)','fiscal',[{m:5,d:25}]);
+      O('cfe','CFE — solde','fiscal',[{m:12,d:15}]);
+    }
+    // ---- social ----
+    if(a.salaries) O('dsn','DSN mensuelle (paie)','social',monthly(15));
+    if(a.dirigeantSocial==='tns' && a.fiscal!=='micro') O('urssaf-tns','Cotisations URSSAF (TNS / indépendant)','social',monthly(5));
+    // ---- facturation ----
+    O('facturation','Facturation à jour (émission & encaissement)','facturation',monthly(28));
+    return L;
+  }
+  // (re)génère les obligations en préservant les derniers dépôts par code
+  function genererObligations(a){
+    var anciens={}; (a.obligations||[]).forEach(function(o){ anciens[o.code]=o; });
+    a.obligations = modeleObligations(a).map(function(m){
+      var old=anciens[m.code];
+      var prochaine = (old&&old.prochaine) ? old.prochaine : nextAnchor(m.anchors, todayISO());
+      return { code:m.code, label:m.label, cat:m.cat, anchors:m.anchors, prochaine:prochaine, dernier:(old?old.dernier:null) };
+    });
+    return a;
+  }
+  function obStatut(ob){
+    var t=d0(todayISO()), p=d0(ob.prochaine);
+    var diff=Math.round((p-t)/86400000);
+    if(diff<0) return 'retard';
+    if(diff<=15) return 'avenir';
+    return 'ajour';
+  }
+  function aboStatut(a){
+    var st='ajour';
+    (a.obligations||[]).forEach(function(ob){ var s=obStatutFor(a,ob); if(s==='retard') st='retard'; else if(s==='avenir'&&st!=='retard') st='avenir'; });
+    return st;
+  }
+  function prochaineEcheance(a){
+    var best=null; (a.obligations||[]).forEach(function(ob){ var p=d0(ob.prochaine); if(!best||p<best) best=p; });
+    return best?ymd(best):null;
+  }
+  var STLBL={ajour:'À jour',avenir:'À venir',retard:'En retard'};
+
+  /* ---- données ------------------------------------------------------------- */
+  function seedAbonnes(){
+    var A=[
+      {id:'ab-1',raison:'MARCHAND CONSEIL',forme:'SAS',siren:'901 234 567',fiscal:'IS',tva:'ca3-mensuel',salaries:true,dirigeantSocial:'assimile',clotureMois:12,aboFormule:'Sérénité mensuel',aboMensualite:149,abonnementActif:true},
+      {id:'ab-2',raison:'CABINET A. BERNARD',forme:'EI',siren:'812 555 210',fiscal:'micro',tva:'franchise',salaries:false,dirigeantSocial:'tns',clotureMois:12,aboFormule:'Essentiel mensuel',aboMensualite:69,abonnementActif:true},
+      {id:'ab-3',raison:'OKONKWO NÉGOCE',forme:'SARL',siren:'534 902 771',fiscal:'IS',tva:'ca3-trimestriel',salaries:false,dirigeantSocial:'tns',clotureMois:12,aboFormule:'Sérénité mensuel',aboMensualite:149,abonnementActif:true}
+    ];
+    A.forEach(genererObligations);
+    // quelques états réalistes : marquer certaines obligations comme faites, en créer une en retard
+    try{
+      var m=A[0].obligations.find(function(o){return o.code==='tva';}); if(m){ m.dernier=todayISO(); }
+      var r=A[2].obligations.find(function(o){return o.code==='tva';}); if(r){ r.prochaine=ymd(new Date(Date.now()-6*86400000)); } // en retard
+      var v=A[1].obligations.find(function(o){return o.code==='micro-ca';}); if(v){ v.prochaine=ymd(new Date(Date.now()+9*86400000)); } // à venir
+    }catch(e){}
+    return A;
+  }
+  function ensureData(){
+    if(typeof DB==='undefined' || !DB || typeof DB!=='object') return;
+    if(!Array.isArray(DB.abonnes)){ DB.abonnes = seedAbonnes(); saveNow(); }
+    else DB.abonnes.forEach(function(a){ if(!a.obligations||!a.obligations.length) genererObligations(a); });
+    ensureServices();
+  }
+
+  /* ---- styles (tokens existants) ------------------------------------------ */
+  function injectCSS(){
+    if(document.getElementById('cf-css')) return;
+    var st=document.createElement('style'); st.id='cf-css';
+    st.textContent=[
+      '.cf-pill{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:20px;border:1px solid;white-space:nowrap}',
+      '.cf-pill::before{content:"";width:6px;height:6px;border-radius:50%}',
+      '.cf-ajour{color:#4f7a3a;background:rgba(120,160,80,.14);border-color:rgba(120,160,80,.4)}.cf-ajour::before{background:#5b8f3e}',
+      '.cf-avenir{color:#9a6a12;background:rgba(214,158,62,.16);border-color:rgba(214,158,62,.42)}.cf-avenir::before{background:#c48a24}',
+      '.cf-retard{color:#a23b28;background:rgba(190,80,55,.14);border-color:rgba(190,80,55,.4)}.cf-retard::before{background:#bd4a30}',
+      '.cf-list{display:flex;flex-direction:column;gap:8px}',
+      '.cf-ab{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:11px 13px;border:1px solid var(--line-soft);border-radius:var(--radius);background:var(--card);cursor:pointer;transition:border-color .12s}',
+      '.cf-ab:hover{border-color:#cbbc93}',
+      '.cf-ab .r{font-weight:700;color:var(--ink);font-size:13px}',
+      '.cf-ab .m{font-size:11px;color:var(--ink-3);margin-top:2px}',
+      '.cf-ab .e{font-size:11px;color:var(--ink-3);text-align:right;white-space:nowrap}',
+      '.cf-grp{margin-top:14px}.cf-grp:first-child{margin-top:0}',
+      '.cf-grp-h{font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--ink-3);margin:0 0 7px}',
+      '.cf-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px 11px;border:1px solid var(--line-soft);border-radius:8px;background:var(--card)}',
+      '.cf-row+.cf-row{margin-top:6px}',
+      '.cf-row .lb{font-weight:700;font-size:12.5px;color:var(--ink)}',
+      '.cf-row .dt{font-size:11px;color:var(--ink-3);margin-top:2px}',
+      '.cf-row .rt{display:flex;align-items:center;gap:9px}',
+      '.cf-form{display:grid;grid-template-columns:1fr 1fr;gap:10px}',
+      '.cf-form label{display:block;font-size:11px;font-weight:700;color:var(--ink-3);margin-bottom:3px}',
+      '.cf-form .full{grid-column:1/-1}',
+      '.cf-form input,.cf-form select{width:100%;padding:7px 9px;border:1px solid var(--line-2);border-radius:7px;background:var(--card);color:var(--ink);font-size:12.5px}'
+    ].join('');
+    document.head.appendChild(st);
+  }
+
+  /* ---- page cockpit -------------------------------------------------------- */
+  window.pageConformite=function(){
+    ensureData(); injectCSS();
+    var A=DB.abonnes||[];
+    var nb=A.length, ajour=0, retard=0, bientot=0, aenc=0;
+    A.forEach(function(a){ var s=aboStatut(a); if(s==='ajour')ajour++; else if(s==='retard')retard++; else bientot++; aenc+=factuAnalyse(a).aEncaisser; });
+    aenc=Math.round(aenc*100)/100;
+    var kpis='<div class="grid" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">'
+      +'<div class="kpi"><div class="val blue">'+nb+'</div><div class="lbl">Abonnés suivis</div></div>'
+      +'<div class="kpi"><div class="val ok">'+ajour+'</div><div class="lbl">Tout à jour</div></div>'
+      +'<div class="kpi"><div class="val" style="color:#c48a24">'+bientot+'</div><div class="lbl">Échéance &lt; 15 j</div></div>'
+      +'<div class="kpi"><div class="val hot">'+retard+'</div><div class="lbl">En retard</div></div>'
+      +'<div class="kpi"><div class="val" style="color:#c48a24">'+euro(aenc)+'</div><div class="lbl">À encaisser</div></div>'
+      +'</div>';
+    var rows=A.slice().sort(function(x,y){ var o={retard:0,avenir:1,ajour:2}; return o[aboStatut(x)]-o[aboStatut(y)]; }).map(function(a){
+      var s=aboStatut(a); var pe=prochaineEcheance(a); var abst=aboAbonnementStatut(a); var an=factuAnalyse(a);
+      return '<div class="cf-ab" onclick="cfOpen(\''+a.id+'\')">'
+        +'<div><div class="r">'+esc(a.raison)+'</div><div class="m">'+esc(a.forme)+' · SIREN '+esc(a.siren)+' · '+esc(a.aboFormule||'—')+' · '+(abst==='actif'?'Abonnement actif':(abst==='suspendu'?'<span style="color:#bd4a30">Abonnement suspendu (impayés)</span>':'Abonnement inactif'))+'</div></div>'
+        +'<div class="e">'+(an.aEncaisser>0?('<span style="color:#c48a24">'+euro(an.aEncaisser)+' à encaisser</span><br>'):'Prochaine échéance<br>')+'<b>'+frDate(pe)+'</b></div>'
+        +'<div><span class="cf-pill cf-'+s+'">'+STLBL[s]+'</span></div>'
+        +'</div>';
+    }).join('') || '<div class="card-b" style="color:var(--ink-3)">Aucun abonné pour le moment.</div>';
+    return '<div class="card"><div class="card-h"><h2>Conformité des abonnés</h2><span class="sub">Tout à jour, aucune échéance oubliée</span>'
+      +'<button class="btn btn-pri btn-sm" style="margin-left:auto" onclick="cfNouvel()">+ Nouvel abonné</button></div>'
+      +'<div class="card-b">'+kpis+'<div class="cf-list">'+rows+'</div></div></div>';
+  };
+
+  /* ---- fiche abonné (carnet d'obligations) -------------------------------- */
+  window.cfOpen=function(id){
+    var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return;
+    var cats=[['fiscal','Déclarations fiscales'],['social','Déclarations sociales']];
+    var body=cats.map(function(c){
+      var obs=(a.obligations||[]).filter(function(o){return o.cat===c[0];});
+      if(!obs.length) return '';
+      return '<div class="cf-grp"><div class="cf-grp-h">'+c[1]+'</div>'+obs.map(function(ob){
+        var s=obStatutFor(a,ob);
+        return '<div class="cf-row"><div><div class="lb">'+esc(ob.label)+'</div>'
+          +'<div class="dt">'+cadenceLbl(ob.anchors.length)+' · prochaine échéance <b>'+frDate(ob.prochaine)+'</b> · dernier dépôt '+frDate(ob.dernier)+'</div></div>'
+          +'<div class="rt"><span class="cf-pill cf-'+s+'">'+STLBL[s]+'</span>'
+          +'<button class="btn btn-sm" onclick="cfMarquer(\''+a.id+'\',\''+ob.code+'\')">Déposé aujourd\'hui</button></div></div>';
+      }).join('')+'</div>';
+    }).join('') + cfFactPanel(a);
+    var head='<div style="font-size:11px;color:var(--ink-3);margin-bottom:12px">'+esc(a.forme)+' · SIREN '+esc(a.siren)
+      +' · '+({IS:'Impôt sociétés',micro:'Micro-entreprise','reel-IR':'IR au réel'}[a.fiscal]||a.fiscal)
+      +' · TVA '+({'franchise':'franchise en base','ca3-mensuel':'CA3 mensuelle','ca3-trimestriel':'CA3 trimestrielle','ca12':'CA12 annuelle'}[a.tva]||a.tva)
+      +(a.salaries?' · avec salariés (DSN)':'')+'</div>';
+    var foot='<button class="btn" onclick="cfSupprimer(\''+a.id+'\')" style="border-color:rgba(190,80,55,.4);color:#bd4a30">Supprimer</button>'
+      +'<button class="btn" onclick="cfEditer(\''+a.id+'\')">Modifier la société</button>'
+      +'<button class="btn btn-pri" onclick="cfAttestation(\''+a.id+'\')">Générer l\'attestation</button>';
+    openModal('Conformité — '+esc(a.raison), head+body, foot);
+  };
+  window.cfMarquer=function(id,code){
+    var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return;
+    var ob=(a.obligations||[]).find(function(o){return o.code===code;}); if(!ob)return;
+    ob.dernier=todayISO();
+    var nextFrom=ymd(new Date(d0(ob.prochaine).getTime()+86400000));
+    ob.prochaine=nextAnchor(ob.anchors, nextFrom);
+    saveNow(); if(typeof toast==='function') toast('✅ '+ob.label+' — marqué déposé'); cfOpen(id); rerender();
+  };
+
+  /* ---- attestation --------------------------------------------------------- */
+  window.cfAttestation=function(id){
+    var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return;
+    var st=aboStatut(a), dj=frDate(todayISO());
+    var lignes=(a.obligations||[]).map(function(ob){ var s=obStatutFor(a,ob);
+      return '<tr><td style="padding:5px 8px;border-bottom:1px solid #e7ddc6">'+esc(ob.label)+'</td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid #e7ddc6;text-align:center;color:'+(s==='retard'?'#a23b28':s==='avenir'?'#9a6a12':'#4f7a3a')+';font-weight:700">'+STLBL[s]+'</td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid #e7ddc6;text-align:center">'+frDate(ob.dernier)+'</td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid #e7ddc6;text-align:center">'+frDate(ob.prochaine)+'</td></tr>';
+    }).join('');
+    var phrase = st==='ajour'
+      ? 'atteste que la société ci-dessus désignée est <b>à jour de l\'ensemble de ses obligations déclaratives fiscales et sociales</b> ainsi que de sa facturation, à la date du '+dj+'.'
+      : 'atteste de la situation déclarative de la société ci-dessus désignée à la date du '+dj+'. Certaines obligations restent à régulariser (voir tableau ci-dessous).';
+    var doc='<div id="cf-att" style="font-family:Georgia,\'Times New Roman\',serif;color:#1c1a15;background:#fff;padding:26px 30px;border:1px solid #e7ddc6;border-radius:8px;max-width:720px;margin:0 auto">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1c1a15;padding-bottom:10px;margin-bottom:16px">'
+      +'<div><div style="font-weight:800;font-size:17px;letter-spacing:.5px">AEM CONSEIL</div><div style="font-size:11px;color:#6a5f4b">Cabinet de formalités & conformité</div></div>'
+      +'<div style="font-size:11px;color:#6a5f4b;text-align:right">Le '+dj+'</div></div>'
+      +'<div style="text-align:center;font-weight:800;font-size:15px;letter-spacing:1px;text-decoration:underline;margin:6px 0 16px">ATTESTATION DE SITUATION À JOUR</div>'
+      +'<p style="font-size:13px;line-height:1.7">Société : <b>'+esc(a.raison)+'</b> — '+esc(a.forme)+' — SIREN '+esc(a.siren)+'</p>'
+      +'<p style="font-size:13px;line-height:1.7">Le cabinet AEM CONSEIL '+phrase+'</p>'
+      +'<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:11.5px;margin:14px 0">'
+      +'<thead><tr style="background:#f3ecda"><th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d9cca8">Obligation</th><th style="padding:6px 8px;border-bottom:1px solid #d9cca8">Statut</th><th style="padding:6px 8px;border-bottom:1px solid #d9cca8">Dernier dépôt</th><th style="padding:6px 8px;border-bottom:1px solid #d9cca8">Prochaine échéance</th></tr></thead><tbody>'+lignes+'</tbody></table>'
+      +'<p style="font-size:12px;line-height:1.7;margin-top:10px">La présente attestation est délivrée pour servir et valoir ce que de droit.</p>'
+      +'<div style="margin-top:26px;text-align:right;font-size:12px"><div>Fait à Amiens, le '+dj+'</div><div style="margin-top:26px;font-weight:700">AEM CONSEIL</div></div>'
+      +'</div>';
+    var foot='<button class="btn" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="cfAttImprimer()">Imprimer / PDF</button>';
+    openModal('Attestation — '+esc(a.raison), doc, foot);
+  };
+  window.cfAttImprimer=function(){
+    var el=document.getElementById('cf-att'); if(!el)return;
+    var w=window.open('','_blank'); if(!w){ if(typeof toast==='function')toast('⚠ Autorisez les fenêtres pop-up pour imprimer'); return; }
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Attestation AEM CONSEIL</title></head><body style="margin:0;padding:20px;background:#fff">'+el.outerHTML+'<'+'script>window.onload=function(){window.print();}<'+'/script></body></html>');
+    w.document.close();
+  };
+
+  /* ---- création / modification d'abonné ----------------------------------- */
+  function opt(v,cur,lbl){ return '<option value="'+v+'"'+(v===cur?' selected':'')+'>'+esc(lbl)+'</option>'; }
+  function formHTML(a){
+    a=a||{};
+    var mois=''; for(var m=1;m<=12;m++) mois+=opt(String(m),String(a.clotureMois||12),['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][m-1]);
+    return '<div class="cf-form">'
+      +'<div class="full"><label>Raison sociale</label><input id="cf-raison" value="'+esc(a.raison||'')+'"></div>'
+      +'<div><label>Forme juridique</label><select id="cf-forme">'+['SAS','SASU','SARL','EURL','SCI','EI'].map(function(f){return opt(f,a.forme||'SAS',f);}).join('')+'</select></div>'
+      +'<div><label>SIREN</label><input id="cf-siren" value="'+esc(a.siren||'')+'"></div>'
+      +'<div><label>Régime fiscal</label><select id="cf-fiscal">'+opt('IS',a.fiscal||'IS','Société à l\'IS (réel)')+opt('reel-IR',a.fiscal,'BNC/BIC au réel (IR)')+opt('micro',a.fiscal,'Micro-entreprise')+'</select></div>'
+      +'<div><label>Régime de TVA</label><select id="cf-tva">'+opt('franchise',a.tva||'franchise','Franchise en base')+opt('ca3-mensuel',a.tva,'Réel normal — CA3 mensuelle')+opt('ca3-trimestriel',a.tva,'Réel normal — CA3 trimestrielle')+opt('ca12',a.tva,'Réel simplifié — CA12')+'</select></div>'
+      +'<div><label>Dirigeant — régime social</label><select id="cf-dir">'+opt('assimile',a.dirigeantSocial||'assimile','Assimilé salarié')+opt('tns',a.dirigeantSocial,'Travailleur non salarié (TNS)')+'</select></div>'
+      +'<div><label>Salariés (paie / DSN)</label><select id="cf-sal">'+opt('non',a.salaries?'oui':'non','Non')+opt('oui',a.salaries?'oui':'non','Oui')+'</select></div>'
+      +'<div><label>Clôture de l\'exercice</label><select id="cf-clot">'+mois+'</select></div>'
+      +'<div><label>Formule d\'abonnement</label><input id="cf-formule" value="'+esc(a.aboFormule||'Sérénité mensuel')+'"></div>'
+      +'<div><label>Mensualité (€)</label><input id="cf-mens" type="number" value="'+esc(a.aboMensualite!=null?a.aboMensualite:'')+'"></div>'
+      +'</div>';
+  }
+  function readForm(a){
+    function v(id){ var e=document.getElementById(id); return e?e.value:''; }
+    a.raison=v('cf-raison').trim(); a.forme=v('cf-forme'); a.siren=v('cf-siren').trim();
+    a.fiscal=v('cf-fiscal'); a.tva=v('cf-tva'); a.dirigeantSocial=v('cf-dir');
+    a.salaries=(v('cf-sal')==='oui'); a.clotureMois=+v('cf-clot')||12;
+    a.aboFormule=v('cf-formule').trim(); a.aboMensualite=+v('cf-mens')||0; a.abonnementActif=true;
+    return a;
+  }
+  window.cfNouvel=function(){
+    openModal('Nouvel abonné', formHTML({}), '<button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-pri" onclick="cfSaveNew()">Créer l\'abonné</button>');
+  };
+  window.cfSaveNew=function(){
+    var a=readForm({id:uid2('ab'),obligations:[]});
+    if(!a.raison){ if(typeof toast==='function')toast('⚠ Renseignez la raison sociale'); return; }
+    genererObligations(a); DB.abonnes=DB.abonnes||[]; DB.abonnes.push(a); saveNow();
+    if(typeof toast==='function')toast('✅ Abonné créé — carnet de conformité généré'); closeModal(); rerender();
+  };
+  window.cfEditer=function(id){
+    var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return;
+    openModal('Modifier — '+esc(a.raison), formHTML(a), '<button class="btn" onclick="cfOpen(\''+id+'\')">Retour</button><button class="btn btn-pri" onclick="cfSaveEdit(\''+id+'\')">Enregistrer</button>');
+  };
+  window.cfSaveEdit=function(id){
+    var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return;
+    readForm(a); genererObligations(a); saveNow();
+    if(typeof toast==='function')toast('✅ Société mise à jour — obligations recalculées'); cfOpen(id); rerender();
+  };
+
+  /* ============ Phase 2 — Facturation ============ */
+  function addDaysISO(iso,n){ var d=d0(iso); d.setDate(d.getDate()+n); return ymd(d); }
+  function nextFactNum(){ DB.cfFactSeq=(DB.cfFactSeq||0)+1; return 'F-'+(new Date().getFullYear())+'-'+String(DB.cfFactSeq).padStart(4,'0'); }
+  function factuAnalyse(a){
+    var f=a.factures||[], t=d0(todayISO()), retard=0, aenc=0, next=null;
+    f.forEach(function(x){ if(x.statut!=='payee'){ aenc+=(+x.ttc||0); var e=d0(x.echeance); if(e<t) retard++; if(!next||e<next) next=e; } });
+    return { retard:retard, aEncaisser:Math.round(aenc*100)/100, prochaine:next?ymd(next):null, nb:f.length };
+  }
+  function factuStatut(a){
+    var an=factuAnalyse(a); if(an.retard>0) return 'retard';
+    if(an.prochaine){ var diff=Math.round((d0(an.prochaine)-d0(todayISO()))/86400000); if(diff<=15) return 'avenir'; }
+    return 'ajour';
+  }
+  function obStatutFor(a,ob){ return (ob&&ob.code==='facturation') ? factuStatut(a) : obStatut(ob); }
+  var FSTLBL={payee:'Payée',retard:'En retard',emise:'Émise',avenir:'À échoir'};
+  function factStatutOne(x){ if(x.statut==='payee') return 'payee'; var t=d0(todayISO()), e=d0(x.echeance); if(e<t) return 'retard'; if((e-t)/86400000<=15) return 'avenir'; return 'emise'; }
+  function factPillClass(s){ return {payee:'cf-ajour',retard:'cf-retard',avenir:'cf-avenir',emise:'cf-avenir'}[s]||'cf-avenir'; }
+  function cfFactPanel(a){
+    var an=factuAnalyse(a);
+    var f=(a.factures||[]).slice().sort(function(x,y){ return (y.date||'').localeCompare(x.date||''); });
+    var rows = f.length ? f.map(function(x){ var s=factStatutOne(x);
+      return '<div class="cf-row"><div><div class="lb">'+esc(x.numero)+' — '+esc(x.libelle)+'</div>'
+        +'<div class="dt">'+({abonnement:'Abonnement',service:'Service'}[x.type]||x.type)+' · émise '+frDate(x.date)+' · échéance <b>'+frDate(x.echeance)+'</b> · '+euro(x.ttc)+' TTC'+(x.relances&&x.relances.length?(' · '+x.relances.length+' relance(s)'):'')+'</div></div>'
+        +'<div class="rt"><span class="cf-pill '+factPillClass(s)+'">'+FSTLBL[s]+'</span>'
+        +(x.statut!=='payee'?('<button class="btn btn-sm" onclick="cfFactPayer(\''+a.id+'\',\''+x.id+'\')">Marquer payée</button><button class="btn btn-sm" onclick="cfFactRelance(\''+a.id+'\',\''+x.id+'\')">Relancer</button>'):'')
+        +'<button class="btn btn-sm" onclick="cfFactVoir(\''+a.id+'\',\''+x.id+'\')">Voir</button></div></div>';
+    }).join('') : '<div class="dt" style="padding:6px 2px;color:var(--ink-3)">Aucune facture émise pour le moment.</div>';
+    var sub = an.aEncaisser>0
+      ? ('<span class="cf-pill '+(an.retard>0?'cf-retard':'cf-avenir')+'">'+euro(an.aEncaisser)+' à encaisser'+(an.retard>0?(' · '+an.retard+' en retard'):'')+'</span>')
+      : '<span class="cf-pill cf-ajour">Facturation à jour</span>';
+    return '<div class="cf-grp"><div class="cf-grp-h" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">Facturation '+sub
+      +'<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">'
+      +'<button class="btn btn-sm" onclick="cfGenMensualite(\''+a.id+'\')">Générer la mensualité</button>'
+      +'<button class="btn btn-sm" onclick="cfCommander(\''+a.id+'\')">Commander un service</button>'
+      +'<button class="btn btn-sm btn-pri" onclick="cfEmettre(\''+a.id+'\')">+ Émettre</button></span></div>'+rows+'</div>';
+  }
+  window.cfEmettre=function(id){
+    var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return;
+    var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
+    var body='<div class="cf-form">'
+      +'<div><label>Type de facture</label><select id="cfe-type" onchange="cfEmType(\''+id+'\')">'+opt('abonnement','abonnement','Abonnement mensuel')+opt('service','abonnement','Service ponctuel')+'</select></div>'
+      +'<div><label>Mode de règlement</label><select id="cfe-mode">'+['Virement','Prélèvement','Carte bancaire','Chèque'].map(function(m){return opt(m,'Prélèvement',m);}).join('')+'</select></div>'
+      +'<div class="full"><label>Libellé</label><input id="cfe-lib" value="'+esc('Abonnement '+(a.aboFormule||'')+' — '+moisNom)+'"></div>'
+      +'<div><label>Montant HT (€)</label><input id="cfe-ht" type="number" step="0.01" value="'+esc(a.aboMensualite!=null?a.aboMensualite:'')+'"></div>'
+      +'<div><label>TVA (%)</label><input id="cfe-tva" type="number" step="0.1" value="20"></div>'
+      +'<div><label>Date d\'émission</label><input id="cfe-date" type="date" value="'+todayISO()+'"></div>'
+      +'<div><label>Échéance de paiement</label><input id="cfe-ech" type="date" value="'+addDaysISO(todayISO(),30)+'"></div>'
+      +'</div>';
+    openModal('Émettre une facture — '+esc(a.raison), body, '<button class="btn" onclick="cfOpen(\''+id+'\')">Annuler</button><button class="btn btn-pri" onclick="cfEmValider(\''+id+'\')">Émettre la facture</button>');
+  };
+  window.cfEmType=function(id){
+    var a=(DB.abonnes||[]).find(function(x){return x.id===id;});
+    var t=document.getElementById('cfe-type'), lib=document.getElementById('cfe-lib'), ht=document.getElementById('cfe-ht'); if(!t)return;
+    if(t.value==='abonnement'){ var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()]; if(lib)lib.value='Abonnement '+((a&&a.aboFormule)||'')+' — '+moisNom; if(ht&&a)ht.value=a.aboMensualite||0; }
+    else { if(lib)lib.value=''; if(ht)ht.value=''; }
+  };
+  window.cfEmValider=function(id){
+    var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return;
+    function v(i){var e=document.getElementById(i);return e?e.value:'';}
+    var ht=+v('cfe-ht')||0, tva=+v('cfe-tva')||0, ttc=Math.round(ht*(1+tva/100)*100)/100;
+    var lib=v('cfe-lib').trim(); if(!lib){ if(typeof toast==='function')toast('⚠ Renseignez le libellé'); return; }
+    a.factures=a.factures||[];
+    a.factures.push({id:uid2('f'),numero:nextFactNum(),type:v('cfe-type'),libelle:lib,ht:ht,tva:tva,ttc:ttc,mode:v('cfe-mode'),date:v('cfe-date')||todayISO(),echeance:v('cfe-ech')||addDaysISO(todayISO(),30),statut:'emise',relances:[]});
+    saveNow(); if(typeof toast==='function')toast('✅ Facture émise — '+euro(ttc)+' TTC'); cfOpen(id); rerender();
+  };
+  window.cfFactPayer=function(id,fid){ var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return; var f=(a.factures||[]).find(function(x){return x.id===fid;}); if(!f)return; f.statut='payee'; f.paidAt=todayISO(); saveNow(); if(typeof toast==='function')toast('✅ '+f.numero+' encaissée'); cfOpen(id); rerender(); };
+  window.cfFactRelance=function(id,fid){ var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return; var f=(a.factures||[]).find(function(x){return x.id===fid;}); if(!f)return; f.relances=f.relances||[]; f.relances.push(todayISO()); saveNow(); if(typeof toast==='function')toast('✅ Relance enregistrée ('+f.relances.length+')'); cfOpen(id); };
+  window.cfFactVoir=function(id,fid){
+    var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return; var f=(a.factures||[]).find(function(x){return x.id===fid;}); if(!f)return;
+    var doc='<div id="cf-fac" style="font-family:Arial,Helvetica,sans-serif;color:#1c1a15;background:#fff;padding:26px 30px;border:1px solid #e7ddc6;border-radius:8px;max-width:720px;margin:0 auto">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1c1a15;padding-bottom:10px;margin-bottom:16px">'
+      +'<div><div style="font-weight:800;font-size:17px;letter-spacing:.5px">AEM CONSEIL</div><div style="font-size:11px;color:#6a5f4b">Cabinet de formalités &amp; conformité</div></div>'
+      +'<div style="text-align:right"><div style="font-weight:800;font-size:15px">FACTURE</div><div style="font-size:12px;color:#6a5f4b">'+esc(f.numero)+'</div></div></div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:14px"><div><b>Facturé à</b><br>'+esc(a.raison)+'<br>'+esc(a.forme)+' — SIREN '+esc(a.siren)+'</div>'
+      +'<div style="text-align:right">Émise le '+frDate(f.date)+'<br>Échéance : '+frDate(f.echeance)+'<br>Règlement : '+esc(f.mode||'—')+'</div></div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px;margin:8px 0"><thead><tr style="background:#f3ecda"><th style="padding:7px 8px;text-align:left;border-bottom:1px solid #d9cca8">Désignation</th><th style="padding:7px 8px;text-align:right;border-bottom:1px solid #d9cca8">HT</th><th style="padding:7px 8px;text-align:right;border-bottom:1px solid #d9cca8">TVA</th><th style="padding:7px 8px;text-align:right;border-bottom:1px solid #d9cca8">TTC</th></tr></thead>'
+      +'<tbody><tr><td style="padding:7px 8px;border-bottom:1px solid #e7ddc6">'+esc(f.libelle)+'</td><td style="padding:7px 8px;text-align:right;border-bottom:1px solid #e7ddc6">'+euro(f.ht)+'</td><td style="padding:7px 8px;text-align:right;border-bottom:1px solid #e7ddc6">'+(f.tva||0)+' %</td><td style="padding:7px 8px;text-align:right;border-bottom:1px solid #e7ddc6">'+euro(f.ttc)+'</td></tr></tbody></table>'
+      +'<div style="text-align:right;font-size:14px;font-weight:800;margin-top:8px">Net à payer : '+euro(f.ttc)+' TTC</div>'
+      +'<p style="font-size:11px;color:#6a5f4b;margin-top:16px">En cas de retard de paiement, indemnité forfaitaire de recouvrement de 40 € (art. L441-10 du Code de commerce).</p></div>';
+    var foot='<button class="btn" onclick="cfOpen(\''+id+'\')">Retour</button>'
+      +(f.statut!=='payee'?'<button class="btn" onclick="cfFactPayer(\''+id+'\',\''+fid+'\')">Marquer payée</button>':'')
+      +'<button class="btn btn-pri" onclick="cfPrint(\'cf-fac\')">Imprimer / PDF</button>';
+    openModal('Facture '+esc(f.numero), doc, foot);
+  };
+  window.cfPrint=function(elId){
+    var el=document.getElementById(elId); if(!el)return;
+    var w=window.open('','_blank'); if(!w){ if(typeof toast==='function')toast('⚠ Autorisez les fenêtres pop-up pour imprimer'); return; }
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>AEM CONSEIL</title></head><body style="margin:0;padding:20px;background:#fff">'+el.outerHTML+'<'+'script>window.onload=function(){window.print();}<'+'/script></body></html>');
+    w.document.close();
+  };
+  window.cfSupprimer=function(id){
+    if(!window.confirm('Supprimer cet abonné et tout son suivi de conformité ? Cette action est définitive.')) return;
+    DB.abonnes=(DB.abonnes||[]).filter(function(x){return x.id!==id;}); saveNow();
+    if(typeof toast==='function')toast('Abonné supprimé'); closeModal(); rerender();
+  };
+
+  /* ============ Phase 3 — Abonnements & services à la carte ============ */
+  function ensureServices(){
+    if(typeof DB==='undefined'||!DB) return;
+    if(!Array.isArray(DB.cfServices)){
+      DB.cfServices=[
+        {id:'s-crea',nom:'Création de société (SAS/SARL/EURL)',prix:300},
+        {id:'s-modif',nom:'Modification statutaire',prix:180},
+        {id:'s-transfert',nom:'Transfert de siège social',prix:180},
+        {id:'s-bilan',nom:'Bilan prévisionnel',prix:350},
+        {id:'s-marque',nom:'Dépôt de marque INPI',prix:250},
+        {id:'s-comptes',nom:'Approbation des comptes (PV + dépôt)',prix:150}
+      ];
+      saveNow();
+    }
+  }
+  function aboAbonnementStatut(a){ if(a.abonnementActif===false) return 'inactif'; var an=factuAnalyse(a); if(an.retard>=2) return 'suspendu'; return 'actif'; }
+  var ABLBL={actif:'Abonnement actif',suspendu:'Abonnement suspendu (impayés)',inactif:'Abonnement inactif'};
+  var MOISNOM=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  window.cfGenMensualite=function(id){
+    var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return;
+    var now=new Date(), mkey=now.getFullYear()+'-'+pad(now.getMonth()+1);
+    var exists=(a.factures||[]).some(function(x){ return x.type==='abonnement' && (x.date||'').slice(0,7)===mkey; });
+    if(exists){ if(typeof toast==='function')toast('ℹ La mensualité de ce mois est déjà générée'); return; }
+    var ht=+a.aboMensualite||0, ttc=Math.round(ht*1.2*100)/100;
+    a.factures=a.factures||[];
+    a.factures.push({id:uid2('f'),numero:nextFactNum(),type:'abonnement',libelle:'Abonnement '+(a.aboFormule||'')+' — '+MOISNOM[now.getMonth()]+' '+now.getFullYear(),ht:ht,tva:20,ttc:ttc,mode:'Prélèvement',date:todayISO(),echeance:addDaysISO(todayISO(),30),statut:'emise',relances:[]});
+    saveNow(); if(typeof toast==='function')toast('✅ Mensualité générée — '+euro(ttc)); cfOpen(id); rerender();
+  };
+  window.cfCommander=function(id){
+    var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return; ensureServices();
+    var opts=(DB.cfServices||[]).map(function(s){ return '<option value="'+s.id+'">'+esc(s.nom)+' — '+euro(s.prix)+'</option>'; }).join('');
+    var body='<div class="cf-form"><div class="full"><label>Service (facturé en plus de l\'abonnement)</label><select id="cfc-svc">'+opts+'</select></div>'
+      +'<div class="full"><label>Précision (optionnel)</label><input id="cfc-note" placeholder="ex. transfert de siège vers Lille"></div>'
+      +'<div><label>Mode de règlement</label><select id="cfc-mode">'+['Virement','Carte bancaire','Chèque','Prélèvement'].map(function(m){return opt(m,'Virement',m);}).join('')+'</select></div></div>';
+    openModal('Commander un service — '+esc(a.raison), body, '<button class="btn" onclick="cfOpen(\''+id+'\')">Annuler</button><button class="btn btn-pri" onclick="cfCommanderValider(\''+id+'\')">Commander &amp; facturer</button>');
+  };
+  window.cfCommanderValider=function(id){
+    var a=(DB.abonnes||[]).find(function(x){return x.id===id;}); if(!a)return;
+    function v(i){var e=document.getElementById(i);return e?e.value:'';}
+    var svc=(DB.cfServices||[]).find(function(x){return x.id===v('cfc-svc');}); if(!svc){ if(typeof toast==='function')toast('⚠ Choisissez un service'); return; }
+    var note=v('cfc-note').trim(), lib=svc.nom+(note?(' ('+note+')'):'');
+    var ht=+svc.prix||0, ttc=Math.round(ht*1.2*100)/100;
+    a.factures=a.factures||[];
+    a.factures.push({id:uid2('f'),numero:nextFactNum(),type:'service',libelle:lib,ht:ht,tva:20,ttc:ttc,mode:v('cfc-mode')||'Virement',date:todayISO(),echeance:addDaysISO(todayISO(),30),statut:'emise',relances:[],service:svc.nom});
+    saveNow(); if(typeof toast==='function')toast('✅ Service commandé & facturé — '+euro(ttc)); cfOpen(id); rerender();
+  };
+
+  /* ---- bouton de navigation « Conformité » (même mécanisme que les autres modules) ---- */
+  function injectCfBtn(){
+    var nav=document.getElementById('nav'); if(!nav) return;
+    if(nav.querySelector('[data-cfbtn]')) return;
+    var ref=nav.querySelector('button.nav-btn[onclick*="espace"]')||nav.querySelector('button.nav-btn[onclick*="editions"]');
+    var on=(typeof state!=='undefined'&&state.page==='conformite')?' on':'';
+    var ico=''; try{ if(typeof svg==='function'&&typeof IC!=='undefined') ico=svg(IC.dash||''); }catch(e){}
+    var b=document.createElement('button');
+    b.className='nav-btn'+on; b.setAttribute('data-cfbtn','1'); b.setAttribute('onclick',"go('conformite')");
+    b.innerHTML=ico+'<span class="nav-btn-lbl">Conformité</span>';
+    if(ref&&ref.parentNode) ref.parentNode.insertBefore(b, ref.nextSibling); else nav.appendChild(b);
+  }
+  try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){ var r=_bn.apply(this,arguments); try{injectCfBtn();}catch(e){} return r; }; } }catch(e){}
+  try{ injectCfBtn(); }catch(e){}
+
+  /* ---- Correctif GLOBAL de défilement : une seule zone de scroll (main) qui va jusqu'en bas,
+         sur tous les modules. Neutralise le double conteneur de scroll (.content/#view) qui
+         empêchait d'atteindre le bas de page. ---- */
+  function injectScrollFix(){
+    if(document.getElementById('cf-scrollfix')) return;
+    var s=document.createElement('style'); s.id='cf-scrollfix';
+    s.textContent='@media(min-width:861px){'
+      +'html body main{height:100vh!important;max-height:100vh!important;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain;scrollbar-gutter:stable}'
+      +'html body main>.content,html body main>#view,html body main .content.fl-in,html body main #view.fl-in{overflow:visible!important;height:auto!important;max-height:none!important;min-height:0!important;flex:0 0 auto!important;padding-bottom:120px!important}'
+      +'}';
+    document.head.appendChild(s);
+  }
+  try{ injectScrollFix(); }catch(e){}
+
+  // init au chargement
+  try{ ensureData(); }catch(e){}
 })();
 </script>
 
