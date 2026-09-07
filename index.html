@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=552;
+var LAST_VER=553;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -20884,25 +20884,324 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.cliStep=function(d){ var L=cliVisible(); if(!L.length)return; var i=-1; for(var k=0;k<L.length;k++){if(L[k].id===state.cliSel){i=k;break;}} if(i<0)i=0; i=(i+d+L.length)%L.length; state.cliSel=L[i].id; if(typeof render==='function')render(); };
   window.cliMail=function(id){ var c=clientById(id); if(!c)return; var em=(''+(c.email||'')).trim(); if(!em){ if(typeof toast==='function')toast('Aucune adresse e-mail — renseignez-la dans la fiche du client'); return; } try{ window.location.href='mailto:'+encodeURIComponent(em); }catch(e){} };
   function cliNavHTML(c){ cliCfCss(); var L=cliVisible(); if(L.length<2)return ''; var idx=0; for(var k=0;k<L.length;k++){if(L[k].id===c.id){idx=k;break;}} return '<div class="cli-nav">'+window.mqNav('prev','cliStep(-1)',{cls:'mq-nav-sm',label:'Client précédent'})+'<span class="cli-nav-pos">'+(idx+1)+' / '+L.length+'</span>'+window.mqNav('next','cliStep(1)',{cls:'mq-nav-sm',label:'Client suivant'})+'</div>'; }
+  /* ===================== FICHE CLIENT — onglets & sections enrichies ===================== */
+  function cn(v){ var x=parseFloat((''+(v==null?'':v)).replace(/\s/g,'').replace(',','.')); return isNaN(x)?0:x; }
+  function cEur(x){ x=Math.round((+x||0)*100)/100; return x.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }
+  function cPct(x){ return (Math.round((+x||0)*10)/10).toLocaleString('fr-FR')+' %'; }
+  function cliArr(c,name){ if(!c)return []; if(!Array.isArray(c[name]))c[name]=[]; return c[name]; }
+
+  var CLI_TABS=[['soc','Société'],['dir','Gérant'],['assoc','Associés'],['sal','Salariés'],['act','Activité & produits'],['fin','Finances'],['doc','Documents']];
+  var CLI_TABS_P=[['soc','Identité'],['fin','Finances'],['doc','Documents']];
+  function cliTabList(c){ return cliIsPart(c)?CLI_TABS_P:CLI_TABS; }
+  function cliTabCur(c){ var t=state.cliTab||'soc'; var ok=cliTabList(c).map(function(x){return x[0];}); return ok.indexOf(t)>=0?t:'soc'; }
+  window.cliTab=function(t){ state.cliTab=t; render(); };
+  function cliTabBar(c){
+    var cur=cliTabCur(c);
+    var cnt={assoc:(c.associes||[]).length,sal:(c.salaries||[]).length,act:(c.produits||[]).length,
+             fin:((c.revenus||[]).length+(c.invests||[]).length+(c.immos||[]).length),
+             doc:((typeof window.cofItemsForClient==='function')?(window.cofItemsForClient(cliName(c))||[]).length:0)+cliDocsGeneres(c).length};
+    return '<div class="cli-tabs" role="tablist">'+cliTabList(c).map(function(t){
+      var n=cnt[t[0]];
+      return '<button class="cli-tab'+(cur===t[0]?' on':'')+'" role="tab" onclick="cliTab(\''+t[0]+'\')">'+E(t[1])+(n?('<span class="cli-tab-n">'+n+'</span>'):'')+'</button>';
+    }).join('')+'</div>';
+  }
+
+  /* ---- écriture générique dans un tableau de la fiche ---- */
+  window.cliArrAdd=function(id,name){ var c=clientById(id); if(!c)return; cliArr(c,name).push({}); save(); render(); };
+  window.cliArrDel=function(id,name,i){ var c=clientById(id); if(!c)return; cliArr(c,name).splice(i,1); save(); render(); };
+  window.cliArrSet=function(id,name,i,key,val){ var c=clientById(id); if(!c)return; var a=cliArr(c,name); if(!a[i])return; a[i][key]=val; save(); cliLiveRefresh(id,name); };
+  function cliLiveRefresh(id,name){
+    var c=clientById(id); if(!c)return;
+    try{
+      if(name==='produits'){ cliArr(c,'produits').forEach(function(p,i){ var r=cliProdCalc(p);
+        var s=function(k,v){ var el=document.getElementById('cp-'+k+'-'+i); if(el)el.textContent=v; };
+        s('tot',cEur(r.total)); s('mb',cEur(r.mb)); s('mbp',cPct(r.mbp)); s('mn',cEur(r.mn)); s('tva',cEur(r.tvaM)); s('ttc',cEur(r.ttc)); });
+        var t=document.getElementById('cli-prod-tot'); if(t)t.innerHTML=cliProdTotHTML(c);
+      }
+      if(name==='salaries'){ cliArr(c,'salaries').forEach(function(s0,i){ var el=document.getElementById('cs-tot-'+i); if(el)el.textContent=cEur(cn(s0.brut)+cn(s0.patronal)); });
+        var t2=document.getElementById('cli-sal-tot'); if(t2)t2.innerHTML=cliSalTotHTML(c);
+      }
+      if(name==='invests'||name==='immos'||name==='revenus'){ var t3=document.getElementById('cli-fin-tot'); if(t3)t3.innerHTML=cliFinTotHTML(c);
+        cliArr(c,'immos').forEach(function(m,i){ var el=document.getElementById('ci-dot-'+i); if(el)el.textContent=cEur(cn(m.duree)>0?(cn(m.valeur)/cn(m.duree)):0); });
+      }
+    }catch(e){}
+  }
+
+  /* ---- petits champs de ligne ---- */
+  function rowIn(id,name,i,key,val,ph,cls){ return '<input class="cli-rin '+(cls||'')+'" value="'+E(val==null?'':val)+'" placeholder="'+E(ph||'')+'" oninput="cliArrSet(\''+id+'\',\''+name+'\','+i+',\''+key+'\',this.value)">'; }
+  function rowSel(id,name,i,key,val,opts){ return '<select class="cli-rin cli-rsel" onchange="cliArrSet(\''+id+'\',\''+name+'\','+i+',\''+key+'\',this.value)">'+opts.map(function(o){return '<option'+(((val||'')===o)?' selected':'')+'>'+E(o)+'</option>';}).join('')+'</select>'; }
+
+  /* ===================== Onglet GÉRANT ===================== */
+  function cliDirSection(c){
+    var id=c.id;
+    return grp('Dirigeant / gérant',
+        fld(id,'president','Nom & prénom du dirigeant')+fld(id,'presidentFonction','Fonction')
+      + fld(id,'dirCivilite','Civilité','sel',['','M.','Mme'])+fld(id,'dirNationalite','Nationalité')
+      + fld(id,'dirNaissance','Date de naissance','date')+fld(id,'dirLieuNaissance','Lieu de naissance'))
+    + grp('Adresse personnelle du dirigeant',
+        fld(id,'dirAdresse','Adresse personnelle')+fld(id,'dirCp','Code postal')+fld(id,'dirVille','Ville')+fld(id,'dirPays','Pays'))
+    + grp('Contact & situation du dirigeant',
+        fld(id,'dirTel','Téléphone')+fld(id,'dirEmail','E-mail')
+      + fld(id,'dirSituation','Situation familiale','sel',['','Célibataire','Marié(e)','Pacsé(e)','Divorcé(e)','Veuf(ve)'])
+      + fld(id,'dirRegime','Régime social','sel',['','TNS (travailleur non salarié)','Assimilé salarié'])
+      + fld(id,'dirRemuneration','Rémunération annuelle brute (€)')+fld(id,'dirParts','Parts détenues (%)'));
+  }
+
+  /* ===================== Onglet SALARIÉS ===================== */
+  function cliSalTotHTML(c){
+    var a=cliArr(c,'salaries'); var br=0,pat=0; a.forEach(function(s){ br+=cn(s.brut); pat+=cn(s.patronal); });
+    return '<div class="cli-kpis">'
+      +'<div class="cli-kpi"><b>'+a.length+'</b><span>Salariés saisis</span></div>'
+      +'<div class="cli-kpi"><b>'+cEur(br)+'</b><span>Coût salarial</span></div>'
+      +'<div class="cli-kpi"><b>'+cEur(pat)+'</b><span>Coût patronal</span></div>'
+      +'<div class="cli-kpi cli-kpi-a"><b>'+cEur(br+pat)+'</b><span>Masse salariale totale</span></div></div>';
+  }
+  window.cliSalQ=function(v){ window.__cliSalQ=(''+v).toLowerCase(); var b=document.getElementById('cli-sal-rows'); if(b)b.innerHTML=cliSalRows(clientById(state.cliSel)); };
+  function cliSalRows(c){
+    var id=c.id, q=(window.__cliSalQ||'');
+    var rows=cliArr(c,'salaries').map(function(s,i){
+      var hay=((s.nom||'')+' '+(s.prenom||'')+' '+(s.poste||'')).toLowerCase();
+      if(q && hay.indexOf(q)<0) return '';
+      return '<div class="cli-row cli-row-sal">'
+        +rowIn(id,'salaries',i,'nom',s.nom,'Nom')
+        +rowIn(id,'salaries',i,'prenom',s.prenom,'Prénom')
+        +rowIn(id,'salaries',i,'poste',s.poste,'Poste')
+        +rowSel(id,'salaries',i,'contrat',s.contrat,['','CDI','CDD','Alternance','Stage','Intérim'])
+        +rowIn(id,'salaries',i,'anciennete',s.anciennete,'Ancienneté')
+        +rowIn(id,'salaries',i,'brut',s.brut,'Coût salarial','r')
+        +rowIn(id,'salaries',i,'patronal',s.patronal,'Coût patronal','r')
+        +'<span class="cli-rout" id="cs-tot-'+i+'">'+cEur(cn(s.brut)+cn(s.patronal))+'</span>'
+        +'<button class="cli-x" title="Retirer" onclick="cliArrDel(\''+id+'\',\'salaries\','+i+')">✕</button></div>';
+    }).join('');
+    return rows||'<div class="cli-empty2">Aucun salarié'+(q?' pour « '+E(q)+' »':'')+'.</div>';
+  }
+  function cliSalSection(c){
+    var id=c.id;
+    return '<div class="cli-grp"><div class="cli-grp-h">Effectif</div><div class="cli-grid">'+fld(id,'nbSalaries','Nombre de salariés')+fld(id,'nbAlternants','Dont alternants / apprentis')+fld(id,'conventionCol','Convention collective')+fld(id,'masseSalMens','Masse salariale mensuelle (€)')+'</div></div>'
+      +'<div class="cli-grp"><div class="cli-grp-h">Salariés<input class="cli-mini-srch" placeholder="Filtrer (nom, poste…)" oninput="cliSalQ(this.value)"><button class="cli-add" onclick="cliArrAdd(\''+id+'\',\'salaries\')">＋ Ajouter</button></div>'
+      +'<div class="cli-rhead cli-row-sal"><span>Nom</span><span>Prénom</span><span>Poste</span><span>Contrat</span><span>Ancienneté</span><span>Coût salarial</span><span>Coût patronal</span><span>Coût total</span><span></span></div>'
+      +'<div id="cli-sal-rows">'+cliSalRows(c)+'</div>'
+      +'<div id="cli-sal-tot">'+cliSalTotHTML(c)+'</div></div>';
+  }
+
+  /* ===================== Onglet ACTIVITÉ & PRODUITS ===================== */
+  function cliProdCalc(p){
+    var q=cn(p.qte)||1, pa=cn(p.pa), pv=cn(p.pv), tva=cn(p.tva), fr=cn(p.frais);
+    var total=q*pv, mb=(pv-pa)*q, mn=mb-(fr*q);
+    return {total:total, mb:mb, mbp:(pv>0?((pv-pa)/pv*100):0), mn:mn, mnp:(total>0?(mn/total*100):0), tvaM:total*tva/100, ttc:total+(total*tva/100)};
+  }
+  function cliProdTotHTML(c){
+    var a=cliArr(c,'produits'); var t=0,mb=0,mn=0,tv=0;
+    a.forEach(function(p){ var r=cliProdCalc(p); t+=r.total; mb+=r.mb; mn+=r.mn; tv+=r.tvaM; });
+    return '<div class="cli-kpis">'
+      +'<div class="cli-kpi"><b>'+cEur(t)+'</b><span>Chiffre d\'affaires HT</span></div>'
+      +'<div class="cli-kpi"><b>'+cEur(mb)+'</b><span>Marge brute</span></div>'
+      +'<div class="cli-kpi cli-kpi-a"><b>'+cEur(mn)+'</b><span>Marge nette</span></div>'
+      +'<div class="cli-kpi"><b>'+cEur(tv)+'</b><span>TVA collectée</span></div>'
+      +'<div class="cli-kpi"><b>'+cEur(t+tv)+'</b><span>Total TTC</span></div></div>';
+  }
+  window.cliProdQ=function(v){ window.__cliProdQ=(''+v).toLowerCase(); var b=document.getElementById('cli-prod-rows'); if(b)b.innerHTML=cliProdRows(clientById(state.cliSel)); };
+  window.cliProdF=function(t){ window.__cliProdF=t; render(); };
+  function cliProdRows(c){
+    var id=c.id, q=(window.__cliProdQ||''), ft=(window.__cliProdF||'');
+    var rows=cliArr(c,'produits').map(function(p,i){
+      if(ft && (p.nature||'Produit')!==ft) return '';
+      if(q && (''+(p.lib||'')).toLowerCase().indexOf(q)<0) return '';
+      var r=cliProdCalc(p);
+      return '<div class="cli-row cli-row-prod">'
+        +rowIn(id,'produits',i,'lib',p.lib,'Désignation du service / produit')
+        +rowSel(id,'produits',i,'nature',p.nature||'Produit',['Produit','Service'])
+        +rowIn(id,'produits',i,'qte',p.qte,'Qté','r')
+        +rowIn(id,'produits',i,'pa',p.pa,'Prix achat','r')
+        +rowIn(id,'produits',i,'pv',p.pv,'Prix vente','r')
+        +rowIn(id,'produits',i,'frais',p.frais,'Frais/u','r')
+        +rowIn(id,'produits',i,'tva',p.tva,'TVA %','r')
+        +'<span class="cli-rout" id="cp-tot-'+i+'">'+cEur(r.total)+'</span>'
+        +'<span class="cli-rout" id="cp-mb-'+i+'">'+cEur(r.mb)+'</span>'
+        +'<span class="cli-rout cli-rout-a" id="cp-mn-'+i+'">'+cEur(r.mn)+'</span>'
+        +'<button class="cli-x" title="Retirer" onclick="cliArrDel(\''+id+'\',\'produits\','+i+')">✕</button></div>';
+    }).join('');
+    return rows||'<div class="cli-empty2">Aucun service ni produit enregistré.</div>';
+  }
+  function cliActSection(c){
+    var id=c.id, ft=(window.__cliProdF||'');
+    var filt=['','Produit','Service'].map(function(t){ return '<button class="cli-filt'+(ft===t?' on':'')+'" onclick="cliProdF(\''+t+'\')">'+(t||'Tous')+'</button>'; }).join('');
+    return grp('Activité de la société',
+        fld(id,'activites','Activité(s) — séparées par des virgules')+fld(id,'secteur','Secteur')
+      + fld(id,'clientele','Clientèle cible','sel',['','B2B','B2C','B2B & B2C','Public'])+fld(id,'zoneChalandise','Zone de chalandise'))
+      +'<div class="cli-grp"><div class="cli-grp-h">Services & produits proposés<span class="cli-filter cli-filter-in">'+filt+'</span><input class="cli-mini-srch" placeholder="Filtrer…" oninput="cliProdQ(this.value)"><button class="cli-add" onclick="cliArrAdd(\''+id+'\',\'produits\')">＋ Ajouter</button></div>'
+      +'<div class="cli-rhead cli-row-prod"><span>Désignation</span><span>Nature</span><span>Qté</span><span>Prix achat</span><span>Prix vente</span><span>Frais/u</span><span>TVA %</span><span>Montant total</span><span>Marge brute</span><span>Marge nette</span><span></span></div>'
+      +'<div id="cli-prod-rows">'+cliProdRows(c)+'</div>'
+      +'<div id="cli-prod-tot">'+cliProdTotHTML(c)+'</div></div>';
+  }
+
+  /* ===================== Onglet FINANCES ===================== */
+  var CLI_INV_TYPES=['','Matériel & équipement','Immobilier','Véhicules','Informatique & logiciels','Recherche & développement','Marketing & communication','Financier','Stock','Autre'];
+  var CLI_IMMO_TYPES=['','Incorporelle','Corporelle','Financière'];
+  var CLI_REV_TYPES=['','Ventes de marchandises','Prestations de services','Locations','Abonnements','Subventions','Produits financiers','Autres produits'];
+  function cliFinTotHTML(c){
+    var rev=0,revAn=0; cliArr(c,'revenus').forEach(function(r){ var m=cn(r.montant); rev+=m; revAn+=(r.recur==='Mensuel'?m*12:(r.recur==='Trimestriel'?m*4:m)); });
+    var inv={t:0,prevu:0,engage:0,realise:0}; cliArr(c,'invests').forEach(function(v){ var m=cn(v.montant); inv.t+=m; var s=v.statut||'Prévu'; if(s==='Engagé')inv.engage+=m; else if(s==='Réalisé')inv.realise+=m; else inv.prevu+=m; });
+    var imv=0,dot=0; cliArr(c,'immos').forEach(function(m){ imv+=cn(m.valeur); if(cn(m.duree)>0)dot+=cn(m.valeur)/cn(m.duree); });
+    var ms=0; cliArr(c,'salaries').forEach(function(s){ ms+=cn(s.brut)+cn(s.patronal); });
+    return '<div class="cli-kpis">'
+      +'<div class="cli-kpi"><b>'+cEur(revAn)+'</b><span>Revenus annualisés</span></div>'
+      +'<div class="cli-kpi cli-kpi-a"><b>'+cEur(cn(c.ebitda))+'</b><span>EBITDA déclaré</span></div>'
+      +'<div class="cli-kpi"><b>'+cEur(inv.t)+'</b><span>Investissements</span></div>'
+      +'<div class="cli-kpi"><b>'+cEur(imv)+'</b><span>Immobilisations</span></div>'
+      +'<div class="cli-kpi"><b>'+cEur(dot)+'</b><span>Dotation annuelle</span></div>'
+      +'<div class="cli-kpi"><b>'+cEur(ms)+'</b><span>Masse salariale</span></div></div>'
+      +'<div class="cli-invprev"><div class="cli-invprev-h">Prévisualisation des investissements</div><div class="cli-invprev-b">'
+      +['Prévu','Engagé','Réalisé'].map(function(s,k){ var v=[inv.prevu,inv.engage,inv.realise][k]; var pct=inv.t>0?(v/inv.t*100):0;
+          return '<div class="cli-ip"><div class="cli-ip-l"><span>'+s+'</span><b>'+cEur(v)+'</b></div><div class="cli-ip-bar"><i class="cli-ip-'+k+'" style="width:'+pct.toFixed(1)+'%"></i></div></div>'; }).join('')
+      +'</div></div>';
+  }
+  function cliFinSection(c){
+    var id=c.id;
+    var rev=cliArr(c,'revenus').map(function(r,i){ return '<div class="cli-row cli-row-rev">'
+      +rowIn(id,'revenus',i,'lib',r.lib,'Libellé du revenu')
+      +rowSel(id,'revenus',i,'type',r.type,CLI_REV_TYPES)
+      +rowSel(id,'revenus',i,'recur',r.recur||'Annuel',['Annuel','Mensuel','Trimestriel','Ponctuel'])
+      +rowIn(id,'revenus',i,'montant',r.montant,'Montant','r')
+      +'<button class="cli-x" onclick="cliArrDel(\''+id+'\',\'revenus\','+i+')">✕</button></div>'; }).join('')||'<div class="cli-empty2">Aucun revenu enregistré.</div>';
+    var inv=cliArr(c,'invests').map(function(v,i){ return '<div class="cli-row cli-row-inv">'
+      +rowIn(id,'invests',i,'lib',v.lib,'Objet de l\'investissement')
+      +rowSel(id,'invests',i,'type',v.type,CLI_INV_TYPES)
+      +rowSel(id,'invests',i,'statut',v.statut||'Prévu',['Prévu','Engagé','Réalisé'])
+      +rowIn(id,'invests',i,'date',v.date,'Date')
+      +rowIn(id,'invests',i,'montant',v.montant,'Montant','r')
+      +'<button class="cli-x" onclick="cliArrDel(\''+id+'\',\'invests\','+i+')">✕</button></div>'; }).join('')||'<div class="cli-empty2">Aucun investissement enregistré.</div>';
+    var imm=cliArr(c,'immos').map(function(m,i){ return '<div class="cli-row cli-row-immo">'
+      +rowIn(id,'immos',i,'lib',m.lib,'Immobilisation')
+      +rowSel(id,'immos',i,'type',m.type,CLI_IMMO_TYPES)
+      +rowIn(id,'immos',i,'sstype',m.sstype,'Nature précise')
+      +rowIn(id,'immos',i,'valeur',m.valeur,'Valeur','r')
+      +rowIn(id,'immos',i,'duree',m.duree,'Durée (ans)','r')
+      +'<span class="cli-rout" id="ci-dot-'+i+'">'+cEur(cn(m.duree)>0?(cn(m.valeur)/cn(m.duree)):0)+'</span>'
+      +'<button class="cli-x" onclick="cliArrDel(\''+id+'\',\'immos\','+i+')">✕</button></div>'; }).join('')||'<div class="cli-empty2">Aucune immobilisation enregistrée.</div>';
+    return '<div id="cli-fin-tot">'+cliFinTotHTML(c)+'</div>'
+      + grp('Indicateurs financiers',
+          fld(id,'ca','Chiffre d\'affaires annuel (€)')+fld(id,'chargesAn','Charges annuelles (€)')
+        + fld(id,'ebitda','EBITDA (€)')+fld(id,'resultatNet','Résultat net (€)')
+        + fld(id,'tresorerie','Trésorerie (€)')+fld(id,'endettement','Endettement (€)')
+        + fld(id,'exerciceClot','Clôture de l\'exercice')+fld(id,'regimeTva','Régime de TVA','sel',['','Franchise en base','Réel simplifié','Réel normal']))
+      +'<div class="cli-grp"><div class="cli-grp-h">Revenus<button class="cli-add" onclick="cliArrAdd(\''+id+'\',\'revenus\')">＋ Ajouter</button></div>'
+      +'<div class="cli-rhead cli-row-rev"><span>Libellé</span><span>Type</span><span>Récurrence</span><span>Montant</span><span></span></div>'+rev+'</div>'
+      +'<div class="cli-grp"><div class="cli-grp-h">Investissements<button class="cli-add" onclick="cliArrAdd(\''+id+'\',\'invests\')">＋ Ajouter</button></div>'
+      +'<div class="cli-rhead cli-row-inv"><span>Objet</span><span>Type</span><span>Statut</span><span>Date</span><span>Montant</span><span></span></div>'+inv+'</div>'
+      +'<div class="cli-grp"><div class="cli-grp-h">Immobilisations<button class="cli-add" onclick="cliArrAdd(\''+id+'\',\'immos\')">＋ Ajouter</button></div>'
+      +'<div class="cli-rhead cli-row-immo"><span>Immobilisation</span><span>Type</span><span>Nature</span><span>Valeur</span><span>Durée</span><span>Dotation / an</span><span></span></div>'+imm+'</div>';
+  }
+
+  /* ===================== Onglet DOCUMENTS ===================== */
+  function cliDocsGeneres(c){
+    var out=[]; var nm=(''+cliName(c)).toLowerCase().trim();
+    try{
+      (DB.editionsLibres||[]).forEach(function(d){
+        var dn=(''+(((d.data||{}).denomination)||((d.data||{}).ident&&d.data.ident.denomination)||'')).toLowerCase().trim();
+        var ti=(''+(d.titre||'')).toLowerCase();
+        if((nm && dn && (dn===nm||dn.indexOf(nm)>=0||nm.indexOf(dn)>=0)) || (nm && nm.length>2 && ti.indexOf(nm)>=0)) out.push(d);
+      });
+    }catch(e){}
+    return out;
+  }
+  function cliEtudeCard(c){
+    var e=null; try{ e=(window.__formData&&window.__formData.etude)||null; }catch(_e){}
+    if(!e) return '';
+    var ent=((e.ident&&e.ident.entreprise)||'').toLowerCase().trim(), nm=(''+cliName(c)).toLowerCase().trim();
+    if(!(ent && nm && (ent===nm||ent.indexOf(nm)>=0||nm.indexOf(ent)>=0))) return '';
+    var o=e.out||{};
+    var kv=[['TAM',o.tamBottom],['SAM',o.sam],['SOM 3 ans',o.som],['CA année 1',o.caAn1],['LTV',o.ltv],['LTV / CAC',o.ltvCac]].filter(function(x){return x[1];});
+    return '<div class="cli-grp"><div class="cli-grp-h">Étude de marché — synthèse</div>'
+      +(kv.length?('<div class="cli-kpis">'+kv.map(function(x){return '<div class="cli-kpi"><b>'+E(x[1])+'</b><span>'+E(x[0])+'</span></div>';}).join('')+'</div>'):'<div class="cli-empty2">Étude en cours de saisie.</div>')
+      +'<div class="cli-docact"><button class="cli-add" onclick="go(\'etudemarche\')">Ouvrir l\'étude</button></div></div>';
+  }
+  function cliDocsTab(c){
+    var gen=cliDocsGeneres(c);
+    var rows=gen.map(function(d){
+      return '<div class="cli-row cli-row-doc"><span class="cli-docn">'+E(d.titre||'Document')+'</span>'
+        +'<span class="cli-docd">'+E(d.updated?(new Date(d.updated)).toLocaleDateString('fr-FR'):'')+'</span>'
+        +'<button class="cli-add cli-add-sm" onclick="edLibOpen(\''+d.id+'\')">Ouvrir</button></div>';
+    }).join('');
+    return cliEtudeCard(c)
+      +'<div class="cli-grp"><div class="cli-grp-h">Documents générés<span class="cli-tab-n">'+gen.length+'</span></div>'
+      +(rows||'<div class="cli-empty2">Aucun document généré pour ce client. Utilisez ＋ dans l\'en-tête de la fiche ou le module Éditions.</div>')+'</div>'
+      +cliDocsSection(c);
+  }
+
+  /* ===================== Import depuis le module FORMULAIRE ===================== */
+  function cliFromForm(){
+    var o=(window.__formData||{}), s=o.societe||{}, si=o.siege||{}, dir=o.direction||{}, co=o.contact||{};
+    return { denomination:s.denomination||'', forme:(s.formeJur||o.type||'').toString().toUpperCase(), capital:s.capital||'',
+      siren:s.siren||'', siret:s.siret||'', regime:s.regime||'', dateDebut:s.debut||'', rcsVille:s.rcsVille||'',
+      nomCommercial:s.enseigne||s.sigle||'', activites:s.objet||'',
+      siege:[si.rue,si.cp,si.ville].filter(Boolean).join(', '), adresse:si.rue||s.adresse||'', cp:si.cp||s.cp||'', ville:si.ville||s.ville||'',
+      siegeType:si.type||'', bailleur:si.bailleur||'', domiciliataire:si.domiciliataire||'',
+      president:((dir.prenom||'')+' '+(dir.nom||'')).trim(), presidentFonction:dir.fonction||'',
+      dirCivilite:dir.civilite||'', dirNaissance:dir.naissance||'', dirLieuNaissance:dir.lieuNaissance||'',
+      dirNationalite:dir.nationalite||'', dirAdresse:dir.adresse||'', dirPays:dir.pays||'',
+      email:co.email||'', tel:co.tel||'',
+      associes:(o.associes||[]).map(function(a){ return JSON.parse(JSON.stringify(a||{})); }) };
+  }
+  function cliHasForm(){ try{ var o=window.__formData||{}; return !!((o.societe&&o.societe.denomination)||(o.direction&&o.direction.nom)); }catch(e){ return false; } }
+  window.cliImportForm=function(id){
+    var c=clientById(id); if(!c)return;
+    if(!cliHasForm()){ if(typeof toast==='function')toast('Aucune société saisie dans le module Formulaire.'); return; }
+    var src=cliFromForm(), n=0;
+    Object.keys(src).forEach(function(k){
+      var v=src[k];
+      if(k==='associes'){ if((!c.associes||!c.associes.length)&&v.length){ c.associes=v; n++; } return; }
+      if(k==='activites'){ if(v && !(c.activites||[]).length){ c.activites=(''+v).split(',').map(function(x){return x.trim();}).filter(Boolean); n++; } return; }
+      if(v && !c[k]){ c[k]=v; n++; }
+    });
+    if(!c.nbAssocies && (c.associes||[]).length) c.nbAssocies=(c.associes||[]).length;
+    save(); render();
+    if(typeof toast==='function')toast(n?('Formulaire importé — '+n+' information(s) reprise(s).'):'Fiche déjà à jour (aucun champ vide à compléter).');
+  };
+  window.cliNewFromForm=function(){
+    if(!cliHasForm()){ if(typeof toast==='function')toast('Aucune société saisie dans le module Formulaire.'); return; }
+    DB.clients=DB.clients||[];
+    var id=(typeof uid==='function'?uid('c'):'c'+Date.now());
+    var base={id:id,clientType:'entreprise',associes:[],docVars:{},createdAt:(typeof today==='function'?today():''),origine:'formulaire'};
+    var src=cliFromForm();
+    Object.keys(src).forEach(function(k){ var v=src[k];
+      if(k==='activites'){ if(v)base.activites=(''+v).split(',').map(function(x){return x.trim();}).filter(Boolean); return; }
+      if(v)base[k]=v; });
+    if((base.associes||[]).length) base.nbAssocies=base.associes.length;
+    DB.clients.unshift(base); state.cliSel=id; state.cliTab='soc'; save(); render();
+    if(typeof toast==='function')toast('Client créé depuis le Formulaire : '+cliName(base));
+  };
+
+
   function cliFiche(id){
     var c=clientById(id);if(!c)return '<div class="cli-empty">Sélectionnez un client dans la liste, ou créez-en un.</div>';
     var id2=c.id;
-    var identity=grp('Identité société',fld(id2,'denomination','Dénomination sociale')+fld(id2,'nomCommercial','Nom commercial')+fld(id2,'forme','Forme juridique','sel')+fld(id2,'capital','Capital (€)')+fld(id2,'siren','SIREN')+fld(id2,'siret','SIRET')+fld(id2,'regime','Régime fiscal')+fld(id2,'dateDebut','Début d\'activité','date')+fld(id2,'activites','Activité(s) — séparées par des virgules'));
-    var siege=grp('Siège social',fld(id2,'siege','Adresse du siège')+fld(id2,'cp','Code postal')+fld(id2,'ville','Ville')+fld(id2,'siegeType','Type de siège')+fld(id2,'bailleur','Bailleur')+fld(id2,'domiciliataire','Société de domiciliation'));
-    var contact=grp('Contact',fld(id2,'email','E-mail')+fld(id2,'tel','Téléphone')+fld(id2,'adresse','Adresse (dirigeant / courrier)'));
-    var dir=grp('Dirigeant',fld(id2,'president','Président / Gérant (nom & prénom)')+fld(id2,'presidentFonction','Fonction'));
-    var acte=grp('Acte & mentions',fld(id2,'rcsVille','Ville du RCS',null,null,true)+fld(id2,'nominal','Valeur nominale du titre (€)',null,null,true)+fld(id2,'dateActe','Date de l\'acte','date',null,true)+fld(id2,'villeSignature','Ville de signature',null,null,true)+fld(id2,'pereNom','Nom du père',null,null,true)+fld(id2,'mereNom','Nom de la mère',null,null,true));
     var tog='<div class="cli-typetog">'+['entreprise','particulier'].map(function(t){var on=(((c.clientType==='particulier')?'particulier':'entreprise')===t)?' on':'';return '<button class="cli-tt'+on+'" onclick="cliSetType(\''+id2+'\',\''+t+'\')">'+(t==='entreprise'?'Entreprise':'Particulier')+'</button>';}).join('')+'</div>';
     var sub=cliIsPart(c)?'Particulier':(E(c.forme||'—')+' · '+E(c.ville||'—'));
-    var head='<div class="cli-fiche-head"><div><div class="cli-fiche-nom">'+E(cliName(c))+'</div><div class="cli-fiche-sub">'+sub+'</div></div>'
-      +'<div class="cli-fiche-act">'+cliNavHTML(c)+tog+window.mqIconBtn('mail','cliMail(\''+id2+'\')',{label:(c.email?('Écrire à '+c.email):'E-mail du client non renseigné')})+window.mqIconBtn('add','cliDocMenu(event,\''+id2+'\')',{cls:'mq-ib-add',label:'Générer un document (Social · Contrat · Facturation)'})+window.mqIconBtn('trash','cliDel(\''+id2+'\')',{danger:true,label:'Supprimer'})+'</div></div>';
+    var imp=cliHasForm()?('<button class="cli-impbtn" onclick="cliImportForm(\''+id2+'\')" title="Reprendre les informations saisies dans le module Formulaire">⤵ Formulaire</button>'):'';
+    var head='<div class="cli-fiche-head"><div><div class="cli-fiche-nom">'+E(cliName(c))+'</div><div class="cli-fiche-sub">'+sub+(c.origine==='formulaire'?' · <span class="cli-orig">issu du Formulaire</span>':'')+'</div></div>'
+      +'<div class="cli-fiche-act">'+cliNavHTML(c)+tog+imp+window.mqIconBtn('mail','cliMail(\''+id2+'\')',{label:(c.email?('Écrire à '+c.email):'E-mail du client non renseigné')})+window.mqIconBtn('add','cliDocMenu(event,\''+id2+'\')',{cls:'mq-ib-add',label:'Générer un document (Social · Contrat · Facturation)'})+window.mqIconBtn('trash','cliDel(\''+id2+'\')',{danger:true,label:'Supprimer'})+'</div></div>';
+    var tab=cliTabCur(c), body='';
     if(cliIsPart(c)){
-      var pid=grp('Identité',fld(id2,'civilite','Civilité','sel',['','M.','Mme'])+fld(id2,'prenom','Prénom')+fld(id2,'nom','Nom')+fld(id2,'dateNaissance','Date de naissance','date')+fld(id2,'lieuNaissance','Lieu de naissance')+fld(id2,'nationalite','Nationalité')+fld(id2,'numPiece','N° pièce d\'identité'));
-      var pco=grp('Coordonnées',fld(id2,'adresse','Adresse')+fld(id2,'cp','Code postal')+fld(id2,'ville','Ville')+fld(id2,'email','E-mail')+fld(id2,'tel','Téléphone'));
-      var pdiv=grp('Divers',fld(id2,'profession','Profession')+fld(id2,'situation','Situation familiale'));
-      return '<div class="cli-fiche">'+head+pid+pco+pdiv+cliDocsSection(c)+'</div>';
+      if(tab==='doc') body=cliDocsTab(c);
+      else if(tab==='fin') body=cliFinSection(c);
+      else body=grp('Identité',fld(id2,'civilite','Civilité','sel',['','M.','Mme'])+fld(id2,'prenom','Prénom')+fld(id2,'nom','Nom')+fld(id2,'dateNaissance','Date de naissance','date')+fld(id2,'lieuNaissance','Lieu de naissance')+fld(id2,'nationalite','Nationalité')+fld(id2,'numPiece','N° pièce d\'identité'))
+        +grp('Coordonnées',fld(id2,'adresse','Adresse')+fld(id2,'cp','Code postal')+fld(id2,'ville','Ville')+fld(id2,'email','E-mail')+fld(id2,'tel','Téléphone'))
+        +grp('Divers',fld(id2,'profession','Profession')+fld(id2,'situation','Situation familiale'));
+    } else {
+      if(tab==='dir') body=cliDirSection(c);
+      else if(tab==='assoc') body=grp('Capital & associés',fld(id2,'nbAssocies','Nombre d\'associés')+fld(id2,'capital','Capital (€)')+fld(id2,'nominal','Valeur nominale du titre (€)',null,null,true)+fld(id2,'nbTitres','Nombre total de titres'))+assocEditor(c);
+      else if(tab==='sal') body=cliSalSection(c);
+      else if(tab==='act') body=cliActSection(c);
+      else if(tab==='fin') body=cliFinSection(c);
+      else if(tab==='doc') body=cliDocsTab(c);
+      else body=cliConfBlock(c)
+        +grp('Identité société',fld(id2,'denomination','Dénomination sociale')+fld(id2,'nomCommercial','Nom commercial')+fld(id2,'forme','Forme juridique','sel')+fld(id2,'capital','Capital (€)')+fld(id2,'siren','SIREN')+fld(id2,'siret','SIRET')+fld(id2,'regime','Régime fiscal')+fld(id2,'dateDebut','Début d\'activité','date')+fld(id2,'activites','Activité(s) — séparées par des virgules'))
+        +grp('Siège social',fld(id2,'siege','Adresse du siège')+fld(id2,'cp','Code postal')+fld(id2,'ville','Ville')+fld(id2,'siegeType','Type de siège')+fld(id2,'bailleur','Bailleur')+fld(id2,'domiciliataire','Société de domiciliation'))
+        +grp('Contact',fld(id2,'email','E-mail')+fld(id2,'tel','Téléphone')+fld(id2,'adresse','Adresse (dirigeant / courrier)'))
+        +grp('Acte & mentions',fld(id2,'rcsVille','Ville du RCS',null,null,true)+fld(id2,'nominal','Valeur nominale du titre (€)',null,null,true)+fld(id2,'dateActe','Date de l\'acte','date',null,true)+fld(id2,'villeSignature','Ville de signature',null,null,true)+fld(id2,'pereNom','Nom du père',null,null,true)+fld(id2,'mereNom','Nom de la mère',null,null,true));
     }
-    return '<div class="cli-fiche">'+head+cliConfBlock(c)+identity+siege+contact+dir+assocEditor(c)+acte+cliDocsSection(c)+'</div>';
+    return '<div class="cli-fiche">'+head+cliTabBar(c)+'<div class="cli-tabpane">'+body+'</div></div>';
   }
   function cliListHTML(){
     var q=window.__cliQ||'';var ft=window.__cliType||'';
@@ -20913,7 +21212,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.pageClients=function(){
     if(state.cliSel&&!clientById(state.cliSel))state.cliSel=null;
     if(!state.cliSel&&(DB.clients||[]).length)state.cliSel=DB.clients[0].id;
-    return '<div class="cli-wrap"><aside class="cli-side"><div class="cli-side-h"><button class="cli-new" onclick="cliNew()">＋ Nouveau client</button></div>'
+    return '<div class="cli-wrap"><aside class="cli-side"><div class="cli-side-h"><button class="cli-new" onclick="cliNew()">＋ Nouveau client</button>'+(cliHasForm()?'<button class="cli-new cli-new-form" onclick="cliNewFromForm()" title="Créer un client à partir de la société saisie dans le module Formulaire">⤵ Depuis le Formulaire</button>':'')+'</div>'
       +'<input class="cli-srch" placeholder="Rechercher un client…" value="'+E(window.__cliQ||'')+'" oninput="cliSearch(this.value)">'
       +'<div class="cli-filter">'+['','entreprise','particulier'].map(function(t){var lbl=t===''?'Tous':(t==='entreprise'?'Entreprises':'Particuliers');var on=((window.__cliType||'')===t)?' on':'';return '<button class="cli-filt'+on+'" onclick="cliFilter(\''+t+'\')">'+lbl+'</button>';}).join('')+'</div>'
       +'<div class="cli-list" id="cli-list">'+cliListHTML()+'</div></aside>'
@@ -28401,6 +28700,68 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     '.pfcl-pri{background:#4f9dff;border-color:#4f9dff;color:#03121f}.pfcl-pri:hover{background:#69adff;color:#03121f}',
     '.pfcl-ghost{background:transparent}',
     '.pfcl-danger{background:#3a1618;border-color:#7a3a3a;color:#ffb4ac}.pfcl-danger:hover{background:#4a1c1e;border-color:#7a3a3a;color:#ffb4ac}'
+  ].join(''); document.head.appendChild(st); }catch(e){}
+})();
+</script>
+
+
+<!-- ===== Module CLIENT : onglets & sections enrichies (styles) ===== -->
+<script>
+(function(){
+  try{ if(document.getElementById('cli-tabs-css'))return; var st=document.createElement('style'); st.id='cli-tabs-css'; st.textContent=[
+    /* Onglets */
+    '.cli-tabs{display:flex;gap:4px;flex-wrap:wrap;margin:14px 0 0;padding:4px;background:var(--paper-2,#1a2334);border:1px solid var(--line-2,#2c384b);border-radius:11px}',
+    '.cli-tab{border:none;background:none;color:var(--ink-2,#b6c3d6);font:inherit;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.13s}',
+    '.cli-tab:hover{background:rgba(255,255,255,.05);color:var(--ink,#f5f9fe)}',
+    '.cli-tab.on{background:var(--accent,#4f9dff);color:#fff}',
+    '.cli-tab-n{font-size:10px;font-weight:700;background:rgba(255,255,255,.14);border-radius:999px;padding:1px 6px;line-height:1.5}',
+    '.cli-tab.on .cli-tab-n{background:rgba(0,0,0,.22)}',
+    '.cli-tabpane{margin-top:14px;overflow-x:auto}',
+    /* Import formulaire */
+    '.cli-impbtn{border:1px solid var(--accent,#4f9dff);background:rgba(79,157,255,.10);color:#cfe0ff;font:inherit;font-size:11.5px;font-weight:700;padding:6px 11px;border-radius:9px;cursor:pointer;white-space:nowrap}',
+    '.cli-impbtn:hover{background:rgba(79,157,255,.22);color:#fff}',
+    '.cli-orig{color:#5bbf8a;font-weight:600}',
+    '.cli-new-form{margin-top:6px;background:rgba(79,157,255,.10)!important;border:1px solid var(--accent,#4f9dff)!important;color:#cfe0ff!important;font-size:11.5px!important}',
+    '.cli-new-form:hover{background:rgba(79,157,255,.2)!important;color:#fff!important}',
+    /* KPI */
+    '.cli-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px;margin:12px 0}',
+    '.cli-kpi{background:rgba(255,255,255,.03);border:1px solid var(--line-2,#2c384b);border-radius:10px;padding:11px 12px;text-align:center}',
+    '.cli-kpi b{display:block;font-size:16px;font-weight:800;color:var(--ink,#f5f9fe);font-variant-numeric:tabular-nums}',
+    '.cli-kpi span{font-size:10.5px;color:var(--ink-3,#8494aa);text-transform:uppercase;letter-spacing:.03em}',
+    '.cli-kpi-a b{color:var(--accent,#4f9dff)}',
+    /* Lignes de tableau */
+    '.cli-rhead{display:grid;gap:7px;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3,#8494aa);font-weight:700;padding:2px 2px 6px;min-width:640px}',
+    '.cli-row{display:grid;gap:7px;align-items:center;margin-bottom:7px;min-width:640px}',
+    '.cli-rin{background:var(--paper,#141b28);border:1px solid var(--line-2,#2c384b);border-radius:8px;color:var(--ink,#f5f9fe);font:inherit;font-size:12.5px;padding:7px 9px;min-width:0;width:100%;box-sizing:border-box}',
+    '.cli-rin:focus{border-color:var(--accent,#4f9dff);outline:none;box-shadow:0 0 0 3px rgba(79,157,255,.18)}',
+    '.cli-rin.r{text-align:right;font-variant-numeric:tabular-nums}',
+    '.cli-rsel{cursor:pointer}',
+    '.cli-rout{font-size:12.5px;font-weight:700;color:var(--ink,#f5f9fe);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.cli-rout-a{color:var(--accent,#4f9dff)}',
+    '.cli-row-sal,.cli-rhead.cli-row-sal{grid-template-columns:1.1fr 1fr 1.1fr .9fr .9fr .9fr .9fr .9fr 30px}',
+    '.cli-row-prod,.cli-rhead.cli-row-prod{grid-template-columns:1.6fr .9fr .5fr .8fr .8fr .7fr .6fr .9fr .9fr .9fr 30px;min-width:940px}',
+    '.cli-row-rev,.cli-rhead.cli-row-rev{grid-template-columns:1.6fr 1.2fr .9fr .9fr 30px;min-width:560px}',
+    '.cli-row-inv,.cli-rhead.cli-row-inv{grid-template-columns:1.6fr 1.2fr .8fr .8fr .9fr 30px;min-width:620px}',
+    '.cli-row-immo,.cli-rhead.cli-row-immo{grid-template-columns:1.4fr 1fr 1fr .8fr .6fr .9fr 30px;min-width:660px}',
+    '.cli-row-doc{grid-template-columns:1fr 110px 90px;min-width:0;padding:8px 2px;border-bottom:1px solid var(--line-soft,#1b2432)}',
+    '.cli-docn{font-size:13px;color:var(--ink,#f5f9fe);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.cli-docd{font-size:11.5px;color:var(--ink-3,#8494aa)}',
+    '.cli-docact{margin-top:10px}',
+    '.cli-add-sm{padding:5px 10px!important;font-size:11.5px!important}',
+    /* Filtres internes */
+    '.cli-mini-srch{margin-left:auto;background:var(--paper,#141b28);border:1px solid var(--line-2,#2c384b);border-radius:8px;color:var(--ink,#f5f9fe);font:inherit;font-size:11.5px;padding:5px 9px;max-width:180px}',
+    '.cli-mini-srch:focus{border-color:var(--accent,#4f9dff);outline:none}',
+    '.cli-filter-in{display:inline-flex;gap:4px;margin-left:10px}',
+    '.cli-filter-in .cli-filt{font-size:11px;padding:4px 10px}',
+    /* Prévisualisation investissements */
+    '.cli-invprev{background:rgba(255,255,255,.02);border:1px solid var(--line-2,#2c384b);border-radius:12px;padding:13px 14px;margin:12px 0}',
+    '.cli-invprev-h{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3,#8494aa);font-weight:700;margin-bottom:11px}',
+    '.cli-invprev-b{display:flex;flex-direction:column;gap:10px}',
+    '.cli-ip-l{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}',
+    '.cli-ip-l span{color:var(--ink-3,#8494aa)}.cli-ip-l b{color:var(--ink,#f5f9fe);font-variant-numeric:tabular-nums}',
+    '.cli-ip-bar{height:7px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden}',
+    '.cli-ip-bar i{display:block;height:100%;border-radius:99px}',
+    '.cli-ip-0{background:#8494aa}.cli-ip-1{background:#e0b93a}.cli-ip-2{background:#5bbf8a}'
   ].join(''); document.head.appendChild(st); }catch(e){}
 })();
 </script>
