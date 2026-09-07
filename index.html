@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=551;
+var LAST_VER=552;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -22260,9 +22260,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var tb='<div class="pf-top"><div class="pf-title"><b>'+E(tpl.titre)+'</b><span>'+E(pg.name)+' · page '+(pi+1)+'/'+tpl.pages.length+'</span></div>'
       +'<div class="pf-act">'+nav
       +'<button class="pf-b" onclick="pfClearPage()">Effacer la page</button>'
-      +'<button class="pf-b pf-pri" onclick="pfPrint()">Imprimer</button>'
-      +'<button class="pf-b pf-dl" onclick="pfDownload(this)" title="Télécharger" aria-label="Télécharger">'+PF_ICON_DL+'</button>'
-      +'<button class="pf-x" onclick="pfClose()" title="Fermer">✕</button></div></div>';
+      +'<button class="pf-b pf-pri" onclick="pfPrintCur()">'+(window.PF_ICPRINT||'')+'Imprimer</button>'
+      +'<button class="pf-b" onclick="pfSaveDoc()">'+(window.PF_ICSAVE||'')+'Enregistrer</button>'
+      +'<button class="pf-x" onclick="pfCloseAsk()" title="Fermer sans enregistrer">✕</button></div></div>';
     var inputs=pg.fields.map(function(f){
       var k=f[0],val=store[k]||'',auto=pfIsComputed(pg,k),o=f[5]||{};
       var _fs=(o.fs||pg.fs||10),_bold=((o.b||auto)?'700 ':''),_al=(o.al||'center'),_ml=!!o.ml;
@@ -22339,7 +22339,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     ov.className='pf-ov show'+(document.body.classList.contains('dark')?' dark':''); document.body.style.overflow='hidden';
     var bul=(typeof window.paieDocInline==='function')?window.paieDocInline(doc.data):'<p>Renseignez la rémunération.</p>';
     var tb='<div class="pf-top"><div class="pf-title"><b>Fiche de paie</b><span>Bulletin de salaire clarifié · calcul automatique</span></div>'
-      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfPaiePrint()">Imprimer</button><button class="pf-b pf-dl" onclick="pfDlDoc(this,\'#pf-paie-doc\',\'Fiche de paie\')" title="Télécharger" aria-label="Télécharger">'+PF_ICON_DL+'</button><button class="pf-x" onclick="pfClose()" title="Fermer">✕</button></div></div>';
+      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfPrintCur()">'+(window.PF_ICPRINT||'')+'Imprimer</button><button class="pf-b" onclick="pfSaveDoc()">'+(window.PF_ICSAVE||'')+'Enregistrer</button><button class="pf-x" onclick="pfCloseAsk()" title="Fermer sans enregistrer">✕</button></div></div>';
     ov.innerHTML=tb+'<div class="pf-body">'+pfPaieSideHTML()+'<div class="pf-scroll"><div id="pf-paie-doc" class="pf-paie-doc">'+bul+'</div></div></div>';
   };
   window.pfPaiePrint=function(){
@@ -22674,7 +22674,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var ov=document.getElementById('pf-ov'); if(!ov)return;
     var doc=window.__pfDoc, type=curType(doc), cfg=FACT_TYPES[type]||FACT_TYPES.factnorm;
     var tb='<div class="pf-top"><div class="pf-title"><b>'+E(cfg.titre)+'</b><span>Modèle A4 · remplissage direct</span></div>'
-      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfFactPrint()">Imprimer</button><button class="pf-b pf-dl" onclick="pfDlDoc(this,\'#pf-fac-doc\',(window.__pfDoc&&(window.__pfDoc.titre))||\'Facture\')" title="Télécharger" aria-label="Télécharger">'+window.PF_ICON_DL+'</button><button class="pf-x" onclick="pfClose()" title="Fermer">✕</button></div></div>';
+      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfPrintCur()">'+(window.PF_ICPRINT||'')+'Imprimer</button><button class="pf-b" onclick="pfSaveDoc()">'+(window.PF_ICSAVE||'')+'Enregistrer</button><button class="pf-x" onclick="pfCloseAsk()" title="Fermer sans enregistrer">✕</button></div></div>';
     var doch=window.factureDocInline(doc);
     ov.innerHTML=tb+'<div class="pf-body">'+sideHTML(doc)+'<div class="pf-scroll"><div id="pf-fac-doc" class="pf-fac-doc">'+doch+'</div></div></div>';
   }
@@ -22965,7 +22965,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function render(){
     var ov=document.getElementById('pf-ov'); if(!ov)return; var doc=window.__pfDoc;
     var tb='<div class="pf-top"><div class="pf-title"><b>Fiche de paie</b><span>Bulletin calculé automatiquement</span></div>'
-      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfPaieXPrint()">Imprimer</button><button class="pf-b pf-dl" onclick="pfDlDoc(this,\'#pe-doc\',\'Fiche de paie\')" title="Télécharger" aria-label="Télécharger">'+window.PF_ICON_DL+'</button><button class="pf-x" onclick="pfClose()" title="Fermer">✕</button></div></div>';
+      +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfPrintCur()">'+(window.PF_ICPRINT||'')+'Imprimer</button><button class="pf-b" onclick="pfSaveDoc()">'+(window.PF_ICSAVE||'')+'Enregistrer</button><button class="pf-x" onclick="pfCloseAsk()" title="Fermer sans enregistrer">✕</button></div></div>';
     ov.innerHTML=tb+'<div class="pf-body">'+sideHTML(doc)+'<div class="pf-scroll"><div id="pe-doc" class="pe-doc-host">'+window.paieExactDoc(doc)+'</div></div></div>';
   }
   window.pfPaieExactRender=render;
@@ -28332,6 +28332,75 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     '.clisvc-badge{font-size:9.5px;color:#5bbf8a;border:1px solid rgba(91,191,138,.4);border-radius:5px;padding:0 5px;margin-left:5px}',
     '.clisvc-empty{font-size:12px;color:var(--ink-3,#8494aa);padding:4px 2px;font-style:italic}',
     '.clisvc-more{font-size:11px;color:var(--ink-3,#8494aa);padding:5px 2px}'
+  ].join(''); document.head.appendChild(st); }catch(e){}
+})();
+</script>
+
+
+<!-- ===== Éditeurs PDF (bilan · contrats · factures PF · paie) : barre d'outils unifiée (Imprimer / Enregistrer / ✕) ===== -->
+<script>
+(function(){
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  window.PF_ICPRINT='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:2px"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>';
+  window.PF_ICSAVE='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:2px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>';
+
+  /* Impression : choisit la bonne fonction selon l'éditeur ouvert */
+  window.pfPrintCur=function(){
+    try{
+      if(document.getElementById('pf-fac-doc') && typeof window.pfFactPrint==='function') return window.pfFactPrint();
+      if(document.getElementById('pe-doc') && typeof window.pfPaieXPrint==='function') return window.pfPaieXPrint();
+      if(document.getElementById('pf-paie-doc') && typeof window.pfPaiePrint==='function') return window.pfPaiePrint();
+      if(typeof window.pfPrint==='function') return window.pfPrint();
+    }catch(e){}
+  };
+
+  /* Enregistrer = finaliser le document (déjà auto-enregistré en continu) */
+  window.pfSaveDoc=function(){
+    var d=window.__pfDoc; if(!d)return; d.data=d.data||{}; d.data._finalise=true; d.updated=Date.now();
+    try{ if(typeof save==='function')save(); }catch(e){}
+    if(typeof toast==='function')toast('Document enregistré ✓ (finalisé).');
+  };
+
+  function clOv(){ var o=document.getElementById('pfcl-ov'); if(o&&o.parentNode)o.parentNode.removeChild(o); }
+  window.pfClCancel=function(){ clOv(); };
+  window.pfClKeep=function(){ clOv(); try{ if(typeof window.pfClose==='function')window.pfClose(); }catch(e){} };
+  window.pfClDiscard=function(){ clOv(); try{ var d=window.__pfDoc; if(d&&d.id){ DB.editionsLibres=(DB.editionsLibres||[]).filter(function(x){return x.id!==d.id;}); if(typeof save==='function')save(); } }catch(e){} try{ if(typeof window.pfClose==='function')window.pfClose(); }catch(e){} if(typeof toast==='function')toast('Document non enregistré — fermé.'); };
+  window.pfClPdf=function(){ clOv(); try{ window.pfPrintCur(); }catch(e){} setTimeout(function(){ try{ if(typeof window.pfClose==='function')window.pfClose(); }catch(e){} },500); };
+
+  /* Fermeture avec choix (identique aux autres générateurs Éditions) */
+  window.pfCloseAsk=function(){
+    var d=window.__pfDoc; if(!d){ try{ if(typeof window.pfClose==='function')window.pfClose(); }catch(e){} return; }
+    var fin=!!(d.data&&d.data._finalise);
+    var acts= fin
+      ? '<button class="pfcl-b pfcl-pri" onclick="pfClPdf()">🖨 Enregistrer en PDF</button>'
+       +'<button class="pfcl-b" onclick="pfClKeep()">Fermer (garder le document)</button>'
+       +'<button class="pfcl-b pfcl-ghost" onclick="pfClCancel()">Annuler</button>'
+      : '<button class="pfcl-b pfcl-pri" onclick="pfClKeep()">Garder en brouillon</button>'
+       +'<button class="pfcl-b pfcl-danger" onclick="pfClDiscard()">Ne pas enregistrer</button>'
+       +'<button class="pfcl-b pfcl-ghost" onclick="pfClCancel()">Annuler</button>';
+    var msg= fin
+      ? 'Ce document est <b>finalisé</b>. Souhaitez-vous l\'enregistrer en PDF avant de fermer ?'
+      : 'Ce document n\'est <b>pas finalisé</b>. Que souhaitez-vous faire ?';
+    clOv();
+    var ov=document.createElement('div'); ov.id='pfcl-ov'; ov.className='pfcl-ov';
+    ov.innerHTML='<div class="pfcl-card" role="dialog" aria-label="Fermer le document"><div class="pfcl-h">Fermer le document</div><div class="pfcl-msg">'+msg+'</div><div class="pfcl-acts">'+acts+'</div></div>';
+    ov.addEventListener('mousedown',function(e){ if(e.target===ov)pfClCancel(); });
+    document.body.appendChild(ov);
+    document.addEventListener('keydown',function esc2(e){ if(e.key==='Escape'){ pfClCancel(); document.removeEventListener('keydown',esc2,true); } },true);
+  };
+
+  try{ var st=document.createElement('style'); st.id='pfcl-css'; st.textContent=[
+    '.pf-b svg{flex:none}',
+    '.pfcl-ov{position:fixed;inset:0;z-index:10050;background:rgba(6,10,17,.66);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px}',
+    '.pfcl-card{width:min(420px,94vw);background:#111828;border:1px solid #33425c;border-radius:15px;padding:18px 20px 20px;box-shadow:0 40px 100px -30px rgba(0,0,0,.95)}',
+    '.pfcl-h{font-size:15px;font-weight:800;color:#f5f9fe;margin-bottom:10px}',
+    '.pfcl-msg{font-size:13px;line-height:1.55;color:#cfcfd6;margin-bottom:16px}',
+    '.pfcl-acts{display:flex;flex-direction:column;gap:8px}',
+    '.pfcl-b{width:100%;box-sizing:border-box;border:1px solid #2c384b;background:#17181d;color:#dbe3ef;border-radius:10px;padding:10px 14px;font:600 13px/1.2 inherit;cursor:pointer}',
+    '.pfcl-b:hover{border-color:#4f9dff;color:#fff}',
+    '.pfcl-pri{background:#4f9dff;border-color:#4f9dff;color:#03121f}.pfcl-pri:hover{background:#69adff;color:#03121f}',
+    '.pfcl-ghost{background:transparent}',
+    '.pfcl-danger{background:#3a1618;border-color:#7a3a3a;color:#ffb4ac}.pfcl-danger:hover{background:#4a1c1e;border-color:#7a3a3a;color:#ffb4ac}'
   ].join(''); document.head.appendChild(st); }catch(e){}
 })();
 </script>
