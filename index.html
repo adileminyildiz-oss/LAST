@@ -3233,7 +3233,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=519;
+var LAST_VER=520;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -25663,12 +25663,17 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function title(el){ var h=el.querySelector('.card-h h2'); return h?h.textContent.trim():''; }
   function stepsOf(wrap){
     return Array.prototype.filter.call(wrap.children, function(c){
-      return c.classList && c.classList.contains('fi-card') && !c.classList.contains('fi-head');
+      if(!c.classList || c.classList.contains('fi-head')) return false;
+      return c.classList.contains('fi-card') || c.classList.contains('wz-step');
     });
   }
   function paint(fromClick){
-    if(typeof state==='undefined' || state.page!=='formulaire') return;
-    var wrap=document.querySelector('.fi-wrap'); if(!wrap) return;
+    if(typeof state==='undefined') return;
+    /* Style 4 — moteur générique : s'applique au formulaire (.fi-wrap) ET à tout
+       formulaire multi-sections d'un autre module marqué .wz-form (100% opt-in,
+       ne touche que ce qui porte explicitement ces classes). */
+    var wrap=document.querySelector('.fi-wrap, .wz-form'); if(!wrap) return;
+    var onForm=(state.page==='formulaire');
     var sections=stepsOf(wrap); if(sections.length<2){ wrap.classList.remove('wz4on'); return; }
     injectCSS(); wrap.classList.add('wz4on');
     // nettoyage d'un rendu précédent
@@ -25686,10 +25691,11 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       return 4; }
     var isModif=false; try{ isModif=!!(window.__formData && window.__formData.nature==='modification'); }catch(e){}
     var groups;
-    if(isModif){ groups=sections.map(function(el){ return {label:title(el)||'Informations', els:[el]}; }); }
-    else{ var by={}; sections.forEach(function(el){ var k=gi(el); (by[k]=by[k]||[]).push(el); });
+    if(onForm && !isModif){ var by={}; sections.forEach(function(el){ var k=gi(el); (by[k]=by[k]||[]).push(el); });
       var order=Object.keys(by).map(Number).sort(function(a,b){return a-b;});
       groups=order.map(function(k){ return {label:GLAB[k]||'Étape', els:by[k]}; }); }
+    else{ /* modification société OU tout .wz-form d'un autre module : une section = une étape */
+      groups=sections.map(function(el){ return {label:title(el)||'Étape', els:[el]}; }); }
     var n=groups.length;
     if(window.__fiStep==null) window.__fiStep=0;
     if(window.__fiStep>n-1) window.__fiStep=n-1;
@@ -25710,7 +25716,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       + (cur<n-1 ? '<button type="button" class="btn btn-pri" data-next>Étape suivante ›</button>' : '<span class="wz4-last">Dernière étape — enregistrez ci-dessous</span>');
     groups[cur].els[groups[cur].els.length-1].appendChild(nav);
     // actions d'enregistrement uniquement sur la dernière étape
-    var act=wrap.querySelector('.fi-actions'); if(act) act.style.display=(cur===n-1)?'':'none';
+    var act=wrap.querySelector('.fi-actions, .wz-actions'); if(act) act.style.display=(cur===n-1)?'':'none';
     // câblage (sans re-render complet → conserve la saisie & le focus)
     Array.prototype.forEach.call(pills.querySelectorAll('.wz4-pill'), function(b){ b.addEventListener('click', function(){ window.__fiStep=+b.getAttribute('data-i'); paint(true); try{window.scrollTo(0,0);}catch(e){} }); });
     var nx=nav.querySelector('[data-next]'); if(nx) nx.addEventListener('click', function(){ window.__fiStep=Math.min(n-1,cur+1); paint(true); try{window.scrollTo(0,0);}catch(e){} });
