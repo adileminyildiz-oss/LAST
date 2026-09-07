@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=546;
+var LAST_VER=547;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -18233,11 +18233,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
         +'<button class="ed2-new ed2-new-app" onclick="go(\'facturier\')">Factures</button>'
         +'<button class="ed2-new ed2-new-app" onclick="go(\'tvarembours\')">Remboursement de TVA</button>'
         +'</div></div>';
-      var edRefresh=(window.mqRefresh?'<button class="mq-ib" onclick="mqRefresh(this)" title="Actualiser la page" aria-label="Actualiser">'+((window.MQ_ICONS&&window.MQ_ICONS.refresh)||'')+'</button>':'');
       var edHero='<div class="ed2-hero">'
-        +'<div class="ed2-hero-l"><h2 class="ed2-hero-t">Éditions</h2><div class="ed2-hero-s">Choisissez un modèle ou une application, renseignez le volet de saisie, puis exportez en Word, PDF ou Excel.</div></div>'
+        +'<div class="ed2-hero-l"><h2 class="ed2-hero-t">Éditions</h2><div class="ed2-hero-s">Choisissez un modèle ou une application, renseignez le volet de saisie, puis imprimez ou enregistrez le document.</div></div>'
         +'<div class="ed2-hero-r"><div class="ed2-search"><svg class="ed2-search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
-        +'<input id="ed2-search" value="'+edE(state.edHomeQ||'')+'" placeholder="Rechercher un modèle…" oninput="edHomeFilter(this.value)"></div>'+edRefresh+'</div>'
+        +'<input id="ed2-search" value="'+edE(state.edHomeQ||'')+'" placeholder="Rechercher un modèle…" oninput="edHomeFilter(this.value)"></div></div>'
         +'</div>';
       return '<div class="ed2-home">'+edHero+'<div class="ed2-create" id="ed2-create">'+apps+create+'</div>'+openl+'</div>';
     }
@@ -18267,16 +18266,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       else { var _n=edAssocCount(D); form+='<div class="ed2-assoc-ctrls"><button class="btn btn-sm" onclick="edLibAssoc(\''+cur.id+'\',1)">+ Ajouter un associé</button>'+(_n>1?'<button class="btn btn-sm btn-ghost" onclick="edLibAssoc(\''+cur.id+'\',-1)">− Retirer</button>':'')+'</div>'; }
     }
     var switcher='';
+    var ICPRINT='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>';
+    var ICSAVE='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>';
     var top='<div class="ed2-topbar">'
-      +'<button class="btn btn-sm btn-ghost ed2-back" onclick="edLibClose()" title="Revenir à la liste des documents">← Retour</button>'
+      +'<button class="ed2-x-close" onclick="edCloseAsk(\''+cur.id+'\')" title="Fermer la page" aria-label="Fermer">✕</button>'
+      +'<button class="btn btn-sm btn-ghost ed2-back" onclick="edCloseAsk(\''+cur.id+'\')" title="Fermer / revenir aux Éditions">← Retour</button>'
       +'<input class="ed2-title" id="edlib-title" value="'+edE(cur.titre)+'" oninput="edLibRename(\''+cur.id+'\',this.value)" aria-label="Titre">'
       +'<span class="ed2-saved" id="edlib-saved">Enregistré</span>'
       +'<span class="ed2-sp"></span>'
       +'<span class="ed2-zoom"><button class="ed2-zb" title="Dézoomer" onclick="edLibZoom(-0.1)">−</button><span class="ed2-zlbl" id="edlib-zlbl">'+Math.round((state.edLibZoom||1)*100)+'%</span><button class="ed2-zb" title="Zoomer" onclick="edLibZoom(0.1)">+</button></span>'
-      +'<button class="btn btn-sm" onclick="edLibWord(\''+cur.id+'\')">Word</button>'
-      +'<button class="btn btn-sm" onclick="edLibPdf(\''+cur.id+'\')">PDF</button>'
-      +'<button class="btn btn-sm" onclick="edLibExcel(\''+cur.id+'\')">Excel</button>'
-      +'<button class="btn btn-sm btn-ghost" onclick="edLibDel(\''+cur.id+'\')">Supprimer</button>'
+      +'<button class="btn btn-sm ed2-tb-print" onclick="edLibPrint(\''+cur.id+'\')" title="Imprimer">'+ICPRINT+'<span>Imprimer</span></button>'
+      +'<button class="btn btn-sm btn-pri ed2-tb-save" onclick="edLibSaveDoc(\''+cur.id+'\')" title="Enregistrer le document">'+ICSAVE+'<span>Enregistrer</span></button>'
       +'</div>';
     var body='<div class="ed2-edit-body">'
       +'<aside class="ed2-form"><div class="ed2-form-t">Saisie des informations</div>'+switcher+form+'</aside>'
@@ -27689,6 +27689,60 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     '.cfab-pill{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid rgba(255,255,255,.16);color:#c9c9d2}',
     '.cfab-pill.ok{background:rgba(38,86,52,.4);color:#bff0cf;border-color:rgba(84,150,104,.5)}',
     '.cfab-pill.warn{background:rgba(150,90,30,.28);color:#ffd9a8;border-color:rgba(190,120,50,.5)}'
+  ].join(''); document.head.appendChild(st); }catch(e){}
+})();
+</script>
+
+<!-- ===== Éditions : barre d'outils unifiée (Imprimer / Enregistrer / Fermer) ===== -->
+<script>
+(function(){
+  function doc(id){ return (typeof DB!=='undefined'&&DB.editionsLibres)?DB.editionsLibres.find(function(x){return x.id===id;}):null; }
+  /* Imprimer (ouvre la fenêtre d'impression → l'utilisateur peut aussi enregistrer en PDF) */
+  window.edLibPrint=function(id){ try{ if(typeof window.edLibPdf==='function')window.edLibPdf(id); }catch(e){} };
+  /* Enregistrer = finaliser le document (il est déjà auto-enregistré en continu) */
+  window.edLibSaveDoc=function(id){ var d=doc(id); if(!d)return; d.data=d.data||{}; d.data._finalise=true; d.updated=Date.now();
+    try{ if(typeof save==='function')save(); }catch(e){}
+    try{ var s=document.getElementById('edlib-saved'); if(s)s.textContent='Enregistré ✓'; }catch(e){}
+    if(typeof toast==='function')toast('Document enregistré ✓ (finalisé).'); };
+  /* Fermeture avec choix (← Retour et ✕) */
+  window.edCloseAsk=function(id){
+    var d=doc(id); if(!d){ try{ if(typeof window.edLibClose==='function')window.edLibClose(); }catch(e){} return; }
+    var fin=!!(d.data&&d.data._finalise);
+    var body;
+    if(fin){
+      body='<div class="edcl"><div class="edcl-msg">Ce document est <b>finalisé</b>. Souhaitez-vous l\'enregistrer en PDF avant de fermer ?</div>'
+        +'<div class="edcl-acts">'
+        +'<button class="btn btn-pri" onclick="edClosePdf(\''+id+'\')">🖨 Enregistrer en PDF</button>'
+        +'<button class="btn" onclick="edCloseKeep(\''+id+'\')">Fermer (garder le document)</button>'
+        +'<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>'
+        +'</div></div>';
+    } else {
+      body='<div class="edcl"><div class="edcl-msg">Ce document n\'est <b>pas finalisé</b>. Que souhaitez-vous faire ?</div>'
+        +'<div class="edcl-acts">'
+        +'<button class="btn btn-pri" onclick="edCloseKeep(\''+id+'\')">Garder en brouillon</button>'
+        +'<button class="btn edcl-danger" onclick="edCloseDiscard(\''+id+'\')">Ne pas enregistrer</button>'
+        +'<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>'
+        +'</div></div>';
+    }
+    if(typeof openModal==='function')openModal('Fermer le document',body);
+  };
+  window.edCloseKeep=function(id){ try{ if(typeof closeModal==='function')closeModal(); }catch(e){} try{ if(typeof window.edLibClose==='function')window.edLibClose(); }catch(e){} };
+  window.edCloseDiscard=function(id){ try{ if(typeof closeModal==='function')closeModal(); }catch(e){}
+    try{ DB.editionsLibres=(DB.editionsLibres||[]).filter(function(x){return x.id!==id;}); if(typeof save==='function')save(); }catch(e){}
+    try{ if(typeof window.edLibClose==='function')window.edLibClose(); }catch(e){}
+    if(typeof toast==='function')toast('Document non enregistré — fermé.'); };
+  window.edClosePdf=function(id){ try{ if(typeof closeModal==='function')closeModal(); }catch(e){} try{ window.edLibPrint(id); }catch(e){} setTimeout(function(){ try{ if(typeof window.edLibClose==='function')window.edLibClose(); }catch(e){} },500); };
+
+  try{ var st=document.createElement('style'); st.id='ed2-tb-css'; st.textContent=[
+    '.ed2-x-close{flex:none;width:32px;height:32px;border-radius:9px;border:1px solid #2c2c30;background:#161619;color:#d7b3b3;font-size:14px;cursor:pointer;line-height:1;transition:.13s}',
+    '.ed2-x-close:hover{background:#2a1618;border-color:#7a3a3a;color:#ffb4ac}',
+    '.ed2-tb-print,.ed2-tb-save{display:inline-flex!important;align-items:center;gap:7px}',
+    '.ed2-tb-print svg,.ed2-tb-save svg{flex:none}',
+    '.edcl-msg{font-size:13px;line-height:1.55;color:#cfcfd6;margin-bottom:14px}',
+    '.edcl-acts{display:flex;flex-direction:column;gap:8px}',
+    '.edcl-acts .btn{width:100%;justify-content:center}',
+    'html body .edcl-danger{background:#3a1618!important;border:1px solid #7a3a3a!important;color:#ffb4ac!important}',
+    'html body .edcl-danger:hover{background:#4a1c1e!important}'
   ].join(''); document.head.appendChild(st); }catch(e){}
 })();
 </script>
