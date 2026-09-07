@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=533;
+var LAST_VER=534;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -26662,6 +26662,51 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     +'.fx-adv .fx-t{flex:1;min-width:0}'
     +'.fx-adv b{color:#cfe0ff;font-weight:600}';
   document.head.appendChild(st);
+})();
+</script>
+
+<!-- ===== Propagation : le Formulaire est la source ; compléter la fiche Client se répercute sur Traitement & Éditions ===== -->
+<script>
+(function(){
+  /* Répercute la fiche Client (complétée n'importe quand) sur les dossiers liés (intake + verif.extract) →
+     Traitement et Éditions restent cohérents avec la source d'information. */
+  function cliDosSync(c){
+    if(!c || typeof DB==='undefined' || !DB.dossiers) return;
+    var doss=DB.dossiers.filter(function(d){ return (d.clientIds||[]).indexOf(c.id)>=0; });
+    if(!doss.length) return;
+    var acts=Array.isArray(c.activites)?c.activites.filter(Boolean).join(', '):(c.activites||'');
+    var pres=(''+(c.president||'')).trim(); var pp=pres.split(/\s+/); var prenom=pp[0]||'', nom=pp.slice(1).join(' ')||'';
+    function set(o,k,v){ if(v!=null && v!=='') o[k]=(''+v); }
+    doss.forEach(function(d){
+      var I=(d.intake=d.intake||{}); I.societe=I.societe||{}; I.siege=I.siege||{}; I.direction=I.direction||{}; I.contact=I.contact||{};
+      set(I.societe,'denomination',c.denomination); set(I.societe,'sigle',c.nomCommercial);
+      set(I.societe,'capital',c.capital); set(I.societe,'regime',c.regime); set(I.societe,'debut',c.dateDebut);
+      if(acts) I.societe.objet=acts;
+      set(I.societe,'siren',c.siren); set(I.societe,'siret',c.siret); set(I.societe,'enseigne',c.enseigne);
+      set(I.siege,'rue',c.siege); set(I.siege,'cp',c.cp); set(I.siege,'ville',c.ville);
+      set(I.siege,'type',c.siegeType); set(I.siege,'bailleur',c.bailleur); set(I.siege,'domiciliataire',c.domiciliataire);
+      if(pres){ I.direction.prenom=prenom; I.direction.nom=nom; }
+      set(I.direction,'fonction',c.presidentFonction);
+      set(I.contact,'email',c.email); set(I.contact,'tel',c.tel);
+      /* identité du dirigeant (client « particulier » ou champs présents sur la fiche) → lue par l'éditeur de documents */
+      var X=(d.verif=d.verif||{}); X.extract=X.extract||{}; X=X.extract;
+      if(pres){ X.prenom=prenom; X.nom=nom; }
+      if(c.civilite!=null){ set(X,'civilite',c.civilite); set(I.direction,'civilite',c.civilite); }
+      if(c.dateNaissance!=null){ set(X,'dateNaissance',c.dateNaissance); set(I.direction,'naissance',c.dateNaissance); }
+      if(c.lieuNaissance!=null){ set(X,'lieuNaissance',c.lieuNaissance); set(I.direction,'lieuNaissance',c.lieuNaissance); }
+      if(c.nationalite!=null){ set(X,'nationalite',c.nationalite); set(I.direction,'nationalite',c.nationalite); }
+      if(c.adresse!=null){ set(X,'adresse',c.adresse); set(I.direction,'adresse',c.adresse); }
+    });
+  }
+  window.cliDosSync=cliDosSync;
+  if(typeof window.cliSet==='function'){
+    var _cs=window.cliSet;
+    window.cliSet=function(id,key,val){
+      var r=_cs.apply(this,arguments);
+      try{ var c=(typeof clientById==='function')?clientById(id):null; if(c){ cliDosSync(c); if(typeof save==='function')save(); } }catch(e){}
+      return r;
+    };
+  }
 })();
 </script>
 
