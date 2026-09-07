@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=534;
+var LAST_VER=535;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -15798,8 +15798,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     window.__formData=blank();
     try{ if(DB.parametres)delete DB.parametres.formDraft; }catch(e){}
     if(typeof save==='function')save();
-    if(typeof toast==='function')toast('Dossier '+ref+' créé — '+(Ttot?(Tnb+'/'+Ttot+' documents validés'):'documents générés')+(Tinpi?' · prêt pour l\'INPI':''));
-    state.page='espace';state.espaceDossier=dos.id;
+    if(ouvrirDocs){
+      if(typeof toast==='function')toast('Dossier '+ref+' créé — '+(Ttot?(Tnb+'/'+Ttot+' documents validés'):'documents générés')+(Tinpi?' · prêt pour l\'INPI':''));
+      state.page='espace';state.espaceDossier=dos.id;
+    } else {
+      /* Une fois le formulaire rempli, toute modification se fait depuis le module CLIENT → on y atterrit directement. */
+      if(typeof toast==='function')toast('Dossier '+ref+' créé — modifiez désormais les informations dans la fiche Client (répercutée sur Traitement & Éditions).');
+      state.cliSel=c.id; state.page='clients';
+    }
     if(typeof render==='function')render();window.scrollTo(0,0);
     if(ouvrirDocs){ try{ if(typeof window.espEdOpen==='function'){ window.__edCat='creation'; setTimeout(function(){ window.espEdOpen(dos.id,'statuts'); },60); } }catch(e){} }
   };
