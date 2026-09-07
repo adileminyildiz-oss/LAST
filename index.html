@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=532;
+var LAST_VER=533;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -26573,6 +26573,94 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     +'.dem-vb{display:inline-block;font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 6px;vertical-align:middle;margin-left:4px}'
     +'.dem-vb-ok{background:rgba(31,138,77,.2);color:#57d98a;border:1px solid rgba(31,138,77,.5)}'
     +'.dem-vb-warn{background:rgba(183,132,42,.2);color:#e8b45a;border:1px solid rgba(183,132,42,.55)}';
+  document.head.appendChild(st);
+})();
+</script>
+
+<!-- ===== Formulaire — avis fiscal discret sous les cases qui peuvent améliorer les conditions du client ===== -->
+<script>
+(function(){
+  function G(path){ var o=window.__formData||{}; var ks=(''+path).split('.'); for(var i=0;i<ks.length;i++){ o=(o&&o[ks[i]]); if(o==null)return ''; } return o; }
+  function N(v){ var n=parseFloat((''+(v||'')).replace(/[^0-9.,]/g,'').replace(/\s/g,'').replace(',','.')); return isNaN(n)?0:n; }
+  var b=function(s){return '<b>'+s+'</b>';};
+
+  /* Règles : uniquement sous les champs porteurs d'un levier fiscal/juridique — jamais sous les infos personnelles. */
+  var RULES=[
+    { key:'forme', sel:'select[onchange*="formType("]', fn:function(){ var t=(''+G('type')).toLowerCase();
+      if(t==='sas'||t==='sasu') return 'SAS/SASU : dividendes hors cotisations sociales (prélèvements '+b('17,2 %')+' / PFU 30 %). Président assimilé salarié — protection forte, charges élevées sur salaire.';
+      if(t==='sarl'||t==='eurl') return 'SARL/EURL : gérant majoritaire = TNS (charges ~45 % vs ~80 % en assimilé salarié). Attention : dividendes > '+b('10 % du capital')+' soumis à cotisations.';
+      if(t==='sci') return 'SCI : IR par défaut (transparence) ; option IS = amortissement du bien mais plus-value taxée à la revente. Choix structurant.';
+      return ''; } },
+    { key:'regime', sel:'[onchange*="societe.regime"]', fn:function(){ var r=(''+G('societe.regime')).toUpperCase();
+      if(r==='IS') return 'IS : taux réduit '+b('15 %')+' jusqu\'à 42 500 € de bénéfice, puis 25 %. Arbitrage rémunération / dividendes possible.';
+      if(r==='IR') return 'IR : résultat imposé au barème de l\'associé ; un déficit de démarrage peut réduire l\'impôt du foyer (selon la forme).';
+      return ''; } },
+    { key:'capital', sel:'[oninput*="societe.capital"]', fn:function(){ var c=N(G('societe.capital')); if(!G('societe.capital'))return '';
+      if(c>0&&c<1000) return 'Un capital plus étoffé rassure banques/tiers et augmente les dividendes distribuables sans requalification (SARL : seuil '+b('10 % du capital')+').';
+      return 'Libération partielle possible à la constitution (50 % SAS / 20 % SARL). Le capital sert de base au seuil de dividendes non chargés (SARL).'; } },
+    { key:'objet', sel:'#fi-objet', after:'#fi-objet-sug', fn:function(){ if(!(''+G('societe.objet')).trim())return '';
+      return 'Franchise en base de TVA possible sous seuils (≈ '+b('36 800 € services / 91 900 € vente')+') : pas de TVA facturée (ni récupérée). Vérifier le régime (BIC/BNC) et une éventuelle activité réglementée.'; } },
+    { key:'activiteType', sel:'[onchange*="profil.activiteType"]', fn:function(){ var a=G('profil.activiteType');
+      if(a==='commerciale') return 'BIC — micro possible sous seuils (abattement 71 % vente / 50 % services).';
+      if(a==='artisanale') return 'BIC artisanal — micro possible (abattement 50 %). Stage/immatriculation CMA selon activité.';
+      if(a==='liberale') return 'BNC — micro-BNC possible (abattement '+b('34 %')+'). Caisse spécifique (SSI/CIPAV) selon l\'activité.';
+      if(a==='immobiliere') return 'Location civile : IR (revenus fonciers) ou IS via SCI (amortissement). Meublé → LMNP possible.';
+      if(a==='agricole') return 'BA — régimes micro-BA / réel ; caisse MSA. Dispositifs spécifiques (DPI, étalement).';
+      return ''; } },
+    { key:'caPrev', sel:'[oninput*="profil.caPrev"]', fn:function(){ var v=N(G('profil.caPrev')); if(!G('profil.caPrev'))return '';
+      if(v>0&&v<77700) return 'Sous les seuils micro : régime '+b('micro')+' envisageable (simplicité, abattement forfaitaire) + franchise de TVA.';
+      return 'Au-delà des seuils micro : régime '+b('réel')+' (récupération de TVA, déduction des charges réelles).'; } },
+    { key:'beneficePrev', sel:'[oninput*="profil.beneficePrev"]', fn:function(){ if(!G('profil.beneficePrev'))return '';
+      return 'À l\'IS : '+b('15 %')+' jusqu\'à 42 500 €. Une rémunération déductible réduit le bénéfice imposable — à arbitrer avec les dividendes.'; } },
+    { key:'remun', sel:'[onchange*="profil.remun"]', fn:function(){ var r=G('profil.remun');
+      if(r==='dividendes') return 'Dividendes : pas de cotisations en SAS (PFU 30 %) ; en SARL, part > 10 % du capital chargée. Moins de droits sociaux.';
+      if(r==='salaire') return 'Salaire : déductible du résultat, ouvre des droits (retraite ; chômage en assimilé salarié) mais charges élevées.';
+      if(r==='mixte') return 'Mixte salaire + dividendes : souvent le meilleur arbitrage protection / coût — à chiffrer selon le bénéfice.';
+      return ''; } },
+    { key:'objectif', sel:'[onchange*="profil.objectif"]', fn:function(){ var o=G('profil.objectif');
+      if(o==='investisseurs') return 'Levée de fonds : la '+b('SAS/SASU')+' est adaptée (actions, BSPCE, clauses souples).';
+      if(o==='capitalisation') return 'Capitaliser : IS + report des déficits ; réinvestissement avant impôt dans la société.';
+      if(o==='patrimoine') return 'Protéger le patrimoine : holding (régime mère-fille, dividendes exonérés à '+b('95 %')+') ou SARL de famille.';
+      if(o==='transmission') return 'Transmettre : pacte '+b('Dutreil')+' (exonération 75 % des droits) et donation-partage à anticiper.';
+      return ''; } },
+    { key:'tvaInvest', sel:'[onchange*="profil.tvaInvest"]', fn:function(){ if(G('profil.tvaInvest')==='oui') return 'Investissements importants : opter pour le '+b('réel')+' → récupération de la TVA (matériel, travaux) et amortissements.'; return ''; } },
+    { key:'autreActivite', sel:'[onchange*="profil.autreActivite"]', fn:function(){ var a=G('profil.autreActivite');
+      if(a==='demandeur'||a==='salarie'||a==='etudiant') return 'Exonération '+b('ACRE')+' probable la 1re année (charges sociales allégées) — éligibilité à confirmer (création, demandeur d\'emploi…).';
+      return 'Vérifier l\'éligibilité à l\''+b('ACRE')+' (exonération partielle de cotisations la 1re année).'; } },
+    { key:'innovation', sel:'[onchange*="profil.innovation"]', fn:function(){ if(G('profil.innovation')==='oui') return 'R&D : '+b('Crédit d\'Impôt Recherche')+' (30 %) et statut '+b('JEI')+' (exonérations de charges) envisageables.'; return ''; } }
+  ];
+
+  function place(anchor,key,html){
+    var wrap=document.querySelector('.fi-wrap'); if(!wrap||!anchor)return;
+    var note=wrap.querySelector('.fx-adv[data-fxkey="'+key+'"]');
+    if(!html){ if(note)note.remove(); return; }
+    if(!note){ note=document.createElement('div'); note.className='fx-adv'; note.setAttribute('data-fxkey',key); }
+    note.innerHTML='<span class="fx-i">💡</span><span class="fx-t">'+html+'</span>';
+    if(anchor.nextElementSibling!==note) anchor.insertAdjacentElement('afterend', note);
+  }
+  function fxRefresh(){
+    try{
+      if(!(typeof state!=='undefined'&&state.page==='formulaire'))return;
+      var wrap=document.querySelector('.fi-wrap'); if(!wrap)return;
+      RULES.forEach(function(r){
+        var input=wrap.querySelector(r.sel);
+        var anchor=r.after?(wrap.querySelector(r.after)||input):input;
+        if(!anchor)return;
+        place(anchor, r.key, r.fn(G));
+      });
+    }catch(e){}
+  }
+  if(typeof window.render==='function'){ var _r=window.render; window.render=function(){ var o=_r.apply(this,arguments); try{ setTimeout(fxRefresh,0); }catch(e){} return o; }; }
+  document.addEventListener('input', function(e){ if(e.target&&e.target.closest&&e.target.closest('.fi-wrap')){ clearTimeout(window.__fxT); window.__fxT=setTimeout(fxRefresh,140); } }, true);
+  document.addEventListener('change', function(e){ if(e.target&&e.target.closest&&e.target.closest('.fi-wrap')){ clearTimeout(window.__fxT); window.__fxT=setTimeout(fxRefresh,60); } }, true);
+  setTimeout(fxRefresh,700);
+
+  var st=document.createElement('style');
+  st.textContent=''
+    +'.fx-adv{display:flex;gap:7px;align-items:flex-start;font-size:11px;line-height:1.5;color:#9fb0c9;background:rgba(93,140,255,.06);border-left:2px solid rgba(93,140,255,.5);border-radius:5px;padding:5px 9px;margin:4px 0 2px}'
+    +'.fx-adv .fx-i{flex:none;font-size:11px;line-height:1.5;opacity:.9}'
+    +'.fx-adv .fx-t{flex:1;min-width:0}'
+    +'.fx-adv b{color:#cfe0ff;font-weight:600}';
   document.head.appendChild(st);
 })();
 </script>
