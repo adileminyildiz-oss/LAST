@@ -3233,7 +3233,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=520;
+var LAST_VER=521;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -21391,6 +21391,10 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   var TYPES=[['rdv','Rendez-vous','#4f9dff'],['signature','Signature','#4ade80'],['depot','Dépôt / formalité','#e0b93a'],['appel','Appel','#a78bfa'],['relance','Relance','#f87171']];
   function typeColor(t){var x=TYPES.filter(function(a){return a[0]===t;})[0];return x?x[2]:'#4f9dff';}
   function typeLabel(t){var x=TYPES.filter(function(a){return a[0]===t;})[0];return x?x[1]:'Rendez-vous';}
+  window.agTypeOff=window.agTypeOff||{};
+  function agVisible(r){return !window.agTypeOff[(r&&r.type)||'rdv'];}
+  window.agToggleType=function(t){window.agTypeOff[t]=!window.agTypeOff[t];render();};
+  function agLegend(){return '<div class="ag-legend">'+TYPES.map(function(a){var off=window.agTypeOff[a[0]]?' off':'';return '<span class="ag-lg'+off+'" onclick="agToggleType(\''+a[0]+'\')" title="Afficher / masquer"><i style="background:'+a[2]+'"></i>'+a[1]+'</span>';}).join('')+'</div>';}
   function agData(){ try{ DB.parametres=DB.parametres||{}; if(!Array.isArray(DB.parametres.rdv))DB.parametres.rdv=[]; return DB.parametres.rdv; }catch(e){return [];} }
   function agCfg(){ try{ DB.parametres=DB.parametres||{}; DB.parametres.agendaCfg=DB.parametres.agendaCfg||{calId:'aemconseil.sas@gmail.com',clientId:'',connecte:false}; return DB.parametres.agendaCfg; }catch(e){return {calId:'aemconseil.sas@gmail.com',clientId:'',connecte:false};} }
   var state2=function(){return (typeof state!=='undefined')?state:(window.state||{});};
@@ -21410,7 +21414,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function monthCal(){
     var c=curMonth(); var first=new Date(c.y,c.m,1); var startDow=(first.getDay()+6)%7; /* Lundi=0 */
     var nbDays=new Date(c.y,c.m+1,0).getDate();
-    var byDay={}; agData().forEach(function(r){ (byDay[r.date]=byDay[r.date]||[]).push(r); });
+    var byDay={}; agData().filter(agVisible).forEach(function(r){ (byDay[r.date]=byDay[r.date]||[]).push(r); });
     var ti=todayISO();
     var nbEv=(function(){var n=0;for(var d=1;d<=nbDays;d++){n+=(byDay[isoOf(c.y,c.m,d)]||[]).length;}return n;})();
     /* Nombre de lignes de la grille (6 pour couvrir tous les mois) */
@@ -21457,8 +21461,10 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var stLbl={prevu:'Prévu',confirme:'Confirmé',fait:'Terminé',annule:'Annulé'}[statut]||'Prévu';
     var stCls='ag-st ag-st-'+statut;
     var gcal=r.gcalId?'<span class="ag-gc" title="Synchronisé avec Google Agenda">◑ G</span>':'';
+    var ini=(function(nm){nm=(nm||'').trim();if(!nm)return '•';var w=nm.split(/\s+/).filter(Boolean);return (((w[0]||'')[0]||'')+((w[1]||'')[0]||'')).toUpperCase();})(r.clientNom);
     return '<div class="ag-item" onclick="agEdit(\''+r.id+'\')">'
       +'<span class="ag-bar" style="background:'+col+'"></span>'
+      +'<span class="ag-av">'+E(ini)+'</span>'
       +'<div class="ag-it-main"><div class="ag-it-top"><b class="ag-cli">'+E(r.clientNom||'—')+'</b>'+gcal+'<span class="ag-when">'+E(when)+'</span></div>'
       +'<div class="ag-it-sub"><span class="ag-typ" style="color:'+col+'">'+typeLabel(r.type)+'</span> — '+E(r.objet||'')+'</div></div>'
       +'<span class="'+stCls+'">'+stLbl+'</span>'
@@ -21466,7 +21472,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   }
 
   function upcoming(){
-    var all=agData().slice().sort(function(a,b){return (a.date+' '+(a.heure||'')).localeCompare(b.date+' '+(b.heure||''));});
+    var all=agData().filter(agVisible).slice().sort(function(a,b){return (a.date+' '+(a.heure||'')).localeCompare(b.date+' '+(b.heure||''));});
     var ti=todayISO();
     var fut=all.filter(function(r){return r.date>=ti && r.statut!=='annule';});
     var past=all.filter(function(r){return r.date<ti || r.statut==='annule';}).reverse();
@@ -21598,12 +21604,14 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var nFut=all.filter(function(r){return r.date>=ti&&r.statut!=='annule';}).length;
     var nToday=all.filter(function(r){return r.date===ti&&r.statut!=='annule';}).length;
     var nWeek=(function(){var d=new Date();var end=new Date(d.getTime()+7*864e5).toISOString().slice(0,10);return all.filter(function(r){return r.date>=ti&&r.date<=end&&r.statut!=='annule';}).length;})();
+    var nConfirm=all.filter(function(r){return r.date>=ti&&(r.statut||'prevu')==='prevu';}).length;
     var kpis='<div class="ag-kpis">'
-      +'<div class="ag-k"><div class="ag-k-v">'+nToday+'</div><div class="ag-k-l">Aujourd\'hui</div></div>'
+      +'<div class="ag-k ag-k-acc"><div class="ag-k-v">'+nToday+'</div><div class="ag-k-l">Aujourd\'hui</div></div>'
       +'<div class="ag-k"><div class="ag-k-v">'+nWeek+'</div><div class="ag-k-l">Cette semaine</div></div>'
       +'<div class="ag-k"><div class="ag-k-v">'+nFut+'</div><div class="ag-k-l">À venir</div></div>'
+      +'<div class="ag-k"><div class="ag-k-v">'+nConfirm+'</div><div class="ag-k-l">À confirmer</div></div>'
       +'</div>';
-    return '<div class="ag-wrap">'+kpis+syncPanel()+'<div class="ag-cols"><div class="ag-left">'+monthCal()+'</div><div class="ag-right">'+upcoming()+'</div></div></div>';
+    return '<div class="ag-wrap">'+kpis+syncPanel()+agLegend()+'<div class="ag-cols"><div class="ag-left">'+monthCal()+'</div><div class="ag-right">'+upcoming()+'</div></div></div>';
   };
 
   /* ---- PAGES + nav ---- */
@@ -21637,9 +21645,16 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   /* ---- Style (tout noir) ---- */
   try{ if(!document.getElementById('agenda-css')){ var st=document.createElement('style'); st.id='agenda-css'; st.textContent=[
     '.ag-wrap{display:flex;flex-direction:column;gap:10px}',
-    '.ag-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}',
+    '.ag-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}',
     '.ag-k{background:#0c0d10;border:1px solid #1f2024;border-radius:11px;padding:8px 13px;display:flex;align-items:baseline;gap:8px}',
     '.ag-k-v{font-size:17px;font-weight:800;color:#f3f5f9;line-height:1}.ag-k-l{font-size:9.5px;color:#858d9b;text-transform:uppercase;letter-spacing:.05em}',
+    '.ag-k-acc .ag-k-v{color:#caa24a}',
+    '.ag-legend{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:2px 0}',
+    '.ag-lg{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;border:1px solid #1f2024;background:#0c0d10;font-size:10.5px;color:#9aa3b2;cursor:pointer;transition:border-color .12s,opacity .12s}',
+    '.ag-lg i{width:8px;height:8px;border-radius:2px;flex:none}',
+    '.ag-lg.off{opacity:.4}.ag-lg:hover{border-color:#33353b}',
+    '.ag-av{width:30px;height:30px;border-radius:9px;flex:none;display:grid;place-items:center;font-size:10.5px;font-weight:800;color:#a8adb5;background:linear-gradient(140deg,#232326,#151517);border:1px solid #262629;margin-right:2px}',
+    '.ag-item{align-items:center}',
     '.ag-sync{background:#0c0d10;border:1px solid #1f2024;border-radius:11px;padding:8px 13px}',
     '.ag-sync-h{font-size:11.5px;font-weight:700;color:#e6e9f0;display:flex;align-items:center;gap:8px}',
     '.ag-syn-on{color:#4ade80;font-size:10px;font-weight:700;margin-left:auto}.ag-syn-off{color:#7d8493;font-size:10px;font-weight:700;margin-left:auto}',
