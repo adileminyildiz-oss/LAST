@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=549;
+var LAST_VER=550;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -18101,6 +18101,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   /* Documents adaptés à la forme de société : liste pliable SAS/SASU/SARL/EURL(/SCI) */
   var EDFORMS={statuts:['SAS','SASU','SARL','EURL','SCI'],souscripteurs:['SAS','SASU','SARL','EURL'],pouvoir:['SAS','SASU','SARL','EURL'],dnc:['SAS','SASU','SARL','EURL'],cesactions:['SAS','SASU','SA'],cesparts:['SARL','EURL'],contrat:[{lbl:'CDI',k:'cdi'},{lbl:'CDD',k:'cdd'}],soustrait:['BTP simplifié (SEBTP 2014)','Standard (loi 75-1334)','Avec un particulier']};
   var EDHIDE={cdi:1,cdd:1};
+  try{ window.EDLIB_TYPES=EDLIB_TYPES; window.EDFORMS=EDFORMS; window.EDHIDE=EDHIDE; }catch(e){}
   function edFormeModel(f){return {SAS:'sas',SASU:'sasu',SARL:'sarl',EURL:'sarl',SCI:'sci'}[f]||'sas';}
   window.edLibToggleType=function(k){state.edOpenType=(state.edOpenType===k?'':k);render();};
   function edAssocFields(i){return [['a'+i+'_nom','Nom & prénom'],['a'+i+'_civ','Civilité'],['a'+i+'_parts','Nombre de titres'],['a'+i+'_adr','Adresse'],['a'+i+'_naiss','Date de naissance','date'],['a'+i+'_lieu','Lieu de naissance'],['a'+i+'_nat','Nationalité']];}
@@ -21719,11 +21720,12 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var stLbl={prevu:'Prévu',confirme:'Confirmé',fait:'Terminé',annule:'Annulé'}[statut]||'Prévu';
     var stCls='ag-st ag-st-'+statut;
     var gcal=r.gcalId?'<span class="ag-gc" title="Synchronisé avec Google Agenda">◑ G</span>':'';
+    var notif=r.notified?'<span class="ag-notified" title="Participants notifiés">🔔</span>':'';
     var ini=(function(nm){nm=(nm||'').trim();if(!nm)return '•';var w=nm.split(/\s+/).filter(Boolean);return (((w[0]||'')[0]||'')+((w[1]||'')[0]||'')).toUpperCase();})(r.clientNom);
     return '<div class="ag-item" onclick="agEdit(\''+r.id+'\')">'
       +'<span class="ag-bar" style="background:'+col+'"></span>'
       +'<span class="ag-av">'+E(ini)+'</span>'
-      +'<div class="ag-it-main"><div class="ag-it-top"><b class="ag-cli">'+E(r.clientNom||'—')+'</b>'+gcal+'<span class="ag-when">'+E(when)+'</span></div>'
+      +'<div class="ag-it-main"><div class="ag-it-top"><b class="ag-cli">'+E(r.clientNom||'—')+'</b>'+gcal+notif+'<span class="ag-when">'+E(when)+'</span></div>'
       +'<div class="ag-it-sub"><span class="ag-typ" style="color:'+col+'">'+typeLabel(r.type)+'</span> — '+E(r.objet||'')+'</div></div>'
       +'<span class="'+stCls+'">'+stLbl+'</span>'
       +'</div>';
@@ -21825,26 +21827,31 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
 
   window.agEdit=function(id){
     var r=id?agData().filter(function(x){return x.id===id;})[0]:null;
-    var isNew=!r; r=r||{id:'',date:(window.agSelDate||todayISO()),heure:'09:00',clientNom:'',objet:'',type:'rdv',statut:'prevu',note:''};
+    var isNew=!r; r=r||{id:'',date:(window.agSelDate||todayISO()),heure:'09:00',clientNom:'',objet:'',type:'rdv',statut:'prevu',note:'',invites:'',lieu:''};
     var clients=[];try{clients=(DB.clients||[]).map(function(c){return ((c.prenom||'')+' '+(c.nom||'')).trim();}).filter(Boolean);}catch(e){}
     var dl='<datalist id="ag-cli-dl">'+clients.map(function(n){return '<option value="'+E(n)+'">';}).join('')+'</datalist>';
     var typeOpts=TYPES.map(function(t){return '<option value="'+t[0]+'"'+(r.type===t[0]?' selected':'')+'>'+t[1]+'</option>';}).join('');
     var stOpts=[['prevu','Prévu'],['confirme','Confirmé'],['fait','Terminé'],['annule','Annulé']].map(function(s){return '<option value="'+s[0]+'"'+((r.statut||'prevu')===s[0]?' selected':'')+'>'+s[1]+'</option>';}).join('');
     var body='<div class="ag-form">'+dl
-      +'<div class="ag-f2"><div><label>Client</label><input id="ag-cli" list="ag-cli-dl" value="'+E(r.clientNom)+'" placeholder="Nom du client"></div>'
+      +'<div class="ag-f2"><div><label>Client / organisme concerné</label><input id="ag-cli" list="ag-cli-dl" value="'+E(r.clientNom)+'" placeholder="Client, organisme ou service"></div>'
       +'<div><label>Type</label><select id="ag-type">'+typeOpts+'</select></div></div>'
       +'<div class="ag-f2"><div><label>Date</label><input id="ag-date" type="date" max="9999-12-31" value="'+E(r.date)+'"></div>'
       +'<div><label>Heure</label><input id="ag-heure" type="time" value="'+E(r.heure||'')+'"></div></div>'
       +'<label>Objet du rendez-vous</label><input id="ag-objet" value="'+E(r.objet)+'" placeholder="Ex. Signature des statuts, remise de documents…">'
+      +'<label>Lieu (facultatif)</label><input id="ag-lieu" value="'+E(r.lieu||'')+'" placeholder="Bureau AEM CONSEIL, visio, adresse…">'
+      +'<label>Participants à notifier <span class="ag-hint">un par ligne — « Nom &lt;email&gt; » ou e-mail seul</span></label>'
+      +'<textarea id="ag-invites" rows="2" placeholder="Sofia B. &lt;sofia@aemconseil.eu&gt;\nclient@exemple.fr">'+E(r.invites||'')+'</textarea>'
       +'<div class="ag-f2"><div><label>Statut</label><select id="ag-statut">'+stOpts+'</select></div><div></div></div>'
       +'<label>Note (facultatif)</label><textarea id="ag-note" rows="2" placeholder="Précisions internes…">'+E(r.note||'')+'</textarea>'
       +'</div>';
+    var canNotify=!isNew;
     var footer=(isNew?'':'<button class="btn btn-ghost ag-del" onclick="agDelete(\''+r.id+'\')">🗑 Supprimer</button>')
+      +(canNotify?('<button class="btn btn-ghost ag-notif" onclick="agNotify(\''+r.id+'\')" title="Envoyer une notification par e-mail aux participants">🔔 Notifier</button>'):'')
       +'<span style="flex:1"></span><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-pri" id="ag-save">'+(isNew?'Planifier':'Enregistrer')+'</button>';
     openModal(isNew?'Nouveau rendez-vous':'Modifier le rendez-vous',body,footer);
     var sv=document.getElementById('ag-save'); if(sv)sv.onclick=function(){
       var g=function(id){var el=document.getElementById(id);return el?el.value:'';};
-      var obj={clientNom:g('ag-cli').trim(),type:g('ag-type'),date:g('ag-date'),heure:g('ag-heure'),objet:g('ag-objet').trim(),statut:g('ag-statut'),note:g('ag-note').trim()};
+      var obj={clientNom:g('ag-cli').trim(),type:g('ag-type'),date:g('ag-date'),heure:g('ag-heure'),objet:g('ag-objet').trim(),lieu:g('ag-lieu').trim(),invites:g('ag-invites').trim(),statut:g('ag-statut'),note:g('ag-note').trim()};
       if(!obj.date){ if(typeof toast==='function')toast('Indiquez une date.'); return; }
       if(isNew){ obj.id=(typeof uid==='function'?uid('rdv'):'rdv'+Date.now()); obj.gcalId=''; agData().push(obj); }
       else { var t=agData().filter(function(x){return x.id===r.id;})[0]; if(t){ for(var k in obj)t[k]=obj[k]; } }
@@ -21854,6 +21861,31 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.agDelete=function(id){
     if(typeof uiConfirm==='function'){ uiConfirm('Supprimer ce rendez-vous ?',function(){ DB.parametres.rdv=agData().filter(function(x){return x.id!==id;}); try{save();}catch(e){} closeModal(); render(); },{okLabel:'Supprimer'}); }
     else { DB.parametres.rdv=agData().filter(function(x){return x.id!==id;}); try{save();}catch(e){} closeModal(); render(); }
+  };
+
+  /* Notification par e-mail aux participants / organismes concernés */
+  function agEmails(str){ var out=[]; (''+(str||'')).split(/[\n,;]+/).forEach(function(line){ var m=(''+line).match(/[\w.+-]+@[\w-]+\.[\w.-]+/); if(m)out.push(m[0]); }); return out.filter(function(e,i,a){return a.indexOf(e)===i;}); }
+  window.agNotify=function(id){
+    var r=agData().filter(function(x){return x.id===id;})[0]; if(!r){ if(typeof toast==='function')toast('Rendez-vous introuvable.'); return; }
+    /* prend la valeur en cours de saisie si la fiche est ouverte */
+    var live=document.getElementById('ag-invites'); var raw=live?live.value:(r.invites||'');
+    var emails=agEmails(raw);
+    if(!emails.length){ if(typeof toast==='function')toast('Ajoutez au moins un e-mail de participant à notifier.'); var el=document.getElementById('ag-invites'); if(el)el.focus(); return; }
+    var quand=frLong(r.date)+(r.heure?(' à '+r.heure):'');
+    var sujet='Rendez-vous AEM CONSEIL — '+(r.objet||typeLabel(r.type))+' — '+frDate(r.date);
+    var corps='Bonjour,\n\nVous êtes convié(e) au rendez-vous suivant organisé par AEM CONSEIL :\n\n'
+      +'• Date : '+quand+'\n'
+      +'• Type : '+typeLabel(r.type)+'\n'
+      +(r.objet?('• Objet : '+r.objet+'\n'):'')
+      +(r.clientNom?('• Concerne : '+r.clientNom+'\n'):'')
+      +(r.lieu?('• Lieu : '+r.lieu+'\n'):'')
+      +(r.note?('\n'+r.note+'\n'):'')
+      +'\nMerci de confirmer votre présence.\n\nCordialement,\nAEM CONSEIL\naemconseil.eu';
+    var to=emails.join(',');
+    var silent=false;
+    try{ if(typeof demEnvoiDirect==='function'){ silent=demEnvoiDirect(to,sujet,corps); } else if(typeof window.open==='function'){ window.open('mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps)); } }catch(e){}
+    r.notified=Date.now(); r.notifCount=(r.notifCount||0)+1; try{save();}catch(e){}
+    if(typeof toast==='function')toast(silent?('Notification envoyée à '+emails.length+' participant'+(emails.length>1?'s':'')+'.'):('E-mail de notification préparé pour '+emails.length+' participant'+(emails.length>1?'s':'')+'.'));
   };
 
   window.pageAgenda=function(){
@@ -21875,7 +21907,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   /* ---- PAGES + nav ---- */
   try{ if(typeof PAGES!=='undefined' && !PAGES.some(function(p){return p.id==='agenda';})){
     var iEd=PAGES.findIndex(function(p){return p.id==='editions';});
-    var entry={id:'agenda',lbl:'Agenda',ic:'calendar',sub:'Rendez-vous clients · synchronisé Google Agenda'};
+    var entry={id:'agenda',lbl:'Agenda',ic:'calendar',sub:'Rendez-vous internes AEM CONSEIL · notifications · Google Agenda'};
     if(iEd>=0)PAGES.splice(iEd+1,0,entry);else PAGES.push(entry);
   } }catch(e){}
   try{ if(typeof IC!=='undefined' && !IC.calendar){ IC.calendar='<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>'; } }catch(e){}
@@ -21972,6 +22004,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     '.ag-form input:focus,.ag-form select:focus,.ag-form textarea:focus{border-color:#4f9dff;outline:none;box-shadow:0 0 0 3px rgba(79,157,255,.22)}',
     '.ag-f2{display:grid;grid-template-columns:1fr 1fr;gap:12px}',
     '.ag-del{color:#f87171!important}',
+    '.ag-notif{color:#4f9dff!important}',
+    '.ag-hint{font-weight:400;color:#8b93a1;font-size:10.5px;text-transform:none;letter-spacing:0}',
+    '.ag-notified{color:#e0b93a;margin-left:6px;font-size:11px}',
     '.ag-cfg label{display:block;font-size:11.5px;font-weight:600;color:#b0b8c6;margin:10px 0 5px}',
     '.ag-cfg input{width:100%;box-sizing:border-box;background:#0a0b0e;border:1px solid #26272d;color:#f3f5f9;border-radius:10px;padding:10px 12px;font:inherit;font-size:13px}',
     '.ag-cfg-help{font-size:11.5px;color:#8b93a1;line-height:1.55;margin-top:10px;background:#0a0b0e;border:1px solid #1f2024;border-radius:10px;padding:10px 12px}'
@@ -28104,6 +28139,121 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     '.du-leg{font-size:10px;margin:0 0 10px;padding:6px 8px;border:1px solid #bbb;background:#f6f8fc;color:#111;border-radius:5px}',
     '.du-t{width:100%;border-collapse:collapse;font-size:8.4px}.du-t th,.du-t td{border:1px solid #888;padding:3px 4px;vertical-align:top;color:#111}.du-t th{background:#e8edf5;font-weight:700;text-align:center}',
     '.du-t .du-c{text-align:center}.du-est,.du-eval{font-weight:700}.du-prio{font-weight:700}'
+  ].join(''); document.head.appendChild(st); }catch(e){}
+})();
+</script>
+
+
+<!-- ===== Éditions : palette de recherche ⌘K (modèles de documents) ===== -->
+<script>
+(function(){
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function norm(s){ return (''+(s==null?'':s)).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+  var SVG='<svg class="edk-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+
+  function models(){
+    var out=[];
+    try{
+      var T=window.EDLIB_TYPES||[], F=window.EDFORMS||{}, H=window.EDHIDE||{};
+      T.forEach(function(t){ if(H[t.k])return;
+        if(F[t.k]){ F[t.k].forEach(function(o){
+          if(typeof o==='string') out.push({label:t.l+' — '+o, group:t.g, run:function(){ window.edLibNew(t.k,o); }});
+          else out.push({label:(o.lbl||t.l), group:t.g, run:(function(kk){return function(){ window.edLibNew(kk); };})(o.k)});
+        }); }
+        else out.push({label:t.l, group:t.g, run:(function(kk){return function(){ window.edLibNew(kk); };})(t.k)});
+      });
+    }catch(e){}
+    /* Documents administratifs (DUERP) */
+    if(typeof window.duerpNew==='function') out.push({label:"DUERP — Document Unique d'Évaluation des Risques", group:'Documents administratifs', run:function(){ window.duerpNew(); }});
+    /* Applications */
+    out.push({label:'Factures', group:'Applications', run:function(){ if(typeof go==='function')go('facturier'); }});
+    out.push({label:'Remboursement de TVA', group:'Applications', run:function(){ if(typeof go==='function')go('tvarembours'); }});
+    return out;
+  }
+
+  window.__edk={list:[],sel:0,q:''};
+  function results(){ var q=norm(window.__edk.q); var all=models();
+    if(!q) return all;
+    return all.filter(function(m){ return norm(m.label).indexOf(q)>=0 || norm(m.group).indexOf(q)>=0; }); }
+
+  function paint(){
+    var box=document.getElementById('edk-list'); if(!box)return;
+    var r=results(); window.__edk.list=r;
+    if(window.__edk.sel>=r.length) window.__edk.sel=Math.max(0,r.length-1);
+    if(!r.length){ box.innerHTML='<div class="edk-none">Aucun modèle ne correspond à « '+esc(window.__edk.q)+' ».</div>'; return; }
+    var html='', lastG=null;
+    r.forEach(function(m,i){
+      if(m.group!==lastG){ html+='<div class="edk-glabel">'+esc(m.group)+'</div>'; lastG=m.group; }
+      html+='<div class="edk-item'+(i===window.__edk.sel?' sel':'')+'" data-i="'+i+'" onmousemove="edkHover('+i+')" onclick="edkRun('+i+')"><span class="edk-ch">›</span>'+esc(m.label)+'</div>';
+    });
+    box.innerHTML=html;
+    var sel=box.querySelector('.edk-item.sel'); if(sel&&sel.scrollIntoView)sel.scrollIntoView({block:'nearest'});
+  }
+  window.edkHover=function(i){ window.__edk.sel=i; var box=document.getElementById('edk-list'); if(box){ [].forEach.call(box.querySelectorAll('.edk-item'),function(el){ el.classList.toggle('sel',+el.getAttribute('data-i')===i); }); } };
+
+  window.edkOpen=function(){
+    if(document.getElementById('edk-ov'))return;
+    window.__edk.q=''; window.__edk.sel=0;
+    var ov=document.createElement('div'); ov.id='edk-ov'; ov.className='edk-ov';
+    ov.innerHTML='<div class="edk-box" role="dialog" aria-label="Rechercher un modèle">'
+      +'<div class="edk-search">'+SVG+'<input id="edk-input" placeholder="Rechercher un modèle…" autocomplete="off" spellcheck="false" aria-label="Rechercher un modèle"></div>'
+      +'<div class="edk-list" id="edk-list"></div>'
+      +'<div class="edk-foot"><span><b>↑↓</b> naviguer</span><span><b>↵</b> ouvrir</span><span><b>Échap</b> fermer</span></div>'
+      +'</div>';
+    ov.addEventListener('mousedown',function(e){ if(e.target===ov)edkClose(); });
+    document.body.appendChild(ov);
+    var inp=document.getElementById('edk-input');
+    inp.addEventListener('input',function(){ window.__edk.q=this.value; window.__edk.sel=0; paint(); });
+    inp.addEventListener('keydown',function(e){
+      if(e.key==='ArrowDown'){ e.preventDefault(); window.__edk.sel=Math.min(window.__edk.list.length-1,window.__edk.sel+1); paint(); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); window.__edk.sel=Math.max(0,window.__edk.sel-1); paint(); }
+      else if(e.key==='Enter'){ e.preventDefault(); edkRun(window.__edk.sel); }
+      else if(e.key==='Escape'){ e.preventDefault(); edkClose(); }
+    });
+    paint(); setTimeout(function(){ try{inp.focus();}catch(e){} },30);
+  };
+  window.edkClose=function(){ var ov=document.getElementById('edk-ov'); if(ov&&ov.parentNode)ov.parentNode.removeChild(ov); };
+  window.edkRun=function(i){ var m=window.__edk.list[i]; edkClose(); if(m&&typeof m.run==='function'){ try{ m.run(); }catch(e){} } };
+
+  /* Raccourci clavier global ⌘K / Ctrl+K sur la page Éditions */
+  document.addEventListener('keydown',function(e){
+    if((e.metaKey||e.ctrlKey) && (e.key==='k'||e.key==='K')){
+      var pg=(typeof state!=='undefined'&&state)?state.page:(window.state&&window.state.page);
+      var docOpen=false; try{ docOpen=!!(typeof state!=='undefined'&&state&&state.edLibId); }catch(_e){}
+      if(pg==='editions' && !docOpen){ e.preventDefault(); if(document.getElementById('edk-ov'))edkClose(); else edkOpen(); }
+    }
+  },true);
+
+  /* Remplace la barre de recherche de l'accueil Éditions par le déclencheur ⌘K */
+  try{ if(typeof window.pageEditions==='function' && !window.pageEditions.__edk){ var _pe=window.pageEditions; window.pageEditions=function(){ var h=_pe.apply(this,arguments);
+    if(typeof h==='string' && h.indexOf('id="ed2-create"')>=0 && h.indexOf('class="ed2-search"')>=0){
+      var trig='<button class="edk-trigger" onclick="edkOpen()" aria-label="Rechercher un modèle">'+SVG+'<span class="edk-trig-t">Rechercher un modèle…</span><span class="edk-kbd">'+(/(Mac|iPhone|iPad)/i.test(navigator.platform||navigator.userAgent)?'⌘K':'Ctrl K')+'</span></button>';
+      h=h.replace(/<div class="ed2-search">[\s\S]*?<\/div>\s*<\/div>/,trig+'</div>');
+      if(h.indexOf('edk-trigger')<0){ h=h.replace(/<div class="ed2-search">[\s\S]*?<\/div>/,trig); }
+    }
+    return h; }; window.pageEditions.__edk=1; } }catch(e){}
+
+  try{ var st=document.createElement('style'); st.id='edk-css'; st.textContent=[
+    '.edk-trigger{display:inline-flex;align-items:center;gap:10px;min-width:260px;background:#161b26;border:1px solid #2a3446;border-radius:11px;padding:10px 14px;color:#8494aa;font:inherit;font-size:13px;cursor:pointer;transition:.15s}',
+    '.edk-trigger:hover{border-color:#4f9dff;color:#b6c3d6}',
+    '.edk-trig-t{flex:1;text-align:left}',
+    '.edk-kbd{font-size:10.5px;font-weight:700;letter-spacing:.03em;color:#b6c3d6;background:#0f1521;border:1px solid #2a3446;border-radius:6px;padding:2px 7px}',
+    '.edk-ic{width:16px;height:16px;flex:none}',
+    '.edk-ov{position:fixed;inset:0;z-index:100000;background:rgba(6,10,17,.62);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;animation:edkIn .12s ease}',
+    '@keyframes edkIn{from{opacity:0}to{opacity:1}}',
+    '.edk-box{width:min(560px,92vw);max-height:70vh;display:flex;flex-direction:column;background:#111828;border:1px solid #33425c;border-radius:15px;overflow:hidden;box-shadow:0 40px 100px -30px rgba(0,0,0,.95),0 0 0 1px rgba(79,157,255,.10)}',
+    '.edk-search{display:flex;align-items:center;gap:11px;padding:15px 17px;border-bottom:1px solid #1b2432;color:#4f9dff}',
+    '.edk-search input{flex:1;min-width:0;background:none;border:0;outline:0;color:#f5f9fe;font:inherit;font-size:15.5px}',
+    '.edk-search input::placeholder{color:#8494aa}',
+    '.edk-list{overflow-y:auto;padding:8px 8px 6px}',
+    '.edk-glabel{font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#8494aa;font-weight:700;padding:9px 10px 4px}',
+    '.edk-item{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;color:#b6c3d6;font-size:13.5px;cursor:pointer}',
+    '.edk-item .edk-ch{color:#8494aa}',
+    '.edk-item.sel{background:rgba(79,157,255,.15);color:#f5f9fe}.edk-item.sel .edk-ch{color:#4f9dff}',
+    '.edk-none{padding:22px 14px;text-align:center;color:#8494aa;font-size:13px}',
+    '.edk-foot{display:flex;gap:16px;padding:9px 17px;border-top:1px solid #1b2432;color:#8494aa;font-size:10.5px}',
+    '.edk-foot b{color:#b6c3d6;background:#0f1521;border:1px solid #2a3446;border-radius:5px;padding:1px 6px;margin-right:5px;font-weight:700}',
+    '@media(prefers-reduced-motion:reduce){.edk-ov{animation:none}}'
   ].join(''); document.head.appendChild(st); }catch(e){}
 })();
 </script>
