@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=554;
+var LAST_VER=555;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -28812,11 +28812,17 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
       mails.forEach(function(m){
         var mid=m.id||m.mailId||((m.from||'')+'|'+(m.subject||'')+'|'+(m.date||''));
         if(s.list.some(function(x){return x.mailId===mid;}))return;
-        s.list.unshift({ id:fpUid(), src:'mail', mailId:mid, from:m.from||'', sujet:m.subject||m.sujet||'',
+        var it={ id:fpUid(), src:'mail', mailId:mid, from:m.from||'', sujet:m.subject||m.sujet||'',
           dateMail:(m.date||'').slice(0,10), fournisseur:fpNomFrom(m.from||m.subject||''), numero:m.numero||'',
           dateFact:(m.date||'').slice(0,10)||today2(), ht:m.ht||'', taux:m.taux||'20', tva:'', ttc:m.ttc||'',
           compteCharge:'606100000', fichierNom:(m.attachment||m.piece||''), lien:m.link||m.url||'',
-          statut:'reperee', ts:Date.now() });
+          statut:'reperee', ts:Date.now() };
+        /* le script pré-remplit le TTC : on en déduit HT et TVA */
+        var _ttc=n(it.ttc), _tx=n(it.taux)||20;
+        if(_ttc>0){ var _ht=_ttc/(1+_tx/100);
+          it.ht=(Math.round(_ht*100)/100).toFixed(2); it.tva=(Math.round((_ttc-_ht)*100)/100).toFixed(2);
+          it.ttc=_ttc.toFixed(2); it.statut='traitee'; }
+        s.list.unshift(it);
         add++;
       });
       s.lastSync=new Date().toISOString(); s.lastErr='';
@@ -28908,32 +28914,31 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
   window.fpSetDossier=function(v){ st2().fpDossier=v; render(); };
 
   /* ---------- Aide : code du script Gmail ---------- */
+  var FP_SCRIPT_SRC="/* ============================================================================\n   AEM CONSEIL — Mar'q · action « factures »\n   Repère les factures reçues sur aemconseil.sas@gmail.com et les renvoie à Mar'q.\n\n   À COLLER dans le MÊME script Google Apps Script que la boîte mail\n   (celui dont l'URL est renseignée dans Mar'q → Demandes → ⚙ Configurer la boîte).\n\n   ── INSTALLATION ────────────────────────────────────────────────────────────\n   1. Ouvrez le script, collez TOUT ce fichier à la fin.\n   2. Dans doGet(e), ajoutez les 2 lignes de routage (voir ci-dessous).\n   3. Paramètres du projet ▸ Propriétés du script :\n        SECRET_KEY       = la clé secrète saisie dans Mar'q   (obligatoire)\n        FP_DRIVE_FOLDER  = nom du dossier Drive d'archivage   (facultatif)\n                           défaut : \"AEM CONSEIL - Factures reçues\"\n        FP_QUERY         = requête Gmail personnalisée        (facultatif)\n   4. Déployer ▸ Gérer les déploiements ▸ ✏️ Modifier\n        ▸ Version : « Nouvelle version » ▸ Déployer.\n        (sans ce redéploiement, Mar'q continue d'appeler l'ancienne version)\n   5. Dans Mar'q : Factures prestataires ▸ « ↻ Relever la boîte ».\n\n   ── ROUTAGE à ajouter dans doGet(e) ─────────────────────────────────────────\n     if (e.parameter.action === 'factures')    return fpReply(e, fpFactures(e));\n     if (e.parameter.action === 'facture_lue') return fpReply(e, fpFactureLue(e));\n   ============================================================================ */\n\nvar FP_LABEL = 'marq-facture-importee';\n\n/* Réponse JSON — supporte le repli JSONP utilisé par Mar'q (&callback=…). */\nfunction fpReply(e, obj) {\n  var s = JSON.stringify(obj);\n  var cb = (e && e.parameter && e.parameter.callback) || '';\n  if (cb) {\n    return ContentService.createTextOutput(cb + '(' + s + ')')\n      .setMimeType(ContentService.MimeType.JAVASCRIPT);\n  }\n  return ContentService.createTextOutput(s)\n    .setMimeType(ContentService.MimeType.JSON);\n}\n\n/* ---------------------------------------------------------------------------\n   ACTION PRINCIPALE : liste les mails de facture avec pièce jointe.\n   --------------------------------------------------------------------------- */\nfunction fpFactures(e) {\n  var P = PropertiesService.getScriptProperties();\n  if ((e.parameter.key || '') !== P.getProperty('SECRET_KEY')) {\n    return { error: 'unauthorized' };\n  }\n\n  var max   = Math.min(Number(e.parameter.max || 30) || 30, 100);\n  var jours = Number(e.parameter.jours || 90) || 90;\n\n  /* in:anywhere → attrape aussi Spam et Promotions (les factures y tombent souvent).\n     -label:… → ne resert pas ce qui a déjà été importé dans Mar'q. */\n  var q = P.getProperty('FP_QUERY') ||\n      ('in:anywhere -in:trash has:attachment newer_than:' + jours + 'd ' +\n       '(facture OR factures OR invoice OR \"note d\\'honoraires\" OR \"avis d\\'échéance\" OR \"votre relevé\") ' +\n       '-label:' + FP_LABEL);\n\n  var out = [];\n  try {\n    GmailApp.search(q, 0, max).forEach(function (th) {\n      th.getMessages().forEach(function (m) {\n        var att = m.getAttachments().filter(function (a) {\n          return /pdf|image\\/(jpe?g|png)/i.test(a.getContentType());\n        });\n        if (!att.length) return;\n\n        var corps = '';\n        try { corps = m.getPlainBody().substring(0, 4000); } catch (err) { corps = ''; }\n        var texte = m.getSubject() + '\\n' + corps;\n\n        out.push({\n          id         : m.getId(),\n          from       : m.getFrom(),\n          subject    : m.getSubject(),\n          date       : Utilities.formatDate(m.getDate(), 'Europe/Paris', 'yyyy-MM-dd'),\n          attachment : att[0].getName(),\n          link       : fpArchive(att[0], m),\n          numero     : fpNumero(texte),\n          ttc        : fpMontant(texte),\n          taux       : fpTaux(texte)\n        });\n      });\n    });\n  } catch (err) {\n    return { error: String(err) };\n  }\n  return { factures: out, requete: q };\n}\n\n/* ---------------------------------------------------------------------------\n   Marque un message comme importé (il ne remontera plus dans la relève).\n   Appelé par Mar'q : action=facture_lue&id=<messageId>\n   --------------------------------------------------------------------------- */\nfunction fpFactureLue(e) {\n  var P = PropertiesService.getScriptProperties();\n  if ((e.parameter.key || '') !== P.getProperty('SECRET_KEY')) {\n    return { error: 'unauthorized' };\n  }\n  var id = e.parameter.id || '';\n  if (!id) return { error: 'missing_id' };\n  try {\n    var lab = GmailApp.getUserLabelByName(FP_LABEL) || GmailApp.createLabel(FP_LABEL);\n    GmailApp.getMessageById(id).getThread().addLabel(lab);\n    return { ok: true, id: id };\n  } catch (err) {\n    return { error: String(err) };\n  }\n}\n\n/* ---------------------------------------------------------------------------\n   Archivage Drive de la pièce jointe → renvoie un lien consultable.\n   Si l'archivage échoue, on renvoie le permalien Gmail du message.\n   --------------------------------------------------------------------------- */\nfunction fpArchive(att, msg) {\n  try {\n    var P = PropertiesService.getScriptProperties();\n    var nom = P.getProperty('FP_DRIVE_FOLDER') || 'AEM CONSEIL - Factures reçues';\n    var it = DriveApp.getFoldersByName(nom);\n    var dossier = it.hasNext() ? it.next() : DriveApp.createFolder(nom);\n\n    /* évite de recréer le même fichier à chaque relève */\n    var nomFichier = Utilities.formatDate(msg.getDate(), 'Europe/Paris', 'yyyy-MM-dd')\n                   + ' - ' + att.getName();\n    var deja = dossier.getFilesByName(nomFichier);\n    if (deja.hasNext()) return deja.next().getUrl();\n\n    var f = dossier.createFile(att.copyBlob().setName(nomFichier));\n    return f.getUrl();\n  } catch (err) {\n    return 'https://mail.google.com/mail/u/0/#all/' + msg.getId();\n  }\n}\n\n/* ---------------------------------------------------------------------------\n   Extractions (pré-remplissage dans Mar'q — toujours vérifiable à l'écran).\n   --------------------------------------------------------------------------- */\nfunction fpNumero(t) {\n  var m = t.match(/(?:facture|invoice)\\s*(?:n\\s*[°o]?)?\\s*[:#]?\\s*([A-Z0-9][A-Z0-9\\-\\/\\.]{2,24})/i)\n       || t.match(/\\bn\\s*[°o]\\s*[:#]?\\s*([A-Z0-9][A-Z0-9\\-\\/\\.]{2,24})/i);\n  return m ? m[1].replace(/[.,;]$/, '') : '';\n}\n\nfunction fpMontant(t) {\n  /* privilégie un montant explicitement TTC / total / net à payer */\n  var best = 0;\n  var re = /(?:total\\s*ttc|montant\\s*ttc|net\\s+[àa]\\s+payer|total\\s+[àa]\\s+payer|total\\s+g[ée]n[ée]ral|ttc)\\s*[:\\s]*([0-9][0-9\\s., ]{0,14})\\s*(?:€|eur)/gi;\n  var m;\n  while ((m = re.exec(t)) !== null) {\n    var v = fpNum(m[1]);\n    if (v > best) best = v;\n  }\n  if (!best) {\n    /* repli : le plus gros montant en euros du message */\n    var re2 = /([0-9][0-9\\s., ]{0,14})\\s*(?:€|EUR)\\b/g;\n    while ((m = re2.exec(t)) !== null) {\n      var v2 = fpNum(m[1]);\n      if (v2 > best) best = v2;\n    }\n  }\n  return best ? best.toFixed(2) : '';\n}\n\nfunction fpTaux(t) {\n  var m = t.match(/tva\\s*(?:\\(?\\s*)?([0-9]{1,2}(?:[.,][0-9])?)\\s*%/i)\n       || t.match(/([0-9]{1,2}(?:[.,][0-9])?)\\s*%\\s*(?:de\\s*)?tva/i);\n  return m ? m[1].replace(',', '.') : '20';\n}\n\nfunction fpNum(s) {\n  s = String(s).replace(/[\\s ]/g, '');\n  /* 1.234,56 → 1234.56   |   1,234.56 → 1234.56 */\n  if (/,\\d{1,2}$/.test(s))      s = s.replace(/\\./g, '').replace(',', '.');\n  else if (/\\.\\d{1,2}$/.test(s)) s = s.replace(/,/g, '');\n  else                           s = s.replace(/[.,]/g, '');\n  var n = parseFloat(s);\n  return isNaN(n) ? 0 : n;\n}\n\n/* ---------------------------------------------------------------------------\n   Test manuel depuis l'éditeur Apps Script (Exécuter ▸ fpTest).\n   Affiche dans les journaux ce que Mar'q recevra.\n   --------------------------------------------------------------------------- */\nfunction fpTest() {\n  var P = PropertiesService.getScriptProperties();\n  var r = fpFactures({ parameter: { key: P.getProperty('SECRET_KEY'), max: 5 } });\n  Logger.log(JSON.stringify(r, null, 2));\n}\n";
+  window.fpDlScript=function(){ fpDl('gmail-script-factures.gs','text/plain;charset=utf-8',FP_SCRIPT_SRC); if(typeof toast==='function')toast('Script téléchargé — collez-le dans votre projet Apps Script.'); };
+  window.fpCopyScript=function(){
+    var t=document.getElementById('fp-src');
+    function ok(){ if(typeof toast==='function')toast('Script copié — collez-le dans Apps Script.'); }
+    try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(FP_SCRIPT_SRC).then(ok,function(){ if(t){t.select();document.execCommand('copy');ok();} }); return; } }catch(e){}
+    if(t){ t.select(); try{document.execCommand('copy');}catch(e){} ok(); }
+  };
   window.fpScriptDoc=function(){
-    var code=[
-      "/* À AJOUTER dans le script Apps Script déjà utilisé par Mar'q (même webapp).",
-      "   Repère les factures reçues sur aemconseil.sas@gmail.com et les renvoie à Mar'q. */",
-      "function fpFactures(e){",
-      "  var max = Number(e.parameter.max || 30);",
-      "  var q = 'in:inbox has:attachment (facture OR invoice OR \"note d honoraires\") newer_than:90d';",
-      "  var out = [];",
-      "  GmailApp.search(q, 0, max).forEach(function(th){",
-      "    th.getMessages().forEach(function(m){",
-      "      var att = m.getAttachments().filter(function(a){ return /pdf|jpe?g|png/i.test(a.getContentType()); });",
-      "      if(!att.length) return;",
-      "      out.push({ id: m.getId(), from: m.getFrom(), subject: m.getSubject(),",
-      "                 date: Utilities.formatDate(m.getDate(), 'Europe/Paris', 'yyyy-MM-dd'),",
-      "                 attachment: att[0].getName() });",
-      "    });",
-      "  });",
-      "  return { factures: out };",
-      "}",
-      "",
-      "/* Dans doGet(e), ajouter la branche : */",
-      "// if (e.parameter.action === 'factures') return reply(e, fpFactures(e));"
-    ].join('\n');
-    var body='<p class="hint" style="margin:0 0 10px">Mar\'q interroge la <b>même passerelle Gmail</b> que le module Demandes. Ajoutez-y l\'action <b>factures</b> puis <b>redéployez</b> le script.</p>'
-      +'<textarea readonly class="fp-code" onclick="this.select()">'+E(code)+'</textarea>';
-    if(typeof openModal==='function')openModal('Script Gmail — action « factures »',body,'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+    var body='<p class="hint" style="margin:0 0 10px">Mar\'q interroge la <b>même passerelle Gmail</b> que le module Demandes. Collez ce bloc à la fin de votre script Apps Script, ajoutez les <b>2 lignes de routage</b> dans <code>doGet(e)</code>, puis <b>redéployez en nouvelle version</b>.</p>'
+      +'<div class="fp-steps"><b>1.</b> Coller le script &nbsp;·&nbsp; <b>2.</b> Router dans <code>doGet(e)</code> &nbsp;·&nbsp; <b>3.</b> Propriété <code>SECRET_KEY</code> &nbsp;·&nbsp; <b>4.</b> Déployer ▸ Gérer les déploiements ▸ Modifier ▸ <b>Nouvelle version</b></div>'
+      +'<textarea id="fp-src" readonly class="fp-code" onclick="this.select()">'+E(FP_SCRIPT_SRC)+'</textarea>';
+    var foot='<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+      +'<button class="btn" onclick="fpDlScript()">⬇ Télécharger (.gs)</button>'
+      +'<button class="btn btn-pri" onclick="fpCopyScript()">📋 Copier le script</button>';
+    if(typeof openModal==='function')openModal('Script Gmail — action « factures »',body,foot);
+  };
+  /* Marque le message comme importé dans Gmail (il ne remonte plus à la relève). */
+  window.fpMarkLue=function(id){
+    var f=fpById(id); if(!f||!f.mailId){ if(typeof toast==='function')toast('Cette facture ne provient pas de la boîte mail.'); return; }
+    if(typeof toast==='function')toast('Marquage dans Gmail…');
+    fpCall('facture_lue','&id='+encodeURIComponent(f.mailId),function(j){
+      if(j&&j.ok){ f.gmailLue=true; try{save();}catch(e){} render(); if(typeof toast==='function')toast('Message marqué comme importé dans Gmail.'); }
+      else { if(typeof toast==='function')toast('Marquage impossible — vérifiez l\'action « facture_lue » et le redéploiement du script.'); }
+    });
   };
 
   /* ---------- Rendu ---------- */
@@ -28968,6 +28973,8 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
       +'<div id="fp-ecr-'+f.id+'">'+fpEcritureHTML(f)+'</div>'
       +'<div class="fp-acts">'
       +(f.statut==='transmise'?'<span class="fp-done">Transmise à YADA le '+frD((f.transmisLe||'').slice(0,10))+'</span>':'<button class="btn btn-sm btn-pri" onclick="fpGenerer(\''+f.id+'\')">⚙ '+(f.statut==='ecriture'?'Régénérer l\'écriture':'Générer l\'écriture')+'</button>')
+      +((f.mailId&&!f.gmailLue)?('<button class="btn btn-sm" onclick="fpMarkLue(\''+f.id+'\')" title="Poser le libellé « importée » sur le message Gmail">✓ Marquer dans Gmail</button>'):'')
+      +(f.gmailLue?'<span class="fp-done">Marquée dans Gmail</span>':'')
       +'<button class="btn btn-sm btn-ghost" onclick="fpDel(\''+f.id+'\')">🗑 Retirer</button></div>'
       +'</div>';
     return '<div class="fp-row open">'+head+det+'</div>';
@@ -29083,6 +29090,8 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     '.fp-empty{text-align:center;color:var(--ink-3,#8494aa);padding:26px 0;font-size:13px}',
     '.fp-yrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}',
     '.fp-doss{flex:1;min-width:210px;background:var(--paper,#141b28);border:1px solid var(--line-2,#2c384b);border-radius:9px;color:var(--ink,#f5f9fe);font:inherit;font-size:12.5px;padding:8px 10px}',
+    '.fp-steps{font-size:11.5px;color:var(--ink-2,#b6c3d6);background:rgba(79,157,255,.07);border-left:2px solid var(--accent,#4f9dff);border-radius:0 7px 7px 0;padding:8px 11px;margin:0 0 10px;line-height:1.7}',
+    '.fp-steps code{background:rgba(255,255,255,.07);border-radius:4px;padding:1px 5px;font-size:11px}',
     '.fp-code{width:100%;box-sizing:border-box;height:280px;background:#0a0b0e;border:1px solid #26272d;border-radius:10px;color:#cfe0ff;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:11px}',
     '@media(max-width:900px){.fp-row-h{grid-template-columns:16px 1fr 90px 110px;}.fp-obj{display:none}}'
   ].join(''); document.head.appendChild(stl); }catch(e){}
