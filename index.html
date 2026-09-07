@@ -1125,7 +1125,7 @@ function demSyncConfig(){var c=demSyncCfg();
     +'<label style="margin-top:8px">Clé secrète (TOKEN du script)</label><input id="dem-sync-key" value="'+esc(c.key||'')+'" placeholder="identique au TOKEN du script">'
     +'<div class="smtp-box"><label class="smtp-check"><input type="checkbox" id="dem-sync-smtp" '+(c.smtp==='1'?'checked':'')+'><span class="smtp-txt"><b>Envoi direct SMTP</b> — les mails (documents, décisions, réponses) partent directement du serveur SMTP de Gmail (aemconseil.sas@gmail.com), sans ouvrir Gmail</span></label>'
     +'<div class="hint" style="margin-top:6px;font-size:11px">Chaque envoi affiche d\'abord une fenêtre de vérification (destinataire, sujet, message) avant de partir. Le bouton « Ouvrir Gmail » reste disponible en repli.</div></div>',
-    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-ghost" onclick="demSmtpScript()">📜 Script Gmail (modèle)</button><button class="btn btn-ghost" onclick="demSyncTest()">🔌 Tester la connexion</button><button class="btn btn-ghost" onclick="demSmtpTest()">📤 Tester l\'envoi SMTP</button><button class="btn btn-pri" onclick="demSyncSave()">💾 Enregistrer & synchroniser</button>');}
+    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-ghost" onclick="demSmtpScript()">📜 Script Gmail (modèle)</button><button class="btn btn-ghost" onclick="demDiag()">🔎 Diagnostic de bout en bout</button><button class="btn btn-ghost" onclick="demSyncTest()">🔌 Tester la connexion</button><button class="btn btn-ghost" onclick="demSmtpTest()">📤 Tester l\'envoi SMTP</button><button class="btn btn-pri" onclick="demSyncSave()">💾 Enregistrer & synchroniser</button>');}
 function demSmtpScriptCode(){
   return ['var TOKEN=\'CHANGE-MOI\'; // même clé que dans Mar’q',
   'function doGet(e){',
@@ -1224,8 +1224,8 @@ function modalDemandeView(id){
   openModal('Fiche technique — '+esc((typeof demBestName==='function'?demBestName(d):'')||'Expéditeur'),
     '<div class="chips" style="margin-bottom:12px"><span class="tag blue">Objet : '+esc(IA.objet(d))+'</span>'+ptag+'</div>'
     +'<div class="grid g2" style="gap:10px">'
-    +'<div><label>Email</label><div class="hint">'+esc(mailEmail(d))+'</div></div>'
-    +'<div><label>Téléphone</label><div class="hint">'+esc(mailTel(d))+'</div></div>'
+    +'<div><label>Email</label><div class="hint">'+esc(mailEmail(d))+' '+(window.demValidBadge?demValidBadge('mail',mailEmail(d)):'')+'</div></div>'
+    +'<div><label>Téléphone</label><div class="hint">'+esc(mailTel(d))+' '+(window.demValidBadge?demValidBadge('tel',mailTel(d)):'')+'</div></div>'
     +'<div><label>Canal</label><div class="hint">'+esc(d.canal||'—')+'</div></div>'
     +'<div><label>Reçue le</label><div class="hint">'+esc(mailDateHeure(d))+'</div></div></div>'
     +'<label>Demande reçue</label><div class="hint" style="background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:11px;white-space:pre-wrap">'+esc(mailDemande(d))+'</div>'
@@ -1363,8 +1363,8 @@ function mailSrcdoc(d){var SO='<'+'style>',SC='</'+'style>';
     +'<div class="card">'
     +'<div class="top"><div class="av">'+e(ini)+'</div><div><div class="nm">'+e(nom||'Expéditeur')+'</div><div class="sb">Demande reçue via le formulaire du site</div></div></div>'
     +'<div class="info">'
-    +'<div class="it"><div class="k">Email</div><div class="val"><a href="mailto:'+e(mailEmail(d))+'">'+e(mailEmail(d))+'</a></div></div>'
-    +'<div class="it"><div class="k">Téléphone</div><div class="val">'+e(mailTel(d))+'</div></div>'
+    +'<div class="it"><div class="k">Email</div><div class="val"><a href="mailto:'+e(mailEmail(d))+'">'+e(mailEmail(d))+'</a> '+(window.demValidBadge?demValidBadge('mail',mailEmail(d)):'')+'</div></div>'
+    +'<div class="it"><div class="k">Téléphone</div><div class="val">'+e(mailTel(d))+' '+(window.demValidBadge?demValidBadge('tel',mailTel(d)):'')+'</div></div>'
     +'<div class="it"><div class="k">Reçu le</div><div class="val">'+e(mailDateHeure(d))+'</div></div>'
     +'</div>'
     +'<div class="dwrap"><div class="dlbl">Demande</div><div class="dem">'+e(mailDemande(d))+'</div></div>'
@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=531;
+var LAST_VER=532;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -26435,6 +26435,144 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     +'.cdm-list{display:flex;flex-direction:column;gap:2px;max-height:340px;overflow:auto}'
     +'.cdm-it{text-align:left;background:transparent;border:0;border-radius:8px;padding:9px 11px;color:#e8ebf2;font-size:13px;cursor:pointer;transition:background .12s}'
     +'.cdm-it:hover{background:rgba(93,140,255,.16);color:#fff}';
+  document.head.appendChild(st);
+})();
+</script>
+
+<!-- ===== Module Demande — transmission : capture e-mail/tél, validation, diagnostic de bout en bout ===== -->
+<script>
+(function(){
+  function E(s){return (typeof esc==='function')?esc(s):(''+(s==null?'':s));}
+
+  /* ---- Validation e-mail & téléphone (demandes du site aemconseil.eu) ---- */
+  window.demValidMail=function(e){ e=(''+(e||'')).trim(); if(!e)return false;
+    if(/formsubmit\.co|no-?reply|noreply|mailer-daemon|postmaster|@example\./i.test(e))return false;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e); };
+  window.demValidTel=function(t){ var d=(''+(t||'')).replace(/[^\d+]/g,''); if(!d)return false;
+    if(/^0\d{9}$/.test(d))return true;                 /* 0X******** (France, 10 chiffres) */
+    if(/^\+33\d{9}$/.test(d))return true;              /* +33X******** */
+    if(/^0033\d{9}$/.test(d))return true;              /* 0033X******** */
+    var only=d.replace(/\D/g,''); return only.length>=8 && only.length<=15; }; /* international */
+  function telFromBody(body){
+    var b=(''+(body||'')).replace(/<[^>]+>/g,' ');
+    var m=b.match(/(?:t[eé]l[eé]phone|t[eé]l|phone|portable|mobile|num[eé]ro)[^\d+]{0,12}(\+?\d[\d ().\-]{6,}\d)/i);
+    if(m)return m[1].trim();
+    return '';
+  }
+  /* Pastille de validité pour l'affichage (e-mail / téléphone d'une demande) */
+  window.demValidBadge=function(kind,val){
+    val=(''+(val||'')).trim(); if(!val||val==='—')return '<span class="dem-vb dem-vb-warn" title="Non renseigné">⚠ absent</span>';
+    var ok=(kind==='mail')?window.demValidMail(val):window.demValidTel(val);
+    return ok?'<span class="dem-vb dem-vb-ok" title="Format valide">✓</span>':'<span class="dem-vb dem-vb-warn" title="Format à vérifier">⚠ à vérifier</span>';
+  };
+
+  /* ---- Enrichissement de l'ingestion : e-mail + téléphone RÉELS du formulaire + validation ---- */
+  if(typeof window.demIngest==='function'){
+    var _ing=window.demIngest;
+    window.demIngest=function(mails){
+      var seenIds={}; (DB.demandes||[]).forEach(function(d){seenIds[d.id]=1;});
+      var r=_ing.apply(this,arguments);
+      try{
+        (DB.demandes||[]).forEach(function(d){
+          if(seenIds[d.id])return;                       /* seulement les demandes nouvellement ingérées */
+          var raw=(d.rawHtml||d.rawBody||d.message||'');
+          var fx=(typeof formSubmitExtract==='function')?formSubmitExtract({body:raw,from:''}):{};
+          /* e-mail réel du client (champ du formulaire, sinon reply-to nettoyé) */
+          var mail=(fx&&fx.email)||'';
+          if(!mail && typeof demReplyTo==='function'){ try{ mail=demReplyTo(d)||''; }catch(e){} }
+          if(!mail) mail=d.clientEmail||'';
+          if(mail && !/formsubmit\.co|no-?reply|noreply/i.test(mail)) d.clientEmail=mail;
+          /* téléphone réel (jamais capturé auparavant) */
+          var tel=(fx&&fx.tel)||d.clientTel||'';
+          if(!tel) tel=telFromBody(raw);
+          if(tel) d.clientTel=tel;
+          /* nom : préférer le nom complet du formulaire s'il est propre */
+          if(fx&&fx.nomComplet&&!/formsubmit/i.test(fx.nomComplet)&&(!d.clientNom||/formsubmit|client|^expéditeur$/i.test(d.clientNom))) d.clientNom=fx.nomComplet;
+          /* drapeaux de validité */
+          d.mailValide=window.demValidMail(d.clientEmail);
+          d.telValide=d.clientTel?window.demValidTel(d.clientTel):false;
+        });
+        DB.parametres=DB.parametres||{}; DB.parametres.mailSync=DB.parametres.mailSync||{};
+        DB.parametres.mailSync.lastOk=Date.now();       /* horodatage du dernier import réussi */
+      }catch(e){}
+      return r;
+    };
+  }
+
+  /* ---- Diagnostic de bout en bout : site/mail → script Gmail → Mar'q ---- */
+  function diagFetch(base){
+    return new Promise(function(resolve){
+      var settled=false; function done(j){ if(settled)return; settled=true; resolve(j); }
+      try{
+        fetch(base,{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
+          var j=null; try{j=JSON.parse(t);}catch(e){}
+          if(j)done(j); else if(typeof demJsonp==='function')demJsonp(base,done); else done(null);
+        }).catch(function(){ if(typeof demJsonp==='function')demJsonp(base,done); else done(null); });
+      }catch(e){ if(typeof demJsonp==='function')demJsonp(base,done); else done(null); }
+      setTimeout(function(){done(null);},16000);
+    });
+  }
+  function ddRow(state,label,detail){
+    var ic=state==='ok'?'✓':(state==='ko'?'✗':(state==='warn'?'!':'…'));
+    return '<div class="dd-row dd-'+state+'"><span class="dd-ic">'+ic+'</span><div class="dd-tx"><b>'+E(label)+'</b>'+(detail?('<div class="dd-d">'+detail+'</div>'):'')+'</div></div>';
+  }
+  window.demDiag=async function(){
+    var c=(typeof demSyncCfg==='function')?demSyncCfg():{};
+    var foot='<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-ghost" onclick="demSyncConfig()">⚙ Configurer la boîte</button><button class="btn btn-pri" onclick="demDiag()">↻ Relancer le diagnostic</button>';
+    if(typeof openModal==='function') openModal('🔎 Diagnostic de la transmission des demandes','<div id="demdiag" class="demdiag">'+ddRow('wait','Test en cours…','Site aemconseil.eu / mail → script Gmail → Mar’q')+'</div>',foot);
+    var out=[]; function paint(){ var el=document.getElementById('demdiag'); if(el)el.innerHTML=out.join(''); }
+    /* 1) Configuration */
+    var hasUrl=!!(c&&c.url), hasKey=!!(c&&c.key);
+    out.push(ddRow(hasUrl?'ok':'ko','1 · Configuration de la boîte mail', hasUrl?('URL du script renseignée'+(hasKey?' · clé secrète présente':' · <b>clé secrète manquante</b>')):'Aucune URL de script (Web App …/exec). Cliquez sur « ⚙ Configurer la boîte ».'));
+    var last=(c&&c.lastOk)?new Date(c.lastOk):null;
+    out.push(ddRow(last?'ok':'warn','Dernier import réussi', last?last.toLocaleString('fr-FR'):'Aucun import réussi enregistré sur cet appareil.'));
+    paint();
+    if(!hasUrl){ out.push(ddRow('ko','Transmission interrompue','La connexion au script Gmail n’est pas configurée → aucune demande ne peut être reçue. Renseignez l’URL /exec et la clé.')); paint(); return; }
+    /* 2) Joignabilité du script Gmail */
+    out.push(ddRow('wait','2 · Connexion au script Gmail…','')); paint();
+    var base=c.url+(c.url.indexOf('?')>=0?'&':'?')+'key='+encodeURIComponent(c.key||'');
+    var t0=Date.now(); var j=await diagFetch(base); var ms=Date.now()-t0;
+    out.pop();
+    if(!j){ out.push(ddRow('ko','2 · Connexion au script Gmail','Injoignable ('+ms+' ms). Vérifiez : URL se terminant par <b>/exec</b>, déploiement <b>Application Web</b> à jour (nouvelle version après chaque modif), accès « <b>Tout le monde</b> ». Un blocage réseau/CORS bascule sur JSONP — si le script déployé est ancien (sans <code>callback</code>), il faut le redéployer avec le modèle fourni.')); paint(); return; }
+    if(j.error){ out.push(ddRow('ko','2 · Connexion au script Gmail', j.error==='unauthorized'?'Clé secrète incorrecte (le TOKEN du script ≠ la clé saisie dans Mar’q).':('Erreur renvoyée par le script : '+E(j.error)))); paint(); return; }
+    var mails=(j.mails||j.messages||[]); var nRaw=mails.length||j.count||0;
+    out.push(ddRow('ok','2 · Connexion au script Gmail','Réponse reçue en '+ms+' ms · <b>'+nRaw+'</b> mail(s) lus dans la boîte (in:inbox, 30 derniers jours).')); paint();
+    /* 3) Reconnaissance des demandes (site / mail) */
+    var nForm=0,nSys=0,nOther=0;
+    mails.forEach(function(m){
+      var mm={from:m.from||'',subject:m.subject||'',body:m.body||m.message||''};
+      var isForm=(typeof demIsFormSubmit==='function')?demIsFormSubmit(mm):false;
+      var isSys=(typeof demEstSysteme==='function')?demEstSysteme(mm.subject,mm.body,mm.from):false;
+      if(isSys)nSys++; else if(isForm)nForm++; else nOther++;
+    });
+    out.push(ddRow(nForm>0?'ok':(nRaw>0?'warn':'ko'),'3 · Reconnaissance des demandes du site','<b>'+nForm+'</b> reconnue(s) comme demande (formulaire aemconseil.eu / FormSubmit)'+(nSys?(' · '+nSys+' message(s) système ignoré(s)'):'')+(nOther?(' · <b>'+nOther+'</b> autre(s) mail(s) non reconnus comme demande'):'')+'.'+(nForm===0&&nRaw>0?' <b>Aucune demande reconnue</b> : le formulaire du site n’envoie peut-être plus via FormSubmit, ou les mails arrivent en Spam/Promotions (le script ne lit que « in:inbox »).':'')));
+    /* 4) Déjà importées / nouvelles */
+    var seen=(DB.parametres&&DB.parametres.mailsImportes)||[];
+    out.push(ddRow('ok','4 · Historique','<b>'+seen.length+'</b> mail(s) déjà importé(s) au total · <b>'+((DB.demandes||[]).length)+'</b> demande(s) actuellement dans Mar’q.'));
+    /* Verdict */
+    var verdict, vstate;
+    if(nForm===0 && nRaw===0){ vstate='ko'; verdict='La boîte est joignable mais <b>vide</b> (aucun mail des 30 derniers jours dans « in:inbox »). Vérifiez que le formulaire du site envoie bien vers aemconseil.sas@gmail.com et que les messages ne partent pas en Spam.'; }
+    else if(nForm===0){ vstate='ko'; verdict='Des mails arrivent mais <b>aucun n’est reconnu comme demande du site</b>. Cause probable : le formulaire n’utilise plus FormSubmit, ou les demandes sont en Spam/Promotions (hors « in:inbox »). Solution : rétablir FormSubmit sur aemconseil.eu, ou adapter le script (recherche Gmail).'; }
+    else { vstate='ok'; verdict='La transmission fonctionne : <b>'+nForm+'</b> demande(s) reconnue(s). Utilisez « 🔄 Synchroniser la boîte » pour les importer.'; }
+    out.push('<div class="dd-verdict dd-'+vstate+'">'+verdict+'</div>');
+    paint();
+  };
+
+  /* Styles */
+  var st=document.createElement('style');
+  st.textContent=''
+    +'.demdiag{display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow:auto}'
+    +'.dd-row{display:flex;gap:11px;align-items:flex-start;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:11px 13px}'
+    +'.dd-ic{width:22px;height:22px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff}'
+    +'.dd-ok .dd-ic{background:#1f8a4d}.dd-ko .dd-ic{background:#b3402e}.dd-warn .dd-ic{background:#b7842a}.dd-wait .dd-ic{background:#3a4657}'
+    +'.dd-tx{font-size:13px;color:#e8ebf2;line-height:1.45}.dd-tx b{color:#fff}'
+    +'.dd-d{font-size:12px;color:#aab2c0;margin-top:3px;line-height:1.5}'
+    +'.dd-verdict{border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55;margin-top:2px}'
+    +'.dd-verdict.dd-ok{background:rgba(31,138,77,.14);border:1px solid rgba(31,138,77,.5);color:#bfe9cd}'
+    +'.dd-verdict.dd-ko{background:rgba(179,64,46,.14);border:1px solid rgba(179,64,46,.5);color:#f2c6bd}'
+    +'.dem-vb{display:inline-block;font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 6px;vertical-align:middle;margin-left:4px}'
+    +'.dem-vb-ok{background:rgba(31,138,77,.2);color:#57d98a;border:1px solid rgba(31,138,77,.5)}'
+    +'.dem-vb-warn{background:rgba(183,132,42,.2);color:#e8b45a;border:1px solid rgba(183,132,42,.55)}';
   document.head.appendChild(st);
 })();
 </script>
