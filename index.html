@@ -3315,7 +3315,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=553;
+var LAST_VER=554;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -28763,6 +28763,329 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
     '.cli-ip-bar i{display:block;height:100%;border-radius:99px}',
     '.cli-ip-0{background:#8494aa}.cli-ip-1{background:#e0b93a}.cli-ip-2{background:#5bbf8a}'
   ].join(''); document.head.appendChild(st); }catch(e){}
+})();
+</script>
+
+
+<!-- ===== MODULE FACTURE PRESTATAIRE — relève Gmail → Mar'q → écritures + dossier pour YADA ===== -->
+<script id="mod-factpresta">
+(function(){
+  function E(s){ return (typeof esc==='function')?esc(s):(''+(s==null?'':s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function n(v){ var x=parseFloat((''+(v==null?'':v)).replace(/\s/g,'').replace(',','.')); return isNaN(x)?0:x; }
+  function eur(x){ x=Math.round((+x||0)*100)/100; return x.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }
+  function st2(){ return (typeof state!=='undefined')?state:(window.state||{}); }
+  function today2(){ try{ if(typeof today==='function')return today(); }catch(e){} return new Date().toISOString().slice(0,10); }
+  function frD(iso){ if(!iso)return '—'; var p=(''+iso).split('T')[0].split('-'); return p.length<3?iso:(p[2]+'/'+p[1]+'/'+p[0]); }
+  function fecD(iso){ return (''+(iso||'')).replace(/-/g,'').slice(0,8); }
+
+  var FP_CHARGES=[['606100000','Fournitures non stockables'],['604000000','Achats d\'études et prestations'],['607000000','Achats de marchandises'],
+    ['611000000','Sous-traitance générale'],['613200000','Locations immobilières'],['615000000','Entretien et réparations'],
+    ['616000000','Primes d\'assurance'],['622600000','Honoraires'],['623000000','Publicité, publications'],
+    ['625100000','Voyages et déplacements'],['626000000','Frais postaux et télécommunications'],['627000000','Services bancaires'],
+    ['651000000','Redevances (concessions, licences)']];
+  var FP_TVA='445660000', FP_JOURNAL='ACH';
+  var FP_STATUTS={reperee:'Repérée',traitee:'À comptabiliser',ecriture:'Écriture générée',transmise:'Transmise à YADA'};
+
+  function fpStore(){ try{ DB.parametres=DB.parametres||{}; var s=DB.parametres.factPresta=DB.parametres.factPresta||{}; if(!Array.isArray(s.list))s.list=[]; return s; }catch(e){ return {list:[]}; } }
+  function fpList(){ return fpStore().list; }
+  function fpById(id){ return fpList().filter(function(x){return x.id===id;})[0]; }
+  function fpUid(){ return 'fp'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
+  function fpAux(nom){ var s=(''+(nom||'')).toUpperCase().replace(/[^A-Z0-9]/g,''); return ('401'+(s.slice(0,4)||'DIV')).padEnd(9,'0').slice(0,9); }
+
+  /* ---------- Relève de la boîte (passerelle Apps Script existante) ---------- */
+  function fpGw(){ try{ return (typeof demSyncCfg==='function')?demSyncCfg():{}; }catch(e){ return {}; } }
+  function fpCall(action,extra,cb){
+    var c=fpGw(); if(!c||!c.url){ cb({error:'no_endpoint'}); return; }
+    var base=c.url+(c.url.indexOf('?')>=0?'&':'?')+'action='+encodeURIComponent(action)+'&key='+encodeURIComponent(c.key||'')+(extra||'');
+    var settled=false; function done(j){ if(settled)return; settled=true; cb(j||{error:'no_response'}); }
+    try{ fetch(base,{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){ var j=null; try{j=JSON.parse(t);}catch(e){} if(j)done(j); else if(typeof demJsonp==='function')demJsonp(base,done); else done(null); }).catch(function(){ if(typeof demJsonp==='function')demJsonp(base,done); else done(null); }); }
+    catch(e){ done(null); }
+  }
+  window.fpReleve=function(){
+    if(typeof toast==='function')toast('Relève de la boîte en cours…');
+    fpCall('factures','&max=40',function(j){
+      if(!j||j.error){
+        var m=(j&&j.error==='no_endpoint')?'Configurez d\'abord la boîte (Demandes → ⚙ Configurer la boîte).':'Passerelle injoignable — vérifiez que l\'action « factures » est déployée dans le script Gmail.';
+        if(typeof toast==='function')toast(m); fpStore().lastErr=m; try{save();}catch(e){} render(); return;
+      }
+      var mails=j.factures||j.items||j.mails||[]; var s=fpStore(), add=0;
+      mails.forEach(function(m){
+        var mid=m.id||m.mailId||((m.from||'')+'|'+(m.subject||'')+'|'+(m.date||''));
+        if(s.list.some(function(x){return x.mailId===mid;}))return;
+        s.list.unshift({ id:fpUid(), src:'mail', mailId:mid, from:m.from||'', sujet:m.subject||m.sujet||'',
+          dateMail:(m.date||'').slice(0,10), fournisseur:fpNomFrom(m.from||m.subject||''), numero:m.numero||'',
+          dateFact:(m.date||'').slice(0,10)||today2(), ht:m.ht||'', taux:m.taux||'20', tva:'', ttc:m.ttc||'',
+          compteCharge:'606100000', fichierNom:(m.attachment||m.piece||''), lien:m.link||m.url||'',
+          statut:'reperee', ts:Date.now() });
+        add++;
+      });
+      s.lastSync=new Date().toISOString(); s.lastErr='';
+      try{save();}catch(e){} render();
+      if(typeof toast==='function')toast(add?(add+' facture(s) repérée(s) dans la boîte.'):'Aucune nouvelle facture dans la boîte.');
+    });
+  };
+  function fpNomFrom(s){ s=''+(s||''); var m=s.match(/^\s*"?([^"<]+?)"?\s*</); if(m)return m[1].trim(); var d=s.match(/@([\w-]+)\./); return d?d[1].toUpperCase():''; }
+
+  window.fpManuel=function(){ var s=fpStore(); s.list.unshift({ id:fpUid(), src:'manuel', fournisseur:'', numero:'', dateFact:today2(), ht:'', taux:'20', tva:'', ttc:'', compteCharge:'606100000', statut:'traitee', ts:Date.now() }); try{save();}catch(e){} st2().fpSel=s.list[0].id; render(); };
+  window.fpDel=function(id){ var go=function(){ var s=fpStore(); s.list=s.list.filter(function(x){return x.id!==id;}); if(st2().fpSel===id)st2().fpSel=null; try{save();}catch(e){} render(); };
+    if(typeof uiConfirm==='function')uiConfirm('Retirer cette facture prestataire ?',go,{okLabel:'Retirer',danger:true}); else go(); };
+  window.fpSel=function(id){ st2().fpSel=(st2().fpSel===id?null:id); render(); };
+  window.fpFilter=function(f){ window.__fpF=f; render(); };
+  window.fpQ=function(v){ window.__fpQ=(''+v).toLowerCase(); render(); };
+
+  window.fpSet=function(id,k,v){
+    var f=fpById(id); if(!f)return; f[k]=v;
+    if(k==='ht'||k==='taux'){ var ht=n(f.ht),t=n(f.taux); f.tva=(Math.round(ht*t)/100).toFixed(2); f.ttc=(Math.round((ht+ht*t/100)*100)/100).toFixed(2); }
+    if(k==='ttc'){ var ttc=n(f.ttc),t2=n(f.taux)||20; var ht2=ttc/(1+t2/100); f.ht=(Math.round(ht2*100)/100).toFixed(2); f.tva=(Math.round((ttc-ht2)*100)/100).toFixed(2); }
+    if(f.statut==='reperee' && (n(f.ht)>0||n(f.ttc)>0)) f.statut='traitee';
+    try{save();}catch(e){} fpLive(id);
+  };
+  function fpLive(id){ var f=fpById(id); if(!f)return;
+    try{ ['ht','tva','ttc'].forEach(function(k){ var el=document.getElementById('fp-'+k+'-'+id); if(el&&document.activeElement!==el)el.value=(f[k]==null?'':f[k]); });
+      var e=document.getElementById('fp-ecr-'+id); if(e)e.innerHTML=fpEcritureHTML(f);
+      var k=document.getElementById('fp-kpis'); if(k)k.innerHTML=fpKpisHTML();
+    }catch(_e){}
+  }
+
+  /* ---------- Écriture comptable ---------- */
+  function fpLignes(f){
+    var ht=n(f.ht), tva=n(f.tva), ttc=n(f.ttc)||(ht+tva);
+    var cl=(FP_CHARGES.filter(function(x){return x[0]===(f.compteCharge||'606100000');})[0]||FP_CHARGES[0]);
+    var aux=fpAux(f.fournisseur), lib=((f.fournisseur||'Fournisseur')+(f.numero?(' · '+f.numero):''));
+    var L=[{compte:cl[0],clib:cl[1],lib:lib,debit:ht,credit:0}];
+    if(tva>0) L.push({compte:FP_TVA,clib:'TVA déductible sur autres biens et services',lib:lib,debit:tva,credit:0});
+    L.push({compte:'401000000',clib:'Fournisseurs',aux:aux,auxlib:(f.fournisseur||'Fournisseur'),lib:lib,debit:0,credit:ttc});
+    return L;
+  }
+  function fpEcritureHTML(f){
+    var L=fpLignes(f), d=0,c=0; L.forEach(function(l){ d+=l.debit; c+=l.credit; });
+    var ok=Math.abs(d-c)<0.005 && d>0;
+    return '<div class="fp-ecr"><div class="fp-ecr-h">Écriture proposée — journal '+FP_JOURNAL+' · '+frD(f.dateFact)+'<span class="fp-bal '+(ok?'ok':'ko')+'">'+(ok?'Équilibrée ✓':'À compléter')+'</span></div>'
+      +'<table class="fp-ecr-t"><thead><tr><th>Compte</th><th>Libellé</th><th class="r">Débit</th><th class="r">Crédit</th></tr></thead><tbody>'
+      +L.map(function(l){ return '<tr><td>'+E(l.aux||l.compte)+'</td><td>'+E(l.clib)+'</td><td class="r">'+(l.debit?eur(l.debit):'')+'</td><td class="r">'+(l.credit?eur(l.credit):'')+'</td></tr>'; }).join('')
+      +'</tbody><tfoot><tr><td colspan="2">Total</td><td class="r">'+eur(d)+'</td><td class="r">'+eur(c)+'</td></tr></tfoot></table></div>';
+  }
+  window.fpGenerer=function(id){ var f=fpById(id); if(!f)return;
+    var L=fpLignes(f), d=0,c=0; L.forEach(function(l){ d+=l.debit; c+=l.credit; });
+    if(!(Math.abs(d-c)<0.005 && d>0)){ if(typeof toast==='function')toast('Renseignez le montant HT (ou TTC) avant de générer l\'écriture.'); return; }
+    if(!(f.fournisseur||'').trim()){ if(typeof toast==='function')toast('Renseignez le fournisseur.'); return; }
+    f.statut='ecriture'; f.ecritureLe=new Date().toISOString(); try{save();}catch(e){} render();
+    if(typeof toast==='function')toast('Écriture générée pour '+f.fournisseur+'.');
+  };
+
+  /* ---------- Transmission vers YADA ---------- */
+  function fpDl(name,type,content){ try{ var b=new Blob([content],{type:type}); var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },600); }catch(e){ if(typeof toast==='function')toast('Export impossible.'); } }
+  var FEC_COLS=['JournalCode','JournalLib','EcritureNum','EcritureDate','CompteNum','CompteLib','CompAuxNum','CompAuxLib','PieceRef','PieceDate','EcritureLib','Debit','Credit','EcritureLet','DateLet','ValidDate','Montantdevise','Idevise'];
+  function fpPrete(){ return fpList().filter(function(f){ return f.statut==='ecriture'||f.statut==='transmise'; }); }
+  window.fpExportFEC=function(){
+    var arr=fpPrete().filter(function(f){ return f.statut==='ecriture'; });
+    if(!arr.length){ if(typeof toast==='function')toast('Aucune écriture générée à transmettre.'); return; }
+    var out=[FEC_COLS.join('\t')], num=0;
+    arr.forEach(function(f){ num++; var L=fpLignes(f), dt=fecD(f.dateFact);
+      L.forEach(function(l){
+        out.push([FP_JOURNAL,'ACHATS','FP'+String(num).padStart(5,'0'),dt,l.compte,l.clib,(l.aux||''),(l.auxlib||''),
+          (f.numero||''),dt,l.lib,(l.debit?l.debit.toFixed(2).replace('.',','):'0,00'),(l.credit?l.credit.toFixed(2).replace('.',','):'0,00'),'','',dt,'',''].join('\t'));
+      });
+      f.statut='transmise'; f.transmisLe=new Date().toISOString();
+    });
+    fpDl('YADA-factures-prestataires-'+today2()+'.txt','text/plain;charset=utf-8',out.join('\r\n'));
+    try{save();}catch(e){} render();
+    if(typeof toast==='function')toast(arr.length+' facture(s) exportée(s) en FEC — à importer dans YADA (Import / Export FEC).');
+  };
+  window.fpExportDossier=function(){
+    var cid=st2().fpDossier||''; var c=(cid&&typeof clientById==='function')?clientById(cid):null;
+    var soc=c?{ denomination:c.denomination||'', formeJur:c.forme||'', siren:c.siren||'', siret:c.siret||'', codeAPE:c.ape||'',
+        adresse:c.siege||c.adresse||'', cp:c.cp||'', ville:c.ville||'', dirigeant:c.president||'', tvaIntra:c.tvaIntra||'',
+        exoDebut:'', exoFin:'' }:{};
+    var tiers=[]; var seen={};
+    fpList().forEach(function(f){ var k=fpAux(f.fournisseur); if(!f.fournisseur||seen[k])return; seen[k]=1;
+      tiers.push({ type:'fournisseur', nom:f.fournisseur, compteAux:k, compteContre:(f.compteCharge||'606100000'), compteTVA:FP_TVA, taux:n(f.taux)||20 }); });
+    var payload={ source:"Mar'q — Factures prestataires", genere:new Date().toISOString(), dossier:(c?(c.denomination||''):''), societe:soc, tiers:tiers,
+      factures:fpList().map(function(f){ return { fournisseur:f.fournisseur, numero:f.numero, date:f.dateFact, ht:n(f.ht), tva:n(f.tva), ttc:n(f.ttc), compteCharge:f.compteCharge, statut:f.statut }; }) };
+    fpDl('YADA-dossier-'+((c&&c.denomination)?(''+c.denomination).replace(/[^\w-]+/g,'_'):'client')+'-'+today2()+'.json','application/json;charset=utf-8',JSON.stringify(payload,null,2));
+    if(typeof toast==='function')toast('Dossier client exporté (société + '+tiers.length+' fournisseur(s)) pour YADA.');
+  };
+  window.fpSetDossier=function(v){ st2().fpDossier=v; render(); };
+
+  /* ---------- Aide : code du script Gmail ---------- */
+  window.fpScriptDoc=function(){
+    var code=[
+      "/* À AJOUTER dans le script Apps Script déjà utilisé par Mar'q (même webapp).",
+      "   Repère les factures reçues sur aemconseil.sas@gmail.com et les renvoie à Mar'q. */",
+      "function fpFactures(e){",
+      "  var max = Number(e.parameter.max || 30);",
+      "  var q = 'in:inbox has:attachment (facture OR invoice OR \"note d honoraires\") newer_than:90d';",
+      "  var out = [];",
+      "  GmailApp.search(q, 0, max).forEach(function(th){",
+      "    th.getMessages().forEach(function(m){",
+      "      var att = m.getAttachments().filter(function(a){ return /pdf|jpe?g|png/i.test(a.getContentType()); });",
+      "      if(!att.length) return;",
+      "      out.push({ id: m.getId(), from: m.getFrom(), subject: m.getSubject(),",
+      "                 date: Utilities.formatDate(m.getDate(), 'Europe/Paris', 'yyyy-MM-dd'),",
+      "                 attachment: att[0].getName() });",
+      "    });",
+      "  });",
+      "  return { factures: out };",
+      "}",
+      "",
+      "/* Dans doGet(e), ajouter la branche : */",
+      "// if (e.parameter.action === 'factures') return reply(e, fpFactures(e));"
+    ].join('\n');
+    var body='<p class="hint" style="margin:0 0 10px">Mar\'q interroge la <b>même passerelle Gmail</b> que le module Demandes. Ajoutez-y l\'action <b>factures</b> puis <b>redéployez</b> le script.</p>'
+      +'<textarea readonly class="fp-code" onclick="this.select()">'+E(code)+'</textarea>';
+    if(typeof openModal==='function')openModal('Script Gmail — action « factures »',body,'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+  };
+
+  /* ---------- Rendu ---------- */
+  function fpKpisHTML(){
+    var l=fpList(), rep=0,tr=0,ec=0,tx=0,ttc=0;
+    l.forEach(function(f){ ttc+=n(f.ttc); if(f.statut==='reperee')rep++; else if(f.statut==='traitee')tr++; else if(f.statut==='ecriture')ec++; else if(f.statut==='transmise')tx++; });
+    return '<div class="fp-kpis">'
+      +'<div class="fp-k"><b>'+rep+'</b><span>Repérées</span></div>'
+      +'<div class="fp-k"><b>'+tr+'</b><span>À comptabiliser</span></div>'
+      +'<div class="fp-k fp-k-a"><b>'+ec+'</b><span>Écritures générées</span></div>'
+      +'<div class="fp-k fp-k-ok"><b>'+tx+'</b><span>Transmises à YADA</span></div>'
+      +'<div class="fp-k"><b>'+eur(ttc)+'</b><span>Total TTC</span></div></div>';
+  }
+  function fpRow(f){
+    var open=(st2().fpSel===f.id);
+    var badge='<span class="fp-badge fp-b-'+f.statut+'">'+E(FP_STATUTS[f.statut]||f.statut)+'</span>';
+    var head='<div class="fp-row-h" onclick="fpSel(\''+f.id+'\')">'
+      +'<span class="fp-caret'+(open?' on':'')+'">▸</span>'
+      +'<span class="fp-four">'+E(f.fournisseur||'(fournisseur à préciser)')+'</span>'
+      +'<span class="fp-obj">'+E(f.sujet||f.numero||'')+'</span>'
+      +'<span class="fp-date">'+frD(f.dateFact||f.dateMail)+'</span>'
+      +'<span class="fp-ttc">'+(n(f.ttc)?eur(n(f.ttc)):'—')+'</span>'
+      +badge+'</div>';
+    if(!open) return '<div class="fp-row">'+head+'</div>';
+    var chOpt=FP_CHARGES.map(function(x){ return '<option value="'+x[0]+'"'+((f.compteCharge||'606100000')===x[0]?' selected':'')+'>'+E(x[0]+' — '+x[1])+'</option>'; }).join('');
+    var i=function(k,lab,ph,cls){ return '<label class="fp-f"><span>'+E(lab)+'</span><input id="fp-'+k+'-'+f.id+'" class="'+(cls||'')+'" value="'+E(f[k]==null?'':f[k])+'" placeholder="'+E(ph||'')+'" oninput="fpSet(\''+f.id+'\',\''+k+'\',this.value)"></label>'; };
+    var det='<div class="fp-det">'
+      +'<div class="fp-grid">'+i('fournisseur','Fournisseur')+i('numero','N° de facture')+i('dateFact','Date de la facture','AAAA-MM-JJ')
+      +'<label class="fp-f"><span>Compte de charge</span><select onchange="fpSet(\''+f.id+'\',\'compteCharge\',this.value)">'+chOpt+'</select></label>'
+      +i('ht','Montant HT','0,00','r')+i('taux','TVA %','20','r')+i('tva','TVA','0,00','r')+i('ttc','Montant TTC','0,00','r')+'</div>'
+      +(f.from?('<div class="fp-mail">Reçu de <b>'+E(f.from)+'</b>'+(f.fichierNom?(' · pièce jointe : '+E(f.fichierNom)):'')+(f.lien?(' · <a href="'+E(f.lien)+'" target="_blank" rel="noopener">ouvrir le mail</a>'):'')+'</div>'):'')
+      +'<div id="fp-ecr-'+f.id+'">'+fpEcritureHTML(f)+'</div>'
+      +'<div class="fp-acts">'
+      +(f.statut==='transmise'?'<span class="fp-done">Transmise à YADA le '+frD((f.transmisLe||'').slice(0,10))+'</span>':'<button class="btn btn-sm btn-pri" onclick="fpGenerer(\''+f.id+'\')">⚙ '+(f.statut==='ecriture'?'Régénérer l\'écriture':'Générer l\'écriture')+'</button>')
+      +'<button class="btn btn-sm btn-ghost" onclick="fpDel(\''+f.id+'\')">🗑 Retirer</button></div>'
+      +'</div>';
+    return '<div class="fp-row open">'+head+det+'</div>';
+  }
+  window.pageFactPresta=function(){
+    var s=fpStore(), q=(window.__fpQ||''), ft=(window.__fpF||'');
+    var l=fpList().filter(function(f){
+      if(ft && f.statut!==ft) return false;
+      if(q && ((f.fournisseur||'')+' '+(f.sujet||'')+' '+(f.numero||'')+' '+(f.from||'')).toLowerCase().indexOf(q)<0) return false;
+      return true;
+    });
+    var gw=fpGw();
+    var bar='<div class="fp-bar">'
+      +'<button class="btn btn-sm btn-pri" onclick="fpReleve()">↻ Relever la boîte</button>'
+      +'<button class="btn btn-sm" onclick="fpManuel()">＋ Facture manuelle</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="fpScriptDoc()">⚙ Script Gmail</button>'
+      +'<span class="fp-gw">'+(gw&&gw.url?('<span class="fp-on">● Passerelle configurée</span>'):('<span class="fp-off">○ Passerelle non configurée</span>'))
+      +(s.lastSync?(' · dernière relève '+frD(s.lastSync.slice(0,10))):'')+'</span></div>'
+      +(s.lastErr?('<div class="fp-err">'+E(s.lastErr)+'</div>'):'');
+    var filt='<div class="fp-filters"><input class="fp-srch" placeholder="Rechercher (fournisseur, objet, n°…)" value="'+E(q)+'" oninput="fpQ(this.value)">'
+      +['','reperee','traitee','ecriture','transmise'].map(function(t){ return '<button class="fp-filt'+(ft===t?' on':'')+'" onclick="fpFilter(\''+t+'\')">'+(t?E(FP_STATUTS[t]):'Toutes')+'</button>'; }).join('')+'</div>';
+    var clients=(typeof DB!=='undefined'&&DB.clients)?DB.clients:[];
+    var dossOpt='<option value="">— Choisir le dossier client —</option>'+clients.map(function(c){ var nm=(c.clientType==='particulier')?(((c.prenom||'')+' '+(c.nom||'')).trim()):(c.denomination||''); return nm?('<option value="'+E(c.id)+'"'+((st2().fpDossier===c.id)?' selected':'')+'>'+E(nm)+'</option>'):''; }).join('');
+    var nPretes=fpList().filter(function(f){return f.statut==='ecriture';}).length;
+    var yada='<div class="card fp-yada"><div class="card-h"><h2>Transmission vers YADA</h2><span class="sub" style="margin-left:auto">'+nPretes+' écriture(s) prête(s)</span></div><div class="card-b">'
+      +'<p class="hint" style="margin:0 0 12px">Mar\'q produit un <b>FEC</b> (écritures d\'achat équilibrées) à importer dans YADA via <b>Import / Export FEC</b>, et un <b>dossier client</b> (société + fournisseurs) pour constituer le dossier côté YADA.</p>'
+      +'<div class="fp-yrow"><select class="fp-doss" onchange="fpSetDossier(this.value)">'+dossOpt+'</select>'
+      +'<button class="btn btn-sm btn-pri" onclick="fpExportFEC()">⬇ Écritures (FEC)</button>'
+      +'<button class="btn btn-sm" onclick="fpExportDossier()">⬇ Dossier client (JSON)</button></div>'
+      +'</div></div>';
+    var rows=l.length?l.map(fpRow).join(''):'<div class="fp-empty">Aucune facture'+(q||ft?' pour ce filtre':' — relevez la boîte ou ajoutez une facture manuelle')+'.</div>';
+    return '<div class="fp-wrap">'+bar+'<div id="fp-kpis">'+fpKpisHTML()+'</div>'+filt
+      +'<div class="card"><div class="card-b fp-list">'+rows+'</div></div>'+yada+'</div>';
+  };
+
+  /* ---------- PAGES + navigation ---------- */
+  try{ if(typeof PAGES!=='undefined' && !PAGES.some(function(p){return p.id==='factpresta';})){
+    var iEd=PAGES.findIndex(function(p){return p.id==='editions';});
+    var entry={id:'factpresta',lbl:'Factures prestataires',ic:'card',sub:'Factures reçues par mail → écritures pour YADA'};
+    if(iEd>=0)PAGES.splice(iEd+1,0,entry); else PAGES.push(entry);
+  } }catch(e){}
+  function injectFpBtn(){ var nav=document.getElementById('nav'); if(!nav)return; if(nav.querySelector('[data-fpbtn]'))return;
+    var after=nav.querySelector('button.nav-btn[onclick*="clients"]')||nav.querySelector('button.nav-btn[onclick*="editions"]');
+    var on=(st2().page==='factpresta')?' on':'';
+    var ico=''; try{ if(typeof svg==='function'&&typeof IC!=='undefined'&&IC.card)ico=svg(IC.card); }catch(e){}
+    var b=document.createElement('button'); b.className='nav-btn'+on; b.setAttribute('data-fpbtn','1'); b.setAttribute('onclick',"go('factpresta')");
+    b.innerHTML=ico+'<span class="nav-btn-lbl">Factures prestataires</span>';
+    if(after&&after.parentNode)after.parentNode.insertBefore(b,after.nextSibling); else nav.appendChild(b);
+  }
+  try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){ var r=_bn.apply(this,arguments); try{injectFpBtn();}catch(e){} return r; }; } }catch(e){}
+  try{ var _rd=window.render; if(typeof _rd==='function'){ window.render=function(){
+    if(st2().page==='factpresta'){
+      try{buildNav();}catch(e){} try{document.body.dataset.page='factpresta';}catch(e){}
+      var p=(typeof PAGES!=='undefined')?PAGES.filter(function(x){return x.id==='factpresta';})[0]:null;
+      try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Factures prestataires';}catch(e){}
+      try{document.getElementById('psub').textContent=(p&&p.sub)||'';}catch(e){}
+      var V=document.getElementById('view'); if(V)V.innerHTML=pageFactPresta();
+      try{injectFpBtn();}catch(e){}
+      return;
+    }
+    return _rd.apply(this,arguments);
+  }; } }catch(e){}
+
+  /* ---------- Styles ---------- */
+  try{ var stl=document.createElement('style'); stl.id='fp-css'; stl.textContent=[
+    '.fp-wrap{display:flex;flex-direction:column;gap:14px}',
+    '.fp-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}',
+    '.fp-gw{margin-left:auto;font-size:11.5px;color:var(--ink-3,#8494aa)}',
+    '.fp-on{color:#5bbf8a;font-weight:600}.fp-off{color:#e0b93a;font-weight:600}',
+    '.fp-err{font-size:12px;color:#ffb4ac;background:#3a1618;border:1px solid #7a3a3a;border-radius:9px;padding:9px 12px}',
+    '.fp-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px}',
+    '.fp-k{background:rgba(255,255,255,.03);border:1px solid var(--line-2,#2c384b);border-radius:10px;padding:11px 12px;text-align:center}',
+    '.fp-k b{display:block;font-size:18px;font-weight:800;color:var(--ink,#f5f9fe);font-variant-numeric:tabular-nums}',
+    '.fp-k span{font-size:10.5px;color:var(--ink-3,#8494aa);text-transform:uppercase;letter-spacing:.03em}',
+    '.fp-k-a b{color:var(--accent,#4f9dff)}.fp-k-ok b{color:#5bbf8a}',
+    '.fp-filters{display:flex;gap:6px;align-items:center;flex-wrap:wrap}',
+    '.fp-srch{flex:1;min-width:200px;background:var(--paper,#141b28);border:1px solid var(--line-2,#2c384b);border-radius:9px;color:var(--ink,#f5f9fe);font:inherit;font-size:12.5px;padding:8px 11px}',
+    '.fp-srch:focus{border-color:var(--accent,#4f9dff);outline:none}',
+    '.fp-filt{border:1px solid var(--line-2,#2c384b);background:none;color:var(--ink-2,#b6c3d6);font:inherit;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:999px;cursor:pointer}',
+    '.fp-filt:hover{border-color:var(--accent,#4f9dff)}.fp-filt.on{background:var(--accent,#4f9dff);border-color:var(--accent,#4f9dff);color:#fff}',
+    '.fp-list{display:flex;flex-direction:column;gap:8px}',
+    '.fp-row{border:1px solid var(--line-2,#2c384b);border-radius:11px;overflow:hidden;background:rgba(255,255,255,.02)}',
+    '.fp-row.open{border-color:var(--accent,#4f9dff)}',
+    '.fp-row-h{display:grid;grid-template-columns:16px 1.2fr 1.4fr 96px 110px 132px;gap:10px;align-items:center;padding:11px 13px;cursor:pointer;font-size:12.5px}',
+    '.fp-row-h:hover{background:rgba(255,255,255,.03)}',
+    '.fp-caret{color:var(--ink-3,#8494aa);transition:.15s;display:inline-block}.fp-caret.on{transform:rotate(90deg);color:var(--accent,#4f9dff)}',
+    '.fp-four{font-weight:700;color:var(--ink,#f5f9fe);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.fp-obj{color:var(--ink-3,#8494aa);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.fp-date{color:var(--ink-2,#b6c3d6)}.fp-ttc{text-align:right;font-weight:700;color:var(--ink,#f5f9fe);font-variant-numeric:tabular-nums}',
+    '.fp-badge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;text-align:center;white-space:nowrap}',
+    '.fp-b-reperee{background:rgba(255,255,255,.09);color:#b6c3d6}',
+    '.fp-b-traitee{background:rgba(224,185,58,.16);color:#e0b93a}',
+    '.fp-b-ecriture{background:rgba(79,157,255,.18);color:#7db4ff}',
+    '.fp-b-transmise{background:rgba(91,191,138,.18);color:#5bbf8a}',
+    '.fp-det{padding:4px 13px 14px;border-top:1px solid var(--line-soft,#1b2432)}',
+    '.fp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}',
+    '.fp-f{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:var(--ink-3,#8494aa);font-weight:600}',
+    '.fp-f input,.fp-f select{background:var(--paper,#141b28);border:1px solid var(--line-2,#2c384b);border-radius:8px;color:var(--ink,#f5f9fe);font:inherit;font-size:12.5px;padding:8px 10px}',
+    '.fp-f input:focus,.fp-f select:focus{border-color:var(--accent,#4f9dff);outline:none}',
+    '.fp-f input.r{text-align:right;font-variant-numeric:tabular-nums}',
+    '.fp-mail{font-size:11.5px;color:var(--ink-3,#8494aa);margin-bottom:10px}.fp-mail b{color:var(--ink-2,#b6c3d6)}',
+    '.fp-ecr{background:rgba(255,255,255,.02);border:1px solid var(--line-2,#2c384b);border-radius:10px;padding:11px 12px;margin-bottom:12px}',
+    '.fp-ecr-h{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3,#8494aa);font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:10px}',
+    '.fp-bal{margin-left:auto;font-size:10px;padding:2px 8px;border-radius:999px;text-transform:none;letter-spacing:0}',
+    '.fp-bal.ok{background:rgba(91,191,138,.16);color:#5bbf8a}.fp-bal.ko{background:rgba(224,185,58,.16);color:#e0b93a}',
+    '.fp-ecr-t{width:100%;border-collapse:collapse;font-size:12px}',
+    '.fp-ecr-t th{text-align:left;font-size:9.5px;text-transform:uppercase;color:var(--ink-3,#8494aa);font-weight:700;padding:4px 6px;border-bottom:1px solid var(--line-2,#2c384b)}',
+    '.fp-ecr-t td{padding:6px;border-bottom:1px solid var(--line-soft,#1b2432);color:var(--ink,#f5f9fe)}',
+    '.fp-ecr-t .r{text-align:right;font-variant-numeric:tabular-nums}',
+    '.fp-ecr-t tfoot td{font-weight:800;border-top:1px solid var(--line-2,#2c384b);border-bottom:0}',
+    '.fp-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}',
+    '.fp-done{font-size:12px;color:#5bbf8a;font-weight:600}',
+    '.fp-empty{text-align:center;color:var(--ink-3,#8494aa);padding:26px 0;font-size:13px}',
+    '.fp-yrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}',
+    '.fp-doss{flex:1;min-width:210px;background:var(--paper,#141b28);border:1px solid var(--line-2,#2c384b);border-radius:9px;color:var(--ink,#f5f9fe);font:inherit;font-size:12.5px;padding:8px 10px}',
+    '.fp-code{width:100%;box-sizing:border-box;height:280px;background:#0a0b0e;border:1px solid #26272d;border-radius:10px;color:#cfe0ff;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:11px}',
+    '@media(max-width:900px){.fp-row-h{grid-template-columns:16px 1fr 90px 110px;}.fp-obj{display:none}}'
+  ].join(''); document.head.appendChild(stl); }catch(e){}
 })();
 </script>
 
