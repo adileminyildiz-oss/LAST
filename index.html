@@ -3234,7 +3234,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=524;
+var LAST_VER=525;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -20764,7 +20764,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var tog='<div class="cli-typetog">'+['entreprise','particulier'].map(function(t){var on=(((c.clientType==='particulier')?'particulier':'entreprise')===t)?' on':'';return '<button class="cli-tt'+on+'" onclick="cliSetType(\''+id2+'\',\''+t+'\')">'+(t==='entreprise'?'Entreprise':'Particulier')+'</button>';}).join('')+'</div>';
     var sub=cliIsPart(c)?'Particulier':(E(c.forme||'—')+' · '+E(c.ville||'—'));
     var head='<div class="cli-fiche-head"><div><div class="cli-fiche-nom">'+E(cliName(c))+'</div><div class="cli-fiche-sub">'+sub+'</div></div>'
-      +'<div class="cli-fiche-act">'+cliNavHTML(c)+tog+'<button class="cli-b" onclick="go(\'editions\')">Créer un document →</button><button class="cli-b cli-b-x" onclick="cliDel(\''+id2+'\')">Supprimer</button></div></div>';
+      +'<div class="cli-fiche-act">'+cliNavHTML(c)+tog+window.mqIconBtn('add','go(\'editions\')',{cls:'mq-ib-add',label:'Créer un document'})+window.mqIconBtn('trash','cliDel(\''+id2+'\')',{danger:true,label:'Supprimer'})+'</div></div>';
     if(cliIsPart(c)){
       var pid=grp('Identité',fld(id2,'civilite','Civilité','sel',['','M.','Mme'])+fld(id2,'prenom','Prénom')+fld(id2,'nom','Nom')+fld(id2,'dateNaissance','Date de naissance','date')+fld(id2,'lieuNaissance','Lieu de naissance')+fld(id2,'nationalite','Nationalité')+fld(id2,'numPiece','N° pièce d\'identité'));
       var pco=grp('Coordonnées',fld(id2,'adresse','Adresse')+fld(id2,'cp','Code postal')+fld(id2,'ville','Ville')+fld(id2,'email','E-mail')+fld(id2,'tel','Téléphone'));
@@ -25909,6 +25909,15 @@ html body .mq-nav[disabled]{opacity:.3;cursor:default;pointer-events:none}
 html body .mq-nav-sm{width:28px;height:28px}
 html body .mq-nav-lg{width:42px;height:42px}
 html body .esp-nav{display:inline-flex;align-items:center;gap:6px;margin-left:10px}
+html body .mq-ic{width:16px;height:16px;display:block}
+html body .mq-ib{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border-radius:9px;border:1px solid var(--line-2,#262629);background:var(--card-2,#141416);color:#fff;cursor:pointer;flex:none;transition:transform .12s,border-color .12s,background .12s;vertical-align:middle}
+html body .mq-ib:hover:not([disabled]){border-color:#4f9dff;transform:translateY(-1px)}
+html body .mq-ib:active:not([disabled]){transform:scale(.93)}
+html body .mq-ib[disabled]{opacity:.35;cursor:default;pointer-events:none}
+html body .mq-ib-danger{color:#f4a3a0;border-color:#3a2426}
+html body .mq-ib-danger:hover:not([disabled]){border-color:#5a2a2c;background:#2a1416}
+html body .mq-ib-add{color:#fff}
+html body .mq-ib-add .mq-ic{width:18px;height:18px}
 </style>
 <script>
 /* ===== Boutons de navigation universels (flèche ronde) — précédent / suivant ===== */
@@ -25919,6 +25928,17 @@ html body .esp-nav{display:inline-flex;align-items:center;gap:6px;margin-left:10
   window.MQ_NAV_NEXT='<svg class="mq-nav-svg" viewBox="0 0 24 24" aria-hidden="true">'+CIRC+ARR_N+'</svg>';
   window.MQ_NAV_PREV='<svg class="mq-nav-svg" viewBox="0 0 24 24" aria-hidden="true">'+CIRC+ARR_P+'</svg>';
   window.mqNav=function(dir,onclick,opts){ opts=opts||{}; var dis=opts.disabled?' disabled':''; var cls='mq-nav'+(opts.cls?(' '+opts.cls):''); var lbl=opts.label||(dir==='prev'?'Précédent':'Suivant'); var oc=(onclick||'').replace(/"/g,'&quot;'); return '<button type="button" class="'+cls+'"'+dis+' onclick="'+oc+'" title="'+lbl+'" aria-label="'+lbl+'">'+(dir==='prev'?window.MQ_NAV_PREV:window.MQ_NAV_NEXT)+'</button>'; };
+  /* ===== Jeu d'icônes universel (SVG, couleur = currentColor) ===== */
+  var IB='viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+  window.MQ_ICONS={
+    add:'<svg class="mq-ic" '+IB+'><path d="M12 5v14M5 12h14"/></svg>',
+    trash:'<svg class="mq-ic" '+IB+'><path d="M4 7h16"/><path d="M9 7V5.4A1.4 1.4 0 0 1 10.4 4h3.2A1.4 1.4 0 0 1 15 5.4V7"/><path d="M6.2 7l.9 12.2A1.6 1.6 0 0 0 8.7 20.7h6.6a1.6 1.6 0 0 0 1.6-1.5L17.8 7"/><path d="M10 11v6M14 11v6"/></svg>',
+    mail:'<svg class="mq-ic" '+IB+'><circle cx="12" cy="12" r="3.6"/><path d="M15.6 8.4V13a2.4 2.4 0 0 0 4.8 0v-1a9 9 0 1 0-3.4 7.05"/></svg>',
+    link:'<svg class="mq-ic" '+IB+'><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 3 2.6 15 0 18M12 3c-2.6 3-2.6 15 0 18"/></svg>',
+    refresh:'<svg class="mq-ic" '+IB+'><path d="M20.5 11a8.5 8.5 0 0 0-15-4.3"/><path d="M5 3.2V7h3.8"/><path d="M3.5 13a8.5 8.5 0 0 0 15 4.3"/><path d="M19 20.8V17h-3.8"/></svg>'
+  };
+  window.mqIcon=function(name){ return window.MQ_ICONS[name]||''; };
+  window.mqIconBtn=function(name,onclick,opts){ opts=opts||{}; var dis=opts.disabled?' disabled':''; var cls='mq-ib'+(opts.danger?' mq-ib-danger':'')+(opts.cls?(' '+opts.cls):''); var lbl=opts.label||''; var oc=(onclick||'').replace(/"/g,'&quot;'); return '<button type="button" class="'+cls+'"'+dis+' onclick="'+oc+'" title="'+lbl+'" aria-label="'+lbl+'">'+window.mqIcon(name)+'</button>'; };
 })();
 </script>
 
