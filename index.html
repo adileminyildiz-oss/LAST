@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=579;
+var LAST_VER=580;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -17250,12 +17250,43 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function wfState(d,i){ var w=wfObj(d); if(w[WF[i][0]])return 'done'; if(i===wfCur(d))return 'cur'; return 'lock'; }
   function wfReach(d,i){ return i<=wfCur(d); }
   function idxOf(key){ for(var i=0;i<WF.length;i++)if(WF[i][0]===key)return i; return -1; }
-  window.trwValider=function(id,key){ var d=(DB.dossiers||[]).filter(function(x){return x.id===id;})[0]; if(!d)return; var w=wfObj(d); var idx=idxOf(key); if(idx<0)return; for(var j=0;j<=idx;j++){ if(!w[WF[j][0]])w[WF[j][0]]=Date.now(); } var nx=WF[idx+1]; if(typeof state!=='undefined')state.espTab=nx?nx[0]:key; try{save();}catch(e){} try{render();}catch(e){} };
+  /* Validation d'une étape : elle n'est jamais acquise seule ni par ricochet.
+     Une étape ne se valide que si toutes les précédentes le sont, elle ne valide
+     qu'elle-même, et elle exige une confirmation explicite de l'utilisateur. */
+  window.trwValider=function(id,key){
+    var d=(DB.dossiers||[]).filter(function(x){return x.id===id;})[0]; if(!d)return;
+    var w=wfObj(d), idx=idxOf(key); if(idx<0)return;
+    if(w[key]) return;
+    for(var j=0;j<idx;j++){
+      if(!w[WF[j][0]]){
+        if(typeof toast==='function')toast('Étape bloquée — validez d’abord « '+WF[j][1]+' ».');
+        if(typeof state!=='undefined')state.espTab=WF[j][0];
+        try{render();}catch(e){}
+        return;
+      }
+    }
+    var go=function(){
+      w[key]=Date.now();
+      d.historique=d.historique||[];
+      d.historique.unshift({d:(typeof today==='function'?today():''),t:'Étape « '+WF[idx][1]+' » validée'});
+      var nx=WF[idx+1];
+      if(typeof state!=='undefined')state.espTab=nx?nx[0]:key;
+      try{save();}catch(e){} try{render();}catch(e){}
+    };
+    if(typeof uiConfirm==='function')
+      uiConfirm('Valider l’étape « '+WF[idx][1]+' » ?\n\n'
+        +'Vous attestez avoir contrôlé les pièces et les mentions de cette étape. '
+        +'L’étape suivante sera ouverte.',
+        go, {title:'Validation de l’étape', okLabel:'Valider l’étape', danger:false});
+    else go();
+  };
   window.trwRevoquer=function(id,key){ var d=(DB.dossiers||[]).filter(function(x){return x.id===id;})[0]; if(!d||!d.wf)return; var idx=idxOf(key); if(idx<0)return; for(var j=idx;j<WF.length;j++){ delete d.wf[WF[j][0]]; } if(typeof state!=='undefined')state.espTab=key; try{save();}catch(e){} try{render();}catch(e){} };
   window.trwGo=function(key){ var d=curDossier(); var idx=idxOf(key); if(d&&idx>=0&&!wfReach(d,idx)){ if(typeof toast==='function')toast('Validez d’abord l’étape en cours.'); return; } if(typeof state!=='undefined')state.espTab=key; try{render();}catch(e){} };
   function footer(d,key,idx){
     var done=!!wfObj(d)[key]; var isLast=idx===WF.length-1;
-    var hint='<span class="trw-hint">'+(done?'Étape validée — vous pouvez la modifier ou continuer.':'Validez cette étape pour débloquer la suivante.')+'</span>';
+    var hint='<span class="trw-hint">'+(done
+      ?'Étape validée — vous pouvez la modifier ou continuer.'
+      :'Aucune étape ne s’ouvre seule : validez celle-ci, une confirmation vous sera demandée.')+'</span>';
     var btns='<span class="trw-btns">';
     if(idx>0)btns+='<button class="trw-b" onclick="trwGo(\''+WF[idx-1][0]+'\')">Étape précédente</button>';
     if(done){ btns+='<button class="trw-b" onclick="trwRevoquer(\''+d.id+'\',\''+key+'\')">Annuler la validation</button>'; if(!isLast)btns+='<button class="trw-b trw-go" onclick="trwGo(\''+WF[idx+1][0]+'\')">Étape suivante</button>'; }
@@ -21393,12 +21424,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function annonceRecu(d){return !!(d&&d.annonceLegale&&d.annonceLegale.fichier);}
   function capitalRecu(d){return !!(d&&d.crea&&d.crea.capital&&d.crea.capital.justifData);}
 
-  /* ===== Auto-validation : dès réception d'un justificatif, l'étape passe au vert ===== */
-  window.creaAutoValidate=function(d){ if(!d)return []; d.wf=d.wf||{}; var done=[];
-    if(annonceRecu(d)&&!d.wf.annonce){d.wf.annonce=Date.now();done.push('Annonce légale');}
-    if(capitalRecu(d)&&!d.wf.capital){d.wf.capital=Date.now();done.push('Dépôt de capital');}
-    return done;
-  };
+  /* Aucune étape ne se valide d'elle-même : la réception d'un justificatif ne vaut
+     pas contrôle. La validation appartient à l'utilisateur (voir trwValider). */
+  window.creaAutoValidate=function(){ return []; };
 
   /* ===== Étape Validation ===== */
   window.creaValidCard=function(d){ if(!d)return '';
@@ -21487,7 +21515,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   };
 
   /* ===== Étape Clôture ===== */
-  window.creaCloturer=function(id){ var d=dos(id); if(!d)return; d.statut='Clôturé'; crea(d).cloture=true; d.wf=d.wf||{}; d.wf.cloture=Date.now(); (d.historique=d.historique||[]).unshift({d:(has('today')?today():''),t:'Dossier clôturé'}); save(); if(has('toast'))toast('Dossier clôturé ✓'); render(); };
+  window.creaCloturer=function(id){ var d=dos(id); if(!d)return; d.statut='Clôturé'; crea(d).cloture=true; d.cloture=d.cloture||{}; if(!d.cloture.le)d.cloture.le=Date.now(); (d.historique=d.historique||[]).unshift({d:(has('today')?today():''),t:'Dossier clôturé'}); save(); if(has('toast'))toast('Dossier clôturé ✓'); render(); };
   window.creaClotureCard=function(d){ if(!d)return ''; var closed=crea(d).cloture; var w=d.wf||{};
     var steps=w.__v6
       ? [['demande','Demande'],['pieces','Pièces'],['actes','Actes'],['attestations','Attestations'],['immatriculation','Immatriculation']]
