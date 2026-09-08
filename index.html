@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=563;
+var LAST_VER=564;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -30008,10 +30008,18 @@ function testLienRdv()  {
     var s=store();
     if(!silencieux && typeof toast==='function') toast('Lecture de l\'agenda…');
     call('agenda_liste','&depuis=-7&jusqua=90',function(j){
-      if(!j||j.error){
-        s.lastErr=(j&&j.error==='no_endpoint')
-          ? 'Passerelle non configurée (Paramètres → Communication → Boîte mail).'
-          : 'Agenda injoignable — vérifiez que le script est déployé en nouvelle version.';
+      if(!j||j.error||!j.evenements){
+        var e0=(j&&j.error)||'';
+        if(e0==='no_endpoint')
+          s.lastErr='Passerelle non configurée — renseignez l\'URL du script et la clé (bouton « Configurer la passerelle »).';
+        else if(e0==='unauthorized')
+          s.lastErr='Clé refusée par le script. La clé de Mar\'q et celle du script (ligne « var TOKEN = … ») doivent être identiques — ouvrez « Script Google », la clé du poste y est déjà insérée.';
+        else if(j && (j.mails||j.count!==undefined))
+          s.lastErr='Le script déployé est une ancienne version : il ne connaît pas encore l\'agenda. Ouvrez « Script Google », collez-le en entier (Ctrl+A puis Ctrl+V), puis Déployer ▸ Gérer les déploiements ▸ ✏️ ▸ Nouvelle version.';
+        else if(e0)
+          s.lastErr='Le script a répondu : '+e0;
+        else
+          s.lastErr='Script injoignable — vérifiez l\'URL (elle doit finir par /exec) et que le déploiement est accessible.';
         if(!silencieux && typeof toast==='function') toast(s.lastErr);
         try{save();}catch(e){} if(!silencieux) render(); return;
       }
