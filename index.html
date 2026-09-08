@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=560;
+var LAST_VER=561;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -29478,6 +29478,796 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
    '.sp-st.on::before{background:#3fae72}.sp-st.off::before{background:#e2685c}',
    '.sp-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}',
    '@media(max-width:900px){.sp-wrap{grid-template-columns:1fr}.sp-side{position:static;max-height:none}}'
+  ].join('');
+  document.head.appendChild(st);
+})();
+</script>
+
+<script type="text/plain" id="marq-gs">
+/**
+ * MAR'Q — Passerelle AEM CONSEIL  ·  aemconseil.sas@gmail.com
+ * Mail · Factures prestataires · Agenda · Prise de rendez-vous
+ *
+ * INSTALLATION — remplacez TOUT le contenu de votre fichier par celui-ci :
+ *   1. Dans l'éditeur Apps Script, cliquez dans le code, faites Ctrl+A puis collez.
+ *   2. Ctrl+S pour enregistrer.
+ *   3. Déployer ▸ Gérer les déploiements ▸ ✏️ ▸ Version : « Nouvelle version » ▸ Déployer.
+ *   4. À la première exécution, Google demande l'autorisation d'accéder à
+ *      Gmail, Drive et Agenda : Paramètres avancés ▸ Accéder à … ▸ Autoriser.
+ *
+ * La clé ci-dessous doit rester identique à celle enregistrée dans Mar'q
+ * (Paramètres ▸ Communication ▸ Boîte mail).
+ */
+
+var TOKEN = '__TOKEN__';
+var QUERY = 'in:inbox newer_than:60d';
+var MAX   = 120;
+
+var FP_LABEL = 'marq-facture-importee';
+
+/* Agenda & rendez-vous */
+var CAL_ID     = 'primary';                 // agenda utilisé ('primary' = celui du compte)
+var RDV_DUREE  = 45;                        // durée d'un rendez-vous, en minutes
+var RDV_JOURS  = 12;                        // nombre de jours ouvrés proposés au client
+var RDV_HEURES = [9, 10, 11, 14, 15, 16];   // heures proposées
+var RDV_DELAI  = 1;                         // premier jour proposé : J+1
+var CABINET    = 'AEM CONSEIL';
+
+/* ==========================================================================
+   ROUTAGE
+   ========================================================================== */
+function doGet(e) {
+  var p = (e && e.parameter) ? e.parameter : {};
+
+  /* Page publique de prise de rendez-vous : pas de clé, le jeton du lien fait foi */
+  if (p.page === 'rdv') return rdvPage(p);
+
+  var payload;
+
+  if (p.key !== TOKEN) {
+    payload = { error: 'unauthorized' };
+
+  } else if (p.action === 'send') {
+    try {
+      GmailApp.sendEmail(p.to, p.subject || '(sans objet)', p.body || '', { name: CABINET });
+      payload = { sent: true };
+    } catch (err) { payload = { error: String(err) }; }
+
+  } else if (p.action === 'factures')      { payload = fpFactures(e);
+  } else if (p.action === 'facture_lue')   { payload = fpFactureLue(e);
+
+  } else if (p.action === 'agenda_liste')  { payload = agListe(e);
+  } else if (p.action === 'agenda_creer')  { payload = agCreer(e);
+  } else if (p.action === 'agenda_suppr')  { payload = agSuppr(e);
+
+  } else if (p.action === 'rdv_invite')    { payload = rdvInvite(e);
+  } else if (p.action === 'rdv_liste')     { payload = rdvListe(e);
+  } else if (p.action === 'rdv_accepter')  { payload = rdvAccepter(e);
+  } else if (p.action === 'rdv_refuser')   { payload = rdvRefuser(e);
+  } else if (p.action === 'rdv_purge')     { payload = rdvPurge(e);
+
+  } else {
+    /* Lecture des mails reçus → deviennent des demandes dans Mar'q */
+    var mails = [];
+    try {
+      var threads = GmailApp.search(QUERY, 0, MAX);
+      for (var t = 0; t < threads.length; t++) {
+        var msgs = threads[t].getMessages();
+        for (var i = 0; i < msgs.length; i++) {
+          var m = msgs[i];
+          mails.push({
+            id: m.getId(), from: m.getFrom(), subject: m.getSubject(),
+            date: m.getDate().toISOString(),
+            body: (m.getPlainBody() || '').slice(0, 4000)
+          });
+        }
+      }
+      payload = { mails: mails, count: mails.length };
+    } catch (err) { payload = { error: String(err) }; }
+  }
+
+  var json = JSON.stringify(payload);
+  if (p.callback) {
+    return ContentService.createTextOutput(p.callback + '(' + json + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+}
+
+function auth(e) {
+  var k = (e && e.parameter && e.parameter.key) || '';
+  return !TOKEN || k === TOKEN;
+}
+function P() { return PropertiesService.getScriptProperties(); }
+function cal() {
+  try {
+    if (CAL_ID && CAL_ID !== 'primary') {
+      var c = CalendarApp.getCalendarById(CAL_ID);
+      if (c) return c;
+    }
+  } catch (err) {}
+  return CalendarApp.getDefaultCalendar();
+}
+function fmtD(d)  { return Utilities.formatDate(d, 'Europe/Paris', 'yyyy-MM-dd'); }
+function fmtH(d)  { return Utilities.formatDate(d, 'Europe/Paris', 'HH:mm'); }
+function fmtFR(d) { return Utilities.formatDate(d, 'Europe/Paris', 'dd/MM/yyyy'); }
+
+/* ==========================================================================
+   AGENDA
+   ========================================================================== */
+function agListe(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  try {
+    var j0 = Number(e.parameter.depuis || -7) || -7;
+    var j1 = Number(e.parameter.jusqua || 60) || 60;
+    var d0 = new Date(); d0.setDate(d0.getDate() + j0); d0.setHours(0, 0, 0, 0);
+    var d1 = new Date(); d1.setDate(d1.getDate() + j1); d1.setHours(23, 59, 59, 0);
+
+    var out = cal().getEvents(d0, d1).map(function (ev) {
+      var invites = [];
+      try { invites = ev.getGuestList().map(function (g) { return g.getEmail(); }); } catch (err) {}
+      return {
+        id      : ev.getId(),
+        titre   : ev.getTitle(),
+        date    : fmtD(ev.getStartTime()),
+        heure   : ev.isAllDayEvent() ? '' : fmtH(ev.getStartTime()),
+        fin     : ev.isAllDayEvent() ? '' : fmtH(ev.getEndTime()),
+        lieu    : ev.getLocation() || '',
+        notes   : (ev.getDescription() || '').slice(0, 1000),
+        invites : invites
+      };
+    });
+    return { evenements: out, agenda: cal().getName() };
+  } catch (err) { return { error: String(err) }; }
+}
+
+function agCreer(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  try {
+    var p = e.parameter;
+    var titre = p.titre || 'Rendez-vous';
+    var date  = p.date  || fmtD(new Date());
+    var h     = p.heure || '09:00';
+    var duree = Number(p.duree || RDV_DUREE) || RDV_DUREE;
+    var deb   = new Date(date + 'T' + h + ':00');
+    var fin   = new Date(deb.getTime() + duree * 60000);
+    var opt   = { description: p.notes || '', location: p.lieu || '' };
+    var inv   = (p.invites || '').split(/[;,\s]+/).filter(function (x) { return x.indexOf('@') > 0; });
+    if (inv.length) opt.guests = inv.join(','), opt.sendInvites = true;
+    var ev = cal().createEvent(titre, deb, fin, opt);
+    return { ok: true, id: ev.getId(), date: fmtD(deb), heure: fmtH(deb) };
+  } catch (err) { return { error: String(err) }; }
+}
+
+function agSuppr(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  try {
+    var ev = cal().getEventById(e.parameter.id || '');
+    if (!ev) return { error: 'introuvable' };
+    ev.deleteEvent();
+    return { ok: true };
+  } catch (err) { return { error: String(err) }; }
+}
+
+/* ==========================================================================
+   PRISE DE RENDEZ-VOUS
+   ========================================================================== */
+function rdvKey(t) { return 'RDV_' + t; }
+function rdvGet(t) { try { return JSON.parse(P().getProperty(rdvKey(t)) || 'null'); } catch (err) { return null; } }
+function rdvPut(o) { P().setProperty(rdvKey(o.token), JSON.stringify(o)); return o; }
+
+/* Mar'q crée l'invitation et récupère le lien à envoyer au client */
+function rdvInvite(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  try {
+    var p = e.parameter;
+    var t = Utilities.getUuid().replace(/-/g, '').slice(0, 16);
+    var o = {
+      token   : t,
+      dossier : p.dossier || '',
+      nom     : p.nom     || '',
+      email   : p.email   || '',
+      objet   : p.objet   || 'Rendez-vous de démarrage du dossier',
+      statut  : 'invite',
+      creneau : '',
+      cree    : new Date().toISOString()
+    };
+    rdvPut(o);
+    return { ok: true, token: t, lien: ScriptApp.getService().getUrl() + '?page=rdv&t=' + t };
+  } catch (err) { return { error: String(err) }; }
+}
+
+/* Créneaux réellement libres dans l'agenda */
+function rdvCreneaux() {
+  var c = cal(), out = [], d = new Date();
+  d.setDate(d.getDate() + RDV_DELAI); d.setHours(0, 0, 0, 0);
+  var jours = 0, garde = 0;
+  while (jours < RDV_JOURS && garde++ < 40) {
+    var dow = d.getDay();
+    if (dow !== 0 && dow !== 6) {
+      jours++;
+      for (var i = 0; i < RDV_HEURES.length; i++) {
+        var deb = new Date(d); deb.setHours(RDV_HEURES[i], 0, 0, 0);
+        var fin = new Date(deb.getTime() + RDV_DUREE * 60000);
+        if (deb < new Date()) continue;
+        var occupe = false;
+        try { occupe = c.getEvents(deb, fin).length > 0; } catch (err) {}
+        if (!occupe) out.push({ iso: fmtD(deb) + 'T' + fmtH(deb), jour: fmtD(deb), heure: fmtH(deb) });
+      }
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+function rdvListe(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  try {
+    var all = P().getProperties(), out = [];
+    Object.keys(all).forEach(function (k) {
+      if (k.indexOf('RDV_') !== 0) return;
+      try { out.push(JSON.parse(all[k])); } catch (err) {}
+    });
+    out.sort(function (a, b) { return (b.cree || '') < (a.cree || '') ? -1 : 1; });
+    return { demandes: out, enAttente: out.filter(function (x) { return x.statut === 'propose'; }).length };
+  } catch (err) { return { error: String(err) }; }
+}
+
+function rdvAccepter(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  try {
+    var o = rdvGet(e.parameter.t || '');
+    if (!o) return { error: 'introuvable' };
+    if (!o.creneau) return { error: 'aucun creneau choisi' };
+    var deb = new Date(o.creneau.replace('T', ' ').replace(/-/g, '/') + ':00');
+    var fin = new Date(deb.getTime() + RDV_DUREE * 60000);
+    var opt = { description: (o.objet || '') + (o.dossier ? ('\nDossier : ' + o.dossier) : '') };
+    if (o.email && o.email.indexOf('@') > 0) { opt.guests = o.email; opt.sendInvites = true; }
+    var ev = cal().createEvent((o.nom || 'Client') + ' — ' + (o.objet || 'Rendez-vous'), deb, fin, opt);
+    o.statut = 'accepte'; o.eventId = ev.getId(); o.accepte = new Date().toISOString();
+    rdvPut(o);
+    if (o.email && o.email.indexOf('@') > 0) {
+      try {
+        GmailApp.sendEmail(o.email, 'Rendez-vous confirmé — ' + CABINET,
+          'Bonjour ' + (o.nom || '') + ',\n\n'
+          + 'Votre rendez-vous est confirmé le ' + fmtFR(deb) + ' à ' + fmtH(deb) + '.\n'
+          + 'Objet : ' + (o.objet || 'Rendez-vous') + '\n\n'
+          + 'Une invitation a été ajoutée à votre agenda.\n\n' + CABINET,
+          { name: CABINET });
+      } catch (err) {}
+    }
+    return { ok: true, id: ev.getId(), date: fmtD(deb), heure: fmtH(deb) };
+  } catch (err) { return { error: String(err) }; }
+}
+
+function rdvRefuser(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  try {
+    var o = rdvGet(e.parameter.t || '');
+    if (!o) return { error: 'introuvable' };
+    o.statut = 'invite'; o.creneau = ''; o.refuse = new Date().toISOString();
+    rdvPut(o);
+    if (o.email && o.email.indexOf('@') > 0) {
+      try {
+        GmailApp.sendEmail(o.email, 'Rendez-vous — nouveau créneau à choisir',
+          'Bonjour ' + (o.nom || '') + ',\n\n'
+          + 'Le créneau que vous aviez retenu ne peut pas être confirmé. '
+          + 'Merci d\'en choisir un autre :\n'
+          + ScriptApp.getService().getUrl() + '?page=rdv&t=' + o.token + '\n\n' + CABINET,
+          { name: CABINET });
+      } catch (err) {}
+    }
+    return { ok: true };
+  } catch (err) { return { error: String(err) }; }
+}
+
+function rdvPurge(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  try { P().deleteProperty(rdvKey(e.parameter.t || '')); return { ok: true }; }
+  catch (err) { return { error: String(err) }; }
+}
+
+/* ---------- Page vue par le client ---------- */
+function rdvHtml(titre, corps) {
+  return HtmlService.createHtmlOutput(
+    '<!doctype html><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>' + titre + '</title><style>'
+    + 'body{margin:0;background:#0b0d11;color:#e9ecf2;font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif}'
+    + '.w{max-width:640px;margin:0 auto;padding:38px 20px 60px}'
+    + '.b{font:600 11px/1 ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase;color:#7b8496}'
+    + 'h1{font-size:25px;letter-spacing:-.02em;margin:12px 0 8px}'
+    + 'p{color:#9aa3b2;margin:0 0 18px}'
+    + '.d{font:600 12px/1 ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;color:#8fb4ff;margin:22px 0 9px}'
+    + '.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}'
+    + 'a.c{display:block;text-align:center;padding:11px 6px;border:1px solid #253048;border-radius:9px;'
+    + 'color:#e9ecf2;text-decoration:none;font-weight:600;background:#111621}'
+    + 'a.c:hover{border-color:#4d8dff;background:#16203a}'
+    + '.ok{border:1px solid #2c5c44;background:#12241b;border-radius:11px;padding:18px 20px}'
+    + '.ok b{color:#6fe0a6}'
+    + '.err{border:1px solid #5c2c2c;background:#241212;border-radius:11px;padding:18px 20px}'
+    + '.f{margin-top:34px;padding-top:16px;border-top:1px solid #1c2432;color:#646c7c;font-size:12.5px}'
+    + '</style><div class="w"><div class="b">' + CABINET + '</div>' + corps
+    + '<div class="f">' + CABINET + ' — cette page vous a été envoyée par e-mail.</div></div>')
+    .setTitle(titre)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function rdvPage(p) {
+  var o = rdvGet(p.t || '');
+  if (!o) return rdvHtml('Lien expiré',
+    '<h1>Lien introuvable</h1><div class="err">Ce lien de prise de rendez-vous n\'est plus valable. '
+    + 'Merci de nous contacter pour en recevoir un nouveau.</div>');
+
+  /* le client vient de choisir un créneau */
+  if (p.choix) {
+    o.creneau = p.choix; o.statut = 'propose'; o.choisi = new Date().toISOString();
+    rdvPut(o);
+    var d = p.choix.split('T');
+    try {
+      GmailApp.sendEmail(Session.getEffectiveUser().getEmail(),
+        'Demande de rendez-vous — ' + (o.nom || 'client'),
+        (o.nom || 'Un client') + ' a choisi le ' + d[0] + ' à ' + d[1] + '.\n'
+        + 'Dossier : ' + (o.dossier || '—') + '\n'
+        + 'À accepter dans Mar\'q ▸ Agenda.', { name: CABINET });
+    } catch (err) {}
+    return rdvHtml('Demande enregistrée',
+      '<h1>Merci, c\'est noté</h1><div class="ok">Votre demande pour le <b>' + d[0]
+      + '</b> à <b>' + d[1] + '</b> a bien été transmise. Vous recevrez un e-mail de confirmation '
+      + 'dès que le rendez-vous sera validé par le cabinet.</div>');
+  }
+
+  if (o.statut === 'accepte') {
+    var c = (o.creneau || '').split('T');
+    return rdvHtml('Rendez-vous confirmé',
+      '<h1>Votre rendez-vous est confirmé</h1><div class="ok">Le <b>' + c[0] + '</b> à <b>' + c[1]
+      + '</b>. Une invitation a été ajoutée à votre agenda.</div>');
+  }
+
+  var cre = rdvCreneaux();
+  if (!cre.length) return rdvHtml('Aucun créneau',
+    '<h1>Aucun créneau disponible</h1><div class="err">Tous les créneaux des prochains jours sont pris. '
+    + 'Merci de nous contacter directement.</div>');
+
+  var parJour = {}, ordre = [];
+  cre.forEach(function (x) {
+    if (!parJour[x.jour]) { parJour[x.jour] = []; ordre.push(x.jour); }
+    parJour[x.jour].push(x);
+  });
+
+  var corps = '<h1>Choisissez votre rendez-vous</h1>'
+    + '<p>' + (o.nom ? (o.nom + ', v') : 'V') + 'otre dossier est accepté. '
+    + 'Sélectionnez le créneau qui vous convient — durée ' + RDV_DUREE + ' minutes.</p>';
+
+  ordre.forEach(function (j) {
+    var d = new Date(j + 'T12:00:00');
+    var jn = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'][d.getDay()];
+    corps += '<div class="d">' + jn + ' ' + fmtFR(d) + '</div><div class="g">'
+      + parJour[j].map(function (x) {
+          return '<a class="c" href="?page=rdv&t=' + o.token + '&choix=' + x.iso + '">' + x.heure + '</a>';
+        }).join('') + '</div>';
+  });
+  return rdvHtml('Prendre rendez-vous', corps);
+}
+
+/* ==========================================================================
+   FACTURES PRESTATAIRES
+   ========================================================================== */
+function fpFactures(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  var max   = Math.min(Number(e.parameter.max || 30) || 30, 100);
+  var jours = Number(e.parameter.jours || 90) || 90;
+  var q = P().getProperty('FP_QUERY') ||
+      ('in:anywhere -in:trash has:attachment newer_than:' + jours + 'd ' +
+       '(facture OR factures OR invoice OR "note d\'honoraires" OR "avis d\'échéance" OR "votre relevé") ' +
+       '-label:' + FP_LABEL);
+  var out = [];
+  try {
+    GmailApp.search(q, 0, max).forEach(function (th) {
+      th.getMessages().forEach(function (m) {
+        var att = m.getAttachments().filter(function (a) {
+          return /pdf|image\/(jpe?g|png)/i.test(a.getContentType());
+        });
+        if (!att.length) return;
+        var corps = '';
+        try { corps = m.getPlainBody().substring(0, 4000); } catch (err) { corps = ''; }
+        var texte = m.getSubject() + '\n' + corps;
+        out.push({
+          id: m.getId(), from: m.getFrom(), subject: m.getSubject(),
+          date: fmtD(m.getDate()), attachment: att[0].getName(),
+          link: fpArchive(att[0], m),
+          numero: fpNumero(texte), ttc: fpMontant(texte), taux: fpTaux(texte)
+        });
+      });
+    });
+  } catch (err) { return { error: String(err) }; }
+  return { factures: out, requete: q };
+}
+
+function fpFactureLue(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  var id = e.parameter.id || '';
+  if (!id) return { error: 'missing_id' };
+  try {
+    var lab = GmailApp.getUserLabelByName(FP_LABEL) || GmailApp.createLabel(FP_LABEL);
+    GmailApp.getMessageById(id).getThread().addLabel(lab);
+    return { ok: true, id: id };
+  } catch (err) { return { error: String(err) }; }
+}
+
+function fpArchive(att, msg) {
+  try {
+    var nom = P().getProperty('FP_DRIVE_FOLDER') || 'AEM CONSEIL - Factures reçues';
+    var it = DriveApp.getFoldersByName(nom);
+    var dossier = it.hasNext() ? it.next() : DriveApp.createFolder(nom);
+    var nomFichier = fmtD(msg.getDate()) + ' - ' + att.getName();
+    var deja = dossier.getFilesByName(nomFichier);
+    if (deja.hasNext()) return deja.next().getUrl();
+    return dossier.createFile(att.copyBlob().setName(nomFichier)).getUrl();
+  } catch (err) {
+    return 'https://mail.google.com/mail/u/0/#all/' + msg.getId();
+  }
+}
+
+var FP_STOP = /^(pour|votre|vos|notre|nos|du|de|des|la|le|les|et|est|en|au|aux|sur|par|avec|sans|dans|ref|no|num|numero|date|datee|client|total|montant|euro|euros|eur|tva|ht|ttc)$/i;
+
+function fpNumero(t) {
+  t = String(t || '');
+  var cands = [], m, re;
+  re = /(?:factures?|invoice)\s*(?:n\s*[°o]?\s*)?[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-\/\.]{2,24})/gi;
+  while ((m = re.exec(t)) !== null) cands.push(m[1]);
+  re = /\bn\s*[°o]\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-\/\.]{2,24})/gi;
+  while ((m = re.exec(t)) !== null) cands.push(m[1]);
+  re = /\b([A-Z]{1,4}[-\/][A-Z0-9]{1,4}[-\/][0-9]{3,}[-\/0-9A-Z]*|[A-Z]{2,4}[0-9]{2,}[-\/][0-9]{3,}|[0-9]{8,})\b/g;
+  while ((m = re.exec(t)) !== null) cands.push(m[1]);
+  for (var i = 0; i < cands.length; i++) {
+    var c = String(cands[i]).replace(/[.,;:]$/, '');
+    if (c.length < 3) continue;
+    if (FP_STOP.test(c)) continue;
+    if (!/[0-9]/.test(c)) continue;
+    return c;
+  }
+  return '';
+}
+
+function fpMontant(t) {
+  var best = 0, m;
+  var re = /(?:total\s*ttc|montant\s*ttc|net\s+[àa]\s+payer|total\s+[àa]\s+payer|total\s+g[ée]n[ée]ral|ttc)\s*[:\s]*([0-9][0-9\s., ]{0,14})\s*(?:€|eur)/gi;
+  while ((m = re.exec(t)) !== null) { var v = fpNum(m[1]); if (v > best) best = v; }
+  if (!best) {
+    var re2 = /([0-9][0-9\s., ]{0,14})\s*(?:€|EUR)\b/g;
+    while ((m = re2.exec(t)) !== null) { var v2 = fpNum(m[1]); if (v2 > best) best = v2; }
+  }
+  return best ? best.toFixed(2) : '';
+}
+
+function fpTaux(t) {
+  var m = t.match(/tva\s*(?:\(?\s*)?([0-9]{1,2}(?:[.,][0-9])?)\s*%/i)
+       || t.match(/([0-9]{1,2}(?:[.,][0-9])?)\s*%\s*(?:de\s*)?tva/i);
+  return m ? m[1].replace(',', '.') : '20';
+}
+
+function fpNum(s) {
+  s = String(s).replace(/[\s ]/g, '');
+  if (/,\d{1,2}$/.test(s))       s = s.replace(/\./g, '').replace(',', '.');
+  else if (/\.\d{1,2}$/.test(s)) s = s.replace(/,/g, '');
+  else                           s = s.replace(/[.,]/g, '');
+  var n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+/* ==========================================================================
+   TESTS depuis l'éditeur (Exécuter ▸ choisir la fonction)
+   ========================================================================== */
+function testFactures() { Logger.log(JSON.stringify(fpFactures({ parameter: { key: TOKEN, max: 5 } }), null, 2)); }
+function testAgenda()   { Logger.log(JSON.stringify(agListe({ parameter: { key: TOKEN } }), null, 2)); }
+function testCreneaux() { Logger.log(JSON.stringify(rdvCreneaux().slice(0, 12), null, 2)); }
+function testLienRdv()  {
+  Logger.log(JSON.stringify(rdvInvite({ parameter: {
+    key: TOKEN, nom: 'Client test', email: '', dossier: 'DOS-2026-001' } }), null, 2));
+}
+
+</script>
+<script>
+/* ============================================================================
+   mod-agenda-gw — Agenda & prise de rendez-vous par la passerelle Apps Script
+   Pas d'identifiant OAuth Google : on réutilise le script déjà déployé sur
+   aemconseil.sas@gmail.com (même URL, même clé que la boîte mail).
+   ========================================================================== */
+(function(){
+  if(window.__agw) return; window.__agw=1;
+
+  function n(v){ return (typeof v==='number')?v:parseFloat(String(v||'').replace(',','.'))||0; }
+  function E(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+  function store(){ try{ DB.parametres=DB.parametres||{};
+      DB.parametres.agendaGw=DB.parametres.agendaGw||{demandes:[],lastSync:'',lastErr:''};
+      if(!Array.isArray(DB.parametres.agendaGw.demandes))DB.parametres.agendaGw.demandes=[];
+      return DB.parametres.agendaGw; }catch(e){ return {demandes:[],lastSync:'',lastErr:''}; } }
+  function rdvData(){ try{ DB.parametres=DB.parametres||{};
+      if(!Array.isArray(DB.parametres.rdv))DB.parametres.rdv=[]; return DB.parametres.rdv; }catch(e){return [];} }
+
+  function gw(){ try{ return (typeof demSyncCfg==='function')?demSyncCfg():{}; }catch(e){ return {}; } }
+  function call(action,extra,cb){
+    var c=gw(); if(!c||!c.url){ cb({error:'no_endpoint'}); return; }
+    var base=c.url+(c.url.indexOf('?')>=0?'&':'?')+'action='+encodeURIComponent(action)
+            +'&key='+encodeURIComponent(c.key||'')+(extra||'');
+    var done=false, fin=function(j){ if(done)return; done=true; cb(j||{error:'no_response'}); };
+    try{
+      fetch(base,{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
+        var j=null; try{ j=JSON.parse(t); }catch(e){}
+        if(j) fin(j); else if(typeof demJsonp==='function') demJsonp(base,fin); else fin(null);
+      }).catch(function(){ if(typeof demJsonp==='function') demJsonp(base,fin); else fin(null); });
+    }catch(e){ fin(null); }
+  }
+  window.agwCall=call;
+
+  /* ---------- synchronisation ---------- */
+  window.agwSync=function(silencieux){
+    var s=store();
+    if(!silencieux && typeof toast==='function') toast('Lecture de l\'agenda…');
+    call('agenda_liste','&depuis=-7&jusqua=90',function(j){
+      if(!j||j.error){
+        s.lastErr=(j&&j.error==='no_endpoint')
+          ? 'Passerelle non configurée (Paramètres → Communication → Boîte mail).'
+          : 'Agenda injoignable — vérifiez que le script est déployé en nouvelle version.';
+        if(!silencieux && typeof toast==='function') toast(s.lastErr);
+        try{save();}catch(e){} if(!silencieux) render(); return;
+      }
+      var evs=j.evenements||[], liste=rdvData(), add=0, maj=0;
+      evs.forEach(function(ev){
+        var ex=liste.filter(function(r){ return r.gid===ev.id; })[0];
+        var o={ gid:ev.id, src:'google', type:'rdv', date:ev.date, heure:ev.heure||'',
+                objet:ev.titre||'Rendez-vous', lieu:ev.lieu||'', notes:ev.notes||'',
+                invites:(ev.invites||[]).join(', ') };
+        if(ex){ ['date','heure','objet','lieu','notes','invites'].forEach(function(k){ ex[k]=o[k]; }); maj++; }
+        else  { o.id='ag'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); liste.unshift(o); add++; }
+      });
+      s.lastSync=new Date().toISOString(); s.lastErr='';
+      call('rdv_liste','',function(k){
+        if(k&&!k.error) s.demandes=k.demandes||[];
+        try{save();}catch(e){} render();
+        if(!silencieux && typeof toast==='function')
+          toast(add+' rendez-vous importé(s) · '+maj+' mis à jour'+(s.demandes.length?(' · '+enAttente()+' demande(s) en attente'):''));
+      });
+    });
+  };
+  function enAttente(){ return store().demandes.filter(function(d){return d.statut==='propose';}).length; }
+  window.agwEnAttente=enAttente;
+
+  /* ---------- invitation ---------- */
+  window.agwInvite=function(nom,email,dossier,objet,cb){
+    call('rdv_invite','&nom='+encodeURIComponent(nom||'')+'&email='+encodeURIComponent(email||'')
+        +'&dossier='+encodeURIComponent(dossier||'')+'&objet='+encodeURIComponent(objet||''),
+      function(j){ cb((j&&j.lien)?j.lien:''); });
+  };
+
+  window.agwEnvoyerLien=function(){
+    var cl=[]; try{ cl=(DB.clients||[]).slice(0,300); }catch(e){}
+    var opts=cl.map(function(c,i){ return '<option value="'+i+'">'+E((c.nom||c.denom||c.raison||'Client')+(c.email?(' — '+c.email):''))+'</option>'; }).join('');
+    var body='<div class="agw-form">'
+      +'<label>Client</label>'
+      +(opts?('<select id="agw-cl" onchange="agwPick(this.value)"><option value="">— saisie libre —</option>'+opts+'</select>'):'')
+      +'<label style="margin-top:8px">Nom</label><input id="agw-nom" placeholder="Nom du client">'
+      +'<label style="margin-top:8px">Adresse e-mail</label><input id="agw-mail" type="email" placeholder="client@exemple.fr">'
+      +'<label style="margin-top:8px">Objet du rendez-vous</label>'
+      +'<input id="agw-obj" value="Rendez-vous de démarrage du dossier">'
+      +'<label style="margin-top:8px">Référence du dossier (facultatif)</label><input id="agw-dos" placeholder="DOS-2026-001">'
+      +'<p class="agw-help">Le client reçoit un lien vers une page où il choisit lui-même son créneau, '
+      +'parmi ceux réellement libres dans votre agenda. Son choix arrive ici comme demande à accepter.</p></div>';
+    openModal('Envoyer un lien de prise de rendez-vous',body,
+      '<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>'
+      +'<button class="btn btn-pri" onclick="agwEnvoyerGo()">Envoyer le lien</button>');
+  };
+  window.agwPick=function(i){
+    var c=(DB.clients||[])[+i]; if(!c)return;
+    var a=document.getElementById('agw-nom'), b=document.getElementById('agw-mail');
+    if(a)a.value=c.nom||c.denom||c.raison||''; if(b)b.value=c.email||'';
+  };
+  window.agwEnvoyerGo=function(){
+    var nom=(document.getElementById('agw-nom')||{}).value||'';
+    var mail=(document.getElementById('agw-mail')||{}).value||'';
+    var obj=(document.getElementById('agw-obj')||{}).value||'Rendez-vous';
+    var dos=(document.getElementById('agw-dos')||{}).value||'';
+    if(!mail||mail.indexOf('@')<1){ if(typeof toast==='function')toast('Renseignez l\'adresse e-mail du client.'); return; }
+    if(typeof toast==='function')toast('Création du lien…');
+    agwInvite(nom,mail,dos,obj,function(lien){
+      if(!lien){ if(typeof toast==='function')toast('Lien impossible — vérifiez la passerelle (Paramètres → Communication).'); return; }
+      var corps='Bonjour'+(nom?(' '+String(nom).split(/\s+/)[0]):'')+',\n\n'
+        +'Pour convenir d\'un rendez-vous, choisissez directement le créneau qui vous convient :\n'
+        +lien+'\n\nVotre choix nous est transmis, et vous recevrez une confirmation par e-mail.\n\n'
+        +'Bien cordialement,\nAEM CONSEIL';
+      var envoye=false;
+      try{ if(typeof demEnvoiSilencieux==='function') envoye=demEnvoiSilencieux(mail,'Prise de rendez-vous — AEM CONSEIL',corps);
+           else if(typeof demEnvoiDirect==='function') envoye=demEnvoiDirect(mail,'Prise de rendez-vous — AEM CONSEIL',corps); }catch(e){}
+      closeModal();
+      if(typeof toast==='function') toast(envoye?('Lien envoyé à '+mail):('Lien créé — envoi manuel : '+lien));
+      agwSync(true);
+    });
+  };
+
+  /* ---------- accepter / refuser ---------- */
+  window.agwAccepter=function(t){
+    if(typeof toast==='function')toast('Confirmation du rendez-vous…');
+    call('rdv_accepter','&t='+encodeURIComponent(t),function(j){
+      if(!j||j.error){ if(typeof toast==='function')toast('Échec : '+((j&&j.error)||'passerelle injoignable')); return; }
+      if(typeof toast==='function')toast('Rendez-vous confirmé le '+(j.date||'')+' à '+(j.heure||'')+' — le client est prévenu.');
+      agwSync(true);
+    });
+  };
+  window.agwRefuser=function(t){
+    var go=function(){ call('rdv_refuser','&t='+encodeURIComponent(t),function(j){
+      if(typeof toast==='function')toast((j&&j.ok)?'Créneau refusé — le client est invité à en choisir un autre.':'Échec de l\'opération.');
+      agwSync(true); }); };
+    if(typeof uiConfirm==='function') uiConfirm('Refuser ce créneau et demander au client d\'en choisir un autre ?',go,{okLabel:'Refuser'});
+    else go();
+  };
+  window.agwOublier=function(t){
+    var go=function(){ call('rdv_purge','&t='+encodeURIComponent(t),function(){ agwSync(true); }); };
+    if(typeof uiConfirm==='function') uiConfirm('Retirer cette demande de la liste ?',go,{okLabel:'Retirer',danger:true}); else go();
+  };
+
+  /* ---------- carte « Demandes de rendez-vous » ---------- */
+  var ST={invite:['Lien envoyé','agw-i'],propose:['À accepter','agw-p'],accepte:['Confirmé','agw-a']};
+  function frD(iso){ var p=String(iso||'').split('-'); return p.length<3?(iso||''):(p[2]+'/'+p[1]+'/'+p[0]); }
+  function ligne(d){
+    var st=ST[d.statut]||['—','agw-i'], c=(d.creneau||'').split('T');
+    return '<div class="agw-row '+(d.statut==='propose'?'on':'')+'">'
+      +'<div class="agw-c1"><b>'+E(d.nom||'Client')+'</b><span>'+E(d.email||'')+(d.dossier?(' · '+E(d.dossier)):'')+'</span></div>'
+      +'<div class="agw-c2">'+(c[0]?('<b>'+frD(c[0])+'</b><span>'+E(c[1]||'')+'</span>'):'<span class="agw-none">créneau non choisi</span>')+'</div>'
+      +'<div class="agw-c3"><span class="agw-tag '+st[1]+'">'+st[0]+'</span></div>'
+      +'<div class="agw-c4">'
+      +(d.statut==='propose'
+        ? '<button class="btn btn-sm btn-pri" onclick="agwAccepter(\''+E(d.token)+'\')">Accepter</button>'
+          +'<button class="btn btn-sm btn-ghost" onclick="agwRefuser(\''+E(d.token)+'\')">Refuser</button>'
+        : '<button class="btn btn-sm btn-ghost" onclick="agwOublier(\''+E(d.token)+'\')">Retirer</button>')
+      +'</div></div>';
+  }
+  function card(){
+    var s=store(), ds=s.demandes||[], att=enAttente();
+    var head='<div class="card-h"><h2>Demandes de rendez-vous</h2>'
+      +(att?('<span class="agw-badge">'+att+' à accepter</span>'):'')
+      +'<span class="sub" style="margin-left:auto">'
+      +(s.lastSync?('dernière lecture '+frD(String(s.lastSync).slice(0,10))):'jamais synchronisé')+'</span></div>';
+    var bar='<div class="agw-bar">'
+      +'<button class="btn btn-sm btn-pri" onclick="agwEnvoyerLien()">Envoyer un lien de rendez-vous</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="agwSync()">↻ Synchroniser l\'agenda</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="agwScript()">⚙ Script Google</button></div>'
+      +(s.lastErr?('<div class="agw-err">'+E(s.lastErr)+'</div>'):'');
+    var corps = ds.length
+      ? '<div class="agw-list">'+ds.map(ligne).join('')+'</div>'
+      : '<div class="agw-empty">Aucune demande. Envoyez un lien de rendez-vous à un client : il choisit son créneau, vous l\'acceptez ici.</div>';
+    return '<div class="card agw-card">'+head+'<div class="card-b">'+bar+corps+'</div></div>';
+  }
+  window.agwCard=card;
+
+  /* ---------- script Google prêt à coller ---------- */
+  window.agwScript=function(){
+    var el=document.getElementById('marq-gs'); var src=el?el.textContent:'';
+    var c=gw(); src=src.replace('__TOKEN__', (c&&c.key)?c.key:'COLLEZ-ICI-VOTRE-CLE');
+    window.__agwSrc=src;
+    openModal('Script Google — passerelle complète',
+      '<p class="agw-help" style="margin:0 0 10px">Ce script remplace <b>en entier</b> celui de votre projet Apps Script : '
+      +'boîte mail, factures prestataires, agenda et prise de rendez-vous. Votre clé y est déjà insérée.<br>'
+      +'Dans l\'éditeur : cliquez dans le code, <b>Ctrl+A</b>, collez, <b>Ctrl+S</b>, puis '
+      +'<b>Déployer ▸ Gérer les déploiements ▸ ✏️ ▸ Nouvelle version ▸ Déployer</b>.</p>'
+      +'<textarea class="agw-code" readonly onclick="this.select()">'+E(src)+'</textarea>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+      +'<button class="btn btn-ghost" onclick="agwDl()">Télécharger .gs</button>'
+      +'<button class="btn btn-pri" onclick="agwCopy()">Copier le script</button>');
+  };
+  window.agwCopy=function(){
+    var t=document.querySelector('.agw-code'); if(!t)return;
+    t.select(); var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+    if(!ok&&navigator.clipboard){ navigator.clipboard.writeText(window.__agwSrc||t.value); ok=true; }
+    if(typeof toast==='function')toast(ok?'Script copié — collez-le dans l\'éditeur Apps Script (Ctrl+A puis Ctrl+V).':'Copie impossible — sélectionnez le texte manuellement.');
+  };
+  window.agwDl=function(){
+    try{ var b=new Blob([window.__agwSrc||''],{type:'text/plain'}); var a=document.createElement('a');
+      a.href=URL.createObjectURL(b); a.download='marq-passerelle.gs'; a.click();
+      setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+    }catch(e){ if(typeof toast==='function')toast('Téléchargement impossible.'); }
+  };
+
+  /* ---------- greffes ---------- */
+  function graftPage(){
+    var _pa=window.pageAgenda;
+    if(typeof _pa!=='function'||_pa.__agw) return;
+    var w=function(){ var h=_pa.apply(this,arguments);
+      try{ if(typeof h==='string' && h.indexOf('agw-card')<0){
+        var i=h.indexOf('<div class="card');
+        h = (i>=0) ? (h.slice(0,i)+card()+h.slice(i)) : (h+card());
+      } }catch(e){}
+      return h; };
+    w.__agw=1; window.pageAgenda=w;
+  }
+  graftPage(); setTimeout(graftPage,0); setTimeout(graftPage,500);
+
+  /* le mail d'acceptation du dossier porte le lien de prise de rendez-vous */
+  function graftAccept(){
+    var _da=window.demAccepter, _dc=window.demComposerDecision;
+    if(typeof _da==='function' && !_da.__agw){
+      var wa=function(id){
+        var d=null; try{ d=(DB.demandes||[]).filter(function(x){return x.id===id;})[0]; }catch(e){}
+        var mail=''; try{ mail=(typeof demReplyTo==='function')?demReplyTo(d):''; }catch(e){}
+        var nom=''; try{ nom=(typeof demBestName==='function')?demBestName(d):''; }catch(e){}
+        var c=gw();
+        if(!d||!mail||!c||!c.url){ return _da.call(this,id); }
+        var self=this;
+        agwInvite(nom,mail,(d&&d.code)||'','Rendez-vous de démarrage du dossier',function(lien){
+          window.__agwLien=lien||''; try{ _da.call(self,id); } finally { window.__agwLien=''; }
+        });
+      };
+      wa.__agw=1; window.demAccepter=wa;
+    }
+    if(typeof _dc==='function' && !_dc.__agw){
+      var wc=function(id,titre,sujet,corps,dec){
+        if(dec==='accepte' && window.__agwLien){
+          var bloc='Pour convenir d\'un rendez-vous, choisissez directement le créneau qui vous convient :\n'
+                  +window.__agwLien+'\n\n';
+          corps = (corps.indexOf('Nous restons à votre disposition')>=0)
+            ? corps.replace('Nous restons à votre disposition', bloc+'Nous restons à votre disposition')
+            : (corps+'\n\n'+bloc);
+        }
+        return _dc.call(this,id,titre,sujet,corps,dec);
+      };
+      wc.__agw=1; window.demComposerDecision=wc;
+    }
+  }
+  graftAccept(); setTimeout(graftAccept,0); setTimeout(graftAccept,600);
+
+  /* pastille sur l'entrée Agenda de la navigation */
+  function badge(){
+    try{
+      var att=enAttente();
+      var b=document.querySelector('.nav-badge-agw'); 
+      var btn=null, all=document.querySelectorAll('#nav button, .nav button, nav button');
+      for(var i=0;i<all.length;i++){ if(/agenda/i.test(all[i].textContent||'')){ btn=all[i]; break; } }
+      if(b&&b.parentNode) b.parentNode.removeChild(b);
+      if(!att||!btn) return;
+      var s=document.createElement('span'); s.className='nav-badge-agw'; s.textContent=att;
+      btn.appendChild(s);
+    }catch(e){}
+  }
+  var _bn=window.buildNav;
+  if(typeof _bn==='function' && !_bn.__agw){
+    var wb=function(){ var o=_bn.apply(this,arguments); setTimeout(badge,0); return o; };
+    wb.__agw=1; window.buildNav=wb;
+  }
+  var _r=window.render;
+  if(typeof _r==='function' && !_r.__agw){
+    var wr=function(){ var o=_r.apply(this,arguments); setTimeout(badge,0); return o; };
+    wr.__agw=1; window.render=wr;
+  }
+
+  /* relève automatique à l'ouverture, si la passerelle est configurée */
+  setTimeout(function(){ try{ var c=gw(); if(c&&c.url) window.agwSync(true); }catch(e){} },2500);
+
+  var st=document.createElement('style'); st.id='agw-mod';
+  st.textContent=[
+   '.agw-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}',
+   '.agw-err{border:1px solid #5c2c2c;background:rgba(226,104,92,.09);border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:13px;color:#e2685c}',
+   '.agw-empty{color:#8f97a6;font-size:13.5px;padding:14px 2px}',
+   '.agw-badge{margin-left:10px;background:#4d8dff;color:#fff;border-radius:20px;padding:2px 9px;font:600 11px/1.6 inherit}',
+   '.agw-list{display:flex;flex-direction:column;gap:1px;background:rgba(127,160,255,.10);border:1px solid rgba(127,160,255,.14);border-radius:10px;overflow:hidden}',
+   '.agw-row{display:grid;grid-template-columns:1.4fr 1fr 110px auto;gap:12px;align-items:center;padding:10px 13px;background:var(--card,#0f1116)}',
+   '.agw-row.on{background:rgba(77,141,255,.08)}',
+   '.agw-row b{display:block;font-size:13.5px}',
+   '.agw-row span{display:block;font-size:12px;color:#8f97a6}',
+   '.agw-c2 b{font-variant-numeric:tabular-nums}',
+   '.agw-none{font-style:italic}',
+   '.agw-tag{display:inline-block;border-radius:20px;padding:2px 9px;font:600 11px/1.6 inherit;border:1px solid}',
+   '.agw-i{color:#8f97a6;border-color:rgba(143,151,166,.4)}',
+   '.agw-p{color:#4d8dff;border-color:rgba(77,141,255,.5);background:rgba(77,141,255,.10)}',
+   '.agw-a{color:#43b581;border-color:rgba(67,181,129,.45);background:rgba(67,181,129,.10)}',
+   '.agw-c4{display:flex;gap:6px;justify-content:flex-end}',
+   '.agw-form label{display:block;font-size:12px;color:#8f97a6;margin-bottom:4px}',
+   '.agw-form input,.agw-form select{width:100%;box-sizing:border-box;background:var(--bg2,#14181f);border:1px solid var(--bd,#232a38);border-radius:8px;color:inherit;padding:8px 10px;font:13px/1.3 inherit}',
+   '.agw-help{color:#8f97a6;font-size:12.5px;line-height:1.5;margin:12px 0 0}',
+   '.agw-code{width:100%;box-sizing:border-box;height:300px;background:#0a0b0e;border:1px solid #26272d;border-radius:10px;color:#cfe0ff;font:11.5px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:11px}',
+   '.nav-badge-agw{margin-left:auto;background:#4d8dff;color:#fff;border-radius:20px;padding:1px 7px;font:600 10.5px/1.7 inherit}',
+   '@media(max-width:900px){.agw-row{grid-template-columns:1fr;gap:6px}.agw-c4{justify-content:flex-start}}'
   ].join('');
   document.head.appendChild(st);
 })();
