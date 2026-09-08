@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=584;
+var LAST_VER=585;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -33469,43 +33469,48 @@ function testLienRdv()  {
   };
 
   /* ---------- cartes ---------- */
-  function carte(){
-    var d=dossier(); if(!d) return '';
-    var c=C(d), h=hono(d), t=totaux(d), rm=remise(d);
-    var pret=rm.filter(function(p){return p.ok;}).length;
-
-    /* 1. remise */
-    var lignesRm=rm.map(function(p){
+  /* ---------- les trois volets, en mini-pages ---------- */
+  function pageRemise(d){
+    var c=C(d), rm=remise(d), pret=rm.filter(function(p){return p.ok;}).length;
+    var lignes=rm.map(function(p){
       return '<div class="cl6-r '+(p.ok?'ok':'ko')+'"><span class="cl6-s">'+(p.ok?'✓':'✗')+'</span>'
-        +'<div><b>'+E(p.l)+'</b><em>'+(p.ok?("Au dossier — "+E(p.src)):("Absente — voir "+E(p.src)))+'</em></div></div>';
+        +'<div><b>'+E(p.l)+'</b><em>'+(p.ok?('Au dossier — '+E(p.src)):('Absente — voir '+E(p.src)))+'</em></div></div>';
     }).join('');
-
-    var carte1='<div class="card crea-cloture cl6-card"><div class="card-h"><h2>Remise du dossier au client</h2>'
-      +(c.remis?'<span class="at4-tag ok">remis le '+frd(c.remis)+'</span>':'<span class="at4-tag g">à remettre</span>')
-      +'<span class="sub" style="margin-left:auto">'+pret+'/'+rm.length+' pièces</span></div><div class="card-b">'
-      +'<div class="at4-bar">'
+    return '<div class="mp-bar">'
       +'<button class="btn btn-sm btn-ghost" onclick="cl6DossierPDF(null)">Dossier complet (PDF)</button>'
       +'<button class="btn btn-sm btn-ghost" onclick="cl6Apercu(null)">Lire le courrier</button>'
       +(c.remis
         ? '<button class="btn btn-sm btn-ghost" onclick="cl6AnnulerRemise(null)">Annuler la remise</button>'
         : '<button class="btn btn-sm btn-pri" onclick="cl6Apercu(null)">Remettre au client</button>')
-      +'</div>'
-      +'<div class="cl6-list">'+lignesRm+'</div>'
-      +'</div></div>';
+      +'<span class="mp-sp mp-nav">'+pret+'/'+rm.length+' pièces</span></div>'
+      +'<div class="cl6-list">'+lignes+'</div>'
+      +'<p class="cl6-note">Le courrier de remise récapitule ces pièces et part à l’adresse du dossier. '
+      +'Une pièce absente se récupère depuis l’étape indiquée, ou se dépose à la main par « Déposer une pièce ».</p>';
+  }
+  window.cl6OuvrirRemise=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return; var c=C(d);
+    mpOuvrir('Remise du dossier au client', pageRemise(d),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(c.remis?('remis le '+frd(c.remis)+(c.remisA?(' à '+c.remisA):'')):'à remettre au client')});
+  };
 
-    /* 2. honoraires */
+  function pageHono(d){
+    var c=C(d), h=hono(d), t=totaux(d);
     function ch(k,l,v,sfx){
       return '<label class="cl6-f"><span>'+E(l)+'</span>'
         +'<input type="number" step="0.01" min="0" value="'+(v||0)+'" '
         +(c.factureId?'disabled ':'')+'onchange="cl6Hono(null,\''+k+'\',this.value)">'
         +(sfx?('<em>'+E(sfx)+'</em>'):'')+'</label>';
     }
-    var carte2='<div class="card crea-cloture cl6-card"><div class="card-h"><h2>Honoraires et débours</h2>'
+    return '<div class="mp-bar">'
       +(c.factureId
-        ? ('<span class="at4-tag ok">facture '+E(c.factureNum)+'</span>'
-           +(c.deboursNum?('<span class="at4-tag">débours '+E(c.deboursNum)+'</span>'):''))
-        : '<span class="at4-tag g">à facturer</span>')
-      +'</div><div class="card-b">'
+        ? '<button class="btn btn-sm btn-ghost" onclick="cl6VoirFacture(null)">Ouvrir la facture</button>'
+          +(c.deboursId?'<button class="btn btn-sm btn-ghost" onclick="cl6VoirFacture(null,\'debours\')">Ouvrir la note de débours</button>':'')
+          +'<button class="btn btn-sm '+(c.regle?'btn-ghost':'at4-ok')+'" onclick="cl6Regle(null)">'
+          +(c.regle?('Réglée le '+frd(c.regle)+' — annuler'):'Marquer réglée')+'</button>'
+          +'<button class="btn btn-sm btn-ghost" onclick="cl6RetirerFacture(null)">Retirer la facture</button>'
+        : '<button class="btn btn-sm btn-pri" onclick="cl6Facturer(null)">Établir la facture</button>')
+      +'<span class="mp-sp mp-nav">'+(c.factureId?('facture '+E(c.factureNum)):'à facturer')+'</span></div>'
       +'<div class="cl6-grid">'
       +ch('honoraires','Honoraires de constitution',h.honoraires)
       +ch('annonce','Annonce légale',h.annonce)
@@ -33524,19 +33529,17 @@ function testLienRdv()  {
       +'<span class="cl6-ttc">Dû par le client <b>'+eur(t.total)+'</b></span></div>'
       +'<p class="cl6-note">Montants indicatifs, à ajuster au dossier. Deux pièces sont établies : la '
       +'<b>facture d’honoraires</b> soumise à la TVA, et une <b>note de débours</b> pour les sommes '
-      +'avancées au greffe, refacturées à l’euro et hors du champ de la TVA.</p>'
-      +'<div class="at4-bar">'
-      +(c.factureId
-        ? '<button class="btn btn-sm btn-ghost" onclick="cl6VoirFacture(null)">Ouvrir la facture</button>'
-          +(c.deboursId?'<button class="btn btn-sm btn-ghost" onclick="cl6VoirFacture(null,\'debours\')">Ouvrir la note de débours</button>':'')
-          +'<button class="btn btn-sm '+(c.regle?'btn-ghost':'at4-ok')+'" onclick="cl6Regle(null)">'
-          +(c.regle?('Réglée le '+frd(c.regle)+' — annuler'):'Marquer réglée')+'</button>'
-          +'<button class="btn btn-sm btn-ghost" onclick="cl6RetirerFacture(null)">Retirer la facture</button>'
-        : '<button class="btn btn-sm btn-pri" onclick="cl6Facturer(null)">Établir la facture</button>')
-      +'</div></div></div>';
+      +'avancées au greffe, refacturées à l’euro et hors du champ de la TVA.</p>';
+  }
+  window.cl6OuvrirHono=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return; var c=C(d), t=totaux(d);
+    mpOuvrir('Honoraires et débours', pageHono(d),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(c.regle?('réglée le '+frd(c.regle)):(c.factureId?'facturée — en attente de règlement':(eur(t.total)+' dû par le client'))), taille:'m'});
+  };
 
-    /* 3. clôture */
-    var w=d.wf||{};
+  function pageCloture(d){
+    var c=C(d), w=d.wf||{};
     var recap=ETAPES.map(function(s){
       var ok=!!w[s[0]];
       return '<div class="cl6-e'+(ok?' ok':'')+'"><span>'+(ok?'✓':'—')+'</span>'
@@ -33546,13 +33549,7 @@ function testLienRdv()  {
       return '<div class="at4-ctl '+(x.ok?'ok':'warn')+'"><span>'+(x.ok?'✓':'!')+'</span>'
         +'<div><b>'+E(x.l)+'</b> '+E(x.d)+'</div></div>';
     }).join('');
-
-    var carte3='<div class="card crea-cloture cl6-card"><div class="card-h"><h2>Clôture et archivage</h2>'
-      +(c.le?'<span class="at4-tag ok">clôturé le '+frd(c.le)+'</span>':'<span class="at4-tag g">en cours</span>')
-      +'</div><div class="card-b">'
-      +'<div class="cl6-recap">'+recap+'</div>'
-      +'<div class="at4-ctls">'+ctl+'</div>'
-      +'<div class="at4-bar" style="margin-top:12px">'
+    return '<div class="mp-bar">'
       +'<button class="btn btn-sm btn-ghost" onclick="cl6ExportJSON(null)">Exporter les données (JSON)</button>'
       +(c.compta
         ? '<button class="btn btn-sm btn-ghost" disabled>Transmis à la comptabilité</button>'
@@ -33561,9 +33558,74 @@ function testLienRdv()  {
         ? '<button class="btn btn-sm btn-ghost" onclick="cl6Rouvrir(null)">Rouvrir le dossier</button>'
           +(d.archived?'':'<button class="btn btn-sm btn-ghost" onclick="cl6Archiver(null)">Archiver</button>')
         : '<button class="btn btn-sm at4-ok" onclick="cl6Cloturer(null)">Clôturer le dossier</button>')
-      +'</div></div></div>';
+      +'</div>'
+      +'<div class="dp-h">Les cinq étapes du parcours</div>'
+      +'<div class="cl6-recap">'+recap+'</div>'
+      +'<div class="dp-h">Ce qui reste à accomplir</div>'
+      +'<div class="at4-ctls">'+ctl+'</div>';
+  }
+  window.cl6OuvrirCloture=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return; var c=C(d);
+    var ko=controles(d).filter(function(x){return !x.ok;}).length;
+    mpOuvrir('Clôture et archivage', pageCloture(d),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(c.le?('clôturé le '+frd(c.le)):(ko?(ko+' point'+(ko>1?'s':'')+' à accomplir'):'prêt à clôturer'))});
+  };
 
-    return carte1+carte2+carte3;
+  /* la mini-page ouverte se remet à jour après chaque action */
+  var TITRES={'Remise du dossier au client':pageRemise,'Honoraires et débours':pageHono,'Clôture et archivage':pageCloture};
+  function rafraichir(){
+    var d=dossier(); if(!d) return false;
+    if(typeof mpOuverte!=='function' || !mpOuverte()) return false;
+    var t=window.__mpCour && window.__mpCour.t, f=TITRES[t];
+    if(!f) return false;
+    return mpMaj(f(d), null, null);
+  }
+  ['cl6Hono','cl6Facturer','cl6RetirerFacture','cl6Regle','cl6Remettre','cl6AnnulerRemise',
+   'cl6Cloturer','cl6Rouvrir','cl6Archiver','cl6Compta'].forEach(function(n){
+    var f=window[n]; if(typeof f!=='function'||f.__mp) return;
+    var g=function(){ var v=f.apply(this,arguments); try{rafraichir();}catch(e){} return v; };
+    g.__mp=1; window[n]=g;
+  });
+
+  /* ---------- la carte : un sommaire de trois lignes ---------- */
+  function carte(){
+    var d=dossier(); if(!d) return '';
+    var c=C(d), t=totaux(d), rm=remise(d);
+    var pret=rm.filter(function(p){return p.ok;}).length;
+    var ctlKo=controles(d).filter(function(x){return !x.ok;}).length;
+
+    function ligne(cl,mark,titre,det,bouton){
+      return '<div class="at4-etl '+cl+'"><span class="at4-etm">'+mark+'</span>'
+        +'<div class="at4-ett"><b>'+titre+'</b><em>'+det+'</em></div>'+bouton+'</div>';
+    }
+    function bt(fn,l,pri){ return '<button class="btn btn-sm '+(pri?'btn-pri':'btn-ghost')+'" onclick="'+fn+'(null)">'+l+'</button>'; }
+
+    var l1=ligne(c.remis?'ok':(pret===rm.length?'at':'w'), c.remis?'✓':(pret===rm.length?'·':'◔'),
+      'Remise du dossier au client',
+      c.remis ? ('Adressé le '+frd(c.remis)+(c.remisA?(' à '+E(c.remisA)):''))
+              : (pret+' pièce'+(pret>1?'s':'')+' sur '+rm.length+' au dossier — le courrier de remise est prêt'),
+      bt('cl6OuvrirRemise', c.remis?'Revoir':'Ouvrir', !c.remis));
+
+    var l2=ligne(c.regle?'ok':(c.factureId?'at':'w'), c.regle?'✓':(c.factureId?'·':'◔'),
+      'Honoraires et débours',
+      c.factureId
+        ? ('Facture '+E(c.factureNum)+' — '+eur(c.factureTotal)
+           +(c.deboursNum?(' · débours '+E(c.deboursNum)):'')
+           +(c.regle?(' · réglée le '+frd(c.regle)):' · en attente de règlement'))
+        : (eur(t.total)+' dû par le client, dont '+eur(t.debours)+' de débours — à facturer'),
+      bt('cl6OuvrirHono', c.factureId?'Revoir':'Ouvrir', !c.factureId));
+
+    var l3=ligne(c.le?'ok':(ctlKo?'w':'at'), c.le?'✓':(ctlKo?'◔':'·'),
+      'Clôture et archivage',
+      c.le ? ('Dossier clôturé le '+frd(c.le)+(d.archived?' et archivé':''))
+           : (ctlKo ? (ctlKo+' point'+(ctlKo>1?'s':'')+' à accomplir avant de clôturer')
+                    : 'Tout est accompli, le dossier peut être clôturé'),
+      bt('cl6OuvrirCloture', c.le?'Revoir':'Ouvrir', !c.le && !ctlKo));
+
+    return '<div class="card crea-cloture cl6-card"><div class="card-h"><h2>Clôture du dossier</h2>'
+      +(c.le?'<span class="at4-tag ok">clôturé le '+frd(c.le)+'</span>':'<span class="at4-tag g">en cours</span>')
+      +'</div><div class="card-b"><div class="at4-etat">'+l1+l2+l3+'</div></div></div>';
   }
   window.cl6Card=carte;
 
@@ -33577,7 +33639,7 @@ function testLienRdv()  {
         var d=dossier(id);
         if(d && !C(d).le){
           if(typeof toast==='function')
-            toast('Étape bloquée — clôturez le dossier depuis la carte « Clôture et archivage ».');
+            toast('Étape bloquée — clôturez le dossier par « Clôture et archivage ».');
           return;
         }
       }
@@ -33623,8 +33685,8 @@ function testLienRdv()  {
    '.cl6-r b{display:block;font-size:13px}',
    '.cl6-r em{display:block;font-style:normal;font-size:11.5px;color:#74767e;margin-top:2px}',
    '.cl6-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:11px 14px;margin-bottom:12px}',
-   '.cl6-f{display:block}',
-   '.cl6-f>span{display:block;font:600 10.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:#74767e}',
+   '.cl6-f{display:flex;flex-direction:column;align-self:start}',
+   '.cl6-f>span{display:flex;align-items:flex-end;min-height:2.2em;font:600 10.5px/1.1 ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:#74767e}',
    '.cl6-f input{display:block;width:100%;box-sizing:border-box;margin-top:5px;background:#0e0e10;border:1px solid #2a2a2e;border-radius:8px;padding:8px 10px;color:inherit;font:13px/1.3 inherit}',
    '.cl6-f input:focus{outline:none;border-color:#4f9dff}',
    '.cl6-f input:disabled{opacity:.55;cursor:not-allowed}',
@@ -34005,6 +34067,303 @@ function testLienRdv()  {
    '.dp-abs{font-size:11px;color:#74767e;font-style:italic}',
    '.dp-vide{padding:16px;text-align:center;color:#74767e;font-size:12.5px;background:#141416}',
    '@media(max-width:820px){.dp-r{grid-template-columns:40px minmax(0,1fr);row-gap:8px}.dp-sel,.dp-a{grid-column:2}}'
+  ].join('');
+  document.head.appendChild(st);
+})();
+</script>
+<script id="mod-etape1">
+/* ============================================================================
+   mod-etape1 — Étape « Demande »
+   La première étape n'est pas une boîte de réception : c'est la qualification.
+   On lit le message reçu, on arrête qui demande, on arrête ce qui est demandé,
+   et on accuse réception. Quatre volets, chacun en mini-page.
+   ========================================================================== */
+(function(){
+  if(window.__e1) return; window.__e1=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s); }
+  function nz(s){ return String(s==null?'':s).trim(); }
+  function frd(t){ try{ if(!t)return ''; var x=new Date(t); return isNaN(x)?String(t):x.toLocaleDateString('fr-FR'); }catch(e){ return ''; } }
+  function eur(n){ n=Math.round((+n||0)*100)/100;
+    return n.toLocaleString('fr-FR',{minimumFractionDigits:0,maximumFractionDigits:2})+' €'; }
+
+  function dossier(id){
+    try{
+      if(id) return (DB.dossiers||[]).filter(function(x){return x.id===id;})[0]||null;
+      var s=(typeof state!=='undefined')?state:{};
+      return (DB.dossiers||[]).filter(function(x){return x.id===s.espaceDossier;})[0]
+          || (DB.dossiers||[]).filter(function(x){return !x.archived;})[0] || null;
+    }catch(e){ return null; }
+  }
+  function dem(d){ try{ return (typeof espDemandeDe==='function')?(espDemandeDe(d)||null):null; }catch(e){ return null; } }
+  function cli(d){ try{ return (typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{}; }catch(e){ return {}; } }
+  function cr(d){ d.crea=d.crea||{}; d.crea.capital=d.crea.capital||{}; return d.crea; }
+  function pj(dm){ try{ return (dm&&typeof demAttList==='function')?(demAttList(dm)||[]):((dm&&dm.attachments)||[]); }catch(e){ return []; } }
+
+  /* ---------- ce que le dossier sait du demandeur et de la formalité ---------- */
+  function qui(d){
+    var c=cli(d), dm=dem(d);
+    var nom=nz(((c.prenom||'')+' '+(c.nom||'')))||((dm&&typeof demBestName==='function')?nz(demBestName(dm)):'');
+    if(/formsubmit/i.test(nom)) nom='';
+    return {
+      nom:nom,
+      email:nz(c.email)||nz(dm&&dm.clientEmail),
+      tel:nz(c.tel||c.telephone)||nz(dm&&dm.telephone),
+      adresse:nz(c.adresse), cp:nz(c.cp), ville:nz(c.ville)
+    };
+  }
+  function quoi(d){
+    var c=cli(d), dm=dem(d), x=cr(d);
+    var obj=''; try{ if(dm&&window.IA&&IA.objet) obj=IA.objet(dm)||''; }catch(e){}
+    return {
+      service:nz(c.service||(dm&&(dm.serviceSouhaite||dm.service))||d.service)||obj,
+      lu:obj,
+      forme:nz(c.forme||d.type),
+      denom:nz(c.denom||c.denomination),
+      capital:(+c.capital||+x.capital.montant||0),
+      activite:nz((c.activites||[]).join(', ')||x.objet||c.objet),
+      siege:nz(x.siege)||nz([c.adresse,[c.cp,c.ville].filter(Boolean).join(' ')].filter(Boolean).join(', '))
+    };
+  }
+
+  /* ---------- 1. le message reçu ---------- */
+  function corpsMessage(d){
+    var dm=dem(d), a=pj(dm);
+    if(!dm) return '<div class="e1-vide">Aucun message n’est lié à ce dossier — il a été ouvert à la main. '
+      +'Les volets suivants permettent de saisir le demandeur et la formalité.</div>';
+    var mail='';
+    try{ mail=(typeof mailFrame==='function')?mailFrame(dm,{scroll:true}):('<pre class="cl6-pre">'+E(dm.message||dm.rawBody||'')+'</pre>'); }
+    catch(e){ mail='<pre class="cl6-pre">'+E(dm.message||dm.rawBody||'')+'</pre>'; }
+    var lignes=a.map(function(x,i){
+      return '<div class="dp-r"><span class="dp-ic">'+(/pdf/i.test(x.name||x.type||'')?'PDF':(/image/i.test(x.type||'')?'IMG':'DOC'))+'</span>'
+        +'<div class="dp-t"><b>'+E(x.name||('pièce '+(i+1)))+'</b><em>'+E(x.cat||'jointe au message')+'</em></div>'
+        +'<span class="dp-a"><button class="btn btn-sm btn-ghost" onclick="demAttOpen(\''+E(dm.id)+'\','+i+')">Ouvrir</button></span></div>';
+    }).join('');
+    return '<div class="mp-bar"><span class="mp-nav">'+E(nz(dm.canal)||'Message')+'</span>'
+      +'<span class="mp-sp mp-nav">'+(dm.date?('reçu le '+frd(dm.date)):'')+'</span></div>'
+      +'<div class="e1-mail">'+mail+'</div>'
+      +'<div class="dp-h">Pièces jointes au message</div>'
+      +'<div class="dp-list">'+(lignes||'<div class="dp-vide">Le message ne portait aucune pièce jointe.</div>')+'</div>';
+  }
+  window.e1OuvrirMessage=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return; var dm=dem(d), a=pj(dm);
+    mpOuvrir('Le message du client', corpsMessage(d),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(dm?((nz(dm.clientEmail)||'expéditeur inconnu')+' · '+a.length+' pièce'+(a.length>1?'s':'')+' jointe'+(a.length>1?'s':'')):'aucun message lié'),
+       taille:'l'});
+  };
+
+  /* ---------- 2. le demandeur ---------- */
+  var QUI=[['prenom','Prénom'],['nom','Nom'],['email','Adresse e-mail'],['tel','Téléphone'],
+           ['adresse','Adresse'],['cp','Code postal'],['ville','Ville']];
+  window.e1Qui=function(id,k,v){
+    var d=dossier(id); if(!d) return; var c=cli(d); v=nz(v);
+    if(k==='tel'){ c.tel=v; c.telephone=v; } else c[k]=v;
+    if(k==='email'){ var dm=dem(d); if(dm&&!nz(dm.clientEmail)) dm.clientEmail=v; }
+    try{save();}catch(e){} render(); rafraichir();
+  };
+  function corpsQui(d){
+    var c=cli(d), q=qui(d);
+    var val={prenom:nz(c.prenom),nom:nz(c.nom),email:q.email,tel:q.tel,adresse:q.adresse,cp:q.cp,ville:q.ville};
+    var champs=QUI.map(function(f){
+      return '<div class="at4-fld"><label>'+E(f[1])+'</label>'
+        +'<input value="'+E(val[f[0]]||'')+'" onchange="e1Qui(null,\''+f[0]+'\',this.value)"></div>';
+    }).join('');
+    return '<p class="at4-p" style="margin-top:0">Le demandeur tel qu’il figurera sur les actes et à qui partiront '
+      +'les courriers du dossier. Ce que le message laissait lire est repris ici, et se corrige.</p>'
+      +'<div class="at4-grid">'+champs+'</div>';
+  }
+  window.e1OuvrirQui=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return; var q=qui(d);
+    mpOuvrir('Le demandeur', corpsQui(d),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(q.nom||'à identifier')+(q.email?(' · '+q.email):'')});
+  };
+
+  /* ---------- 3. la formalité demandée ---------- */
+  var FORMES=['SARL','EURL','SAS','SASU','SCI','SNC','SASU','SA','Micro-entreprise'];
+  window.e1Quoi=function(id,k,v){
+    var d=dossier(id); if(!d) return; var c=cli(d), x=cr(d); v=nz(v);
+    if(k==='service'){ c.service=v; d.service=v; var dm=dem(d); if(dm) dm.serviceSouhaite=v; }
+    else if(k==='forme'){ c.forme=v.toUpperCase(); d.type=v.toUpperCase(); }
+    else if(k==='denom'){ c.denom=v; c.denomination=v; }
+    else if(k==='capital'){ var n=parseFloat(String(v).replace(',','.'))||0; c.capital=n; x.capital.montant=n; }
+    else if(k==='activite'){ c.activites=v?v.split(/\s*[;,]\s*/).filter(Boolean):[]; c.objet=v; x.objet=v; }
+    else if(k==='siege'){ x.siege=v; c.adresse=v.replace(/,\s*\d{5}.*$/,'').trim()||c.adresse; }
+    try{save();}catch(e){} render(); rafraichir();
+  };
+  function corpsQuoi(d){
+    var w=quoi(d);
+    function ch(k,l,v,ph){
+      return '<div class="at4-fld"><label>'+E(l)+'</label>'
+        +'<input value="'+E(v||'')+'"'+(ph?(' placeholder="'+E(ph)+'"'):'')+' onchange="e1Quoi(null,\''+k+'\',this.value)"></div>';
+    }
+    var opts=['<option value=""></option>'].concat(FORMES.filter(function(f,i,a){return a.indexOf(f)===i;}).map(function(f){
+      return '<option'+(f===w.forme?' selected':'')+'>'+E(f)+'</option>'; })).join('');
+    return '<p class="at4-p" style="margin-top:0">Ce que le client demande, arrêté ici une fois pour toutes : '
+      +'les actes de l’étape 3 s’écriront sur ces valeurs.'
+      +(w.lu?(' Lecture du message : <b>'+E(w.lu)+'</b>.'):'')+'</p>'
+      +'<div class="at4-grid">'
+      +ch('service','Formalité demandée',w.service,'Création de société')
+      +'<div class="at4-fld"><label>Forme juridique</label>'
+      +'<select onchange="e1Quoi(null,\'forme\',this.value)">'+opts+'</select></div>'
+      +ch('denom','Dénomination envisagée',w.denom)
+      +ch('capital','Capital (€)',w.capital?String(w.capital):'')
+      +ch('activite','Activité',w.activite,'séparez par des virgules')
+      +ch('siege','Siège envisagé',w.siege)
+      +'</div>';
+  }
+  window.e1OuvrirQuoi=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return; var w=quoi(d);
+    mpOuvrir('La formalité demandée', corpsQuoi(d),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(w.service||'à préciser')+(w.forme?(' · '+w.forme):'')+(w.denom?(' · '+w.denom):'')});
+  };
+
+  /* ---------- 4. accusé de réception ---------- */
+  function cab(){ try{ return nz(DB.params&&DB.params.cabinet)||'AEM CONSEIL'; }catch(e){ return 'AEM CONSEIL'; } }
+  function corpsAccuse(d){
+    var q=qui(d), w=quoi(d), dm=dem(d), a=d.accuse||{};
+    var prenom=nz((cli(d).prenom))||q.nom.split(/\s+/)[0]||'';
+    var txt=nz(a.texte) || ('Bonjour'+(prenom?(' '+prenom):'')+',\n\n'
+      +'Nous avons bien reçu votre demande'+(dm&&dm.date?(' du '+frd(dm.date)):'')
+      +(w.service?(' concernant '+w.service.toLowerCase()):'')+'.\n\n'
+      +'Votre dossier est ouvert sous la référence '+nz(d.ref)+'. Nous revenons vers vous sous 48 heures '
+      +'avec la liste des pièces à nous transmettre pour engager la formalité.\n\n'
+      +'Cordialement,\n'+cab());
+    return '<div class="mp-bar">'
+      +'<button class="btn btn-sm '+(a.le?'btn-ghost':'btn-pri')+'" onclick="e1Envoyer(null)">'
+      +(a.le?'Renvoyer l’accusé':'Envoyer l’accusé de réception')+'</button>'
+      +(a.le?'<button class="btn btn-sm btn-ghost" onclick="e1AnnulerAccuse(null)">Annuler l’envoi</button>':'')
+      +'<span class="mp-sp mp-nav">'+(a.le?('envoyé le '+frd(a.le)):(q.email||'aucune adresse au dossier'))+'</span></div>'
+      +'<div class="at4-fld"><label>Message</label>'
+      +'<textarea class="e1-ta" onchange="e1Texte(null,this.value)">'+E(txt)+'</textarea></div>'
+      +'<p class="at4-p">L’accusé part à l’adresse du demandeur. Il n’engage rien : il pose une date '
+      +'et annonce la suite. Le message se modifie avant l’envoi.</p>';
+  }
+  window.e1Texte=function(id,v){ var d=dossier(id); if(!d)return; d.accuse=d.accuse||{}; d.accuse.texte=String(v||''); try{save();}catch(e){} };
+  window.e1Envoyer=function(id){
+    var d=dossier(id); if(!d) return; var q=qui(d);
+    if(!q.email){ if(typeof toast==='function')toast('Aucune adresse e-mail — renseignez-la dans « Le demandeur ».'); return; }
+    var txt=nz((d.accuse||{}).texte); if(!txt){ var dv=document.querySelector('#ov .e1-ta'); txt=dv?dv.value:''; }
+    var sujet=cab()+' — Réception de votre demande'+(d.ref?(' ('+d.ref+')'):'');
+    var envoye=false;
+    if(typeof demEnvoiSilencieux==='function'){ try{ envoye=!!demEnvoiSilencieux(q.email,sujet,txt); }catch(e){} }
+    if(!envoye){ try{ window.location.href='mailto:'+encodeURIComponent(q.email)
+      +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(txt); }catch(e){} }
+    d.accuse=d.accuse||{}; d.accuse.le=Date.now(); d.accuse.a=q.email; d.accuse.texte=txt;
+    (d.historique=d.historique||[]).unshift({d:(typeof today==='function'?today():''),t:'Accusé de réception envoyé'});
+    try{save();}catch(e){}
+    if(typeof toast==='function')toast('Accusé de réception envoyé à '+q.email+'.');
+    render(); rafraichir();
+  };
+  window.e1AnnulerAccuse=function(id){ var d=dossier(id); if(!d)return; d.accuse=d.accuse||{};
+    delete d.accuse.le; delete d.accuse.a; try{save();}catch(e){} render(); rafraichir(); };
+  window.e1OuvrirAccuse=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return; var a=d.accuse||{};
+    mpOuvrir('Accusé de réception', corpsAccuse(d),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(a.le?('envoyé le '+frd(a.le)+(a.a?(' à '+a.a):'')):'à envoyer au demandeur')});
+  };
+
+  /* la mini-page ouverte se remet à jour après chaque action */
+  var TITRES={'Le message du client':corpsMessage,'Le demandeur':corpsQui,
+              'La formalité demandée':corpsQuoi,'Accusé de réception':corpsAccuse};
+  function rafraichir(){
+    var d=dossier(); if(!d) return false;
+    if(typeof mpOuverte!=='function' || !mpOuverte()) return false;
+    var t=window.__mpCour && window.__mpCour.t, f=TITRES[t];
+    if(!f) return false;
+    return mpMaj(f(d), null, null);
+  }
+
+  /* ---------- la carte : un sommaire de quatre lignes ---------- */
+  function carte(d){
+    var q=qui(d), w=quoi(d), dm=dem(d), a=d.accuse||{}, atts=pj(dm);
+    var nom=(dm&&typeof demBestName==='function')?nz(demBestName(dm)):'';
+    if(/formsubmit/i.test(nom)) nom='';
+
+    function ligne(cl,mark,titre,det,bouton){
+      return '<div class="at4-etl '+cl+'"><span class="at4-etm">'+mark+'</span>'
+        +'<div class="at4-ett"><b>'+titre+'</b><em>'+det+'</em></div>'+bouton+'</div>';
+    }
+    function bt(fn,l,pri){ return '<button class="btn btn-sm '+(pri?'btn-pri':'btn-ghost')+'" onclick="'+fn+'(null)">'+l+'</button>'; }
+
+    var l1=ligne(dm?'ok':'w', dm?'✓':'◔', 'Le message du client',
+      dm ? (E(nz(dm.canal)||'Message')+(dm.date?(' du '+frd(dm.date)):'')
+            +' — '+(atts.length?(atts.length+' pièce'+(atts.length>1?'s':'')+' jointe'+(atts.length>1?'s':'')):'sans pièce jointe'))
+         : 'Aucun message lié — le dossier a été ouvert à la main',
+      bt('e1OuvrirMessage','Lire'));
+
+    var manque=[]; if(!q.nom)manque.push('le nom'); if(!q.email)manque.push('l’adresse e-mail');
+    var l2=ligne(manque.length?'w':'ok', manque.length?'◔':'✓', 'Le demandeur',
+      manque.length ? ('À identifier — il manque '+manque.join(' et '))
+                    : (E(q.nom)+' · '+E(q.email)+(q.tel?(' · '+E(q.tel)):'')),
+      bt('e1OuvrirQui', manque.length?'Compléter':'Revoir', !!manque.length));
+
+    var pose=[w.service,w.forme,w.denom].filter(function(x){return nz(x);}).length;
+    var l3=ligne(pose>=2?'ok':(pose?'at':'w'), pose>=2?'✓':(pose?'·':'◔'), 'La formalité demandée',
+      pose ? ([w.service,w.forme,w.denom].filter(function(x){return nz(x);}).map(E).join(' · ')
+              +(w.capital?(' · capital '+eur(w.capital)):''))
+           : 'À préciser — rien n’est encore arrêté',
+      bt('e1OuvrirQuoi', pose>=2?'Revoir':'Préciser', pose<2));
+
+    var l4=ligne(a.le?'ok':'at', a.le?'✓':'·', 'Accusé de réception',
+      a.le ? ('Envoyé le '+frd(a.le)+(a.a?(' à '+E(a.a)):''))
+           : 'À envoyer — il pose une date et annonce la suite au client',
+      bt('e1OuvrirAccuse', a.le?'Revoir':'Ouvrir', !a.le));
+
+    var pret=(dm?1:0)+(manque.length?0:1)+(pose>=2?1:0)+(a.le?1:0);
+    return '<div class="card esp-mailcard e1-card"><div class="card-h"><h2>Demande du client</h2>'
+      +'<span class="at4-tag'+(pret===4?' ok':'')+'">'+pret+'/4</span>'
+      +'<span class="sub" style="margin-left:auto">'+E(nom||q.nom||'—')+' · '+E(nz(d.ref))+'</span>'
+      +'</div><div class="card-b"><div class="at4-etat">'+l1+l2+l3+l4+'</div></div></div>';
+  }
+
+  /* ---------- verrou : on ne quitte pas l'étape sans savoir qui demande ---------- */
+  function graftValider(){
+    if(typeof window.trwValider!=='function' || window.__e1TV) return;
+    window.__e1TV=1;
+    var _v=window.trwValider;
+    window.trwValider=function(id,key){
+      if(key==='demande'){
+        var d=dossier(id);
+        if(d){
+          var q=qui(d), m=[];
+          if(!q.nom) m.push('le nom du demandeur');
+          if(!q.email) m.push('son adresse e-mail');
+          if(m.length){
+            if(typeof toast==='function')
+              toast('Étape bloquée — renseignez '+m.join(' et ')+' dans « Le demandeur ».');
+            return;
+          }
+        }
+      }
+      return _v.apply(this,arguments);
+    };
+  }
+  graftValider(); setTimeout(graftValider,0); setTimeout(graftValider,1400);
+
+  /* ---------- la carte remplace le visualiseur de mail ---------- */
+  function graftCarte(){
+    if(typeof window.espMailCard!=='function' || window.__e1MC) return;
+    window.__e1MC=1;
+    var _m=window.espMailCard;
+    window.espMailCard=function(d){
+      try{ if(d) return carte(d); }catch(e){}
+      return _m.apply(this,arguments);
+    };
+  }
+  graftCarte(); setTimeout(graftCarte,0); setTimeout(graftCarte,1400);
+  window.e1Card=carte;
+
+  var st=document.createElement('style'); st.id='e1-mod';
+  st.textContent=[
+   '.e1-card .card-b{padding:0}',
+   '.e1-mail{border:1px solid #242428;border-radius:10px;overflow:hidden;background:#0e0e10}',
+   '.e1-mail .mailv-frame,.e1-mail iframe{width:100%;min-height:340px;border:0;background:#fff}',
+   '.e1-vide{padding:22px;text-align:center;color:#a6a8b0;font-size:13px;line-height:1.6;border:1px dashed #2c3241;border-radius:10px}',
+   '.e1-ta{width:100%;min-height:230px;background:#0e0e10;border:1px solid #2a2a2e;border-radius:9px;color:#eef0f4;font:inherit;font-size:13px;line-height:1.65;padding:12px 13px;resize:vertical}',
+   '.e1-ta:focus{outline:none;border-color:#4f9dff}'
   ].join('');
   document.head.appendChild(st);
 })();
