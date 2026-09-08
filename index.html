@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=581;
+var LAST_VER=582;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -31121,14 +31121,17 @@ function testLienRdv()  {
 
   function nz(s){ return String(s==null?'':s).toLowerCase().normalize('NFD')
     .replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
-  /* « 12 r. des Lilas » et « 12 rue des Lilas » ne sont pas un écart */
-  function equiv(a,b){
+  /* « 12 r. des Lilas » et « 12 rue des Lilas » ne sont pas un écart. En revanche
+     l'inclusion ne vaut que pour les textes d'adresse : sur un nom, « ROPPERS »
+     et « ROPPERS-MARTIN » sont deux personnes différentes. */
+  var LIBRE={adresse:1, siege:1, domiciliataire:1, banque:1};
+  function equiv(a,b,f){
     var A=nz(a), B=nz(b); if(!A||!B) return null;
     var ab={'r':'rue','av':'avenue','bd':'boulevard','bld':'boulevard','pl':'place','imp':'impasse','ch':'chemin','rte':'route','st':'saint','ste':'sainte'};
     var dev=function(t){ return t.split(' ').map(function(w){ return ab[w]||w; }).join(' '); };
     A=dev(A); B=dev(B);
     if(A===B) return true;
-    if(A.indexOf(B)>=0 || B.indexOf(A)>=0) return true;
+    if(LIBRE[f] && (A.indexOf(B)>=0 || B.indexOf(A)>=0)) return true;
     return false;
   }
 
@@ -31142,7 +31145,7 @@ function testLienRdv()  {
       if(!l && !s) return;
       if(!l){ out.push({f:f, l:LBL[f]||f, lu:'', sai:s, type:'absent'}); return; }
       if(!s){ return; }
-      if(equiv(l,s)===true) return;
+      if(equiv(l,s,f)===true) return;
       out.push({f:f, l:LBL[f]||f, lu:l, sai:s, type:'ecart'});
     });
     return out;
@@ -31184,6 +31187,39 @@ function testLienRdv()  {
     else go();
   };
   window.e3Decertifier=function(id,k){ var d=dossier(id); if(!d)return; delete V(d).cert[k]; try{save();}catch(e){} render(); };
+  /* Où écrire la valeur lue lorsqu'on retient la pièce plutôt que le dossier. */
+  function poser(d,f,val){
+    var c={}; try{ c=(typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{}; }catch(e){}
+    var cr=d.crea=d.crea||{};
+    val=String(val==null?'':val).trim();
+    if(f==='nom'||f==='prenom'){
+      var pres=String(c.president||'').trim().split(/\s+/);
+      var pre=(pres.length>1?pres[0]:''), nom=(pres.length>1?pres.slice(1).join(' '):(pres[0]||''));
+      if(f==='prenom') pre=val; else nom=val;
+      c.president=(pre+' '+nom).trim();
+      if(f==='nom') c.nom=val; else c.prenom=val;
+      return true;
+    }
+    var M={adresse:function(){c.adresse=val;}, cpPerso:function(){c.cp=val;}, villePerso:function(){c.ville=val;},
+           siege:function(){cr.siege=val;}, banque:function(){cr.banque=val;}, iban:function(){c.iban=val;}};
+    if(M[f]){ M[f](); return true; }
+    return false;
+  }
+  /* retenir : 'piece' reporte la valeur lue au dossier, 'dossier' aligne la lecture */
+  window.e3Retenir=function(id,k,f,quoi){
+    var d=dossier(id); if(!d) return; var v=V(d);
+    var ec=(v.ecarts[k]||[]).filter(function(x){return x.f===f;})[0]; if(!ec) return;
+    if(quoi==='piece'){
+      if(!poser(d,f,ec.lu)){ if(typeof toast==='function')toast('Ce champ ne se reporte pas automatiquement au dossier.'); return; }
+      if(typeof toast==='function')toast('« '+ec.lu+' » reporté au dossier.');
+    }else{
+      v.extract[f]=ec.sai;
+      if(typeof toast==='function')toast('Lecture alignée sur le dossier.');
+    }
+    v.ecarts[k]=(v.ecarts[k]||[]).filter(function(x){return x.f!==f;});
+    try{save();}catch(e){} render();
+  };
+
   window.e3Corriger=function(id,k,f){
     var d=dossier(id); if(!d)return; var v=V(d), ec=(v.ecarts[k]||[]).filter(function(x){return x.f===f;})[0];
     if(!ec)return;
@@ -31208,9 +31244,9 @@ function testLienRdv()  {
     var d=dossier(); if(!d) return '';
     var v=V(d), ps=pieces(d);
     if(!ps.length)
-      return '<div class="card crea-valid e3-card"><div class="card-h"><h2>Certification des pièces</h2></div>'
+      return '<div class="card crea-valid e3-card"><div class="card-h"><h2>Relevé des pièces</h2></div>'
         +'<div class="card-b"><div class="e3-vide">Aucune pièce au dossier. '
-        +'Les documents transmis par le client apparaîtront ici pour certification.</div></div></div>';
+        +'Les documents transmis par le client apparaîtront ici pour être relevés puis certifiés.</div></div></div>';
 
     if(!v.sel || !ps.some(function(p){return p.k===v.sel;})) v.sel=ps[0].k;
     var cur=ps.filter(function(p){return p.k===v.sel;})[0]||ps[0];
@@ -31218,57 +31254,71 @@ function testLienRdv()  {
     var ec=(v.ecarts[v.sel]||[]);
     var ecN=ec.filter(function(x){return x.type==='ecart';}).length;
     var certifiee=!!(v.cert[v.sel]&&v.cert[v.sel].ok);
+    var sa=saisies(d);
+    var rang=0; ps.forEach(function(p,i){ if(p.k===v.sel) rang=i+1; });
 
-    /* colonne gauche : pièces puis informations lues de la pièce courante */
-    var liste=ps.map(function(p){
+    /* onglets des pièces : la chemise, en ligne */
+    var tabs=ps.map(function(p){
       var c=v.cert[p.k]&&v.cert[p.k].ok, e=(v.ecarts[p.k]||[]).filter(function(x){return x.type==='ecart';}).length;
-      return '<button class="e3-it'+(p.k===v.sel?' on':'')+(c?' ok':'')+'" onclick="e3Sel(null,\''+p.k+'\')">'
-        +'<span class="e3-it-l">'+E(p.libelle)+'</span>'
-        +'<span class="e3-it-m">'+(c?'✓':(e?(e+' écart'+(e>1?'s':'')):'—'))+'</span></button>';
+      return '<button class="e3-tab'+(p.k===v.sel?' on':'')+(c?' ok':(e?' ko':''))+'" onclick="e3Sel(null,\''+p.k+'\')">'
+        +'<span class="e3-tm">'+(c?'✓':(e?'✗':'·'))+'</span>'+E(p.libelle)+'</button>';
     }).join('');
 
-    var champs=(CHAMPS[v.sel]||CHAMPS.autre).map(function(f){
+    /* le relevé : à gauche ce que le dossier affirme, à droite ce que la pièce montre */
+    var lignes=(CHAMPS[v.sel]||CHAMPS.autre).map(function(f){
       var lu=String(v.extract[f]==null?'':v.extract[f]).trim();
+      var sai=String(sa[f]==null?'':sa[f]).trim();
       var e=ec.filter(function(x){return x.f===f;})[0];
-      var cl=e?(e.type==='ecart'?'ko':'abs'):(lu?'ok':'');
-      return '<div class="e3-f"><label>'+E(LBL[f]||f)+'</label>'
-        +'<span class="e3-v '+cl+'">'+(lu?E(lu):'—')+'</span>'
-        +(e&&e.type==='ecart'
-          ? '<button class="e3-fix" onclick="e3Corriger(null,\''+v.sel+'\',\''+f+'\')" title="Retenir la valeur du dossier : '+E(e.sai)+'">≠ '+E(e.sai)+'</button>'
-          : '')
+      var div=!!(e&&e.type==='ecart');
+      var mark=div?'✗':(lu?'✓':'·');
+      var cellLu = div
+        ? '<b><span class="e3-barre">'+E(lu)+'</span><span class="e3-prop">→ '+E(sai)+'</span></b>'
+        : '<b>'+(lu?E(lu):'<span class="e3-abs">non lu</span>')+'</b>';
+      return '<div class="e3-lg'+(div?' e':'')+'">'
+        +'<s>'+E(LBL[f]||f)+'</s>'
+        +'<b>'+(sai?E(sai):'<span class="e3-abs">—</span>')+'</b>'
+        +cellLu
+        +'<i>'+mark+'</i>'
+        +(div
+          ? '<div class="e3-arb">'
+            +'<button class="e3-b p" onclick="e3Retenir(null,\''+v.sel+'\',\''+f+'\',\'piece\')">Retenir « '+E(lu)+' »</button>'
+            +'<button class="e3-b" onclick="e3Retenir(null,\''+v.sel+'\',\''+f+'\',\'dossier\')">Conserver la saisie</button>'
+            +'</div>' : '')
         +'</div>';
     }).join('');
 
     var bandeau = certifiee
-      ? '<div class="e3-band ok">Pièce certifiée le '+new Date(v.cert[v.sel].ts).toLocaleDateString('fr-FR')+'.</div>'
+      ? '<div class="e3-band ok"><span>✓</span><div>Pièce certifiée le '+new Date(v.cert[v.sel].ts).toLocaleDateString('fr-FR')+'.</div></div>'
       : (ecN
-        ? '<div class="e3-band ko"><b>'+ecN+' écart'+(ecN>1?'s':'')+' avec le dossier.</b> '
-          +ec.filter(function(x){return x.type==='ecart';}).map(function(x){
-              return E(x.l)+' — lu « '+E(x.lu)+' », dossier « '+E(x.sai)+' »'; }).join(' · ')+'</div>'
+        ? '<div class="e3-band ko"><span>✗</span><div><b>'+ecN+' écart'+(ecN>1?'s':'')+' relevé'+(ecN>1?'s':'')+'.</b> '
+          +'Tranchez chaque ligne rouge — retenir la pièce reporte la valeur lue au dossier, conserver la saisie aligne la lecture.</div></div>'
         : (v.testeLe
-          ? '<div class="e3-band ok">Aucun écart relevé sur cette pièce.</div>'
-          : '<div class="e3-band n">Lancez le test de conformité pour comparer les informations lues à celles du dossier.</div>'));
+          ? '<div class="e3-band ok"><span>✓</span><div>Aucun écart relevé sur cette pièce.</div></div>'
+          : '<div class="e3-band n"><span>·</span><div>Lancez le test de conformité : chaque information lue sera confrontée à la saisie du dossier.</div></div>'));
 
-    return '<div class="card crea-valid e3-card"><div class="card-h"><h2>Certification des pièces</h2>'
-      +'<span class="e3-cpt'+(certN===ps.length?' ok':'')+'">'+certN+'/'+ps.length+' certifiées</span>'
-      +'<span class="sub" style="margin-left:auto">'+E(cur.nom)+'</span></div>'
+    return '<div class="card crea-valid e3-card"><div class="card-h"><h2>Relevé des pièces</h2>'
+      +(certifiee?'<span class="e3-cpt ok">certifiée</span>':(ecN?('<span class="e3-cpt ko">'+ecN+' écart'+(ecN>1?'s':'')+'</span>'):'<span class="e3-cpt">à contrôler</span>'))
+      +'<span class="sub" style="margin-left:auto">'+certN+'/'+ps.length+' certifiées · '+E(cur.nom)+'</span></div>'
       +'<div class="card-b">'
+      +'<div class="e3-tabs">'+tabs+'</div>'
+      +'<div class="e3-split">'
+        +'<div class="e3-releve">'
+          +'<div class="e3-lh"><s>Information</s><b>Saisi au dossier</b><b>Lu sur la pièce</b><i></i></div>'
+          +(lignes||'<div class="e3-none">Aucune information attendue pour cette nature de pièce.</div>')
+        +'</div>'
+        +'<div class="e3-papier"><div class="e3-pl">Pièce '+rang+' sur '+ps.length+' — '+E(cur.libelle)+'</div>'
+          +apercu(cur.piece)+'</div>'
+      +'</div>'
+      + bandeau
       +'<div class="e3-bar">'
       +'<button class="btn btn-sm btn-pri" onclick="e3Tester(null)">Test de conformité</button>'
-      +'<button class="btn btn-sm btn-ghost" onclick="e3Nav(null,-1)">‹ Précédent</button>'
-      +'<button class="btn btn-sm btn-ghost" onclick="e3Nav(null,1)">Suivant ›</button>'
       +(certifiee
         ? '<button class="btn btn-sm btn-ghost" onclick="e3Decertifier(null,\''+v.sel+'\')">Retirer la certification</button>'
         : '<button class="btn btn-sm e3-cert" onclick="e3Certifier(null,\''+v.sel+'\')">Certifier cette pièce</button>')
+      +'<button class="btn btn-sm btn-ghost" onclick="e3Nav(null,-1)">‹ Précédente</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="e3Nav(null,1)">Suivante ›</button>'
       +'</div>'
-      +'<div class="e3-split">'
-      +'<div class="e3-side">'
-        +'<div class="e3-h">Pièces à certifier</div>'+liste
-        +'<div class="e3-h" style="padding-top:14px">Informations lues</div>'
-        +'<div class="e3-fs">'+(champs||'<div class="e3-none">Aucune information attendue pour cette pièce.</div>')+'</div>'
-      +'</div>'
-      +'<div class="e3-view">'+apercu(cur.piece)+bandeau+'</div>'
-      +'</div></div></div>';
+      +'</div></div>';
   }
   window.e3Card=carte;
 
@@ -31324,13 +31374,52 @@ function testLienRdv()  {
 
   var st=document.createElement('style'); st.id='e3-mod';
   st.textContent=[
-   '.e3-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px}',
+   '.e3-bar{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0 0}',
+   '.e3-cpt.ko{border-color:rgba(210,86,74,.5);color:#e2685c;background:rgba(210,86,74,.09)}',
+   /* — onglets des pièces — */
+   '.e3-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:13px}',
+   '.e3-tab{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:999px;border:1px solid #242428;background:#141416;color:#a6a8b0;font:500 12px/1 inherit;cursor:pointer}',
+   '.e3-tab:hover{border-color:#2c3241;color:#eef0f4}',
+   '.e3-tab .e3-tm{font:700 11px/1 ui-monospace,Menlo,monospace;color:#5f6270}',
+   '.e3-tab.ok{border-color:rgba(67,181,129,.4)} .e3-tab.ok .e3-tm{color:#43b581}',
+   '.e3-tab.ko{border-color:rgba(210,86,74,.42)} .e3-tab.ko .e3-tm{color:#e2685c}',
+   '.e3-tab.on{background:rgba(76,141,255,.16);border-color:rgba(76,141,255,.45);color:#dce9ff;font-weight:600}',
+   /* — le relevé, en regard du document — */
+   /* le volet de l'étape est étroit : on ne met le relevé et la pièce côte à côte
+      que si l'écran est assez large, sinon le tableau se tasse mot par mot */
+   '.e3-split{display:grid;grid-template-columns:1fr;gap:14px;align-items:start;margin-bottom:12px}',
+   '@media(min-width:1660px){.e3-split{grid-template-columns:minmax(0,1fr) minmax(0,1.02fr)}}',
+   '.e3-releve{border:1px solid #242428;border-radius:8px;overflow:hidden}',
+   '.e3-lh,.e3-lg{display:grid;grid-template-columns:minmax(104px,1.15fr) minmax(0,1.25fr) minmax(0,1.45fr) 20px;gap:11px;padding:9px 12px;align-items:baseline}',
+   '.e3-lh{background:#191d25;border-bottom:1px solid #242428;font:600 9px/1.35 ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:#74767e}',
+   '.e3-lh s,.e3-lh b{text-decoration:none;font-weight:600;color:#74767e}',
+   '.e3-lg{border-bottom:1px solid #242428;font-size:12px}',
+   '.e3-lg:last-child{border-bottom:0}',
+   '.e3-lg s{text-decoration:none;color:#74767e;font-size:11px;line-height:1.4}',
+   '.e3-lg b{font-weight:500;color:#eef0f4;overflow-wrap:break-word;min-width:0}',
+   '.e3-lg i{font-style:normal;text-align:center;font:700 11px/1.4 ui-monospace,Menlo,monospace;color:#43b581}',
+   '.e3-abs{color:#5f6270;font-style:italic}',
+   '.e3-lg.e{background:rgba(210,86,74,.06)}',
+   '.e3-lg.e i{color:#e2685c}',
+   '.e3-barre{color:#e2685c;text-decoration:line-through;text-decoration-color:rgba(210,86,74,.65)}',
+   '.e3-prop{display:block;color:#43b581;font-size:11.5px;margin-top:2px}',
+   '.e3-arb{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;padding-top:7px}',
+   '.e3-b{border:1px solid #2c3241;background:#0e0e10;color:#a6a8b0;border-radius:6px;padding:5px 9px;cursor:pointer;font:500 11px/1.3 inherit;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+   '.e3-b:hover{border-color:#4f9dff;color:#eef0f4}',
+   '.e3-b.p{border-color:rgba(67,181,129,.45);background:rgba(67,181,129,.1);color:#43b581}',
+   /* — le plan papier : la pièce telle qu'elle existe — */
+   '.e3-papier{background:#f6f3ec;border:1px solid #ddd6c7;border-radius:8px;padding:11px;display:flex;flex-direction:column;gap:9px;min-width:0}',
+   '.e3-pl{font:600 9.5px/1.4 ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;color:#8a877f}',
+   '.e3-papier .e3-img{display:block;margin:0 auto;max-width:100%;max-height:360px;object-fit:contain;border:1px solid #ddd6c7;border-radius:4px;background:#fff}',
+   '.e3-papier .e3-pdf{width:100%;height:360px;border:1px solid #ddd6c7;border-radius:4px;background:#fff}',
+   '.e3-papier .e3-noprev{border:1px dashed #c9c2b2;border-radius:4px;padding:44px 18px;text-align:center;color:#8a877f;font-size:12.5px;line-height:1.6;background:#fffdf8}',
+   '.e3-band{display:grid;grid-template-columns:18px 1fr;gap:10px;align-items:start}',
+   '.e3-band span{text-align:center;font-weight:700}',
+   '.e3-band.ko{border-color:rgba(210,86,74,.4)!important;background:rgba(210,86,74,.07)!important;color:#a6a8b0!important}',
+   '.e3-band.ko span,.e3-band.ko b{color:#e2685c}',
    '.e3-cert{background:rgba(63,174,114,.14)!important;border-color:rgba(63,174,114,.4)!important;color:#6fe0a6!important}',
    '.e3-cpt{margin-left:10px;border:1px solid rgba(143,151,166,.4);color:#8f97a6;border-radius:20px;padding:2px 9px;font:600 11px/1.6 inherit}',
    '.e3-cpt.ok{border-color:rgba(67,181,129,.5);color:#43b581;background:rgba(67,181,129,.10)}',
-   '.e3-split{display:grid;grid-template-columns:250px 1fr;gap:1px;background:rgba(127,160,255,.10);border:1px solid rgba(127,160,255,.14);border-radius:10px;overflow:hidden;min-height:380px}',
-   '.e3-side{background:var(--paper-2,#1b1b1e);padding:11px 0;overflow-y:auto;max-height:520px}',
-   '.e3-h{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.13em;text-transform:uppercase;color:#74767e;padding:0 13px 8px}',
    '.e3-it{display:flex;gap:8px;align-items:center;width:100%;text-align:left;background:none;border:0;border-left:2px solid transparent;color:#a6a8b0;padding:7px 13px;cursor:pointer;font:400 12.5px/1.35 inherit}',
    '.e3-it:hover{background:rgba(76,141,255,.07);color:inherit}',
    '.e3-it.on{background:rgba(76,141,255,.22);color:#dce9ff;font-weight:600;border-left-color:#4c8dff;box-shadow:inset 0 0 0 1px rgba(76,141,255,.22)}',
@@ -31345,7 +31434,6 @@ function testLienRdv()  {
    '.e3-v.ko{border-color:rgba(215,160,58,.45);color:#e8c67e}',
    '.e3-v.abs{border-style:dashed}',
    '.e3-fix{background:rgba(215,160,58,.12);border:1px solid rgba(215,160,58,.4);color:#e8c67e;border-radius:5px;padding:3px 7px;cursor:pointer;font:500 10.5px/1.3 ui-monospace,Menlo,monospace;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
-   '.e3-view{background:var(--card,#141416);padding:13px 15px;display:flex;flex-direction:column;gap:12px;min-width:0}',
    '.e3-img{max-width:100%;max-height:420px;object-fit:contain;border:1px solid #2a2a2e;border-radius:6px;background:#0e0e10}',
    '.e3-pdf{width:100%;height:420px;border:1px solid #2a2a2e;border-radius:6px;background:#0e0e10}',
    '.e3-noprev{border:1px dashed #2a2a2e;border-radius:6px;padding:40px 18px;text-align:center;color:#74767e;font-size:12.5px;line-height:1.6}',
