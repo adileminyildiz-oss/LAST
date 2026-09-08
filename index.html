@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=570;
+var LAST_VER=571;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -30690,6 +30690,290 @@ function testLienRdv()  {
    '.agw-inv{border-color:rgba(77,141,255,.45)!important;color:#8fb4ff!important}',
    '.agw-ingcal{align-self:center;font:500 11.5px/1 inherit;color:#43b581;margin-right:2px}',
    '@media(max-width:900px){.agw-row{grid-template-columns:1fr;gap:6px}.agw-c4{justify-content:flex-start}}'
+  ].join('');
+  document.head.appendChild(st);
+})();
+</script>
+
+<script>
+/* ============================================================================
+   mod-etape2 — Analyse : pièces reçues du client, contrôle et mise au dossier
+   Les pièces jointes des réponses du client sont récupérées depuis la boîte,
+   converties en PDF et rattachées au dossier. L'étape ne se valide que lorsque
+   toutes les pièces exigées sont présentes.
+   ========================================================================== */
+(function(){
+  if(window.__e2) return; window.__e2=1;
+
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s); }
+
+  /* ---------- pièces exigées pour une création de société ---------- */
+  var EXIGES=[
+    {k:'cni',      l:"Pièce d'identité du dirigeant",
+     aide:"Carte nationale d'identité recto-verso ou passeport en cours de validité. Pour un ressortissant étranger : titre de séjour portant l'autorisation d'exercer."},
+    {k:'domicile', l:"Justificatif de domiciliation du siège", alt:['bail'],
+     aide:"Facture d'électricité ou de gaz, quittance de loyer de moins de trois mois, ou contrat et facture de domiciliation."},
+    {k:'rib',      l:"Références bancaires (dépôt de capital)",
+     aide:"Relevé d'identité bancaire de l'établissement dépositaire des fonds."}
+  ];
+
+  function dossier(id){
+    try{
+      if(id) return (DB.dossiers||[]).filter(function(x){return x.id===id;})[0]||null;
+      var s=(typeof state!=='undefined')?state:{};
+      return (DB.dossiers||[]).filter(function(x){return x.id===s.espaceDossier;})[0]
+          || (DB.dossiers||[]).filter(function(x){return !x.archived;})[0] || null;
+    }catch(e){ return null; }
+  }
+  function demandeDe(dos){
+    if(!dos) return null;
+    try{ return (DB.demandes||[]).filter(function(x){return x.dossierId===dos.id;})[0]||null; }catch(e){ return null; }
+  }
+  /* pièces vues par le dossier : celles du dossier + celles de la demande liée */
+  function pieces(dos){
+    var out=[], vus={};
+    var add=function(arr,src){ (arr||[]).forEach(function(a){
+      var o=(typeof a==='string')?{name:a}:a;
+      var cle=(o.name||'')+'|'+(o.size||'')+'|'+(o.msgId||'');
+      if(vus[cle]) return; vus[cle]=1; o.__src=src; out.push(o); }); };
+    add(dos&&dos.attachments,'dossier');
+    var d=demandeDe(dos); add(d&&d.attachments,'demande');
+    return out;
+  }
+  window.e2Pieces=pieces;
+
+  function catOf(p){
+    try{ return (typeof demAttCat==='function')?demAttCat(p):{key:'autre',label:'À classer'}; }
+    catch(e){ return {key:'autre',label:'À classer'}; }
+  }
+
+  /* ---------- état de complétude ---------- */
+  function etat(dos){
+    var ps=pieces(dos);
+    var lignes=EXIGES.map(function(x){
+      var f=ps.filter(function(p){ var k=catOf(p).key;
+        return k===x.k || (x.alt&&x.alt.indexOf(k)>=0); });
+      return {k:x.k, l:x.l, aide:x.aide, fichiers:f, ok:f.length>0};
+    });
+    /* remarques conditionnelles tirées du nom des fichiers */
+    var noms=ps.map(function(p){ return String(p.name||'').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,''); }).join(' | ');
+    var remarques=[];
+    if(/heberg/.test(noms) && !/logeur|hebergeant/.test(noms))
+      remarques.push("Attestation d'hébergement reçue : la pièce d'identité de l'hébergeant et un justificatif de domicile à son nom doivent également figurer au dossier.");
+    if(/domicili/.test(noms) && !/facture/.test(noms))
+      remarques.push("Contrat de domiciliation reçu : la facture de domiciliation correspondante reste à fournir.");
+    var autres=ps.filter(function(p){ return catOf(p).key==='autre'; });
+    var manquants=lignes.filter(function(l){ return !l.ok; });
+    return {lignes:lignes, manquants:manquants, complet:manquants.length===0 && ps.length>0,
+            total:ps.length, autres:autres, remarques:remarques,
+            aRecuperer:ps.filter(function(p){ return p.msgId && !p.dataB64; }).length};
+  }
+  window.e2Etat=etat;
+
+  /* ---------- récupération depuis la boîte ---------- */
+  window.e2Recuperer=function(dosId){
+    var dos=dossier(dosId); if(!dos) return;
+    var d=demandeDe(dos);
+    var cible=[].concat(dos.attachments||[], (d&&d.attachments)||[]);
+    var ids=[]; cible.forEach(function(a){ if(a&&a.msgId&&!a.dataB64&&ids.indexOf(a.msgId)<0) ids.push(a.msgId); });
+    if(!ids.length){ if(typeof toast==='function')toast('Aucune pièce à récupérer — tout est déjà au dossier.'); return; }
+    if(typeof demFetchAtts!=='function'){ if(typeof toast==='function')toast('Passerelle indisponible.'); return; }
+    if(typeof toast==='function')toast('Récupération des pièces du client…');
+    var reste=ids.length, recus=0;
+    ids.forEach(function(mid){
+      demFetchAtts(mid,function(list){
+        (list||[]).forEach(function(fa){
+          cible.forEach(function(a){
+            if(a.msgId===mid && !a.dataB64 && (!a.name || a.name===fa.name)){
+              a.dataB64=fa.dataB64; a.type=fa.type; a.name=a.name||fa.name; a.size=fa.size; recus++; }
+          });
+        });
+        if(--reste===0){
+          try{ if(d) d.attachments=(d.attachments||[]); }catch(e){}
+          try{save();}catch(e){}
+          if(typeof toast==='function')toast(recus?(recus+' pièce(s) récupérée(s) et rattachée(s) au dossier.'):'Aucun contenu renvoyé par la boîte.');
+          render();
+        }
+      });
+    });
+  };
+
+  /* ---------- conversion en PDF ---------- */
+  function pdfDepuisJpeg(b64, w, h){
+    var A4W=595.28, A4H=841.89;
+    var s=Math.min(A4W/w, A4H/h)*0.94, iw=w*s, ih=h*s, x=(A4W-iw)/2, y=(A4H-ih)/2;
+    var jpg=atob(b64);
+    var flux='q '+iw.toFixed(2)+' 0 0 '+ih.toFixed(2)+' '+x.toFixed(2)+' '+y.toFixed(2)+' cm /I0 Do Q';
+    var parts=[], off=[0], pos=0;
+    function P(t){ parts.push(t); pos+=t.length; }
+    function O(n,t){ off[n]=pos; P(n+' 0 obj\n'+t+'\nendobj\n'); }
+    P('%PDF-1.4\n');
+    O(1,'<</Type/Catalog/Pages 2 0 R>>');
+    O(2,'<</Type/Pages/Kids[3 0 R]/Count 1>>');
+    O(3,'<</Type/Page/Parent 2 0 R/MediaBox[0 0 '+A4W+' '+A4H+']'
+        +'/Resources<</XObject<</I0 4 0 R>>/ProcSet[/PDF/ImageC]>>/Contents 5 0 R>>');
+    O(4,'<</Type/XObject/Subtype/Image/Width '+w+'/Height '+h
+        +'/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length '+jpg.length+'>>\nstream\n'+jpg+'\nendstream');
+    O(5,'<</Length '+flux.length+'>>\nstream\n'+flux+'\nendstream');
+    var xref=pos;
+    var t='xref\n0 6\n0000000000 65535 f \n';
+    for(var i=1;i<=5;i++){ var v=String(off[i]); while(v.length<10) v='0'+v; t+=v+' 00000 n \n'; }
+    t+='trailer\n<</Size 6/Root 1 0 R>>\nstartxref\n'+xref+'\n%%EOF';
+    P(t);
+    var str=parts.join(''), u=new Uint8Array(str.length);
+    for(var j=0;j<str.length;j++) u[j]=str.charCodeAt(j)&0xff;
+    return u;
+  }
+  window.e2PdfDepuisJpeg=pdfDepuisJpeg;
+
+  function imageVersPdf(att, cb){
+    try{
+      var img=new Image();
+      img.onload=function(){
+        try{
+          var c=document.createElement('canvas');
+          var mx=1600, r=Math.min(1, mx/Math.max(img.width,img.height));
+          c.width=Math.round(img.width*r); c.height=Math.round(img.height*r);
+          c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+          var jb64=c.toDataURL('image/jpeg',0.86).split(',')[1];
+          var u=pdfDepuisJpeg(jb64,c.width,c.height);
+          var bin=''; for(var i=0;i<u.length;i++) bin+=String.fromCharCode(u[i]);
+          att.dataB64=btoa(bin); att.type='application/pdf';
+          att.name=String(att.name||'piece').replace(/\.(jpe?g|png|gif|webp|bmp)$/i,'')+'.pdf';
+          att.converti=true; cb(true);
+        }catch(e){ cb(false); }
+      };
+      img.onerror=function(){ cb(false); };
+      img.src='data:'+(att.type||'image/jpeg')+';base64,'+att.dataB64;
+    }catch(e){ cb(false); }
+  }
+
+  window.e2VersPdf=function(dosId){
+    var dos=dossier(dosId); if(!dos) return;
+    var ps=pieces(dos).filter(function(p){ return p.dataB64 && /^image\//i.test(p.type||'')
+      && !/pdf$/i.test(p.type||''); });
+    if(!ps.length){ if(typeof toast==='function')toast('Toutes les pièces sont déjà au format PDF.'); return; }
+    if(typeof toast==='function')toast('Conversion en PDF…');
+    var reste=ps.length, ok=0;
+    ps.forEach(function(p){ imageVersPdf(p,function(r){ if(r)ok++;
+      if(--reste===0){ try{save();}catch(e){}
+        if(typeof toast==='function')toast(ok+' pièce(s) converties en PDF.'); render(); } }); });
+  };
+
+  window.e2Ouvrir=function(dosId,i){
+    var ps=pieces(dossier(dosId)), p=ps[i]; if(!p) return;
+    if(!p.dataB64){ if(typeof toast==='function')toast('Pièce non encore récupérée depuis la boîte.'); return; }
+    try{
+      var bin=atob(p.dataB64), u=new Uint8Array(bin.length);
+      for(var k=0;k<bin.length;k++) u[k]=bin.charCodeAt(k);
+      var url=URL.createObjectURL(new Blob([u],{type:p.type||'application/pdf'}));
+      window.open(url,'_blank'); setTimeout(function(){URL.revokeObjectURL(url);},60000);
+    }catch(e){ if(typeof toast==='function')toast('Ouverture impossible.'); }
+  };
+
+  /* ---------- carte de l'étape 2 ---------- */
+  function carte(){
+    var dos=dossier(); if(!dos) return '';
+    var st=etat(dos), ps=pieces(dos);
+    var idx={}; ps.forEach(function(p,i){ idx[(p.name||'')+i]=i; });
+
+    var bandeau = st.complet
+      ? '<div class="e2-band ok"><b>Le client a transféré l\'ensemble des pièces demandées.</b> '
+        +'Les '+st.total+' documents sont au dossier — l\'étape peut être validée.</div>'
+      : (st.total
+        ? '<div class="e2-band ko"><b>Dossier incomplet — '+st.manquants.length+' pièce(s) manquante(s) :</b> '
+          +st.manquants.map(function(m){return E(m.l);}).join(' · ')+'</div>'
+        : '<div class="e2-band att">Aucune pièce reçue à ce jour. Les documents transmis par le client seront rattachés ici automatiquement.</div>');
+
+    var lignes=st.lignes.map(function(l){
+      var f=l.fichiers.map(function(p){
+        var i=ps.indexOf(p);
+        return '<button class="e2-file'+(p.dataB64?'':' vide')+'" onclick="e2Ouvrir(null,'+i+')" title="'
+          +(p.dataB64?'Ouvrir la pièce':'Pièce annoncée, contenu non encore récupéré')+'">'
+          +(/pdf/i.test(p.type||'')?'PDF':'IMG')+' <span>'+E(p.name||'pièce')+'</span></button>';
+      }).join('');
+      return '<div class="e2-row '+(l.ok?'ok':'ko')+'">'
+        +'<span class="e2-st">'+(l.ok?'✓':'✗')+'</span>'
+        +'<div class="e2-txt"><b>'+E(l.l)+'</b><span>'+E(l.aide)+'</span>'
+        +(f?('<div class="e2-files">'+f+'</div>'):'')+'</div></div>';
+    }).join('');
+
+    var autres = st.autres.length
+      ? '<div class="e2-autres"><b>Autres pièces reçues</b> — à classer : '
+        +st.autres.map(function(p){ return '<button class="e2-file" onclick="e2Ouvrir(null,'+ps.indexOf(p)+')">'
+          +E(p.name||'pièce')+'</button>'; }).join('')+'</div>'
+      : '';
+    var rem = st.remarques.length
+      ? '<div class="e2-rem">'+st.remarques.map(function(r){return '<div>▸ '+E(r)+'</div>';}).join('')+'</div>'
+      : '';
+
+    return '<div class="card ana-card e2-card"><div class="card-h"><h2>Pièces reçues du client</h2>'
+      +'<span class="e2-cpt'+(st.complet?' ok':'')+'">'
+      +st.lignes.filter(function(l){return l.ok;}).length+'/'+st.lignes.length+' exigées</span>'
+      +'<span class="sub" style="margin-left:auto">'+st.total+' document(s) au dossier</span></div>'
+      +'<div class="card-b">'
+      +'<div class="e2-bar">'
+      +'<button class="btn btn-sm btn-pri" onclick="e2Recuperer(null)">Récupérer les pièces du mail'
+      +(st.aRecuperer?(' ('+st.aRecuperer+')'):'')+'</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="e2VersPdf(null)">Convertir en PDF</button>'
+      +'</div>'+bandeau+'<div class="e2-list">'+lignes+'</div>'+rem+autres
+      +'</div></div>';
+  }
+  window.e2Card=carte;
+
+  /* ---------- blocage de la validation tant que le dossier est incomplet ---------- */
+  function graftValider(){
+    if(typeof window.trwValider!=='function' || window.__e2TV) return;
+    window.__e2TV=1;
+    var _v=window.trwValider;
+    window.trwValider=function(id,key){
+      if(key==='analyse'){
+        var dos=dossier(id), st=dos?etat(dos):null;
+        if(st && !st.complet){
+          if(typeof toast==='function')
+            toast('Étape incomplète — pièce(s) manquante(s) : '+st.manquants.map(function(m){return m.l;}).join(', '));
+          return;
+        }
+      }
+      return _v.apply(this,arguments);
+    };
+  }
+  graftValider(); setTimeout(graftValider,0); setTimeout(graftValider,900);
+
+  function graftPage(){
+    var _pe=window.pageEspace;
+    if(typeof _pe!=='function' || window.__e2PE) return;
+    window.__e2PE=1;
+    var w=function(){ var h=_pe.apply(this,arguments);
+      try{ if(typeof h==='string' && h.indexOf('e2-card')<0) h+=carte(); }catch(e){}
+      return h; };
+    w.__e2=1; window.pageEspace=w;
+  }
+  graftPage(); setTimeout(graftPage,0); setTimeout(graftPage,900);
+
+  var st=document.createElement('style'); st.id='e2-mod';
+  st.textContent=[
+   '.e2-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}',
+   '.e2-cpt{margin-left:10px;border:1px solid rgba(143,151,166,.4);color:#8f97a6;border-radius:20px;padding:2px 9px;font:600 11px/1.6 inherit}',
+   '.e2-cpt.ok{border-color:rgba(67,181,129,.5);color:#43b581;background:rgba(67,181,129,.10)}',
+   '.e2-band{border-radius:9px;padding:11px 14px;font-size:13px;line-height:1.5;margin-bottom:14px;border:1px solid}',
+   '.e2-band.ok{border-color:rgba(67,181,129,.4);background:rgba(67,181,129,.09);color:#9fe0bf}',
+   '.e2-band.ko{border-color:rgba(215,160,58,.45);background:rgba(215,160,58,.09);color:#e8c67e}',
+   '.e2-band.att{border-color:rgba(143,151,166,.3);background:rgba(143,151,166,.07);color:#9aa3b2}',
+   '.e2-list{display:flex;flex-direction:column;gap:1px;background:rgba(127,160,255,.10);border:1px solid rgba(127,160,255,.14);border-radius:10px;overflow:hidden}',
+   '.e2-row{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:11px 13px;background:var(--card,#0f1116)}',
+   '.e2-st{font:700 14px/1.3 inherit;text-align:center}',
+   '.e2-row.ok .e2-st{color:#43b581}.e2-row.ko .e2-st{color:#d7a03a}',
+   '.e2-txt b{display:block;font-size:13.5px}',
+   '.e2-txt span{display:block;font-size:12px;color:#8f97a6;line-height:1.5;margin-top:2px}',
+   '.e2-files{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}',
+   '.e2-file{background:rgba(77,141,255,.12);border:1px solid rgba(77,141,255,.35);color:#8fb4ff;border-radius:7px;padding:3px 9px;cursor:pointer;font:500 11.5px/1.5 inherit;display:inline-flex;gap:6px;align-items:center}',
+   '.e2-file:hover{background:rgba(77,141,255,.2)}',
+   '.e2-file.vide{border-style:dashed;color:#8f97a6;background:none}',
+   '.e2-file span{font-weight:400}',
+   '.e2-rem{margin-top:12px;font-size:12.5px;color:#e8c67e;line-height:1.6}',
+   '.e2-autres{margin-top:12px;font-size:12.5px;color:#8f97a6;display:flex;gap:7px;flex-wrap:wrap;align-items:center}'
   ].join('');
   document.head.appendChild(st);
 })();
