@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=566;
+var LAST_VER=568;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -29108,6 +29108,195 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
 
 <script>
 /* ============================================================================
+   mod-pieces-mail — Demande automatique des pièces justificatives
+   À l'acceptation d'une demande portant sur une formalité (création ou
+   modification), le client reçoit la liste des pièces à produire et
+   l'invitation à les remettre en original lors d'un rendez-vous au cabinet.
+   ========================================================================== */
+(function(){
+  if(window.__pm) return; window.__pm=1;
+
+  function E(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+  var OBJET_DEF = 'Votre dossier {code} — pièces justificatives à produire';
+
+  var CORPS_DEF =
+"{civilite},\n\n"+
+"Nous vous confirmons la prise en charge de votre dossier de {formalite}, enregistré sous la référence {code}.\n\n"+
+"Afin de procéder à l'établissement des actes et au dépôt de la formalité auprès des autorités compétentes, nous vous prions de bien vouloir nous faire parvenir les pièces justificatives suivantes :\n\n"+
+"{pieces}\n"+
+"REMISE DES DOCUMENTS — RENDEZ-VOUS AU CABINET\n\n"+
+"Nous vous invitons à convenir d'un rendez-vous en nos bureaux afin de nous remettre l'ensemble de ces pièces en original. Cette rencontre nous permet d'en vérifier la conformité, de recueillir votre signature sur les actes et d'écarter tout retard qu'entraînerait une pièce incomplète ou irrecevable.\n\n"+
+"{lien}"+
+"Nous restons à votre entière disposition pour tout renseignement complémentaire.\n\n"+
+"Nous vous prions d'agréer, {civilite}, l'expression de nos salutations distinguées.\n\n"+
+"AEM CONSEIL";
+
+  var P_IDENT =
+"1. IDENTITÉ DU DIRIGEANT ET DES ASSOCIÉS\n"+
+"   • Photocopie recto-verso de la carte nationale d'identité ou du passeport en cours de validité ;\n"+
+"   • Pour les ressortissants étrangers : titre de séjour en cours de validité portant expressément l'autorisation d'exercer une activité professionnelle non salariée.\n\n";
+
+  var P_DOMIC =
+"2. JUSTIFICATIF DE DOMICILIATION DU SIÈGE SOCIAL — selon votre situation\n"+
+"   • Local dont vous êtes propriétaire ou locataire : facture d'électricité ou de gaz, ou quittance de loyer, de moins de trois mois ;\n"+
+"   • Hébergement à titre gratuit : attestation d'hébergement signée de l'hébergeant, accompagnée de la photocopie de sa pièce d'identité et d'un justificatif de domicile à son nom ;\n"+
+"   • Domiciliation auprès d'une société spécialisée : contrat de domiciliation en cours de validité et facture correspondante.\n\n";
+
+  var P_CAPITAL =
+"3. DÉPÔT DU CAPITAL SOCIAL\n"+
+"   • Références bancaires de l'établissement dépositaire (relevé d'identité bancaire), en vue du dépôt des fonds constitutifs et de la délivrance de l'attestation de dépôt de capital.\n\n";
+
+  function cfg(){ try{ DB.parametres=DB.parametres||{};
+      DB.parametres.mailPieces=DB.parametres.mailPieces||{};
+      var c=DB.parametres.mailPieces;
+      if(c.actif===undefined) c.actif=true;
+      if(!c.objet) c.objet=OBJET_DEF;
+      if(!c.corps) c.corps=CORPS_DEF;
+      return c; }catch(e){ return {actif:true,objet:OBJET_DEF,corps:CORPS_DEF}; } }
+  window.pmCfg=cfg;
+
+  /* la demande porte-t-elle sur une formalité ? (ni devis, ni simple question) */
+  function estFormalite(d){
+    if(!d) return false;
+    var o='';
+    try{ o=(typeof IA!=='undefined'&&IA.objet)?IA.objet(d):''; }catch(e){}
+    var t=(o+' '+(d.serviceSouhaite||'')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    if(/devis|tarif|prix|combien|honoraires|question|renseign|a qualifier/.test(t)) return false;
+    return true;
+  }
+  window.pmEstFormalite=estFormalite;
+
+  function nature(d){ try{ return (typeof demNature==='function')?demNature(d):'creation'; }catch(e){ return 'creation'; } }
+
+  function libelleFormalite(d){
+    var o=''; try{ o=(typeof IA!=='undefined'&&IA.objet)?IA.objet(d):''; }catch(e){}
+    if(o && !/a qualifier/i.test(o)) return o.charAt(0).toLowerCase()+o.slice(1);
+    return nature(d)==='admin' ? 'modification statutaire' : 'création de société';
+  }
+
+  function pieces(d){
+    var b=P_IDENT+P_DOMIC;
+    if(nature(d)!=='admin') b+=P_CAPITAL;
+    else {
+      var o=''; try{ o=(typeof IA!=='undefined'&&IA.objet)?IA.objet(d):''; }catch(e){}
+      if(/capital/i.test(o)) b+=P_CAPITAL;
+    }
+    return b;
+  }
+  window.pmPieces=pieces;
+
+  /* Sans civilité connue, l'usage épistolaire veut « Madame, Monsieur » seul :
+     on n'accole jamais le patronyme à cette formule. */
+  function civilite(d){
+    var c=String((d&&(d.civilite||d.titre))||'').trim().toLowerCase();
+    var nom=''; try{ nom=(typeof demBestName==='function')?(demBestName(d)||''):''; }catch(e){}
+    var pat=String(nom||'').trim().split(/\s+/).slice(-1)[0]||'';
+    if(/^(m\.|mr|monsieur)$/.test(c)) return 'Monsieur'+(pat?(' '+pat.toUpperCase()):'');
+    if(/^(mme|madame|mrs|ms)$/.test(c)) return 'Madame'+(pat?(' '+pat.toUpperCase()):'');
+    return 'Madame, Monsieur';
+  }
+
+  window.pmCorps=function(d,lien){
+    var c=cfg();
+    var code=''; try{ code=(typeof demCode==='function')?demCode(d):(d.code||''); }catch(e){ code=d.code||''; }
+    var blocLien = lien
+      ? ('Pour retenir le créneau qui vous convient, il vous suffit de suivre ce lien :\n'+lien+'\n\n')
+      : ('Nous vous remercions de nous indiquer vos disponibilités afin que nous convenions ensemble d\'un rendez-vous.\n\n');
+    return String(c.corps)
+      .replace(/\{civilite\}/g, civilite(d))
+      .replace(/\{code\}/g, code||'—')
+      .replace(/\{formalite\}/g, libelleFormalite(d))
+      .replace(/\{pieces\}/g, pieces(d))
+      .replace(/\{lien\}/g, blocLien);
+  };
+  window.pmObjet=function(d){
+    var code=''; try{ code=(typeof demCode==='function')?demCode(d):(d.code||''); }catch(e){ code=d.code||''; }
+    return String(cfg().objet).replace(/\{code\}/g, code||'').replace(/\s+—\s*$/,'');
+  };
+
+  /* ---------- greffe : le mail d'acceptation devient la demande de pièces ---------- */
+  function graft(){
+    var _dc=window.demComposerDecision;
+    if(typeof _dc!=='function' || window.__pmDC) return;
+    window.__pmDC=1;
+    var w=function(id,titre,sujet,corps,dec){
+      try{
+        if(dec==='accepte' && cfg().actif){
+          var d=(DB.demandes||[]).filter(function(x){return x.id===id;})[0];
+          if(d && estFormalite(d)){
+            var lien=window.__agwLien||'';
+            corps = window.pmCorps(d,lien);
+            sujet = window.pmObjet(d);
+            window.__agwLien='';   /* le lien est déjà dans le corps : pas de doublon */
+            d.piecesDemandees=Date.now();
+          }
+        }
+      }catch(e){}
+      return _dc.call(this,id,titre,sujet,corps,dec);
+    };
+    w.__pm=1; window.demComposerDecision=w;
+  }
+  graft(); setTimeout(graft,0); setTimeout(graft,800);
+
+  /* ---------- carte de réglage (Paramètres › Communication › Modèles d'e-mails) ---------- */
+  function carte(){
+    var c=cfg();
+    return '<div class="card" data-sp="com/mails" id="pm-card"><div class="card-h"><h2>Demande de pièces justificatives</h2>'
+      +'<span class="sub" style="margin-left:auto">Envoi automatique à l\'acceptation</span></div><div class="card-b">'
+      +'<label class="pm-sw"><input type="checkbox" id="pm-actif"'+(c.actif?' checked':'')+' onchange="pmSet(\'actif\',this.checked)">'
+      +'<span>Envoyer automatiquement la demande de pièces lorsqu\'une demande de <b>formalité</b> est acceptée '
+      +'(création ou modification). Les demandes de devis et de renseignement en sont exclues.</span></label>'
+      +'<label style="margin-top:12px">Objet</label>'
+      +'<input id="pm-objet" value="'+E(c.objet)+'" onchange="pmSet(\'objet\',this.value)">'
+      +'<label style="margin-top:10px">Corps du message</label>'
+      +'<textarea id="pm-corps" rows="16" onchange="pmSet(\'corps\',this.value)">'+E(c.corps)+'</textarea>'
+      +'<p class="hint" style="margin:8px 0 0">Variables : <code>{civilite}</code> · <code>{code}</code> · '
+      +'<code>{formalite}</code> · <code>{pieces}</code> (liste adaptée à la nature du dossier) · <code>{lien}</code> '
+      +'(prise de rendez-vous). Le dépôt de capital n\'est demandé qu\'en création.</p>'
+      +'<div class="pm-acts"><button class="btn btn-sm btn-ghost" onclick="pmApercu()">Aperçu du message</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="pmReset()">Rétablir le modèle</button></div>'
+      +'</div></div>';
+  }
+  window.pmSet=function(k,v){ var c=cfg(); c[k]=v; try{save();}catch(e){} };
+  window.pmReset=function(){ var go=function(){ var c=cfg(); c.objet=OBJET_DEF; c.corps=CORPS_DEF;
+      try{save();}catch(e){} render(); if(typeof toast==='function')toast('Modèle rétabli.'); };
+    if(typeof uiConfirm==='function') uiConfirm('Rétablir le modèle d\'origine ?',go,{okLabel:'Rétablir'}); else go(); };
+  window.pmApercu=function(){
+    var d=(DB.demandes||[]).filter(function(x){return estFormalite(x);})[0]
+        ||{id:'x',code:'DC-0000',clientNom:'Paul ROPPERS',serviceSouhaite:'Création SARL',message:'créer ma société'};
+    var corps=window.pmCorps(d,'https://script.google.com/…/exec?page=rdv&t=…');
+    openModal('Aperçu — '+window.pmObjet(d),
+      '<pre class="pm-prev">'+E(corps)+'</pre>',
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>');
+  };
+
+  function graftParams(){
+    var _pp=window.pageParams;
+    if(typeof _pp!=='function'||_pp.__pm) return;
+    var w=function(){ var h=_pp.apply(this,arguments);
+      try{ if(typeof h==='string' && h.indexOf('pm-card')<0) h+=carte(); }catch(e){}
+      return h; };
+    w.__pm=1; window.pageParams=w;
+  }
+  /* avant la coque des Paramètres, pour que la carte soit rangée dans Communication */
+  graftParams(); setTimeout(graftParams,0);
+
+  var st=document.createElement('style'); st.id='pm-mod';
+  st.textContent=[
+   '.pm-sw{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:#9aa3b2;line-height:1.5}',
+   '.pm-sw input{width:auto;margin-top:2px;flex:none}',
+   '#pm-corps{font:12.5px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre}',
+   '.pm-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}',
+   '.pm-prev{white-space:pre-wrap;font:13px/1.65 ui-monospace,Menlo,Consolas,monospace;background:#0a0b0e;border:1px solid #26272d;border-radius:10px;padding:16px;max-height:60vh;overflow:auto;color:#cfe0ff;margin:0}'
+  ].join('');
+  document.head.appendChild(st);
+})();
+</script>
+
+<script>
+/* ============================================================================
    mod-params-shell — Paramètres : coque « latérale dépliable » (maquette B)
    Range les cartes existantes en 6 thèmes / sous-modules / onglets.
    100 % additif : aucune carte n'est supprimée, toutes restent dans le DOM
@@ -30268,7 +30457,7 @@ function testLienRdv()  {
   /* le mail d'acceptation du dossier porte le lien de prise de rendez-vous */
   function graftAccept(){
     var _da=window.demAccepter, _dc=window.demComposerDecision;
-    if(typeof _da==='function' && !_da.__agw){
+    if(typeof _da==='function' && !window.__agwDA){ window.__agwDA=1;
       var wa=function(id){
         var d=null; try{ d=(DB.demandes||[]).filter(function(x){return x.id===id;})[0]; }catch(e){}
         var mail=''; try{ mail=(typeof demReplyTo==='function')?demReplyTo(d):''; }catch(e){}
@@ -30282,7 +30471,7 @@ function testLienRdv()  {
       };
       wa.__agw=1; window.demAccepter=wa;
     }
-    if(typeof _dc==='function' && !_dc.__agw){
+    if(typeof _dc==='function' && !window.__agwDC){ window.__agwDC=1;
       var wc=function(id,titre,sujet,corps,dec){
         if(dec==='accepte' && window.__agwLien){
           var bloc='Pour convenir d\'un rendez-vous, choisissez directement le créneau qui vous convient :\n'
