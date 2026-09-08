@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=573;
+var LAST_VER=574;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -17197,27 +17197,48 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   /* Module Traitement — parcours guidé « Piste B » : barre latérale verticale (6 étapes
      verrouillées) + contenu de l'étape + validation. Réorganise au niveau du DOM après
      rendu, sans altérer les cartes ni leurs handlers. */
-  var WF=[['reception','Réception'],['analyse','Analyse'],['validation','Validation'],['generation','Génération'],['annonce','Annonce légale'],['capital','Dépôt de capital'],['inpi','Dépôt INPI'],['dossier','Dossier complet'],['cloture','Clôture']];
+  /* Parcours d'une création de société, dans l'ordre où le dossier se traite
+     réellement : les fonds sont déposés avec les statuts signés, l'annonce
+     paraît, puis la formalité est déposée au guichet unique. */
+  var WF=[['demande','Demande'],['pieces','Pièces'],['actes','Actes'],
+          ['attestations','Attestations'],['immatriculation','Immatriculation'],['cloture','Clôture']];
+  /* correspondance depuis l'ancien découpage en neuf étapes */
+  var WF_MIG={reception:'demande',analyse:'pieces',validation:'pieces',generation:'actes',
+              capital:'attestations',annonce:'attestations',inpi:'immatriculation',
+              dossier:'immatriculation',cloture:'cloture'};
+  var WF_EXIGE={pieces:['analyse','validation'],attestations:['capital','annonce'],
+                immatriculation:['inpi','dossier']};
+  /* Un dossier ouvert sous l'ancien parcours conserve son avancement : une étape
+     fusionnée n'est acquise que si toutes celles qu'elle absorbe l'étaient. */
+  function wfMigre(d){
+    if(!d||!d.wf||d.wf.__v6) return;
+    var a=d.wf, n={__v6:1};
+    Object.keys(WF_MIG).forEach(function(k){
+      if(!a[k]) return;
+      var cible=WF_MIG[k], req=WF_EXIGE[cible];
+      if(req){ if(req.every(function(x){return !!a[x];})) n[cible]=Math.max(n[cible]||0,a[k]); }
+      else n[cible]=a[k];
+    });
+    d.wf=n;
+  }
+  window.wfMigre=wfMigre;
   var UTIL=[['traitement','Outils'],['notes','Notes']];
   var CHECK='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>';
   var LOCK='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
   var DOT='<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="7"/></svg>';
   function tabOf(el){
     var c=' '+(el.className||'')+' ';
-    if(/\besp-mailcard\b/.test(c))return 'reception';
-    if(/\bana-card\b/.test(c))return 'analyse';
-    if(/\bcrea-valid\b/.test(c))return 'validation';
-    if(/\bcrea-gen\b/.test(c))return 'generation';
-    if(/\bal-card\b/.test(c))return 'annonce';
-    if(/\bcrea-capital\b/.test(c))return 'capital';
-    if(/\binpi-card\b/.test(c))return 'inpi';
-    if(/\bcrea-dossier\b|\bfin-card\b/.test(c))return 'dossier';
+    if(/\besp-mailcard\b/.test(c))return 'demande';
+    if(/\bana-card\b|\bcrea-valid\b/.test(c))return 'pieces';
+    if(/\bcrea-gen\b/.test(c))return 'actes';
+    if(/\bal-card\b|\bcrea-capital\b/.test(c))return 'attestations';
+    if(/\binpi-card\b|\bcrea-dossier\b|\bfin-card\b/.test(c))return 'immatriculation';
     if(/\bcrea-cloture\b/.test(c))return 'cloture';
     try{var h=el.querySelector('h2');if(h&&/Notes internes/i.test(h.textContent))return 'notes';}catch(e){}
     return 'traitement';
   }
-  function curDossier(){ try{ if(typeof state==='undefined')return null; var id=state.espaceDossier; var d=(DB.dossiers||[]).filter(function(x){return x.id===id;})[0]; if(!d)d=(DB.dossiers||[]).filter(function(x){return !x.archived;})[0]; return d||null; }catch(e){return null;} }
-  function wfObj(d){ if(!d.wf||typeof d.wf!=='object')d.wf={}; return d.wf; }
+  function curDossier(){ try{ if(typeof state==='undefined')return null; var id=state.espaceDossier; var d=(DB.dossiers||[]).filter(function(x){return x.id===id;})[0]; if(!d)d=(DB.dossiers||[]).filter(function(x){return !x.archived;})[0]; if(d)wfMigre(d); return d||null; }catch(e){return null;} }
+  function wfObj(d){ if(!d.wf||typeof d.wf!=='object')d.wf={}; wfMigre(d); return d.wf; }
   function wfCur(d){ var w=wfObj(d); for(var i=0;i<WF.length;i++){ if(!w[WF[i][0]]) return i; } return WF.length; }
   function wfState(d,i){ var w=wfObj(d); if(w[WF[i][0]])return 'done'; if(i===wfCur(d))return 'cur'; return 'lock'; }
   function wfReach(d,i){ return i<=wfCur(d); }
@@ -17245,6 +17266,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var d=curDossier();
     var curKey=(d&&wfCur(d)<WF.length)?WF[wfCur(d)][0]:WF[WF.length-1][0];
     var active=(typeof state!=='undefined'&&state.espTab)||curKey;
+    if(WF_MIG[active]) active=WF_MIG[active];
+    if(active!=='traitement'&&active!=='notes'&&idxOf(active)<0) active=curKey;
+    try{ if(typeof state!=='undefined') state.espTab=active; }catch(e){}
     var ai=idxOf(active);
     if(d&&ai>=0&&!wfReach(d,ai))active=curKey;
     var utilAvail=UTIL.filter(function(t){return groups[t[0]]&&groups[t[0]].length;});
@@ -30928,7 +30952,7 @@ function testLienRdv()  {
     window.__e2TV=1;
     var _v=window.trwValider;
     window.trwValider=function(id,key){
-      if(key==='analyse'){
+      if(key==='pieces'){
         var dos=dossier(id), st=dos?etat(dos):null;
         if(st && !st.complet){
           if(typeof toast==='function')
@@ -31210,7 +31234,7 @@ function testLienRdv()  {
     window.__e3TV=1;
     var _v=window.trwValider;
     window.trwValider=function(id,key){
-      if(key==='validation'){
+      if(key==='pieces'){
         var d=dossier(id);
         if(d){
           var v=V(d), ps=pieces(d);
