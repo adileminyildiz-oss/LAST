@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=585;
+var LAST_VER=586;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -7068,13 +7068,13 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
       +'<div class="tr-prog"><div class="tr-prog-track"><div class="tr-prog-bar" style="width:'+pr.pct+'%"></div></div><span class="tr-prog-lbl">'+pr.ok+'/'+pr.total+' étapes · '+pr.pct+'%</span></div>'
       +'</div>';
   }
-  /* Outils fiscaux déplacés dans l'étape « Analyse » du parcours (classe ana-card → routée par le wizard). */
+  /* Outils fiscaux : outil de conseil, rangé dans les Outils du parcours (pas dans l'étape Pièces). */
   function fiscCard(d){
     var b=''
       +(has('ouvrirAvocatFiscaliste')?'<button class="tr-act" onclick="ouvrirAvocatFiscaliste(\''+d.id+'\')">Analyse fiscaliste</button>':'')
       +(has('fiscalHubOpen')?'<button class="tr-act tr-act-fisc" onclick="fiscalHubOpen(\''+d.id+'\')">Module fiscal</button>':'');
     if(!b)return '';
-    return '<div class="card ana-card tr-fisccard"><div class="card-h"><h2>Outils fiscaux</h2><span class="sub" style="margin-left:auto">À réaliser pendant ou après le rendez-vous</span></div><div class="card-b"><p class="tr-fc-p">Détermine la structure la plus avantageuse pour le client (forme, régime fiscal, statut social) — à présenter pendant ou après le rendez-vous.</p><div class="tr-actions">'+b+'</div></div></div>';
+    return '<div class="card tr-fisccard"><div class="card-h"><h2>Outils fiscaux</h2><span class="sub" style="margin-left:auto">À réaliser pendant ou après le rendez-vous</span></div><div class="card-b"><p class="tr-fc-p">Détermine la structure la plus avantageuse pour le client (forme, régime fiscal, statut social) — à présenter pendant ou après le rendez-vous.</p><div class="tr-actions">'+b+'</div></div></div>';
   }
   /* Étape 2 (Analyse) : bouton « Formulaire » pour compléter les informations du client
      (ex. après un rendez-vous). Ouvre le formulaire pré-rempli avec les infos connues du dossier. */
@@ -7099,7 +7099,7 @@ body.dark .fv-view-scroll{border-color:#ccc!important}
     try{ if(typeof toast==='function')toast('Formulaire ouvert — complétez les informations du client, puis enregistrez.'); }catch(e){}
   };
   function formClientCard(d){
-    return '<div class="card ana-card tr-formclient"><div class="card-h"><h2>Informations client</h2><span class="sub" style="margin-left:auto">À compléter pendant ou après le rendez-vous</span></div>'
+    return '<div class="card tr-formclient"><div class="card-h"><h2>Informations client</h2><span class="sub" style="margin-left:auto">À compléter pendant ou après le rendez-vous</span></div>'
       +'<div class="card-b"><p class="tr-fc-p">Renseignez ou complétez les informations du client dans le formulaire (identité, dirigeant, société, profil).</p>'
       +'<div class="tr-actions"><button class="tr-act tr-act-pri" onclick="trFormClient(\''+d.id+'\')">📝 Ouvrir le formulaire</button></div></div></div>';
   }
@@ -30933,11 +30933,9 @@ function testLienRdv()  {
     }catch(e){ if(typeof toast==='function')toast('Ouverture impossible.'); }
   };
 
-  /* ---------- carte de l'étape 2 ---------- */
-  function carte(){
-    var dos=dossier(); if(!dos) return '';
+  /* ---------- la réception des pièces, en mini-page ---------- */
+  function corps(dos){
     var st=etat(dos), ps=pieces(dos);
-    var idx={}; ps.forEach(function(p,i){ idx[(p.name||'')+i]=i; });
 
     var bandeau = st.complet
       ? '<div class="e2-band ok"><b>Le client a transféré l\'ensemble des pièces demandées.</b> '
@@ -30969,19 +30967,37 @@ function testLienRdv()  {
       ? '<div class="e2-rem">'+st.remarques.map(function(r){return '<div>▸ '+E(r)+'</div>';}).join('')+'</div>'
       : '';
 
-    return '<div class="card ana-card e2-card"><div class="card-h"><h2>Pièces reçues du client</h2>'
-      +'<span class="e2-cpt'+(st.complet?' ok':'')+'">'
-      +st.lignes.filter(function(l){return l.ok;}).length+'/'+st.lignes.length+' exigées</span>'
-      +'<span class="sub" style="margin-left:auto">'+st.total+' document(s) au dossier</span></div>'
-      +'<div class="card-b">'
-      +'<div class="e2-bar">'
+    return '<div class="mp-bar">'
       +'<button class="btn btn-sm btn-pri" onclick="e2Recuperer(null)">Récupérer les pièces du mail'
       +(st.aRecuperer?(' ('+st.aRecuperer+')'):'')+'</button>'
       +'<button class="btn btn-sm btn-ghost" onclick="e2VersPdf(null)">Convertir en PDF</button>'
-      +'</div>'+bandeau+'<div class="e2-list">'+lignes+'</div>'+rem+autres
-      +'</div></div>';
+      +'<span class="mp-sp mp-nav">'+st.total+' document(s) au dossier</span></div>'
+      +bandeau+'<div class="e2-list">'+lignes+'</div>'+rem+autres;
   }
-  window.e2Card=carte;
+  window.e2OuvrirReception=function(id){
+    var dos=dossier(id); if(!dos||typeof mpOuvrir!=='function') return; var st=etat(dos);
+    mpOuvrir('Réception des pièces', corps(dos),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:st.lignes.filter(function(l){return l.ok;}).length+'/'+st.lignes.length+' pièces exigées · '
+        +st.total+' document(s) au dossier', taille:'l'});
+  };
+  function rafraichir(){
+    var dos=dossier(); if(!dos) return false;
+    if(typeof mpOuverte!=='function' || !mpOuverte()) return false;
+    if(!window.__mpCour || window.__mpCour.t!=='Réception des pièces') return false;
+    return mpMaj(corps(dos), null, null);
+  }
+  ['e2Recuperer','e2VersPdf'].forEach(function(n){
+    var f=window[n]; if(typeof f!=='function'||f.__mp) return;
+    var g=function(){ var v=f.apply(this,arguments); try{setTimeout(rafraichir,0);}catch(e){} return v; };
+    g.__mp=1; window[n]=g;
+  });
+
+  /* l'étape 2 n'a plus qu'une carte : le relevé de certification, qui porte
+     la ligne « réception » en tête. Cette carte-ci se retire. */
+  window.e2Card=function(){ return ''; };
+  window.e2Etat=etat;
+  window.e2Corps=corps;
 
   /* ---------- blocage de la validation tant que le dossier est incomplet ---------- */
   function graftValider(){
@@ -31326,27 +31342,46 @@ function testLienRdv()  {
   function carte(){
     var d=dossier(); if(!d) return '';
     var v=V(d), ps=pieces(d);
+
+    function ligne(cl,mark,titre,det,bouton){
+      return '<div class="at4-etl '+cl+'"><span class="at4-etm">'+mark+'</span>'
+        +'<div class="at4-ett"><b>'+titre+'</b><em>'+det+'</em></div>'+bouton+'</div>';
+    }
+
+    /* 1. la réception, tenue par l'étape 2 */
+    var st=null; try{ if(typeof window.e2Etat==='function') st=window.e2Etat(d); }catch(e){}
+    var lRecep='';
+    if(st){
+      var recus=st.lignes.filter(function(l){return l.ok;}).length;
+      lRecep=ligne(st.complet?'ok':(st.total?'w':'at'), st.complet?'✓':(st.total?'◔':'·'),
+        'Réception des pièces',
+        st.complet ? ('Les '+st.lignes.length+' pièces exigées sont au dossier — '+st.total+' document'+(st.total>1?'s':'')+' reçu'+(st.total>1?'s':''))
+          : (st.total ? (recus+' sur '+st.lignes.length+' — il manque '+st.manquants.map(function(m){return E(m.l);}).join(', '))
+                      : 'Aucune pièce reçue — récupérez-les du message du client'),
+        '<button class="btn btn-sm '+(st.complet?'btn-ghost':'btn-pri')+'" onclick="e2OuvrirReception(null)">'
+        +(st.complet?'Revoir':'Ouvrir')+'</button>');
+    }
+
     if(!ps.length)
-      return '<div class="card crea-valid e3-card"><div class="card-h"><h2>Certification des pièces</h2></div>'
-        +'<div class="card-b"><div class="e3-vide">Aucune pièce au dossier. '
+      return '<div class="card ana-card crea-valid e3-card"><div class="card-h"><h2>Pièces du dossier</h2></div>'
+        +'<div class="card-b"><div class="at4-etat">'+lRecep+'</div>'
+        +'<div class="e3-vide">Aucune pièce au dossier. '
         +'Les documents transmis par le client apparaîtront ici pour être relevés puis certifiés.</div></div></div>';
 
     var certN=ps.filter(function(p){ return v.cert[p.k]&&v.cert[p.k].ok; }).length;
     var ecTot=ps.reduce(function(n,p){ return n+(v.ecarts[p.k]||[]).filter(function(x){return x.type==='ecart';}).length; },0);
 
+    /* 2. une ligne par pièce à certifier */
     var lignes=ps.map(function(p){
       var c=!!(v.cert[p.k]&&v.cert[p.k].ok);
       var e=(v.ecarts[p.k]||[]).filter(function(x){return x.type==='ecart';}).length;
-      var etat = c ? '<span class="e3-et ok">certifiée</span>'
-               : (e ? '<span class="e3-et ko">'+e+' écart'+(e>1?'s':'')+'</span>'
-                    : (v.testeLe?'<span class="e3-et at">à certifier</span>':'<span class="e3-et">à relever</span>'));
-      return '<div class="e3-row'+(c?' ok':(e?' ko':''))+'">'
-        +'<span class="e3-rm">'+(c?'✓':(e?'✗':'·'))+'</span>'
-        +'<div class="e3-rt"><b>'+E(p.libelle)+'</b><em>'+E(p.nom)+'</em></div>'
-        +etat
-        +'<button class="btn btn-sm '+(c?'btn-ghost':'btn-pri')+'" onclick="e3Ouvrir(null,\''+p.k+'\')">'
-        +(c?'Revoir':'Relever')+'</button>'
-        +'</div>';
+      var det = c ? ('Certifiée — '+E(p.nom))
+              : (e ? (e+' écart'+(e>1?'s':'')+' à trancher — '+E(p.nom))
+                   : (v.testeLe ? ('Relevée, reste à certifier — '+E(p.nom))
+                                : ('À relever — '+E(p.nom))));
+      return ligne(c?'ok':(e?'w':'at'), c?'✓':(e?'◔':'·'), E(p.libelle), det,
+        '<button class="btn btn-sm '+(c?'btn-ghost':'btn-pri')+'" onclick="e3Ouvrir(null,\''+p.k+'\')">'
+        +(c?'Revoir':'Relever')+'</button>');
     }).join('');
 
     var etat = certN===ps.length
@@ -31355,13 +31390,13 @@ function testLienRdv()  {
         ? '<div class="e3-band ko"><span>✗</span><div><b>'+ecTot+' écart'+(ecTot>1?'s':'')+' à trancher.</b> Ouvrez la pièce concernée pour arbitrer.</div></div>'
         : '<div class="e3-band n"><span>·</span><div>Ouvrez chaque pièce pour confronter ce qui y est lu à ce que le dossier affirme, puis la certifier.</div></div>');
 
-    return '<div class="card crea-valid e3-card"><div class="card-h"><h2>Certification des pièces</h2>'
+    return '<div class="card ana-card crea-valid e3-card"><div class="card-h"><h2>Pièces du dossier</h2>'
       +'<span class="e3-cpt'+(certN===ps.length?' ok':(ecTot?' ko':''))+'">'+certN+'/'+ps.length+' certifiées</span>'
       +'</div><div class="card-b">'
-      +'<div class="e3-rows">'+lignes+'</div>'
+      +'<div class="at4-etat">'+lRecep+lignes+'</div>'
       + etat
       +'<div class="e3-bar">'
-      +'<button class="btn btn-sm btn-pri" onclick="e3Ouvrir(null)">Ouvrir le relevé</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="e3Ouvrir(null)">Ouvrir le relevé</button>'
       +'<button class="btn btn-sm btn-ghost" onclick="e3Tester(null)">Tester toutes les pièces</button>'
       +'</div>'
       +'</div></div>';
@@ -31413,8 +31448,14 @@ function testLienRdv()  {
   /* la carte héritée « Validation des informations » se borne à relire les champs
      extraits : la certification pièce par pièce la remplace entièrement. */
   function neutraliserAncienne(){
-    if(window.__e3Neut || typeof window.creaValidCard!=='function') return;
-    window.__e3Neut=1; window.creaValidCard=function(){ return ''; };
+    if(!window.__e3Neut && typeof window.creaValidCard==='function'){
+      window.__e3Neut=1; window.creaValidCard=function(){ return ''; };
+    }
+    /* le pipeline « Analyse & auto-remplissage » lisait les pièces de son côté ;
+       la réception et le relevé de certification tiennent désormais ce travail. */
+    if(!window.__e3NeutAna && typeof window.anaCard==='function'){
+      window.__e3NeutAna=1; window.anaCard=function(){ return ''; };
+    }
   }
   neutraliserAncienne(); setTimeout(neutraliserAncienne,0); setTimeout(neutraliserAncienne,1000);
 
@@ -32038,6 +32079,52 @@ function testLienRdv()  {
   }
   window.a3RafraichirParapheur=rafraichirParapheur;
 
+  /* ---------- la génération des actes, en mini-page ---------- */
+  function generationHTML(d){
+    var as=actes(d);
+    var lignes=as.map(function(a){
+      var g=genere(d,a.k);
+      return '<div class="a3-feuille'+(g?' sig':'')+'">'
+        +'<span class="a3-nom">'+E(a.l)+'</span>'
+        +'<span class="a3-note">'+E(a.note||'')+'</span>'
+        +(g?'<span class="a3-lg ok">généré</span>':'<span class="a3-lg">à générer</span>')
+        +'<span class="a3-acts">'
+        +(g&&typeof espDocVoir==='function'
+          ? '<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+a.k+'\')">Ouvrir</button>' : '')
+        +'</span></div>';
+    }).join('');
+    var gen=as.filter(function(a){ return genere(d,a.k); }).length;
+    return '<div class="mp-bar">'
+      +'<button class="btn btn-sm '+(gen===as.length?'btn-ghost':'btn-pri')+'" onclick="creaGenTous(\''+d.id+'\')">'
+      +(gen===as.length?'Régénérer tous les actes':'Générer tous les actes')+'</button>'
+      +'<span class="mp-sp mp-nav">'+gen+' généré'+(gen>1?'s':'')+' sur '+as.length+'</span></div>'
+      +'<p class="at4-p" style="margin-top:0">Les actes sont établis depuis la fiche société et le bloc création. '
+      +'Une valeur corrigée dans la table de concordance se reporte ici à la régénération.</p>'
+      +'<div class="a3-paraph">'+(lignes||'<div class="a3-vide">Aucun acte prévu pour cette formalité.</div>')+'</div>';
+  }
+  window.a3OuvrirGeneration=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return;
+    var as=actes(d), gen=as.filter(function(a){ return genere(d,a.k); }).length;
+    mpOuvrir('Génération des actes', generationHTML(d),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(cli(d).denom||d.ref||'dossier')+' · '+gen+' acte(s) établi(s) sur '+as.length, taille:'l'});
+  };
+  function rafraichirGeneration(){
+    var d=dossier(); if(!d) return false;
+    if(typeof mpOuverte!=='function' || !mpOuverte()) return false;
+    if(!window.__mpCour || window.__mpCour.t!=='Génération des actes') return false;
+    return mpMaj(generationHTML(d), null);
+  }
+  (function(){ var f=window.creaGenTous; if(typeof f!=='function'||f.__mp) return;
+    var g=function(){ var v=f.apply(this,arguments); try{setTimeout(rafraichirGeneration,0);}catch(e){} return v; };
+    g.__mp=1; window.creaGenTous=g; })();
+
+  /* la carte héritée « Génération des documents » faisait double emploi */
+  function neutraliserGen(){
+    if(window.__a3NeutGen || typeof window.creaGenCard!=='function') return;
+    window.__a3NeutGen=1; window.creaGenCard=function(){ return ''; };
+  }
+  neutraliserGen(); setTimeout(neutraliserGen,0); setTimeout(neutraliserGen,1200);
   /* ---------- la carte d'étape : l'état, et les portes d'entrée ---------- */
   function carte(){
     var d=dossier(); if(!d) return '';
@@ -32051,7 +32138,10 @@ function testLienRdv()  {
     }
 
     var l1=ligne(gen===as.length?'ok':'at', gen===as.length?'✓':'·', 'Actes générés',
-      gen+' acte'+(gen>1?'s':'')+' sur '+as.length+' établi'+(gen>1?'s':'')+' depuis la fiche société', '');
+      gen ? (gen+' acte'+(gen>1?'s':'')+' sur '+as.length+' établi'+(gen>1?'s':'')+' depuis la fiche société')
+          : ('Aucun acte établi — '+as.length+' à générer depuis la fiche société'),
+      '<button class="btn btn-sm '+(gen===as.length?'btn-ghost':'btn-pri')+'" onclick="a3OuvrirGeneration(null)">'
+      +(gen===as.length?'Revoir':'Générer')+'</button>');
     var l2=ligne(z.rompus.length?'ko':'ok', z.rompus.length?'✗':'✓', 'Concordance des actes',
       z.rompus.length
         ? (z.rompus.length+' fait'+(z.rompus.length>1?'s':'')+' rompu'+(z.rompus.length>1?'s':'')+' — '+E(z.rompus[0].l))
@@ -33672,6 +33762,9 @@ function testLienRdv()  {
     if(typeof window.creaDossierCard==='function'){ window.creaDossierCard=function(){return '';}; n++; }
     if(typeof window.creaClotureCard==='function'){ window.creaClotureCard=function(){return '';}; n++; }
     if(typeof window.dossierFinalisationCard==='function'){ window.dossierFinalisationCard=function(){return '';}; n++; }
+    /* « Contrôle du dossier » énumérait en parallèle ce que les six verrous d'étape
+       contrôlent déjà, sans rien bloquer. Les contrôles font foi là où ils bloquent. */
+    if(typeof window.dossierPreflightCard==='function'){ window.dossierPreflightCard=function(){return '';}; n++; }
     if(n>=3) window.__cl6Neut=1;
   }
   neutraliser(); setTimeout(neutraliser,0); setTimeout(neutraliser,1400);
