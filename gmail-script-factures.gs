@@ -170,10 +170,32 @@ function fpArchive(att, msg) {
 /* ---------------------------------------------------------------------------
    Extractions (pré-remplissage dans Mar'q — toujours vérifiable à l'écran).
    --------------------------------------------------------------------------- */
+var FP_STOP = /^(pour|votre|vos|notre|nos|du|de|des|la|le|les|et|est|en|au|aux|sur|par|avec|sans|dans|ref|no|num|numero|date|datee|client|total|montant|euro|euros|eur|tva|ht|ttc)$/i;
+
 function fpNumero(t) {
-  var m = t.match(/(?:facture|invoice)\s*(?:n\s*[°o]?)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/\.]{2,24})/i)
-       || t.match(/\bn\s*[°o]\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/\.]{2,24})/i);
-  return m ? m[1].replace(/[.,;]$/, '') : '';
+  t = String(t || '');
+  var cands = [], m, re;
+
+  /* 1) « facture / invoice [n°] <ref> » */
+  re = /(?:factures?|invoice)\s*(?:n\s*[°o]?\s*)?[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-\/\.]{2,24})/gi;
+  while ((m = re.exec(t)) !== null) cands.push(m[1]);
+
+  /* 2) « n° <ref> » */
+  re = /\bn\s*[°o]\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-\/\.]{2,24})/gi;
+  while ((m = re.exec(t)) !== null) cands.push(m[1]);
+
+  /* 3) repli : référence typée (LETTRES-CHIFFRES) ou longue suite de chiffres */
+  re = /\b([A-Z]{1,4}[-\/][A-Z0-9]{1,4}[-\/][0-9]{3,}[-\/0-9A-Z]*|[0-9]{8,})\b/g;
+  while ((m = re.exec(t)) !== null) cands.push(m[1]);
+
+  for (var i = 0; i < cands.length; i++) {
+    var c = String(cands[i]).replace(/[.,;:]$/, '');
+    if (c.length < 3) continue;
+    if (FP_STOP.test(c)) continue;
+    if (!/[0-9]/.test(c)) continue;   /* un n° de facture contient toujours un chiffre */
+    return c;
+  }
+  return '';
 }
 
 function fpMontant(t) {
