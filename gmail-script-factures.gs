@@ -18,9 +18,34 @@
         (sans ce redéploiement, Mar'q continue d'appeler l'ancienne version)
    5. Dans Mar'q : Factures prestataires ▸ « ↻ Relever la boîte ».
 
-   ── ROUTAGE à ajouter dans doGet(e) ─────────────────────────────────────────
-     if (e.parameter.action === 'factures')    return fpReply(e, fpFactures(e));
-     if (e.parameter.action === 'facture_lue') return fpReply(e, fpFactureLue(e));
+   ── ROUTAGE : À L'INTÉRIEUR de doGet(e), JAMAIS APRÈS SON ACCOLADE ! ────────
+
+   ⚠️  Coller les branches HORS de doGet provoque :
+       « SyntaxError: Illegal return statement »
+
+   ▸ CAS A — votre doGet construit une variable `payload` puis la sérialise
+     à la fin (c'est le cas du script de la boîte AEM CONSEIL).
+     Ajoutez ces 2 branches dans la chaîne if / else if,
+     JUSTE AVANT le `} else {` qui lit les mails :
+
+         } else if (p.action === 'factures') {
+           payload = fpFactures(e);
+
+         } else if (p.action === 'facture_lue') {
+           payload = fpFactureLue(e);
+
+         } else {
+           // ... lecture des mails (code existant, ne pas toucher)
+
+     Rien d'autre à faire : la fin de votre doGet gère déjà le JSON et le
+     JSONP (p.callback). La fonction fpReply ci-dessous n'est alors pas
+     utilisée — vous pouvez la laisser, elle ne gêne pas.
+
+   ▸ CAS B — votre doGet fait directement des `return`.
+     Ajoutez ces 2 lignes tout au DÉBUT du corps de doGet(e) :
+
+         if (e.parameter.action === 'factures')    return fpReply(e, fpFactures(e));
+         if (e.parameter.action === 'facture_lue') return fpReply(e, fpFactureLue(e));
    ============================================================================ */
 
 var FP_LABEL = 'marq-facture-importee';
