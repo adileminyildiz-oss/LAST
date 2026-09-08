@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=571;
+var LAST_VER=573;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -30974,6 +30974,305 @@ function testLienRdv()  {
    '.e2-file span{font-weight:400}',
    '.e2-rem{margin-top:12px;font-size:12.5px;color:#e8c67e;line-height:1.6}',
    '.e2-autres{margin-top:12px;font-size:12.5px;color:#8f97a6;display:flex;gap:7px;flex-wrap:wrap;align-items:center}'
+  ].join('');
+  document.head.appendChild(st);
+})();
+</script>
+
+<script>
+/* ============================================================================
+   mod-etape3 — Validation : certification des pièces par l'expert
+   Barre latérale des pièces et des informations lues, document à droite,
+   parcours pièce par pièce. Test de conformité : compare ce qui a été lu des
+   documents aux informations saisies au dossier. L'étape ne se valide que
+   lorsque chaque pièce a été certifiée par l'expert.
+   ========================================================================== */
+(function(){
+  if(window.__e3) return; window.__e3=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s); }
+
+  /* informations lues attendues, par nature de pièce */
+  var CHAMPS={
+    cni:      ['civilite','prenom','nom','dateNaissance','lieuNaissance','paysNaissance','nationalite','typePiece','numPiece','travailAutorise'],
+    domicile: ['adresse','cpPerso','villePerso'],
+    bail:     ['siege','domiciliataire'],
+    rib:      ['iban','banque'],
+    impot:    ['revenuFiscal','nom','prenom'],
+    autre:    ['nom','prenom','adresse']
+  };
+  var LBL={};
+  try{ (EXTRACT_FIELDS||[]).forEach(function(f){ LBL[f.k]=f.l; }); }catch(e){}
+  /* libellés de repli pour les champs absents de la table d'extraction */
+  var SUP={cpPerso:'Code postal', villePerso:'Ville', iban:'IBAN', banque:'Établissement bancaire',
+           siege:'Siège social', domiciliataire:'Société de domiciliation', adresse:'Adresse',
+           revenuFiscal:'Revenu fiscal de référence'};
+  Object.keys(SUP).forEach(function(k){ if(!LBL[k]) LBL[k]=SUP[k]; });
+
+  function dossier(id){
+    try{
+      if(id) return (DB.dossiers||[]).filter(function(x){return x.id===id;})[0]||null;
+      var s=(typeof state!=='undefined')?state:{};
+      return (DB.dossiers||[]).filter(function(x){return x.id===s.espaceDossier;})[0]
+          || (DB.dossiers||[]).filter(function(x){return !x.archived;})[0] || null;
+    }catch(e){ return null; }
+  }
+  function V(d){ d.verif=d.verif||{}; d.verif.extract=d.verif.extract||{};
+                 d.verif.cert=d.verif.cert||{}; d.verif.ecarts=d.verif.ecarts||{}; return d.verif; }
+
+  /* pièces à certifier : celles réellement reçues (étape 2) */
+  function pieces(d){
+    var ps=[]; try{ ps=(typeof e2Pieces==='function')?e2Pieces(d):[]; }catch(e){}
+    return ps.map(function(p,i){
+      var c={key:'autre',label:'À classer'};
+      try{ c=(typeof demAttCat==='function')?demAttCat(p):c; }catch(e){}
+      var k=c.key;
+      if(k==='statuts'||k==='kbis'||k==='facture') k='autre';
+      return {i:i, k:k, nom:p.name||'pièce', libelle:c.label||'Pièce', piece:p};
+    });
+  }
+  window.e3Pieces=pieces;
+
+  /* informations saisies au dossier, en regard des informations lues */
+  function saisies(d){
+    var c={}; try{ c=(typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{}; }catch(e){}
+    var cr=d.crea||{};
+    var pres=(c.president||'').trim();
+    var parts=pres.split(/\s+/);
+    return {
+      nom:      (parts.length>1?parts.slice(1).join(' '):(c.nom||'')),
+      prenom:   (parts.length>1?parts[0]:(c.prenom||'')),
+      adresse:  (c.adresse||''),
+      cpPerso:  (c.cp||''),
+      villePerso:(c.ville||''),
+      siege:    (cr.siege||c.siege||''),
+      banque:   (cr.banque||''),
+      iban:     (c.iban||'')
+    };
+  }
+  window.e3Saisies=saisies;
+
+  function nz(s){ return String(s==null?'':s).toLowerCase().normalize('NFD')
+    .replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
+  /* « 12 r. des Lilas » et « 12 rue des Lilas » ne sont pas un écart */
+  function equiv(a,b){
+    var A=nz(a), B=nz(b); if(!A||!B) return null;
+    var ab={'r':'rue','av':'avenue','bd':'boulevard','bld':'boulevard','pl':'place','imp':'impasse','ch':'chemin','rte':'route','st':'saint','ste':'sainte'};
+    var dev=function(t){ return t.split(' ').map(function(w){ return ab[w]||w; }).join(' '); };
+    A=dev(A); B=dev(B);
+    if(A===B) return true;
+    if(A.indexOf(B)>=0 || B.indexOf(A)>=0) return true;
+    return false;
+  }
+
+  /* test de conformité d'une pièce : informations lues vs informations saisies */
+  function tester(d,k){
+    var v=V(d), ex=v.extract, sa=saisies(d), out=[];
+    (CHAMPS[k]||CHAMPS.autre).forEach(function(f){
+      var lu=ex[f], sai=sa[f];
+      if(sai===undefined) return;                    /* rien à comparer au dossier */
+      var l=String(lu==null?'':lu).trim(), s=String(sai==null?'':sai).trim();
+      if(!l && !s) return;
+      if(!l){ out.push({f:f, l:LBL[f]||f, lu:'', sai:s, type:'absent'}); return; }
+      if(!s){ return; }
+      if(equiv(l,s)===true) return;
+      out.push({f:f, l:LBL[f]||f, lu:l, sai:s, type:'ecart'});
+    });
+    return out;
+  }
+  window.e3Tester=function(id,k){
+    var d=dossier(id); if(!d) return;
+    var v=V(d), ps=pieces(d);
+    var cibles = k ? [k] : ps.map(function(p){return p.k;});
+    var n=0;
+    cibles.forEach(function(kk){ var r=tester(d,kk); v.ecarts[kk]=r; n+=r.length; });
+    v.testeLe=Date.now();
+    try{save();}catch(e){}
+    if(typeof toast==='function')
+      toast(n? (n+' écart(s) relevé(s) entre les documents et le dossier.')
+              : 'Aucun écart : les informations lues concordent avec le dossier.');
+    render();
+  };
+
+  window.e3Sel=function(id,k){ var d=dossier(id); if(!d)return; V(d).sel=k; try{save();}catch(e){} render(); };
+  window.e3Nav=function(id,pas){
+    var d=dossier(id); if(!d)return; var ps=pieces(d); if(!ps.length)return;
+    var v=V(d), i=0;
+    for(var j=0;j<ps.length;j++) if(ps[j].k===v.sel) i=j;
+    i=(i+pas+ps.length)%ps.length; v.sel=ps[i].k; try{save();}catch(e){} render();
+  };
+  window.e3Certifier=function(id,k){
+    var d=dossier(id); if(!d)return; var v=V(d);
+    var ec=(v.ecarts[k]||[]).filter(function(x){return x.type==='ecart';});
+    var go=function(){
+      v.cert[k]={ok:true, ts:Date.now(), par:(window.yadaUser||'expert')};
+      try{save();}catch(e){}
+      if(typeof toast==='function')toast('Pièce certifiée.');
+      var ps=pieces(d), reste=ps.filter(function(p){ return !(v.cert[p.k]&&v.cert[p.k].ok); });
+      if(reste.length) v.sel=reste[0].k;
+      render();
+    };
+    if(ec.length && typeof uiConfirm==='function')
+      uiConfirm('Cette pièce présente '+ec.length+' écart(s) non tranché(s). La certifier malgré tout ?',go,{okLabel:'Certifier'});
+    else go();
+  };
+  window.e3Decertifier=function(id,k){ var d=dossier(id); if(!d)return; delete V(d).cert[k]; try{save();}catch(e){} render(); };
+  window.e3Corriger=function(id,k,f){
+    var d=dossier(id); if(!d)return; var v=V(d), ec=(v.ecarts[k]||[]).filter(function(x){return x.f===f;})[0];
+    if(!ec)return;
+    v.extract[f]=ec.sai;                          /* on retient la valeur du dossier */
+    v.ecarts[k]=(v.ecarts[k]||[]).filter(function(x){return x.f!==f;});
+    try{save();}catch(e){}
+    if(typeof toast==='function')toast('Information alignée sur le dossier.');
+    render();
+  };
+
+  /* ---------- rendu ---------- */
+  function apercu(p){
+    var u=p&&p.dataB64 ? ('data:'+(p.type||'application/pdf')+';base64,'+p.dataB64) : '';
+    if(!u) return '<div class="e3-noprev">Pièce annoncée par le client mais non encore récupérée.<br>'
+      +'Utilisez « Récupérer les pièces du mail » à l\'étape Analyse.</div>';
+    if(/^data:image\//.test(u)) return '<img class="e3-img" src="'+u+'" alt="pièce">';
+    if(/^data:application\/pdf/.test(u)) return '<iframe class="e3-pdf" src="'+u+'" title="pièce"></iframe>';
+    return '<div class="e3-noprev">Aperçu non disponible pour ce format.</div>';
+  }
+
+  function carte(){
+    var d=dossier(); if(!d) return '';
+    var v=V(d), ps=pieces(d);
+    if(!ps.length)
+      return '<div class="card crea-valid e3-card"><div class="card-h"><h2>Certification des pièces</h2></div>'
+        +'<div class="card-b"><div class="e3-vide">Aucune pièce au dossier. '
+        +'Les documents transmis par le client apparaîtront ici pour certification.</div></div></div>';
+
+    if(!v.sel || !ps.some(function(p){return p.k===v.sel;})) v.sel=ps[0].k;
+    var cur=ps.filter(function(p){return p.k===v.sel;})[0]||ps[0];
+    var certN=ps.filter(function(p){ return v.cert[p.k]&&v.cert[p.k].ok; }).length;
+    var ec=(v.ecarts[v.sel]||[]);
+    var ecN=ec.filter(function(x){return x.type==='ecart';}).length;
+    var certifiee=!!(v.cert[v.sel]&&v.cert[v.sel].ok);
+
+    /* colonne gauche : pièces puis informations lues de la pièce courante */
+    var liste=ps.map(function(p){
+      var c=v.cert[p.k]&&v.cert[p.k].ok, e=(v.ecarts[p.k]||[]).filter(function(x){return x.type==='ecart';}).length;
+      return '<button class="e3-it'+(p.k===v.sel?' on':'')+(c?' ok':'')+'" onclick="e3Sel(null,\''+p.k+'\')">'
+        +'<span class="e3-it-l">'+E(p.libelle)+'</span>'
+        +'<span class="e3-it-m">'+(c?'✓':(e?(e+' écart'+(e>1?'s':'')):'—'))+'</span></button>';
+    }).join('');
+
+    var champs=(CHAMPS[v.sel]||CHAMPS.autre).map(function(f){
+      var lu=String(v.extract[f]==null?'':v.extract[f]).trim();
+      var e=ec.filter(function(x){return x.f===f;})[0];
+      var cl=e?(e.type==='ecart'?'ko':'abs'):(lu?'ok':'');
+      return '<div class="e3-f"><label>'+E(LBL[f]||f)+'</label>'
+        +'<span class="e3-v '+cl+'">'+(lu?E(lu):'—')+'</span>'
+        +(e&&e.type==='ecart'
+          ? '<button class="e3-fix" onclick="e3Corriger(null,\''+v.sel+'\',\''+f+'\')" title="Retenir la valeur du dossier : '+E(e.sai)+'">≠ '+E(e.sai)+'</button>'
+          : '')
+        +'</div>';
+    }).join('');
+
+    var bandeau = certifiee
+      ? '<div class="e3-band ok">Pièce certifiée le '+new Date(v.cert[v.sel].ts).toLocaleDateString('fr-FR')+'.</div>'
+      : (ecN
+        ? '<div class="e3-band ko"><b>'+ecN+' écart'+(ecN>1?'s':'')+' avec le dossier.</b> '
+          +ec.filter(function(x){return x.type==='ecart';}).map(function(x){
+              return E(x.l)+' — lu « '+E(x.lu)+' », dossier « '+E(x.sai)+' »'; }).join(' · ')+'</div>'
+        : (v.testeLe
+          ? '<div class="e3-band ok">Aucun écart relevé sur cette pièce.</div>'
+          : '<div class="e3-band n">Lancez le test de conformité pour comparer les informations lues à celles du dossier.</div>'));
+
+    return '<div class="card crea-valid e3-card"><div class="card-h"><h2>Certification des pièces</h2>'
+      +'<span class="e3-cpt'+(certN===ps.length?' ok':'')+'">'+certN+'/'+ps.length+' certifiées</span>'
+      +'<span class="sub" style="margin-left:auto">'+E(cur.nom)+'</span></div>'
+      +'<div class="card-b">'
+      +'<div class="e3-bar">'
+      +'<button class="btn btn-sm btn-pri" onclick="e3Tester(null)">Test de conformité</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="e3Nav(null,-1)">‹ Précédent</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="e3Nav(null,1)">Suivant ›</button>'
+      +(certifiee
+        ? '<button class="btn btn-sm btn-ghost" onclick="e3Decertifier(null,\''+v.sel+'\')">Retirer la certification</button>'
+        : '<button class="btn btn-sm e3-cert" onclick="e3Certifier(null,\''+v.sel+'\')">Certifier cette pièce</button>')
+      +'</div>'
+      +'<div class="e3-split">'
+      +'<div class="e3-side">'
+        +'<div class="e3-h">Pièces à certifier</div>'+liste
+        +'<div class="e3-h" style="padding-top:14px">Informations lues</div>'
+        +'<div class="e3-fs">'+(champs||'<div class="e3-none">Aucune information attendue pour cette pièce.</div>')+'</div>'
+      +'</div>'
+      +'<div class="e3-view">'+apercu(cur.piece)+bandeau+'</div>'
+      +'</div></div></div>';
+  }
+  window.e3Card=carte;
+
+  /* ---------- verrou : toutes les pièces certifiées ---------- */
+  function graftValider(){
+    if(typeof window.trwValider!=='function' || window.__e3TV) return;
+    window.__e3TV=1;
+    var _v=window.trwValider;
+    window.trwValider=function(id,key){
+      if(key==='validation'){
+        var d=dossier(id);
+        if(d){
+          var v=V(d), ps=pieces(d);
+          if(!ps.length){ if(typeof toast==='function')toast('Aucune pièce à certifier — le dossier est vide.'); return; }
+          var reste=ps.filter(function(p){ return !(v.cert[p.k]&&v.cert[p.k].ok); });
+          if(reste.length){
+            if(typeof toast==='function')
+              toast('Étape bloquée — '+reste.length+' pièce(s) restent à certifier : '+reste.map(function(p){return p.libelle;}).join(', '));
+            return;
+          }
+        }
+      }
+      return _v.apply(this,arguments);
+    };
+  }
+  graftValider(); setTimeout(graftValider,0); setTimeout(graftValider,1000);
+
+  function graftPage(){
+    var _pe=window.pageEspace;
+    if(typeof _pe!=='function' || window.__e3PE) return;
+    window.__e3PE=1;
+    var w=function(){ var h=_pe.apply(this,arguments);
+      try{ if(typeof h==='string' && h.indexOf('e3-card')<0) h+=carte(); }catch(e){}
+      return h; };
+    w.__e3=1; window.pageEspace=w;
+  }
+  graftPage(); setTimeout(graftPage,0); setTimeout(graftPage,1000);
+
+  var st=document.createElement('style'); st.id='e3-mod';
+  st.textContent=[
+   '.e3-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px}',
+   '.e3-cert{background:rgba(63,174,114,.14)!important;border-color:rgba(63,174,114,.4)!important;color:#6fe0a6!important}',
+   '.e3-cpt{margin-left:10px;border:1px solid rgba(143,151,166,.4);color:#8f97a6;border-radius:20px;padding:2px 9px;font:600 11px/1.6 inherit}',
+   '.e3-cpt.ok{border-color:rgba(67,181,129,.5);color:#43b581;background:rgba(67,181,129,.10)}',
+   '.e3-split{display:grid;grid-template-columns:250px 1fr;gap:1px;background:rgba(127,160,255,.10);border:1px solid rgba(127,160,255,.14);border-radius:10px;overflow:hidden;min-height:380px}',
+   '.e3-side{background:var(--paper-2,#1b1b1e);padding:11px 0;overflow-y:auto;max-height:520px}',
+   '.e3-h{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.13em;text-transform:uppercase;color:#74767e;padding:0 13px 8px}',
+   '.e3-it{display:flex;gap:8px;align-items:center;width:100%;text-align:left;background:none;border:0;border-left:2px solid transparent;color:#a6a8b0;padding:7px 13px;cursor:pointer;font:400 12.5px/1.35 inherit}',
+   '.e3-it:hover{background:rgba(76,141,255,.07);color:inherit}',
+   '.e3-it.on{background:rgba(76,141,255,.22);color:#dce9ff;font-weight:600;border-left-color:#4c8dff;box-shadow:inset 0 0 0 1px rgba(76,141,255,.22)}',
+   '.e3-it-l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+   '.e3-it-m{font:400 10.5px/1 ui-monospace,Menlo,monospace;color:#74767e;flex:none}',
+   '.e3-it.ok .e3-it-m{color:#43b581}',
+   '.e3-fs{padding:0 13px}',
+   '.e3-f{display:grid;grid-template-columns:1fr auto;gap:3px 8px;margin-bottom:7px}',
+   '.e3-f label{grid-column:1/-1;font-size:10.5px;color:#74767e}',
+   '.e3-v{background:#0e0e10;border:1px solid #2a2a2e;border-radius:5px;padding:4px 8px;font:400 11.5px/1.35 ui-monospace,Menlo,monospace;color:#a6a8b0;overflow-wrap:anywhere;min-width:0}',
+   '.e3-v.ok{border-color:rgba(63,174,114,.35);color:#6fe0a6}',
+   '.e3-v.ko{border-color:rgba(215,160,58,.45);color:#e8c67e}',
+   '.e3-v.abs{border-style:dashed}',
+   '.e3-fix{background:rgba(215,160,58,.12);border:1px solid rgba(215,160,58,.4);color:#e8c67e;border-radius:5px;padding:3px 7px;cursor:pointer;font:500 10.5px/1.3 ui-monospace,Menlo,monospace;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+   '.e3-view{background:var(--card,#141416);padding:13px 15px;display:flex;flex-direction:column;gap:12px;min-width:0}',
+   '.e3-img{max-width:100%;max-height:420px;object-fit:contain;border:1px solid #2a2a2e;border-radius:6px;background:#0e0e10}',
+   '.e3-pdf{width:100%;height:420px;border:1px solid #2a2a2e;border-radius:6px;background:#0e0e10}',
+   '.e3-noprev{border:1px dashed #2a2a2e;border-radius:6px;padding:40px 18px;text-align:center;color:#74767e;font-size:12.5px;line-height:1.6}',
+   '.e3-band{border-radius:8px;padding:10px 13px;font-size:12.5px;line-height:1.55;border:1px solid}',
+   '.e3-band.ok{border-color:rgba(63,174,114,.4);background:rgba(63,174,114,.09);color:#6fe0a6}',
+   '.e3-band.ko{border-color:rgba(215,160,58,.45);background:rgba(215,160,58,.09);color:#e8c67e}',
+   '.e3-band.n{border-color:#2a2a2e;background:rgba(255,255,255,.02);color:#8f97a6}',
+   '.e3-band b{color:#eef0f4}',
+   '.e3-vide,.e3-none{color:#74767e;font-size:12.5px;padding:10px 0;line-height:1.6}',
+   '@media(max-width:900px){.e3-split{grid-template-columns:1fr}.e3-side{max-height:none}}'
   ].join('');
   document.head.appendChild(st);
 })();
