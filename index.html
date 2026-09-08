@@ -2448,13 +2448,13 @@ function stMontant(v){
   return isFinite(n)?n:0;
 }
 try{ window.stMontant=stMontant; }catch(e){}
-function stCivil(a,ph){var nom=esc((a&&a.nom||'').trim())||'«nom prénom»';var civ=(a&&a.civilite)?esc(a.civilite):'M.';
-  var naiss=(a&&a.naissance)?esc(a.naissance):'«…»';var lieu=(a&&a.lieuNaissance)?esc(a.lieuNaissance):'«lieu»';
-  var pays=(a&&a.pays)?esc(a.pays):'«pays»';var nat=(a&&a.nationalite)?esc(a.nationalite):'«…»';
-  var adr=(a&&a.adresse)?esc(a.adresse):(ph||'«adresse»');
+function stCivil(a,ph){var nom=esc((a&&a.nom||'').trim())||'«NOM PRÉNOM»';var civ=(a&&a.civilite)?esc(a.civilite):'M.';
+  var naiss=(a&&a.naissance)?esc(a.naissance):'«…»';var lieu=(a&&a.lieuNaissance)?esc(a.lieuNaissance):'«LIEU»';
+  var pays=(a&&a.pays)?esc(a.pays):'«PAYS»';var nat=(a&&a.nationalite)?esc(a.nationalite):'«…»';
+  var adr=(a&&a.adresse)?esc(a.adresse):(ph||'«ADRESSE»');
   var ne=/^\s*(mme|mlle|madame|mademoiselle)/i.test((a&&a.civilite)||'')?'née':'né';
-  return civ+' '+nom+' '+ne+' le '+naiss+' à '+lieu+' en '+pays+', de nationalité '+nat+', demeurant au '+adr+'.';}
-function stFormeLabel(f){return {SAS:'Société par actions simplifiée',SASU:'Société par actions simplifiée Unipersonnelle',SARL:'Société à responsabilité limitée',EURL:'Entreprise unipersonnelle à responsabilité limitée',SCI:'Société civile immobilière',SA:'Société anonyme'}[f]||'Société par actions simplifiée';}
+  return civ+' '+nom+' '+ne+' le '+naiss+' à '+lieu+' en '+pays+', de nationalité '+nat+', demeurant '+adr+'.';}
+function stFormeLabel(f){return {SAS:'Société par actions simplifiée',SASU:'Société par actions simplifiée unipersonnelle',SARL:'Société à responsabilité limitée',EURL:'Entreprise unipersonnelle à responsabilité limitée',SCI:'Société civile immobilière',SA:'Société anonyme'}[f]||'Société par actions simplifiée';}
 function stQualite(f){return (f==='SARL'||f==='EURL'||f==='SCI')?'gérant':'Président';}
 function stDossData(d){
   var s=DB.societe||{};var c=clientById((d.clientIds||[])[0])||{};var dv=c.docVars||{};
@@ -2483,21 +2483,21 @@ function stDossData(d){
   var annee=((dv.anneeExo||'')+'').trim()||(''+_now.getFullYear());
   var finExo=((dv.finExo||'')+'').trim()||('31 décembre '+annee);
   var villeB=((c.ville||'')+'').trim();
-  var villeSignature=((dv.villeSignature||'')+'').trim()||villeB||'«ville»';
-  var rcsVille=((dv.rcsVille||'')+'').trim()||villeB||'«ville RCS»';
+  var villeSignature=((dv.villeSignature||'')+'').trim()||villeB||'«VILLE»';
+  var rcsVille=((dv.rcsVille||'')+'').trim()||villeB||'«VILLE RCS»';
   var cp=((c.cp||'')+'').trim();
   var villeMaj=(villeB||'').toUpperCase();
   var siegeRue=((c.siege||'')+'').trim();
-  var siegeComplet=siegeRue?(siegeRue+((cp||villeMaj)?(', '+(cp?cp+' ':'')+villeMaj):'')):'«adresse du siège social»';
+  var siegeComplet=siegeRue?(siegeRue+((cp||villeMaj)?(', '+(cp?cp+' ':'')+villeMaj):'')):'«ADRESSE DU SIÈGE SOCIAL»';
   return {s:s,c:c,assoc:assoc,totalParts:totalParts,cap:cap,nominal:nominal,nbActions:nbActions,
     denom:((c.denomination||'')+'').trim().toUpperCase()||'«DÉNOMINATION SOCIALE»',
     forme:(c.forme||d.forme||'SAS'),
-    siege:((c.siege||'')+'').trim()||'«adresse du siège»',
+    siege:((c.siege||'')+'').trim()||'«ADRESSE DU SIÈGE»',
     cp:cp,villeMaj:villeMaj,siegeComplet:siegeComplet,
-    ville:((c.ville||'')+'').trim()||'«ville»',
+    ville:((c.ville||'')+'').trim()||'«VILLE»',
     dateActe:dateActe,annee:annee,finExo:finExo,villeSignature:villeSignature,rcsVille:rcsVille,
     pere:((dv.pereNom||'')+'').trim(),mere:((dv.mereNom||'')+'').trim(),
-    president:presDisplay||'«Président»'};
+    president:presDisplay||'«PRÉSIDENT»'};
 }
 function souscripteursHTML(d){
   var x=stDossData(d);
@@ -2525,8 +2525,8 @@ function souscripteursHTML(d){
     +'<table class="st-tbl"><thead><tr>'
     +'<th>N°</th><th>Associé (nom, prénom, adresse ou dénomination, forme, capital, siège, RCS)</th>'
     +'<th>Montant de l\'apport en euros</th>'
-    +'<th>Montant libéré en euros lors de la création de la société, au moins égal à la moitié de l\'apport en numéraire</th>'
-    +'<th>Nombre de '+UNS+' attribuées en rémunération de l\'apport</th></tr></thead><tbody>'
+    +'<th>Montant libéré en euros lors de la création de la société, au moins égal '+(_actForme?'à la moitié':'au cinquième')+' de l\'apport en numéraire</th>'
+    +'<th>Nombre '+(_actForme?'d\'':'de ')+UNS+' attribuées en rémunération de l\'apport</th></tr></thead><tbody>'
     +rows
     +'<tr class="tot"><td></td><td class="al">TOTAL</td><td>'+totTxt+'</td><td>'+totTxt+'</td><td>'+totAct+'</td></tr>'
     +'</tbody></table>'
@@ -2538,18 +2538,18 @@ function souscripteursHTML(d){
 function pouvoirHTML(d){
   var x=stDossData(d);var s=x.s;
   var mandant=x.president;
-  var adrMandant=((x.siege||'')+'').trim()||'«adresse»';
+  var adrMandant=((x.siege||'')+'').trim()||'«ADRESSE»';
   var qualite=stQualite(x.forme);
-  var repFirm=((s.representant||s.dirigeant||s.raison||'')+'').trim()||'«représentant»';
+  var repFirm=((s.representant||s.dirigeant||s.raison||'')+'').trim()||'«REPRÉSENTANT»';
   var repTit=/^(M\.|Mme|M |Mr|Monsieur|Madame)/i.test(repFirm)?esc(repFirm):'M. '+esc(repFirm);
-  var adrFirm=((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«adresse du mandataire»';
+  var adrFirm=((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«ADRESSE DU MANDATAIRE»';
   var mandataire=repTit+' dirigeant de la société '+esc(s.raison||'AEM CONSEIL')+' situé au '+esc(adrFirm);
   var villeFait=x.villeSignature;
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
   var dateTxt=x.dateActe;
   return '<div class="st-doc"><div class="st-page">'
     +'<div class="st-titre" style="font-size:15px;margin-top:8px">POUVOIR</div>'
-    +'<p style="margin-top:18px">Je soussigné '+esc(mandant)+' demeurant à '+esc(adrMandant)+', agissant en qualité de '+qualite+' de la Société '+esc(x.denom)+' en cours de constitution donne par les présentes pouvoirs à '+mandataire+' aux fins d\'effectuer toutes démarches relatives aux formalités d\'inscription au Registre du commerce et des sociétés, de signer tous documents à cet effet, et d\'une façon générale, de faire tout ce qui sera nécessaire pour l\'exécution des présentes.</p>'
+    +'<p style="margin-top:18px">Je soussigné '+esc(mandant)+' demeurant à '+esc(adrMandant)+', agissant en qualité de '+qualite+' de la Société '+esc(x.denom)+' en cours de constitution donne par les présentes pouvoirs à '+mandataire+' aux fins d\'effectuer toutes démarches relatives aux formalités d\'inscription au registre du commerce et des sociétés, de signer tous documents à cet effet, et d\'une façon générale, de faire tout ce qui sera nécessaire pour l\'exécution des présentes.</p>'
     +'<div class="st-fin" style="margin-top:34px"><p>Fait à '+esc(villeFait)+',</p><p>Le '+dateTxt+'</p>'
     +'<div class="st-sign" style="margin-top:30px"><div class="sg"><b>'+esc(mandant)+'</b>Le Mandant — Signature</div><div class="sg"><b>'+repTit+'</b>Le Mandataire — Signature</div></div></div>'
     +'</div></div>';
@@ -2557,31 +2557,31 @@ function pouvoirHTML(d){
 function dncHTML(d){
   var x=stDossData(d);var c=x.c;
   var dcl=x.assoc.find(function(a){return (''+(a.nom||'')).trim()===(''+x.president).trim();})||x.assoc[0]||{};
-  var nom=esc((dcl.nom||x.president||'').trim())||'«nom prénom»';
+  var nom=esc((dcl.nom||x.president||'').trim())||'«NOM PRÉNOM»';
   var naiss=dcl.naissance?esc(dcl.naissance):'«…»';
-  var lieu=dcl.lieuNaissance?esc(dcl.lieuNaissance):'«lieu»';
+  var lieu=dcl.lieuNaissance?esc(dcl.lieuNaissance):'«LIEU»';
   var pays=dcl.pays?(' en '+esc(dcl.pays)):'';
   var nat=dcl.nationalite?esc(dcl.nationalite):'«…»';
-  var adr=dcl.adresse?esc(dcl.adresse):'«adresse»';
+  var adr=dcl.adresse?esc(dcl.adresse):'«ADRESSE»';
   var pere=(x.pere||((dcl.pereNom||c.pereNom||'')+'')).trim();
   var mere=(x.mere||((dcl.mereNom||c.mereNom||'')+'')).trim();
-  var filiation=(pere||mere)?('Déclare être le fils ou la fille de '+esc(pere||'«père»')+' et de '+esc(mere||'«mère»')):'Déclare être le fils ou la fille de «père» et de «mère»';
+  var filiation=(pere||mere)?('Déclare être le fils ou la fille de '+esc(pere||'«PÈRE»')+' et de '+esc(mere||'«MÈRE»')):'Déclare être le fils ou la fille de «PÈRE» et de «MÈRE»';
   var qualite=stQualite(x.forme);
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
   var dateTxt=x.dateActe;
   var villeFait=x.villeSignature;
   return '<div class="st-doc"><div class="st-page">'
     +'<div class="st-titre" style="font-size:14px">DÉCLARATION DE NON-CONDAMNATION</div>'
-    +'<p style="text-align:center;font-size:10px;margin-top:-4px">(Arrêté et Instructions du 9 février 1988 relatif au Registre du commerce et des sociétés)</p>'
+    +'<p style="text-align:center;font-size:10px;margin-top:-4px">(Arrêté et instructions du 9 février 1988 relatifs au registre du commerce et des sociétés)</p>'
     +'<p style="margin-top:16px">Je soussigné <b>'+nom+'</b></p>'
     +'<p>né le '+naiss+'</p><p>à '+lieu+pays+'</p><p>de nationalité '+nat+'</p><p>demeurant à '+adr+'</p>'
     +'<p style="margin-top:10px">'+filiation+'</p>'
     +'<p style="margin-top:10px">agissant en qualité de '+qualite+' de la Société '+esc(x.denom)+' dont le siège social est à '+esc(x.siegeComplet)+'.</p>'
     +'<p style="margin-top:10px">En conformité des prescriptions de l\'article 20 de l\'arrêté du 24 décembre 1975 et du paragraphe 2-3 de l\'Instruction de même date, relatifs au RCS ainsi que de l\'article 17 de l\'arrêté du 24 septembre 1984 pris à la suite du décret du 31 mai 1984 ;</p>'
-    +'<p>En connaissance des sanctions prévues à l\'article 2 de l\'ordonnance modifiée n° 58-1352 du 27 décembre 1958 réprimant certaines infractions en matière de Registre du commerce ;</p>'
+    +'<p>En connaissance des sanctions prévues à l\'article L. 123-5 du Code de commerce ;</p>'
     +'<p style="margin-top:10px"><b>Certifie et déclare sur l\'honneur</b> n\'avoir fait l\'objet d\'aucune condamnation pénale, ni de sanction civile ou administrative de nature à m\'interdire de gérer, d\'administrer ou de diriger une personne morale, ou d\'exercer une activité commerciale.</p>'
-    +'<p style="margin-top:10px">J\'ai pris connaissance des dispositions du texte ci-dessous — article 2 de l\'ordonnance n° 58-1352 du 27 décembre 1958 :</p>'
-    +'<p style="font-style:italic">Quiconque donne, de mauvaise foi, des indications inexactes ou incomplètes en vue d\'une immatriculation, d\'une radiation ou d\'une mention complémentaire ou rectificative au Registre du commerce et des sociétés est puni d\'une amende de 76,22 à 3048,98 euros et d\'un emprisonnement de dix jours à six mois ou de l\'une de ces deux peines seulement.</p>'
+    +'<p style="margin-top:10px">J\'ai pris connaissance des dispositions du texte ci-dessous — article L. 123-5 du Code de commerce :</p>'
+    +'<p style="font-style:italic">Le fait de donner, de mauvaise foi, des indications inexactes ou incomplètes en vue d\'une immatriculation, d\'une radiation ou d\'une mention complémentaire ou rectificative au registre du commerce et des sociétés est puni d\'une amende de 4 500 euros.</p>'
     +'<div class="st-fin" style="margin-top:26px"><p>Fait à '+esc(villeFait)+'</p><p>Le '+dateTxt+'</p>'
     +'<div class="st-sign" style="margin-top:24px"><div class="sg"><b>'+nom+'</b>Signature</div></div></div>'
     +'</div></div>';
@@ -2591,11 +2591,11 @@ function statutsSasHTML(d){
   var denom=((c.denomination||'')+'').trim().toUpperCase()||'«DÉNOMINATION SOCIALE»';
   var nomCom=((c.nomCommercial||'')+'').trim();
   var cap=stMontant(c.capital)||0;var capN=cap?stNum(cap):'«…»';var capL=cap?stLettres(cap):'«…»';
-  var siege=((c.siege||'')+'').trim()||'«adresse du siège social»';
-  var ville=((c.ville||'')+'').trim()||'«ville»';
-  var _cp=((c.cp||'')+'').trim();var _villeMaj=(ville!=='«ville»'?ville:'').toUpperCase();
+  var siege=((c.siege||'')+'').trim()||'«ADRESSE DU SIÈGE SOCIAL»';
+  var ville=((c.ville||'')+'').trim()||'«VILLE»';
+  var _cp=((c.cp||'')+'').trim();var _villeMaj=(!/^«[^»]*»$/.test(ville)?ville:'').toUpperCase();
   var siegeComplet=siege+((_cp||_villeMaj)?(', '+(_cp?_cp+' ':'')+_villeMaj):'');
-  var objet=((c.activites||[]).join(', ')||'').trim()||'«objet social — activités de la société»';
+  var objet=((c.activites||[]).join(', ')||'').trim()||'«OBJET SOCIAL — ACTIVITÉS DE LA SOCIÉTÉ»';
   var assoc=(c.associes||[]).filter(function(a){return a&&(''+(a.nom||'')).trim();});
   if(!assoc.length)assoc=[{nom:''}];
   var _ex=(d.verif&&d.verif.extract)||{};var _exFull=((_ex.prenom||'')+' '+(_ex.nom||'')).trim();var _pn=((c.president||(assoc[0]&&assoc[0].nom))||'').trim();
@@ -2609,7 +2609,7 @@ function statutsSasHTML(d){
   if(_dv.nominal!=null&&(''+_dv.nominal).trim()!=='')nominal=Number((''+_dv.nominal).replace(/[^0-9.]/g,''))||nominal;
   var nbActions=totalParts>0?totalParts:(nominal>0?Math.round(cap/nominal):0);
   if(_dv.nbTitres!=null&&(''+_dv.nbTitres).trim()!=='')nbActions=parseInt((''+_dv.nbTitres).replace(/[^0-9]/g,''),10)||nbActions;
-  var president=_exFull||((c.president||(assoc[_pi]&&assoc[_pi].nom)||'')+'').trim()||'«Président»';
+  var president=_exFull||((c.president||(assoc[_pi]&&assoc[_pi].nom)||'')+'').trim()||'«PRÉSIDENT»';
   var annee=((_dv.anneeExo||'')+'').trim()||(''+new Date().getFullYear());
   var _finExo=((_dv.finExo||'')+'').trim()||('31 décembre '+annee);
   var A=[];
@@ -2623,14 +2623,14 @@ function statutsSasHTML(d){
   // Préambule
   var soussignes=assoc.map(function(a){return '<p>'+stCivil(a)+'</p>';}).join('');
   var preambule='<p><b>Les soussignés :</b></p>'+soussignes
-    +'<p>Les soussignés ont établi ainsi qu\'il suit les statuts de la Société par actions simplifiée qu\'ils sont convenus de constituer.</p>';
+    +'<p>Ont établi ainsi qu\'il suit les statuts de la Société par actions simplifiée qu\'ils sont convenus de constituer.</p>';
   // TITRE I
   A.push('<div class="st-titre">TITRE I — FORME · DÉNOMINATION · SIÈGE · OBJET · DURÉE</div>');
   A.push(art('ARTICLE 1 — Forme',
     ['La Société est une société par actions simplifiée régie par les dispositions légales applicables et par les présents statuts.',
      'Elle fonctionne indifféremment sous la même forme avec un ou plusieurs associés.',
-     'Elle ne peut faire appel public à l\'épargne sous sa forme actuelle de Société par actions simplifiée.',
-     'Elle peut émettre toutes valeurs mobilières définies à l\'article L 211-2 du Code monétaire et financier, donnant accès au capital ou à l\'attribution de titres de créances, dans les conditions prévues par la loi et les présents statuts.']));
+     'Elle ne peut procéder à une offre au public de titres financiers, conformément à l\'article L. 227-2 du Code de commerce.',
+     'Elle peut émettre toutes valeurs mobilières définies à l\'article L. 211-2 du Code monétaire et financier, donnant accès au capital ou à l\'attribution de titres de créances, dans les conditions prévues par la loi et les présents statuts.']));
   A.push('<div class="st-art">ARTICLE 2 — Dénomination sociale</div><p>La dénomination sociale est :</p><p class="st-den">'+esc(denom)+'</p>'
     +(nomCom?('<p>Nom commercial : '+esc(nomCom)+'</p>'):'')
     +'<p>Sur tous les actes et documents émanant de la Société, la dénomination sociale doit être précédée ou suivie immédiatement des mots « Société par actions simplifiée » ou des initiales « S.A.S. » et de l\'énonciation du capital social.</p>');
@@ -2638,8 +2638,8 @@ function statutsSasHTML(d){
     ['Le siège social est fixé à '+esc(siegeComplet)+'.',
      'Il ne peut être transféré que par décision collective des associés.']));
   A.push(art('ARTICLE 4 — Objet',
-    ['La Société a pour objet directement ou indirectement, tant en France qu\'à l\'étranger :',
-     esc(objet)+'.',
+    ['La Société a pour objet, directement ou indirectement, tant en France qu\'à l\'étranger :',
+     esc(objet)+' ;',
      'la création, l\'acquisition, la prise en location-gérance de tous fonds de commerce, la prise à bail, l\'installation, l\'exploitation de tous établissements, fonds de commerce, usines, ateliers, se rapportant à l\'une ou l\'autre des activités spécifiées ci-dessus ;',
      'la prise, l\'acquisition, l\'exploitation ou la cession de tous procédés, brevets et droits de propriété intellectuelle concernant lesdites activités ;',
      'la participation, directe ou indirecte, de la Société dans toutes opérations financières, immobilières ou mobilières ou entreprises commerciales ou industrielles pouvant se rattacher à l\'objet social ou à tout objet similaire ou connexe ;',
@@ -2651,38 +2651,38 @@ function statutsSasHTML(d){
   A.push('<div class="st-titre">TITRE II — APPORTS · CAPITAL SOCIAL · FORME DES ACTIONS · DROITS ET OBLIGATIONS ATTACHÉS AUX ACTIONS</div>');
   var apports=assoc.map(function(a){var p=Number(a.parts)||0;var m=(nominal&&p)?stNum(Math.round(nominal*p)):'«…»';
     var _civ=((a.civilite||'')+'').trim()||'M.';
-    return '<p>- '+_civ+' '+ (esc((a.nom||'').trim())||'«associé»') +', une somme en numéraire de '+((nominal&&p)?stLettres(Math.round(nominal*p))+' euros':'«…»')+' ci '+m+' euros ;</p>';}).join('');
-  A.push('<div class="st-art">ARTICLE 6 — Apports</div><p>Les soussignés apportent à la société, à savoir :</p>'+apports
-    +'<p>Soit au total la somme de '+capL+' euros, ci '+capN+' euros.</p>'
-    +'<p>Ladite somme correspond à la souscription de '+(nbActions||'«…»')+' actions ordinaires de '+stNum(Math.round(nominal))+' euros et libérées entièrement, ainsi que l\'atteste le certificat de la banque.</p>');
+    return '<p>- '+_civ+' '+ (esc((a.nom||'').trim())||'«ASSOCIÉ»') +', une somme en numéraire de '+((nominal&&p)?stLettres(Math.round(nominal*p))+' euros':'«…»')+', ci ……… '+m+' € ;</p>';}).join('');
+  A.push('<div class="st-art">ARTICLE 6 — Apports</div><p>Les soussignés font à la Société les apports en numéraire suivants :</p>'+apports
+    +'<p>Soit au total la somme de '+capL+' euros, ci ……… '+capN+' €.</p>'
+    +'<p>Ladite somme correspond à la souscription de '+(nbActions||'«…»')+' actions ordinaires de '+stNum(Math.round(nominal))+' euros de valeur nominale, intégralement libérées, ainsi qu\'en atteste l\'attestation de dépôt des fonds délivrée par le dépositaire.</p>');
   A.push(art('ARTICLE 7 — Capital social',
     ['Le capital social est fixé à la somme de '+capN+' euros.',
      'Il est divisé en '+(nbActions||'«…»')+' actions de '+stNum(Math.round(nominal))+' euros de valeur nominale chacune, entièrement libérées et de même catégorie.']));
   A.push(art('ARTICLE 8 — Modifications du capital social',
-    ['1° Le capital ne peut être augmenté ou réduit que par une décision collective des associés statuant sur le rapport du Président.',
-     '2° Les associés peuvent déléguer au Président les pouvoirs nécessaires à l\'effet de réaliser ou de décider, dans les conditions et délais prévus par la loi, l\'augmentation ou la réduction du capital.',
-     '3° En cas d\'augmentation du capital en numéraire ou d\'émission de valeurs mobilières donnant accès au capital ou donnant droit à l\'attribution de titres de créances, les associés ont, proportionnellement au montant de leurs actions, un droit de préférence à la souscription des nouveaux titres émis. Toutefois, les associés peuvent renoncer à titre individuel à leur droit préférentiel de souscription et la décision d\'augmentation du capital peut supprimer ce droit préférentiel dans les conditions prévues par la loi.',
-     '4° Les actions nouvelles de numéraire doivent obligatoirement être libérées lors de la souscription de la quotité du nominal (ou du pair) prévue par la loi et, le cas échéant, de la totalité de la prime d\'émission.']));
-  A.push(art('ARTICLE 9 — Forme des titres de capital de la Société',
-    ['La Société ne pouvant faire appel public à l\'épargne, les valeurs mobilières émises par celle-ci sont obligatoirement nominatives.',
+    ['1. Le capital ne peut être augmenté ou réduit que par une décision collective des associés statuant sur le rapport du Président.',
+     '2. Les associés peuvent déléguer au Président les pouvoirs nécessaires à l\'effet de réaliser ou de décider, dans les conditions et délais prévus par la loi, l\'augmentation ou la réduction du capital.',
+     '3. En cas d\'augmentation du capital en numéraire ou d\'émission de valeurs mobilières donnant accès au capital ou donnant droit à l\'attribution de titres de créances, les associés ont, proportionnellement au montant de leurs actions, un droit de préférence à la souscription des nouveaux titres émis. Toutefois, les associés peuvent renoncer à titre individuel à leur droit préférentiel de souscription et la décision d\'augmentation du capital peut supprimer ce droit préférentiel dans les conditions prévues par la loi.',
+     '4. Les actions nouvelles de numéraire doivent obligatoirement être libérées lors de la souscription de la quotité du nominal (ou du pair) prévue par la loi et, le cas échéant, de la totalité de la prime d\'émission.']));
+  A.push(art('ARTICLE 9 — Forme des titres de capital',
+    ['La Société ne pouvant procéder à une offre au public de titres financiers, les valeurs mobilières qu\'elle émet sont obligatoirement nominatives.',
      'Elles sont inscrites en compte conformément à la réglementation en vigueur et aux usages applicables.',
      'Tout associé peut demander à la Société la délivrance d\'une attestation d\'inscription en compte.']));
   A.push(art('ARTICLE 10 — Droits et obligations attachés aux actions',
-    ['1. Toute action donne droit dans les bénéfices et l\'actif social, à une part nette proportionnelle à la quotité de capital qu\'elle représente. Pour y parvenir, il est fait masse, le cas échéant, de toutes exonérations fiscales comme de toutes taxations pouvant être prises en charge par la Société et auxquelles les répartitions au profit des actions pourraient donner lieu.',
+    ['1. Toute action donne droit, dans les bénéfices et l\'actif social, à une part nette proportionnelle à la quotité de capital qu\'elle représente. Pour y parvenir, il est fait masse, le cas échéant, de toutes exonérations fiscales comme de toutes taxations pouvant être prises en charge par la Société et auxquelles les répartitions au profit des actions pourraient donner lieu.',
      '2. Les associés ne supportent les pertes qu\'à concurrence de leurs apports.',
      '3. Les actions sont indivisibles à l\'égard de la Société. Les copropriétaires indivis doivent se faire représenter auprès de la Société par l\'un d\'entre eux ou par un mandataire unique désigné en justice en cas de désaccord.',
-     '4. Le droit de vote attaché aux actions démembrées appartient au nu-propriétaire pour toutes les décisions collectives, sauf pour celles concernant l\'affectation des bénéfices de l\'exercice où il est réservé à l\'usufruitier.',
+     '4. Le droit de vote attaché aux actions démembrées appartient au nu-propriétaire pour toutes les décisions collectives, sauf pour celles concernant l\'affectation des bénéfices de l\'exercice, pour lesquelles il est réservé à l\'usufruitier.',
      '5. Chaque fois qu\'il est nécessaire de posséder plusieurs actions pour exercer un droit quelconque, les propriétaires de titres isolés ou en nombre inférieur à celui requis ne pourront exercer ce droit qu\'à condition d\'avoir fait leur affaire personnelle du groupement et, éventuellement, de l\'achat ou de la vente du nombre d\'actions ou de titres nécessaires.']));
   // TITRE III
   A.push('<div class="st-titre">TITRE III — TRANSMISSION ET LOCATION DES ACTIONS · EXCLUSION D\'ASSOCIÉS</div>');
   A.push(art('ARTICLE 11 — Dispositions communes applicables aux cessions d\'actions',
     ['Dans le cadre des présents statuts, les soussignés sont convenus des définitions ci-après :',
-     'a) Cession : signifie toute opération à titre onéreux ou gratuit entraînant le transfert de la pleine propriété, de la nue-propriété ou de l\'usufruit des valeurs mobilières émises par la Société, à savoir : cession, transmission, échange, apport en Société, fusion et opération assimilée, cession judiciaire, constitution de trusts, nantissement, liquidation, transmission universelle de patrimoine.',
+     'a) Cession : signifie toute opération à titre onéreux ou gratuit entraînant le transfert de la pleine propriété, de la nue-propriété ou de l\'usufruit des valeurs mobilières émises par la Société, à savoir : cession, transmission, échange, apport en société, fusion et opération assimilée, cession judiciaire, constitution de trust, nantissement, liquidation, transmission universelle de patrimoine.',
      'b) Action ou Valeur mobilière : signifie les valeurs mobilières émises par la Société donnant accès de façon immédiate ou différée, et de quelque manière que ce soit, à l\'attribution d\'un droit au capital et/ou d\'un droit de vote de la Société, ainsi que les bons et droits de souscription et d\'attribution attachés à ces valeurs mobilières.',
-     'c) Opération de reclassement : signifie toute opération de reclassement simple des actions de la Société intervenant à l\'intérieur de chacun des groupes d\'associés, constitué par chaque Société associée et les sociétés ou entités qu\'elle contrôle directement ou indirectement au sens de l\'article L 233-3 du Code de commerce.',
-     'Modalités de transmission des actions : la transmission des actions émises par la Société s\'opère par un virement de compte à compte sur production d\'un ordre de mouvement. Ce mouvement est inscrit sur le registre des mouvements coté et paraphé.']));
+     'c) Opération de reclassement : signifie toute opération de reclassement simple des actions de la Société intervenant à l\'intérieur de chacun des groupes d\'associés, constitué par chaque Société associée et les sociétés ou entités qu\'elle contrôle directement ou indirectement au sens de l\'article L. 233-3 du Code de commerce.',
+     'd) Modalités de transmission des actions : la transmission des actions émises par la Société s\'opère par un virement de compte à compte sur production d\'un ordre de mouvement. Ce mouvement est inscrit sur le registre des mouvements coté et paraphé.']));
   A.push(art('ARTICLE 12 — Agrément',
-    ['1. Les actions sont librement cessibles entre associés. Elles ne peuvent être cédées, à titre onéreux ou à titre gratuit, à un cessionnaire n\'ayant déjà la qualité d\'associé et quel que soit son degré de parenté avec le cédant, qu\'avec l\'agrément préalable de la collectivité des associés statuant à la majorité des voix des associés disposant du droit de vote.',
+    ['1. Les actions sont librement cessibles entre associés. Elles ne peuvent être cédées, à titre onéreux ou à titre gratuit, à un cessionnaire n\'ayant pas déjà la qualité d\'associé et quel que soit son degré de parenté avec le cédant, qu\'avec l\'agrément préalable de la collectivité des associés statuant à la majorité des voix des associés disposant du droit de vote.',
      '2. La demande d\'agrément doit être notifiée par lettre recommandée avec demande d\'avis de réception adressée au Président de la Société et indiquant le nombre d\'actions dont la cession est envisagée, le prix de la cession, les nom, prénoms, adresse, nationalité de l\'acquéreur ou, s\'il s\'agit d\'une personne morale, son identification complète. Cette demande d\'agrément est transmise par le Président aux associés.',
      '3. Le Président dispose d\'un délai de trois mois à compter de la réception de la demande d\'agrément pour faire connaître au Cédant la décision de la collectivité des associés. À défaut de réponse dans le délai ci-dessus, l\'agrément sera réputé acquis.',
      '4. Les décisions d\'agrément ou de refus d\'agrément ne sont pas motivées.',
@@ -2693,12 +2693,12 @@ function statutsSasHTML(d){
   // TITRE IV
   A.push('<div class="st-titre">TITRE IV — ADMINISTRATION ET DIRECTION · CONVENTIONS · COMMISSAIRES AUX COMPTES</div>');
   A.push(art('ARTICLE 14 — Président de la Société',
-    ['La Société est représentée, dirigée et administrée par un Président, personne physique ou morale, associé ou non, de la Société.',
+    ['La Société est représentée, dirigée et administrée par un Président, personne physique ou morale, associé ou non de la Société.',
      'Le premier Président de la Société est désigné aux termes des présents statuts. Le Président est ensuite désigné par décision collective des associés. Lorsque le Président est une personne morale, celle-ci doit obligatoirement désigner un représentant permanent personne physique.',
      'Durée des fonctions : le Président est nommé sans limitation de durée. Le Président peut être révoqué à tout moment, sans qu\'il soit besoin d\'un juste motif, par décision collective des associés prise à l\'initiative d\'un ou plusieurs associés réunissant au moins 51 % du capital et des droits de vote et statuant à la majorité des voix des associés disposant du droit de vote. Cette révocation n\'ouvre droit à aucune indemnisation.',
      'La rémunération du Président est fixée chaque année par décision collective des associés. Le Président dirige la Société et la représente à l\'égard des tiers ; il est investi de tous les pouvoirs nécessaires pour agir en toute circonstance au nom de la Société, dans la limite de l\'objet social et des pouvoirs expressément dévolus par les dispositions légales et les présents statuts aux décisions collectives des associés.']));
   A.push(art('ARTICLE 15 — Conventions entre la Société et ses dirigeants',
-    ['Toute convention intervenant, directement ou par personne interposée, entre la Société et son Président, l\'un de ses dirigeants, l\'un de ses associés disposant d\'une fraction des droits de vote supérieure à 10 % ou, s\'il s\'agit d\'une société associée, la Société la contrôlant au sens de l\'article L 233-3 du Code de commerce, doit être portée à la connaissance des Commissaires aux comptes dans le mois de sa conclusion.',
+    ['Toute convention intervenant, directement ou par personne interposée, entre la Société et son Président, l\'un de ses dirigeants, l\'un de ses associés disposant d\'une fraction des droits de vote supérieure à 10 % ou, s\'il s\'agit d\'une société associée, la Société la contrôlant au sens de l\'article L. 233-3 du Code de commerce, doit être portée à la connaissance des Commissaires aux comptes dans le mois de sa conclusion.',
      'Les Commissaires aux comptes présentent aux associés un rapport sur la conclusion et l\'exécution des conventions au cours de l\'exercice écoulé. Les associés statuent sur ce rapport lors de la décision collective statuant sur les comptes de cet exercice.']));
   A.push(art('ARTICLE 16 — Commissaires aux comptes',
     ['La collectivité des associés désigne, pour la durée, dans les conditions et avec la mission fixée par la loi, un ou plusieurs Commissaires aux comptes titulaires et, le cas échéant, suppléants. Les Commissaires aux comptes doivent être invités à participer à toutes les décisions collectives dans les mêmes conditions que les associés.']));
@@ -2708,7 +2708,7 @@ function statutsSasHTML(d){
     ['La collectivité des associés est seule compétente pour prendre les décisions suivantes : transformation de la Société ; modification du capital social (augmentation, amortissement et réduction) ; fusion, scission, apport partiel d\'actifs ; dissolution ; nomination des Commissaires aux comptes ; nomination, rémunération, révocation du Président ; approbation des comptes annuels et affectation des résultats ; approbation des conventions conclues entre la Société et ses dirigeants ou associés ; modification des statuts, y compris transfert du siège social ; nomination du Liquidateur et décisions relatives aux opérations de liquidation ; agrément des cessions d\'actions.']));
   A.push(art('ARTICLE 18 — Règles de majorité',
     ['Sauf stipulations spécifiques contraires et expresses des présents statuts, les décisions collectives des associés sont adoptées à la majorité des voix des associés disposant du droit de vote, présents ou représentés. Le droit de vote attaché aux actions est proportionnel à la quotité du capital qu\'elles représentent ; chaque action donne droit à une voix au moins.',
-     'Par exception, sont adoptées à l\'unanimité des associés disposant du droit de vote : celles prévues par les dispositions légales ; les décisions ayant pour effet d\'augmenter les engagements des associés ; la prorogation de la Société ; la dissolution de la société ; la transformation de la Société en société d\'une autre forme.']));
+     'Par exception, sont adoptées à l\'unanimité des associés disposant du droit de vote : les décisions prévues par les dispositions légales ; les décisions ayant pour effet d\'augmenter les engagements des associés ; la prorogation de la Société ; la dissolution de la Société ; la transformation de la Société en société d\'une autre forme.']));
   A.push(art('ARTICLE 19 — Modalités des décisions collectives',
     ['Les décisions collectives sont prises sur convocation du Président. Elles résultent de la réunion d\'une assemblée ou d\'un procès-verbal signé par tous les associés ; elles peuvent également être prises par tous moyens de télécommunication électronique.',
      'Tout associé a le droit de participer aux décisions collectives, personnellement ou par mandataire, ou à distance par voie électronique, dans les conditions prévues par la loi et les présents statuts, quel que soit le nombre d\'actions qu\'il possède.']));
@@ -2746,15 +2746,15 @@ function statutsSasHTML(d){
     +'<p>Le premier Président de la Société, nommé aux termes des présents statuts sans limitation de durée, est :</p>'
     +'<p>- '+esc(president)+'.</p>'
     +'<p>Lequel déclare accepter lesdites fonctions et satisfaire à toutes les conditions requises par la loi et les règlements pour leur exercice. Les Présidents suivants seront nommés par décisions collectives des associés.</p>');
-  A.push(art('ARTICLE 29 — Nomination des premiers Commissaires aux comptes',
-    ['Seules sont tenues de désigner au moins un commissaire aux comptes les SAS dépassant, à la clôture de l\'exercice social, deux des trois seuils fixés par décret, ainsi que les SAS qui contrôlent une ou plusieurs sociétés ou qui sont contrôlées, au sens de l\'article L 233-16 II et III du Code de commerce.']));
+  A.push(art('ARTICLE 29 — Commissaires aux comptes',
+    ['La Société n\'est tenue de désigner un ou plusieurs Commissaires aux comptes que si elle dépasse, à la clôture de l\'exercice social, deux des trois seuils fixés par décret, ou si elle contrôle une ou plusieurs sociétés ou est elle-même contrôlée, au sens de l\'article L. 233-16, II et III, du Code de commerce.']));
   A.push(art('ARTICLE 30 — Formalités de publicité · Immatriculation',
     ['Tous pouvoirs sont conférés au porteur d\'un original des présentes à l\'effet d\'accomplir les formalités de publicité, de dépôt et autres nécessaires pour parvenir à l\'immatriculation de la Société au registre du commerce et des sociétés.']));
   // Clôture
   var moisNom=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'][new Date().getMonth()];
   var jour=new Date().getDate();
   var _presTrim=(''+president).trim();
-  var signs=assoc.map(function(a){var an=(''+(a.nom||'')).trim();var role=(an&&an===_presTrim)?('Le '+stQualite(c.forme||d.forme||'SAS')+' — Signature'):'Associé — Signature';return '<div class="sg"><b>'+(esc(an)||'«associé»')+'</b>'+role+'</div>';}).join('');
+  var signs=assoc.map(function(a){var an=(''+(a.nom||'')).trim();var role=(an&&an===_presTrim)?('Le '+stQualite(c.forme||d.forme||'SAS')+' — Signature'):'Associé — Signature';return '<div class="sg"><b>'+(esc(an)||'«ASSOCIÉ»')+'</b>'+role+'</div>';}).join('');
   var _villeSig=((_dv.villeSignature||'')+'').trim()||ville;
   var _dateActe=stDateSlash(_dv.dateActe);
   var fin='<div class="st-fin"><p>Fait à '+esc(_villeSig)+',</p><p>Le '+_dateActe+',</p>'
@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=590;
+var LAST_VER=591;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -4671,8 +4671,8 @@ window.modalDemandeView=function(id){
   window.statutsSasuHTML=function(d){
     var x=stDossData(d);var c=x.c;
     var denom=x.denom, cap=x.cap, capN=cap?stNum(cap):'«…»', capL=cap?stLettres(cap):'«…»';
-    var siege=x.siege, ville=(x.ville&&x.ville!=='«ville»')?x.ville:'';
-    var objet=((c.activites||[]).join(', ')||'').trim()||'«objet social — activités de la société»';
+    var siege=x.siege, ville=(x.ville&&!/^«[^»]*»$/.test(x.ville))?x.ville:'';
+    var objet=((c.activites||[]).join(', ')||'').trim()||'«OBJET SOCIAL — ACTIVITÉS DE LA SOCIÉTÉ»';
     var uni=x.assoc[0]||{nom:''};
     var nominal=Math.round(x.nominal)||10;
     var nbActions=x.nbActions||(cap&&nominal?Math.round(cap/nominal):100);
@@ -4696,9 +4696,9 @@ window.modalDemandeView=function(id){
       ['Le siège social est fixé '+esc(x.siegeComplet)+'.',
        'Il peut être transféré en tout endroit par décision du Président qui est habilité à modifier les statuts en conséquence.']));
     A.push(art('ARTICLE 5 — DURÉE',
-      ['La durée de la Société est fixée à quatre-vingt-dix-neuf années à compter de la date de son immatriculation au Registre du commerce et des sociétés, sauf les cas de dissolution anticipée ou de prorogation.']));
+      ['La durée de la Société est fixée à quatre-vingt-dix-neuf années à compter de la date de son immatriculation au registre du commerce et des sociétés, sauf les cas de dissolution anticipée ou de prorogation.']));
     A.push('<div class="st-art">ARTICLE 6 — APPORTS</div><p>À la constitution, l\'actionnaire unique a procédé aux apports suivants :</p>'
-      +'<p>'+(esc((uni.nom||'').trim())||'«actionnaire unique»')+' : '+capN+' euros</p>'
+      +'<p>'+(esc((uni.nom||'').trim())||'«ACTIONNAIRE UNIQUE»')+' : '+capN+' euros</p>'
       +'<p>Soit une somme en numéraire de '+capN+' ('+capL+' euros), correspondant à '+nbActions+' actions de numéraire, d\'une valeur nominale de '+stNum(nominal)+' euros chacune, souscrites en totalité. À la constitution, le capital est libéré en totalité.</p>');
     A.push(art('ARTICLE 7 — CAPITAL SOCIAL',
       ['À la constitution, le capital a été fixé à '+capN+' euros, réparti en '+nbActions+' actions de '+stNum(nominal)+' euros chacune, de même catégorie.']));
@@ -4712,7 +4712,7 @@ window.modalDemandeView=function(id){
       ['Les actions sont obligatoirement nominatives. Elles donnent lieu à une inscription en compte individuel dans les conditions et selon les modalités prévues par la loi et les règlements en vigueur.',
        'Tout actionnaire peut demander à la Société la délivrance d\'une attestation d\'inscription en compte.']));
     A.push(art('ARTICLE 11 — TRANSMISSION DES ACTIONS',
-      ['Les actions ne sont négociables qu\'après l\'immatriculation de la Société au Registre du Commerce et des Sociétés. En cas d\'augmentation du capital, les actions sont négociables à compter de la réalisation de celle-ci. Les actions demeurent négociables après la dissolution de la Société et jusqu\'à la clôture de la liquidation.',
+      ['Les actions ne sont négociables qu\'après l\'immatriculation de la Société au registre du commerce et des sociétés. En cas d\'augmentation du capital, les actions sont négociables à compter de la réalisation de celle-ci. Les actions demeurent négociables après la dissolution de la Société et jusqu\'à la clôture de la liquidation.',
        'La propriété des actions résulte de leur inscription en compte individuel au nom du titulaire sur les registres tenus à cet effet au siège social.',
        'La transmission des actions s\'opère à l\'égard de la Société et des tiers par un virement du compte du cédant au compte du cessionnaire, sur production d\'un ordre de mouvement établi sur un formulaire fourni ou agréé par la Société et signé par le cédant ou son mandataire. L\'ordre de mouvement est enregistré sur un registre coté et paraphé, tenu chronologiquement, dit "registre des mouvements".']));
     A.push(art('ARTICLE 12 — DROITS ET OBLIGATIONS ATTACHÉS AUX ACTIONS',
@@ -4725,8 +4725,8 @@ window.modalDemandeView=function(id){
        'Les fonctions de Président prennent fin soit par le décès, la démission, la révocation, l\'expiration de son mandat, soit par l\'ouverture à l\'encontre de celui-ci d\'une procédure de redressement ou de liquidation judiciaires.',
        'Le Président peut recevoir une rémunération dont les modalités sont fixées par la décision de nomination.']));
     A.push(art('ARTICLE 14 — CONVENTIONS ENTRE LA SOCIÉTÉ ET SES DIRIGEANTS OU ASSOCIÉS',
-      ['En application des dispositions de l\'article L. 227-10 du Code de commerce, le Commissaire aux Comptes (s\'il en est nommé un) présente un rapport sur les conventions intervenues directement ou par personne interposée entre la Société et son Président et actionnaire unique.',
-       'Les interdictions prévues à l\'article L. 225-43 du Code de commerce s\'appliquent, dans les conditions déterminées par cet article, au Président.']));
+      ['En application des dispositions de l\'article L. 227-10 du Code de commerce, le Commissaire aux Comptes (s\'il en est nommé un) présente un rapport sur les conventions intervenues directement ou par personne interposée entre la Société et son Président et actionnaire unique.',
+       'Les interdictions prévues à l\'article L. 225-43 du Code de commerce s\'appliquent, dans les conditions déterminées par cet article, au Président.']));
     A.push(art('ARTICLE 15 — DÉCISIONS COLLECTIVES',
       ['L\'assemblée générale est seule compétente pour prendre les décisions suivantes : approbation des comptes annuels et affectation des résultats ; approbation des conventions réglementées ; nomination des Commissaires aux Comptes ; augmentation, amortissement et réduction du capital social ; transformation de la Société ; modification des statuts, sauf transfert du siège social.',
        'Toutes autres décisions relèvent de la compétence du Président.']));
@@ -4735,7 +4735,7 @@ window.modalDemandeView=function(id){
        'Les décisions collectives prises en assemblée sont constatées par des procès-verbaux signés par le Président et le secrétaire et établis sur un registre spécial, ou sur des feuillets mobiles numérotés.']));
     A.push(art('ARTICLE 17 — EXERCICE SOCIAL',
       ['Chaque exercice social a une durée d\'une année, qui commence le premier janvier et finit le trente et un décembre.',
-       'Par exception, le premier exercice commencera le jour de l\'immatriculation de la Société au Registre du commerce et des sociétés et se terminera le '+x.finExo+'.']));
+       'Par exception, le premier exercice commencera le jour de l\'immatriculation de la Société au registre du commerce et des sociétés et se terminera le '+x.finExo+'.']));
     A.push(art('ARTICLE 18 — INVENTAIRE · COMPTES ANNUELS',
       ['Il est tenu une comptabilité régulière des opérations sociales, conformément à la loi et aux usages du commerce. À la clôture de chaque exercice, le Président dresse l\'inventaire des divers éléments de l\'actif et du passif existant à cette date, ainsi que le bilan, le compte de résultat et l\'annexe.',
        'Dans les six mois de la clôture de l\'exercice, l\'actionnaire doit statuer sur les comptes annuels, au vu du rapport de gestion et des rapports du Commissaire aux Comptes (éventuellement).']));
@@ -4749,8 +4749,8 @@ window.modalDemandeView=function(id){
     A.push('<div class="st-art">ARTICLE 22 — NOMINATION DES DIRIGEANTS</div>'
       +'<p>Le premier Président de la Société nommé aux termes des présents statuts, pour une durée indéterminée, est '+esc(x.president)+'.</p>');
     A.push(art('ARTICLE 23 — REPRISE DES ENGAGEMENTS ACCOMPLIS POUR LE COMPTE DE LA SOCIÉTÉ EN FORMATION',
-      ['Conformément à la loi, la Société ne jouira de la personnalité morale qu\'à compter du jour de son immatriculation au Registre du commerce et des sociétés.',
-       'La signature des présents statuts emportera reprise de ces engagements par la Société, lorsque celle-ci aura été immatriculée au Registre du commerce et des sociétés.']));
+      ['Conformément à la loi, la Société ne jouira de la personnalité morale qu\'à compter du jour de son immatriculation au registre du commerce et des sociétés.',
+       'La signature des présents statuts emportera reprise de ces engagements par la Société, lorsque celle-ci aura été immatriculée au registre du commerce et des sociétés.']));
     A.push(art('ARTICLE 24 — FORMALITÉS DE PUBLICITÉ · POUVOIRS · FRAIS',
       ['Tous pouvoirs sont donnés au porteur d\'un original ou d\'une copie certifiée conforme des présentes pour effectuer l\'ensemble des formalités légales relatives à la constitution de la société.']));
     var fin='<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+',</p><p>Le '+x.dateActe+'</p>'
@@ -4762,7 +4762,7 @@ window.modalDemandeView=function(id){
   window.statutsSciHTML=function(d){
     var x=stDossData(d);var c=x.c;
     var denom=x.denom, cap=x.cap, capN=cap?stNum(cap):'«…»';
-    var siege=x.siege, ville=(x.ville&&x.ville!=='«ville»')?x.ville:'';
+    var siege=x.siege, ville=(x.ville&&!/^«[^»]*»$/.test(x.ville))?x.ville:'';
     var objet=((c.activites||[]).join(', ')||'').trim();
     var assoc=x.assoc.length?x.assoc:[{nom:''}];
     var totalParts=x.totalParts||0;var nbParts=totalParts>0?totalParts:100;
@@ -4793,10 +4793,10 @@ window.modalDemandeView=function(id){
       ['La durée de la Société est fixée à QUATRE-VINGT-DIX-NEUF ans à compter de son immatriculation au registre du commerce et des sociétés, sauf cas de dissolution anticipée ou de prorogation.',
        'La Société ne sera pas dissoute par le décès, la déconfiture, la faillite, la banqueroute, la liquidation ou le règlement judiciaire d\'un associé.']));
     A.push('<div class="st-titre">TITRE DEUXIÈME — APPORTS · CAPITAL SOCIAL · PARTS SOCIALES</div>');
-    var apports=assoc.map(function(a){var p=Number(a.parts)||0;var m=(nominal&&p)?stNum(nominal*p):'«…»';return '<p>'+(esc((a.nom||'').trim())||'«associé»')+' apporte à la Société une somme en numéraire de '+m+' euros.</p>';}).join('');
+    var apports=assoc.map(function(a){var p=Number(a.parts)||0;var m=(nominal&&p)?stNum(nominal*p):'«…»';return '<p>'+(esc((a.nom||'').trim())||'«ASSOCIÉ»')+' apporte à la Société une somme en numéraire de '+m+' euros.</p>';}).join('');
     A.push('<div class="st-art">ARTICLE 6 — Apports</div><p>Les apports faits par les associés sont les suivants :</p>'+apports
       +'<p>Soit au total '+capN+' euros. Cette somme sera déposée ultérieurement sur un compte ouvert au nom de la Société à la Banque sur demande du Gérant.</p>');
-    var repart=assoc.map(function(a){var p=Number(a.parts)||0;return '<p>'+(esc((a.nom||'').trim())||'«associé»')+' détient '+(p||'«…»')+' parts</p>';}).join('');
+    var repart=assoc.map(function(a){var p=Number(a.parts)||0;return '<p>'+(esc((a.nom||'').trim())||'«ASSOCIÉ»')+' détient '+(p||'«…»')+' parts</p>';}).join('');
     A.push('<div class="st-art">ARTICLE 7 — Capital social · Parts sociales</div>'
       +'<p>Le capital social est fixé à '+capN+' euros. Il est divisé en '+nbParts+' parts sociales de '+stNum(nominal)+' euros chacune.</p>'
       +'<p>Ce capital social est réparti de la façon suivante :</p>'+repart+'<p>Total : '+nbParts+' parts.</p>');
@@ -4855,7 +4855,7 @@ window.modalDemandeView=function(id){
     A.push(art('ARTICLE 28 — Contestations',
       ['Toutes les contestations qui pourraient s\'élever pendant la durée de la Société ou lors de sa liquidation, soit entre associés, soit entre le ou les gérants et la société, seront soumises à la juridiction des tribunaux compétents du lieu du siège social.']));
     A.push('<div class="st-art">ARTICLE 29 — Engagements contractés au nom de la Société avant son immatriculation</div><p>Néant.</p>');
-    var signs=assoc.map(function(a){return '<div class="sg"><b>'+(esc((a.nom||'').trim())||'«associé»')+'</b>Associé — Signature</div>';}).join('');
+    var signs=assoc.map(function(a){return '<div class="sg"><b>'+(esc((a.nom||'').trim())||'«ASSOCIÉ»')+'</b>Associé — Signature</div>';}).join('');
     var fin='<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+',</p><p>Le '+x.dateActe+',</p><p>en autant d\'exemplaires que nécessaire.</p>'
       +'<div class="st-sign"><div class="sg"><b>'+esc(gerant)+'</b>Le Gérant — Signature</div>'+signs+'</div></div>';
     return '<div class="st-doc">'+cover+'<div class="st-page">'+preambule+A.join('')+fin+'</div></div>';
@@ -4894,20 +4894,20 @@ window.modalDemandeView=function(id){
     var x=stDossData(d);var forme=x.forme;var des=motDes(forme);
     var rcsVille=x.rcsVille;
     var siren=((x.c.siren||x.s.siren||'')+'').trim()||'«SIREN»';
-    var repr=x.president||'«représentant légal»';
+    var repr=x.president||'«REPRÉSENTANT LÉGAL»';
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-titre">ACTE DE CESSION DE '+titreDes(forme)+'</div>'
       +'<div style="text-align:center;font-size:11px;margin:-4px 0 14px">'+esc(x.denom)+' — '+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros — RCS de '+esc(rcsVille)+' n° '+esc(siren)+'</div>'
       +'<p><b>ENTRE LES SOUSSIGNÉS :</b></p>'
-      +'<p><b>Le(s) cédant(s) :</b> «Civilité Nom Prénom du cédant», né(e) le «…» à «…», de nationalité «…», demeurant au «adresse du cédant» ;</p>'
-      +'<p><b>Le(s) cessionnaire(s) :</b> «Civilité Nom Prénom du cessionnaire», né(e) le «…» à «…», de nationalité «…», demeurant au «adresse du cessionnaire» ;</p>'
+      +'<p><b>Le(s) cédant(s) :</b> «CIVILITÉ NOM PRÉNOM DU CÉDANT», né(e) le «…» à «…», de nationalité «…», demeurant «ADRESSE DU CÉDANT» ;</p>'
+      +'<p><b>Le(s) cessionnaire(s) :</b> «CIVILITÉ NOM PRÉNOM DU CESSIONNAIRE», né(e) le «…» à «…», de nationalité «…», demeurant «ADRESSE DU CESSIONNAIRE» ;</p>'
       +'<p>concernant la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros, dont le siège social est situé '+esc(x.siegeComplet)+', immatriculée au RCS de '+esc(rcsVille)+' sous le numéro '+esc(siren)+', représentée par '+esc(repr)+'.</p>'
       +'<p style="margin-top:6px"><b>IL A ÉTÉ CONVENU CE QUI SUIT :</b></p>'
-      +'<p><b>Article 1 — Cession.</b> Le cédant cède et transporte, sous les garanties ordinaires et de droit, au cessionnaire qui accepte, «nombre» '+des+' sur les «total» '+des+' qu\'il possède dans ladite société '+esc(x.denom)+'.</p>'
-      +'<p><b>Article 2 — Propriété · Jouissance.</b> Le cessionnaire devient propriétaire des '+des+' cédées avec effet à compter du «date d\'effet». Il est subrogé dans tous les droits et obligations attachés aux '+des+' cédées.</p>'
-      +'<p><b>Article 3 — Prix.</b> La présente cession est consentie et acceptée moyennant le prix de «montant en lettres» euros (« montant » €), que le cédant reconnaît avoir reçu du cessionnaire, dont quittance.</p>'
-      +'<p><b>Article 4 — Agrément.</b> La présente cession a été autorisée par décision '+((forme==='SARL'||forme==='EURL'||forme==='SCI')?'collective des associés':'de la collectivité des associés')+' en date du «date», conformément aux statuts de la société.</p>'
-      +'<p><b>Article 5 — Frais.</b> Les frais, droits et honoraires des présentes et tous ceux qui en seront la conséquence seront supportés par «le cessionnaire / la société».</p>'
+      +'<p><b>Article 1 — Cession.</b> Le cédant cède et transporte, sous les garanties ordinaires et de droit, au cessionnaire qui accepte, «NOMBRE» '+des+' sur les «TOTAL» '+des+' qu\'il possède dans ladite société '+esc(x.denom)+'.</p>'
+      +'<p><b>Article 2 — Propriété · Jouissance.</b> Le cessionnaire devient propriétaire des '+des+' cédées avec effet à compter du «DATE D\'EFFET». Il est subrogé dans tous les droits et obligations attachés aux '+des+' cédées.</p>'
+      +'<p><b>Article 3 — Prix.</b> La présente cession est consentie et acceptée moyennant le prix de «MONTANT EN LETTRES» euros (« montant » €), que le cédant reconnaît avoir reçu du cessionnaire, dont quittance.</p>'
+      +'<p><b>Article 4 — Agrément.</b> La présente cession a été autorisée par décision '+((forme==='SARL'||forme==='EURL'||forme==='SCI')?'collective des associés':'de la collectivité des associés')+' en date du «DATE», conformément aux statuts de la société.</p>'
+      +'<p><b>Article 5 — Frais.</b> Les frais, droits et honoraires des présentes et tous ceux qui en seront la conséquence seront supportés par «LE CESSIONNAIRE / LA SOCIÉTÉ».</p>'
       +'<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+',</p><p>en autant d\'originaux que de parties, plus un pour l\'enregistrement.</p>'
       +'<div class="st-sign"><div class="sg"><b>Le Cédant</b>Signature (précédée de « Bon pour cession »)</div><div class="sg"><b>Le Cessionnaire</b>Signature (précédée de « Bon pour acquisition »)</div></div></div>'
       +'</div></div>';
@@ -4919,20 +4919,20 @@ window.modalDemandeView=function(id){
     var assoc=x.assoc.length?x.assoc:[{nom:''}];
     var total=x.totalParts||0;
     var rows=assoc.map(function(a){var p=Number(a.parts)||0;
-      return '<tr><td class="al">'+(esc((a.nom||'').trim())||'«associé»')+'</td><td>'+(p||'«…»')+'</td><td>☐ Présent&nbsp;&nbsp;☐ Représenté</td><td></td></tr>';
+      return '<tr><td class="al">'+(esc((a.nom||'').trim())||'«ASSOCIÉ»')+'</td><td>'+(p||'«…»')+'</td><td>☐ Présent&nbsp;&nbsp;☐ Représenté</td><td></td></tr>';
     }).join('');
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-hdr"><b>'+esc(x.denom)+'</b>'
       +'<div class="sub">'+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
       +'<div class="sub">Siège social : '+esc(x.siegeComplet)+'</div></div>'
       +'<div class="st-titre">FEUILLE DE PRÉSENCE</div>'
-      +'<p style="text-align:center;margin:-4px 0 12px">Assemblée générale du «date de l\'assemblée» — «heure» — «lieu de l\'assemblée»</p>'
+      +'<p style="text-align:center;margin:-4px 0 12px">Assemblée générale du «DATE DE L\'ASSEMBLÉE» — «HEURE» — «LIEU DE L\'ASSEMBLÉE»</p>'
       +'<table class="st-tbl"><thead><tr><th class="al">Associé (nom, prénom ou dénomination)</th><th>Nombre de '+des+'</th><th>Présence</th><th>Signature</th></tr></thead><tbody>'
       +rows
       +'<tr class="tot"><td class="al">TOTAL</td><td>'+(total||'«…»')+'</td><td></td><td></td></tr>'
       +'</tbody></table>'
       +'<p style="margin-top:14px">La présente feuille de présence, certifiée exacte et sincère, a été arrêtée à la somme de '+(total||'«…»')+' '+des+' représentées, sur un total de '+(total||'«…»')+' '+des+' composant le capital social.</p>'
-      +'<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+', le «date»</p>'
+      +'<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+', le «DATE»</p>'
       +'<div class="st-sign"><div class="sg"><b>'+esc(x.president)+'</b>'+((forme==='SARL'||forme==='EURL'||forme==='SCI')?'Le Gérant':'Le Président')+' de séance — Signature</div><div class="sg"><b>Le Secrétaire</b>Signature</div></div></div>'
       +'</div></div>';
   };
@@ -4974,7 +4974,7 @@ window.modalDemandeView=function(id){
   window.etatLieuxHTML=function(d){
     var x=stDossData(d);var forme=x.forme;
     var qualite=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'Gérant':'Président';
-    var ville=(x.ville&&x.ville!=='«ville»')?x.ville:'«ville»';
+    var ville=(x.ville&&!/^«[^»]*»$/.test(x.ville))?x.ville:'«VILLE»';
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-hdr"><b>'+esc(x.denom)+'</b>'
       +'<div class="sub">'+esc(stFormeLabel(forme))+'</div>'
@@ -4983,8 +4983,8 @@ window.modalDemandeView=function(id){
       +'<div class="sub">RCS : en cours d\'immatriculation</div></div>'
       +'<div class="st-titre">ÉTAT DES LIEUX ANTÉRIEURS</div>'
       +'<p style="margin-top:18px">Je soussigné(e) <b>'+esc(x.president)+'</b>, en qualité de '+qualite+' de la '+esc(forme)+' '+esc(x.denom)+',</p>'
-      +'<p style="margin-top:10px">Certifie que la société a été créée au «adresse, code postal et ville de l\'ancien siège social» en date du «date de début d\'activité» et a été transférée au «adresse, code postal et ville du nouveau siège» en date du «date du transfert».</p>'
-      +'<div class="st-fin" style="margin-top:34px"><p>Fait à '+esc(ville)+',</p><p>Le «date du procès-verbal».</p>'
+      +'<p style="margin-top:10px">Certifie que la société a été créée au «ADRESSE, CODE POSTAL ET VILLE DE L\'ANCIEN SIÈGE SOCIAL» en date du «DATE DE DÉBUT D\'ACTIVITÉ» et a été transférée au «ADRESSE, CODE POSTAL ET VILLE DU NOUVEAU SIÈGE» en date du «DATE DU TRANSFERT».</p>'
+      +'<div class="st-fin" style="margin-top:34px"><p>Fait à '+esc(ville)+',</p><p>Le «DATE DU PROCÈS-VERBAL».</p>'
       +'<div class="st-sign" style="margin-top:28px"><div class="sg"><b>'+esc(x.president)+'</b>Le '+qualite+' — Signature</div></div></div>'
       +'</div></div>';
   };
@@ -5006,8 +5006,8 @@ window.modalDemandeView=function(id){
   window.statutsSarlHTML=function(d){
     var x=stDossData(d);var c=x.c;
     var denom=x.denom, cap=x.cap, capN=cap?stNum(cap):'«…»', capL=cap?stLettres(cap):'«…»';
-    var siege=x.siege, ville=(x.ville&&x.ville!=='«ville»')?x.ville:'';
-    var objet=((c.activites||[]).join(', ')||'').trim()||'«objet social — activités de la société»';
+    var siege=x.siege, ville=(x.ville&&!/^«[^»]*»$/.test(x.ville))?x.ville:'';
+    var objet=((c.activites||[]).join(', ')||'').trim()||'«OBJET SOCIAL — ACTIVITÉS DE LA SOCIÉTÉ»';
     var assoc=x.assoc.length?x.assoc:[{nom:''}];
     var totalParts=x.totalParts||0;var nbParts=totalParts>0?totalParts:100;
     var nominal=Math.round(x.nominal)||10;var gerant=x.president;var annee=x.annee;var jour=new Date().getDate();
@@ -5027,14 +5027,14 @@ window.modalDemandeView=function(id){
     A.push(art('ARTICLE 4 — Siège social',['Le siège social est fixé au '+esc(x.siegeComplet)+'.','Il peut être transféré en tout autre lieu par décision collective des associés.']));
     A.push(art('ARTICLE 5 — Durée',['La durée de la société est fixée à quatre-vingt-dix-neuf années à compter de son immatriculation au registre du commerce et des sociétés, sauf cas de dissolution anticipée ou de prorogation.']));
     A.push('<div class="st-titre">TITRE II — APPORTS · CAPITAL SOCIAL · PARTS SOCIALES</div>');
-    var apports=assoc.map(function(a){var p=Number(a.parts)||0;var m=(nominal&&p)?stNum(nominal*p):'«…»';return '<p>- '+(esc((a.nom||'').trim())||'«associé»')+', une somme en numéraire de '+m+' euros ;</p>';}).join('');
+    var apports=assoc.map(function(a){var p=Number(a.parts)||0;var m=(nominal&&p)?stNum(nominal*p):'«…»';return '<p>- '+(esc((a.nom||'').trim())||'«ASSOCIÉ»')+', une somme en numéraire de '+m+' euros ;</p>';}).join('');
     A.push('<div class="st-art">ARTICLE 6 — Apports</div><p>Les soussignés apportent à la société les sommes suivantes :</p>'+apports
       +'<p>Soit au total la somme de '+capL+' euros ('+capN+' euros), correspondant à '+nbParts+' parts sociales, intégralement souscrites et libérées.</p>');
     A.push(art('ARTICLE 7 — Capital social',['Le capital social est fixé à la somme de '+capN+' euros. Il est divisé en '+nbParts+' parts sociales de '+stNum(nominal)+' euros chacune, intégralement libérées et attribuées aux associés en proportion de leurs apports.']));
-    var repart=assoc.map(function(a){var p=Number(a.parts)||0;return '<p>- '+(esc((a.nom||'').trim())||'«associé»')+' : '+(p||'«…»')+' parts</p>';}).join('');
+    var repart=assoc.map(function(a){var p=Number(a.parts)||0;return '<p>- '+(esc((a.nom||'').trim())||'«ASSOCIÉ»')+' : '+(p||'«…»')+' parts</p>';}).join('');
     A.push('<div class="st-art">ARTICLE 8 — Répartition des parts</div><p>Les parts sociales sont réparties entre les associés de la manière suivante :</p>'+repart+'<p>Total : '+nbParts+' parts sociales.</p>');
     A.push(art('ARTICLE 9 — Augmentation et réduction du capital',['Le capital social peut être augmenté ou réduit en une ou plusieurs fois par décision collective extraordinaire des associés, dans les conditions prévues par la loi.']));
-    A.push(art('ARTICLE 10 — Cession et transmission des parts',['Les parts sociales sont librement cessibles entre associés. Elles ne peuvent être cédées à des tiers étrangers à la société qu\'avec le consentement de la majorité des associés représentant au moins la moitié des parts sociales, conformément à l\'article L. 223-14 du Code de commerce.','La cession des parts sociales doit être constatée par écrit. Elle n\'est opposable à la société qu\'après signification ou acceptation par la société dans les formes prévues à l\'article 1690 du Code civil.']));
+    A.push(art('ARTICLE 10 — Cession et transmission des parts',['Les parts sociales sont librement cessibles entre associés. Elles ne peuvent être cédées à des tiers étrangers à la société qu\'avec le consentement de la majorité des associés représentant au moins la moitié des parts sociales, conformément à l\'article L. 223-14 du Code de commerce.','La cession des parts sociales doit être constatée par écrit. Elle n\'est opposable à la société qu\'après signification ou acceptation par la société dans les formes prévues à l\'article 1690 du Code civil.']));
     A.push(art('ARTICLE 11 — Décès · Incapacité d\'un associé',['La société n\'est pas dissoute par le décès, l\'incapacité, la faillite ou la déconfiture d\'un associé. En cas de décès d\'un associé, la société continue entre les associés survivants et les héritiers ou ayants droit de l\'associé décédé.']));
     A.push(art('ARTICLE 12 — Droits attachés aux parts',['Chaque part sociale confère à son propriétaire un droit égal dans les bénéfices de la société et dans tout l\'actif social, proportionnellement au nombre de parts existantes. Les parts sont indivisibles à l\'égard de la société.']));
     A.push('<div class="st-titre">TITRE III — GÉRANCE</div>');
@@ -5056,7 +5056,7 @@ window.modalDemandeView=function(id){
     A.push('<div class="st-art">ARTICLE 23 — Nomination du premier gérant</div><p>Est nommé premier gérant de la société, pour une durée illimitée : '+esc(gerant)+', qui déclare accepter ces fonctions.</p>');
     A.push(art('ARTICLE 24 — Reprise des engagements',['Les présents statuts emportent reprise par la société, dès son immatriculation, des engagements souscrits pour son compte pendant la période de formation.']));
     A.push(art('ARTICLE 25 — Formalités · Pouvoirs',['Tous pouvoirs sont donnés au porteur d\'un original ou d\'une copie des présentes pour effectuer les formalités de publicité, de dépôt et d\'immatriculation.']));
-    var signs=assoc.map(function(a){return '<div class="sg"><b>'+(esc((a.nom||'').trim())||'«associé»')+'</b>Associé — Signature</div>';}).join('');
+    var signs=assoc.map(function(a){return '<div class="sg"><b>'+(esc((a.nom||'').trim())||'«ASSOCIÉ»')+'</b>Associé — Signature</div>';}).join('');
     var fin='<div class="st-fin"><p>Fait à '+esc(x.villeSignature)+',</p><p>Le '+x.dateActe+',</p><p>en autant d\'originaux que nécessaire.</p>'
       +'<div class="st-sign"><div class="sg"><b>'+esc(gerant)+'</b>Le Gérant — Signature</div>'+signs+'</div></div>';
     return '<div class="st-doc">'+cover+'<div class="st-page">'+preambule+A.join('')+fin+'</div></div>';
@@ -5066,8 +5066,8 @@ window.modalDemandeView=function(id){
   window.statutsEurlHTML=function(d){
     var x=stDossData(d);var c=x.c;
     var denom=x.denom, cap=x.cap, capN=cap?stNum(cap):'«…»', capL=cap?stLettres(cap):'«…»';
-    var siege=x.siege, ville=(x.ville&&x.ville!=='«ville»')?x.ville:'';
-    var objet=((c.activites||[]).join(', ')||'').trim()||'«objet social — activités de la société»';
+    var siege=x.siege, ville=(x.ville&&!/^«[^»]*»$/.test(x.ville))?x.ville:'';
+    var objet=((c.activites||[]).join(', ')||'').trim()||'«OBJET SOCIAL — ACTIVITÉS DE LA SOCIÉTÉ»';
     var uni=x.assoc[0]||{nom:''};var nbParts=x.totalParts>0?x.totalParts:100;var nominal=Math.round(x.nominal)||10;
     var gerant=x.president;var annee=x.annee;var jour=new Date().getDate();
     var cover='<div class="st-cover"><div class="st-c1">STATUTS</div>'
@@ -5111,18 +5111,18 @@ window.modalDemandeView=function(id){
     var x=stDossData(d);var forme=x.forme;
     var qualite=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'la Gérance':'la Présidence';
     var qualiteSig=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'LA GÉRANCE':'LA PRÉSIDENCE';
-    var objet=((x.c.activites||[]).join(', ')||'').trim()||'«activité de la société»';
+    var objet=((x.c.activites||[]).join(', ')||'').trim()||'«ACTIVITÉ DE LA SOCIÉTÉ»';
     var rcsVille=x.rcsVille;
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-hdr"><b>'+esc(x.denom)+'</b>'
       +'<div class="sub">'+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
       +'<div class="sub">Siège social : '+esc(x.siegeComplet)+' — RCS de '+esc(rcsVille)+'</div></div>'
       +'<div class="st-titre">RAPPORT DE GESTION</div>'
-      +'<p style="text-align:center;margin:-4px 0 14px">Assemblée générale ordinaire annuelle du «date de l\'assemblée» (Exercice clos le «date de clôture»)</p>'
+      +'<p style="text-align:center;margin:-4px 0 14px">Assemblée générale ordinaire annuelle du «DATE DE L\'ASSEMBLÉE» (Exercice clos le «DATE DE CLÔTURE»)</p>'
       +'<p>Mesdames, Messieurs,</p>'
-      +'<p>Nous vous avons réunis aujourd\'hui en assemblée générale ordinaire annuelle, afin de soumettre à votre approbation, après lecture de notre rapport portant sur la situation de la société pour l\'exercice clos le «date de clôture», les comptes annuels dudit exercice.</p>'
+      +'<p>Nous vous avons réunis aujourd\'hui en assemblée générale ordinaire annuelle, afin de soumettre à votre approbation, après lecture de notre rapport portant sur la situation de la société pour l\'exercice clos le «DATE DE CLÔTURE», les comptes annuels dudit exercice.</p>'
       +'<p><b>ACTIVITÉ DE LA SOCIÉTÉ :</b> Au cours de l\'exercice susmentionné, l\'activité de la société a été la suivante : '+esc(objet)+'.</p>'
-      +'<p>Ces différents éléments rappelés, nous allons vous présenter les comptes de la société. Ceux-ci ont été établis selon la même présentation et les mêmes méthodes d\'évaluation que pour l\'exercice précédent. Ils font ainsi apparaître un résultat de «montant du résultat» euros («bénéfice / perte»).</p>'
+      +'<p>Ces différents éléments rappelés, nous allons vous présenter les comptes de la société. Ceux-ci ont été établis selon la même présentation et les mêmes méthodes d\'évaluation que pour l\'exercice précédent. Ils font ainsi apparaître un résultat de «MONTANT DU RÉSULTAT» euros («BÉNÉFICE / PERTE»).</p>'
       +'<p>Nous vous précisons, en outre, qu\'aucune dépense visée par l\'article 39-4 du Code général des impôts n\'est incluse dans les comptes qui vous sont présentés.</p>'
       +'<p>Nous vous demanderons également de donner quitus de sa gestion à votre gérant.</p>'
       +'<p>Souhaitant que toutes ces propositions emportent votre agrément, nous vous invitons à voter les résolutions correspondantes.</p>'
@@ -5143,15 +5143,15 @@ window.modalDemandeView=function(id){
       +'<div class="sub">'+esc(stFormeLabel(forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
       +'<div class="sub">Siège social : '+esc(x.siegeComplet)+' — RCS de '+esc(rcsVille)+'</div></div>'
       +'<div class="st-titre">PROCÈS-VERBAL DE L\'ASSEMBLÉE GÉNÉRALE «ORDINAIRE / EXTRAORDINAIRE»</div>'
-      +'<p style="text-align:center;margin:-4px 0 14px">En date du «date de l\'assemblée»</p>'
-      +'<p>L\'an «…», le «date», les '+motAssoc+' de la société '+esc(x.denom)+' se sont réunis en assemblée générale «ordinaire / extraordinaire» au siège social, sur convocation de '+conv+'.</p>'
+      +'<p style="text-align:center;margin:-4px 0 14px">En date du «DATE DE L\'ASSEMBLÉE»</p>'
+      +'<p>L\'an «…», le «DATE», les '+motAssoc+' de la société '+esc(x.denom)+' se sont réunis en assemblée générale «ORDINAIRE / EXTRAORDINAIRE» au siège social, sur convocation de '+conv+'.</p>'
       +'<p>L\'assemblée est présidée par '+esc(x.president)+', '+qualite+'. Le Président constate, d\'après la feuille de présence établie par ses soins, que le quorum nécessaire est atteint pour délibérer valablement sur l\'ordre du jour suivant :</p>'
       +'<p style="margin-left:16px">«ordre du jour — ex. : changement de gérant, cession de parts sociales, transfert de siège social, modification de l\'objet social, pouvoirs, questions diverses»</p>'
       +'<p>Les '+motAssoc+' présents donnent acte au '+qualite+' que l\'ensemble des documents nécessaires à leur information leur ont été communiqués préalablement, suivant les modalités prévues par la loi et les statuts.</p>'
       +'<p>La discussion étant ouverte, puis personne ne demandant plus la parole, il est passé au vote des résolutions inscrites à l\'ordre du jour :</p>'
-      +'<p><b>PREMIÈRE RÉSOLUTION :</b> «objet de la résolution». Cette résolution est adoptée à l\'unanimité.</p>'
-      +'<p><b>DEUXIÈME RÉSOLUTION :</b> «objet de la résolution». Cette résolution est adoptée à l\'unanimité.</p>'
-      +'<p><b>TROISIÈME RÉSOLUTION :</b> «objet de la résolution». Cette résolution est adoptée à l\'unanimité.</p>'
+      +'<p><b>PREMIÈRE RÉSOLUTION :</b> «OBJET DE LA RÉSOLUTION». Cette résolution est adoptée à l\'unanimité.</p>'
+      +'<p><b>DEUXIÈME RÉSOLUTION :</b> «OBJET DE LA RÉSOLUTION». Cette résolution est adoptée à l\'unanimité.</p>'
+      +'<p><b>TROISIÈME RÉSOLUTION :</b> «OBJET DE LA RÉSOLUTION». Cette résolution est adoptée à l\'unanimité.</p>'
       +'<p>L\'ordre du jour étant épuisé et personne ne demandant plus la parole, la séance est levée.</p>'
       +'<p>De tout ce que dessus, il a été dressé le présent procès-verbal, signé par le Président de séance.</p>'
       +'<div class="st-fin" style="margin-top:22px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
@@ -5184,10 +5184,10 @@ window.modalDemandeView=function(id){
   window.declaDomicileHTML=function(d){
     var x=stDossData(d);var forme=x.forme;
     var qualite=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'gérant':'président';
-    var ville=(x.ville&&x.ville!=='«ville»')?x.ville:'';
-    var greffe=ville||(x.s.ville||'«ville du greffe»');
+    var ville=(x.ville&&!/^«[^»]*»$/.test(x.ville))?x.ville:'';
+    var greffe=ville||(x.s.ville||'«VILLE DU GREFFE»');
     var dir=(x.assoc||[]).filter(function(a){return (''+(a.nom||'')).trim()===(''+x.president).trim();})[0]||(x.assoc||[])[0]||{};
-    var domicile=((dir.adresse||x.c.adresse||x.siege||'')+'').trim()||'«adresse personnelle du '+qualite+'»';
+    var domicile=((dir.adresse||x.c.adresse||x.siege||'')+'').trim()||'«ADRESSE PERSONNELLE DU '+String(qualite).toUpperCase()+'»';
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-titre">DÉCLARATION SUR L\'HONNEUR</div>'
       +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(domiciliation du siège social au domicile du '+qualite+')</p>'
@@ -5195,8 +5195,8 @@ window.modalDemandeView=function(id){
       +'<p style="margin-top:8px">Dénomination sociale : <b>'+esc(x.denom)+'</b></p>'
       +'<p>Siège social : '+esc(x.siegeComplet)+'</p>'
       +'<p style="margin-top:12px"><b>Déclare :</b></p>'
-      +'<p>fixer le siège social de la société susvisée à mon domicile personnel situé au '+esc(domicile)+', et y exercer une activité, aucune disposition législative ou stipulation contraire ne s\'y opposant, conformément à l\'article L.123-11-1 du Code de commerce.</p>'
-      +'<p style="margin-top:10px">La présente déclaration est établie et produite en vue de l\'immatriculation ou de l\'inscription modificative de la société susvisée au Registre du Commerce et des Sociétés de '+esc(greffe)+'.</p>'
+      +'<p>fixer le siège social de la société susvisée à mon domicile personnel situé '+esc(domicile)+', et y exercer une activité, aucune disposition législative ou stipulation contraire ne s\'y opposant, conformément à l\'article L. 123-11-1 du Code de commerce.</p>'
+      +'<p style="margin-top:10px">La présente déclaration est établie et produite en vue de l\'immatriculation ou de l\'inscription modificative de la société susvisée au registre du commerce et des sociétés de '+esc(greffe)+'.</p>'
       +'<div class="st-fin" style="margin-top:30px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
       +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+esc(x.president)+'</b>Le '+qualite+' — Signature</div></div></div>'
       +'</div></div>';
@@ -5218,7 +5218,7 @@ window.modalDemandeView=function(id){
     var forme=x.forme;var qualite=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'Gérant':'Président';
     var desMot=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'parts':'actions';
     var objet=((c.activites||[]).join(', ')||'').trim();
-    var ville=(x.ville&&x.ville!=='«ville»')?x.ville:'';
+    var ville=(x.ville&&!/^«[^»]*»$/.test(x.ville))?x.ville:'';
     /* dirigeant : fusion données extraites + associé président */
     var dcl=(x.assoc||[]).filter(function(a){return (''+(a.nom||'')).trim()===(''+x.president).trim();})[0]||(x.assoc||[])[0]||{};
     var dirNom=((ex.prenom||'')+' '+(ex.nom||'')).trim()||x.president;
@@ -5253,7 +5253,7 @@ window.modalDemandeView=function(id){
 
       +'<div class="ft-sec">Identité de la société</div>'
       +'<div class="ft-grid">'
-      +row('Dénomination sociale',V(x.denom!=='«DÉNOMINATION SOCIALE»'?x.denom:''))
+      +row('Dénomination sociale',V(!/^«[^»]*»$/.test(x.denom)?x.denom:''))
       +row('Forme juridique',V(stFormeLabel(forme))+' <span class="ft-sub">('+esc(forme)+')</span>')
       +row('Capital social',V(x.cap?(stNum(x.cap)+' € ('+stLettres(x.cap)+' euros)'):''))
       +row('Nombre de '+desMot,V(x.nbActions?(''+x.nbActions):'')+(x.nominal?(' <span class="ft-sub">à '+stNum(Math.round(x.nominal))+' € l\'unité</span>'):''))
@@ -5265,7 +5265,7 @@ window.modalDemandeView=function(id){
       +(c.dateCreation?row('Date de création',esc(c.dateCreation)):'')
       +'</div>'
       +row('Objet social (activités)',V(objet))
-      +row('Siège social',V(x.siege!=='«adresse du siège»'?x.siege:'')+(ville?(' — '+esc(ville)):''))
+      +row('Siège social',V(!/^«[^»]*»$/.test(x.siege)?x.siege:'')+(ville?(' — '+esc(ville)):''))
 
       +'<div class="ft-sec">'+qualite+' de la société</div>'
       +'<div class="ft-grid">'
@@ -5681,30 +5681,30 @@ window.modalDemandeView=function(id){
   /* ---------- Actes de modification (procès-verbaux) ---------- */
   window.ACTE_TYPES=['Transfert de siège','Changement de dirigeant','Cession de parts / actions','Changement de dénomination',"Changement d'objet",'Augmentation de capital','Dissolution'];
   function acteQ(x){return (x.forme==='SARL'||x.forme==='EURL'||x.forme==='SCI')?'Gérant':'Président';}
-  function acteIntro(x){var cap=x.cap?stNum(x.cap)+' euros':'«capital» euros';
+  function acteIntro(x){var cap=x.cap?stNum(x.cap)+' euros':'«CAPITAL» euros';
     return x.denom+'\n'+x.formeLabel+' au capital de '+cap+'\nSiège social : '+x.siegeComplet+'\n'+(x.siren?(x.siren+' RCS '+x.rcsVille):('RCS '+x.rcsVille))+'\n\n'
      +'PROCÈS-VERBAL DES DÉCISIONS DE L\'ASSOCIÉ UNIQUE / DE L\'ASSEMBLÉE GÉNÉRALE\n(à adapter selon la forme et le nombre d\'associés)\n\n'
-     +'L\'an «année», le «date», à «heure»,\n'
-     +'La collectivité des associés (ou l\'associé unique) de la société '+x.denom+', '+x.formeLabel+' au capital de '+cap+', dont le siège social est situé '+x.siegeComplet+', immatriculée au Registre du commerce et des sociétés de '+x.rcsVille+' sous le numéro '+(x.siren||'«SIREN»')+',\na pris les décisions suivantes :\n\n';}
+     +'L\'an «ANNÉE», le «DATE», à «HEURE»,\n'
+     +'La collectivité des associés (ou l\'associé unique) de la société '+x.denom+', '+x.formeLabel+' au capital de '+cap+', dont le siège social est situé '+x.siegeComplet+', immatriculée au registre du commerce et des sociétés de '+x.rcsVille+' sous le numéro '+(x.siren||'«SIREN»')+',\na pris les décisions suivantes :\n\n';}
   function acteFin(x){var q=acteQ(x);
     return '\nPOUVOIRS\nTous pouvoirs sont donnés au porteur d\'un original ou d\'une copie certifiée conforme des présentes à l\'effet d\'accomplir les formalités de publicité et de dépôt légales auprès du guichet unique (INPI).\n\n'
-     +'De tout ce que dessus, il a été dressé le présent procès-verbal.\n\nFait à '+x.rcsVille+', le «date».\n\nLe '+q+'\n'+(x.president||'«'+q+'»');}
+     +'De tout ce que dessus, il a été dressé le présent procès-verbal.\n\nFait à '+x.rcsVille+', le «DATE».\n\nLe '+q+'\n'+(x.president||'«'+q+'»');}
   window.acteTexte=function(type,x){var q=acteQ(x);
     switch(type){
       case 'Changement de dirigeant':
-        return acteIntro(x)+'PREMIÈRE DÉCISION — Cessation de fonctions\nIl est mis fin aux fonctions de '+(x.president||'«ancien dirigeant»')+', '+q+', à compter du «date».\n\nDEUXIÈME DÉCISION — Nomination d\'un nouveau dirigeant\n«Civilité Prénom NOM», né(e) le «date» à «lieu», de nationalité «nationalité», demeurant «adresse», est nommé(e) '+q+' à compter du «date», pour une durée «indéterminée / …». Le nouveau '+q+' déclare accepter ses fonctions et n\'être frappé d\'aucune interdiction ni incompatibilité.\n\nTROISIÈME DÉCISION — Modification corrélative des statuts\nLes statuts sont modifiés en conséquence.\n'+acteFin(x);
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Cessation de fonctions\nIl est mis fin aux fonctions de '+(x.president||'«ANCIEN DIRIGEANT»')+', '+q+', à compter du «DATE».\n\nDEUXIÈME DÉCISION — Nomination d\'un nouveau dirigeant\n«CIVILITÉ PRÉNOM NOM», né(e) le «DATE» à «LIEU», de nationalité «NATIONALITÉ», demeurant «ADRESSE», est nommé(e) '+q+' à compter du «DATE», pour une durée «INDÉTERMINÉE / …». Le nouveau '+q+' déclare accepter ses fonctions et n\'être frappé d\'aucune interdiction ni incompatibilité.\n\nTROISIÈME DÉCISION — Modification corrélative des statuts\nLes statuts sont modifiés en conséquence.\n'+acteFin(x);
       case 'Cession de parts / actions':
-        return acteIntro(x)+'PREMIÈRE DÉCISION — Agrément de la cession\nLa cession de «nombre» parts sociales / actions consentie par «Prénom NOM du cédant» au profit de «Prénom NOM du cessionnaire», moyennant le prix de «montant» euros, est agréée.\n\nDEUXIÈME DÉCISION — Modification de la répartition du capital\nLa répartition du capital social figurant dans les statuts est modifiée en conséquence.\n'+acteFin(x);
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Agrément de la cession\nLa cession de «NOMBRE» parts sociales / actions consentie par «PRÉNOM NOM DU CÉDANT» au profit de «PRÉNOM NOM DU CESSIONNAIRE», moyennant le prix de «MONTANT» euros, est agréée.\n\nDEUXIÈME DÉCISION — Modification de la répartition du capital\nLa répartition du capital social figurant dans les statuts est modifiée en conséquence.\n'+acteFin(x);
       case 'Changement de dénomination':
-        return acteIntro(x)+'PREMIÈRE DÉCISION — Changement de dénomination sociale\nLa dénomination sociale devient : « «nouvelle dénomination» », à compter du «date».\n\nDEUXIÈME DÉCISION — Modification des statuts\nL\'article «n°» des statuts est modifié en conséquence.\n'+acteFin(x);
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Changement de dénomination sociale\nLa dénomination sociale devient : « «NOUVELLE DÉNOMINATION» », à compter du «DATE».\n\nDEUXIÈME DÉCISION — Modification des statuts\nL\'article «N°» des statuts est modifié en conséquence.\n'+acteFin(x);
       case "Changement d'objet":
-        return acteIntro(x)+'PREMIÈRE DÉCISION — Changement d\'objet social\nL\'objet social devient : « «nouvel objet social» », à compter du «date».\n\nDEUXIÈME DÉCISION — Modification des statuts\nL\'article «n°» des statuts est modifié en conséquence.\n'+acteFin(x);
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Changement d\'objet social\nL\'objet social devient : « «NOUVEL OBJET SOCIAL» », à compter du «DATE».\n\nDEUXIÈME DÉCISION — Modification des statuts\nL\'article «N°» des statuts est modifié en conséquence.\n'+acteFin(x);
       case 'Augmentation de capital':
-        return acteIntro(x)+'PREMIÈRE DÉCISION — Augmentation du capital social\nLe capital social est augmenté de «montant» euros par «apports en numéraire / incorporation de réserves», pour être porté de '+(x.cap?stNum(x.cap)+' euros':'«capital» euros')+' à «nouveau capital» euros.\n\nDEUXIÈME DÉCISION — Modification des statuts\nLes articles «capital» et «apports» des statuts sont modifiés en conséquence.\n'+acteFin(x);
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Augmentation du capital social\nLe capital social est augmenté de «MONTANT» euros par «APPORTS EN NUMÉRAIRE / INCORPORATION DE RÉSERVES», pour être porté de '+(x.cap?stNum(x.cap)+' euros':'«CAPITAL» euros')+' à «NOUVEAU CAPITAL» euros.\n\nDEUXIÈME DÉCISION — Modification des statuts\nLes articles «CAPITAL» et «APPORTS» des statuts sont modifiés en conséquence.\n'+acteFin(x);
       case 'Dissolution':
-        return acteIntro(x)+'PREMIÈRE DÉCISION — Dissolution anticipée\nIl est décidé la dissolution anticipée de la société à compter du «date» et sa mise en liquidation amiable.\n\nDEUXIÈME DÉCISION — Nomination du liquidateur\n«Civilité Prénom NOM», demeurant «adresse», est nommé(e) liquidateur, avec les pouvoirs les plus étendus.\n\nTROISIÈME DÉCISION — Siège de liquidation\nLe siège de la liquidation est fixé à «adresse».\n'+acteFin(x);
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Dissolution anticipée\nIl est décidé la dissolution anticipée de la société à compter du «DATE» et sa mise en liquidation amiable.\n\nDEUXIÈME DÉCISION — Nomination du liquidateur\n«CIVILITÉ PRÉNOM NOM», demeurant «ADRESSE», est nommé(e) liquidateur, avec les pouvoirs les plus étendus.\n\nTROISIÈME DÉCISION — Siège de liquidation\nLe siège de la liquidation est fixé à «ADRESSE».\n'+acteFin(x);
       default: /* Transfert de siège */
-        return acteIntro(x)+'PREMIÈRE DÉCISION — Transfert du siège social\nLe siège social est transféré de '+x.siegeComplet+' à « «nouvelle adresse du siège» » à compter du «date».\n\nDEUXIÈME DÉCISION — Modification corrélative des statuts\nL\'article «n°» des statuts (« Siège social ») est modifié en conséquence.\n'+acteFin(x);
+        return acteIntro(x)+'PREMIÈRE DÉCISION — Transfert du siège social\nLe siège social est transféré de '+x.siegeComplet+' à « «NOUVELLE ADRESSE DU SIÈGE» » à compter du «DATE».\n\nDEUXIÈME DÉCISION — Modification corrélative des statuts\nL\'article «N°» des statuts (« Siège social ») est modifié en conséquence.\n'+acteFin(x);
     }
   };
   window.acteRefresh=function(){var t=(document.getElementById('acte-type')||{}).value||ACTE_TYPES[0];var ta=document.getElementById('acte-txt');if(ta)ta.value=acteTexte(t,window._acteX||{});};
@@ -5727,35 +5727,35 @@ window.modalDemandeView=function(id){
   /* ---------- Générateur d'annonce légale (création / modification) ---------- */
   window.ANNONCE_TYPES=['Création','Transfert de siège','Changement de dirigeant','Changement de dénomination',"Changement d'objet",'Augmentation de capital','Dissolution'];
   window.annonceTexte=function(type,x){
-    var cap=x.cap?stNum(x.cap)+' euros':'«capital» euros';
+    var cap=x.cap?stNum(x.cap)+' euros':'«CAPITAL» euros';
     var head=x.denom+', '+x.formeLabel+' au capital de '+cap+', siège social : '+x.siegeComplet+', '+(x.siren?(x.siren+' RCS '+x.rcsVille):('RCS '+x.rcsVille))+'.';
     var q=(x.forme==='SARL'||x.forme==='EURL'||x.forme==='SCI')?'Gérant':'Président';
     switch(type){
       case 'Transfert de siège':
-        return head+'\n\nAux termes d\'une décision en date du «date», il a été décidé de transférer le siège social de '+x.siegeComplet+' à «nouvelle adresse du siège» à compter du «date». Les statuts ont été modifiés en conséquence.\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
+        return head+'\n\nAux termes d\'une décision en date du «DATE», il a été décidé de transférer le siège social de '+x.siegeComplet+' à «NOUVELLE ADRESSE DU SIÈGE» à compter du «DATE». Les statuts ont été modifiés en conséquence.\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
       case 'Changement de dirigeant':
-        return head+'\n\nAux termes d\'une décision en date du «date», «Civilité Prénom NOM», demeurant «adresse», a été nommé(e) en qualité de '+q+' en remplacement de '+(x.president||'«ancien dirigeant»')+', à compter du «date».\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
+        return head+'\n\nAux termes d\'une décision en date du «DATE», «CIVILITÉ PRÉNOM NOM», demeurant «ADRESSE», a été nommé(e) en qualité de '+q+' en remplacement de '+(x.president||'«ANCIEN DIRIGEANT»')+', à compter du «DATE».\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
       case 'Changement de dénomination':
-        return head+'\n\nAux termes d\'une décision en date du «date», il a été décidé de modifier la dénomination sociale qui devient : «nouvelle dénomination», à compter du «date». Les statuts ont été modifiés en conséquence.\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
+        return head+'\n\nAux termes d\'une décision en date du «DATE», il a été décidé de modifier la dénomination sociale qui devient : «NOUVELLE DÉNOMINATION», à compter du «DATE». Les statuts ont été modifiés en conséquence.\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
       case "Changement d'objet":
-        return head+'\n\nAux termes d\'une décision en date du «date», il a été décidé de modifier l\'objet social qui devient : «nouvel objet social», à compter du «date». Les statuts ont été modifiés en conséquence.\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
+        return head+'\n\nAux termes d\'une décision en date du «DATE», il a été décidé de modifier l\'objet social qui devient : «NOUVEL OBJET SOCIAL», à compter du «DATE». Les statuts ont été modifiés en conséquence.\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
       case 'Augmentation de capital':
-        return head+'\n\nAux termes d\'une décision en date du «date», le capital social a été augmenté de «montant» euros pour être porté de '+cap+' à «nouveau capital» euros. Les statuts ont été modifiés en conséquence.\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
+        return head+'\n\nAux termes d\'une décision en date du «DATE», le capital social a été augmenté de «MONTANT» euros pour être porté de '+cap+' à «NOUVEAU CAPITAL» euros. Les statuts ont été modifiés en conséquence.\nMention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
       case 'Dissolution':
-        return head+'\n\nAux termes d\'une décision en date du «date», il a été décidé la dissolution anticipée de la société et sa mise en liquidation amiable. «Civilité Prénom NOM», demeurant «adresse», a été nommé(e) liquidateur. Le siège de liquidation est fixé à «adresse». Mention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
+        return head+'\n\nAux termes d\'une décision en date du «DATE», il a été décidé la dissolution anticipée de la société et sa mise en liquidation amiable. «CIVILITÉ PRÉNOM NOM», demeurant «ADRESSE», a été nommé(e) liquidateur. Le siège de liquidation est fixé à «ADRESSE». Mention sera faite au RCS de '+x.rcsVille+'.\n\nPour avis.';
       default: /* Création */
-        return 'AVIS DE CONSTITUTION\n\nAux termes d\'un acte sous seing privé en date du '+(x.dateActe||'«date»')+' à '+(x.ville||'«ville»')+', il a été constitué une société présentant les caractéristiques suivantes :\n\n'
-          +'Forme : '+x.formeLabel+'\nDénomination : '+x.denom+'\nSiège social : '+x.siegeComplet+'\nObjet social : '+(x.objet||'«objet social»')+'\nDurée : 99 ans à compter de son immatriculation au RCS\nCapital social : '+cap+'\n'+q+' : '+(x.president||'«'+q+'»')+(x.presAdr?(', demeurant '+x.presAdr):'')+'\n\nLa société sera immatriculée au Registre du commerce et des sociétés de '+x.rcsVille+'.\n\nPour avis, le '+q+'.';
+        return 'AVIS DE CONSTITUTION\n\nAux termes d\'un acte sous seing privé en date du '+(x.dateActe||'«DATE»')+' à '+(x.ville||'«VILLE»')+', il a été constitué une société présentant les caractéristiques suivantes :\n\n'
+          +'Forme : '+x.formeLabel+'\nDénomination : '+x.denom+'\nSiège social : '+x.siegeComplet+'\nObjet social : '+(x.objet||'«OBJET SOCIAL»')+'\nDurée : 99 ans à compter de son immatriculation au RCS\nCapital social : '+cap+'\n'+q+' : '+(x.president||'«'+q+'»')+(x.presAdr?(', demeurant '+x.presAdr):'')+'\n\nLa société sera immatriculée au registre du commerce et des sociétés de '+x.rcsVille+'.\n\nPour avis, le '+q+'.';
     }
   };
   window.annonceData=function(id){
     var d=espDoss().find(function(x){return x.id===id;});var x={};
     try{ x=stDossData(d)||{}; }catch(_e){}
     var c=clientById((d.clientIds||[])[0])||{};
-    return {denom:(x.denom||c.denomination||'«dénomination»'),forme:(x.forme||c.forme||'SAS'),
+    return {denom:(x.denom||c.denomination||'«DÉNOMINATION»'),forme:(x.forme||c.forme||'SAS'),
       formeLabel:stFormeLabel(x.forme||c.forme||'SAS'),cap:(x.cap||c.capital||0),
-      siegeComplet:(x.siegeComplet||c.siege||'«siège social»'),ville:(x.ville||c.ville||'«ville»'),
-      rcsVille:(x.rcsVille||c.ville||'«ville»'),siren:(c.siren||''),dateActe:(x.dateActe||''),
+      siegeComplet:(x.siegeComplet||c.siege||'«SIÈGE SOCIAL»'),ville:(x.ville||c.ville||'«VILLE»'),
+      rcsVille:(x.rcsVille||c.ville||'«VILLE»'),siren:(c.siren||''),dateActe:(x.dateActe||''),
       objet:((c.activites||[]).join(', ')||''),president:(x.president||c.president||''),
       presAdr:(x.siege||c.adresse||'')};
   };
@@ -7716,10 +7716,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var objet=((c.activites||[]).join(', ')||'').trim();
     var nominal=x.nominal||100, nbParts=x.nbActions||0;
     var apports=x.assoc.map(function(a){ var pn=Number(a.parts)||0; var val=pn*nominal;
-      return '<p>- '+(E(a.nom)||'«associé»')+' apporte la somme de '+(val?num(val)+' Euros':'«…» Euros')+', soit '+(pn||'«…»')+' part'+(pn>1?'s':'')+'.</p>'; }).join('');
-    var repart=x.assoc.map(function(a){ var pn=Number(a.parts)||0; return '<p>- '+(E(a.nom)||'«associé»')+' : '+(pn||'«…»')+' part'+(pn>1?'s':'')+'</p>'; }).join('');
+      return '<p>- '+(E(a.nom)||'«ASSOCIÉ»')+' apporte la somme de '+(val?num(val)+' Euros':'«…» Euros')+', soit '+(pn||'«…»')+' part'+(pn>1?'s':'')+'.</p>'; }).join('');
+    var repart=x.assoc.map(function(a){ var pn=Number(a.parts)||0; return '<p>- '+(E(a.nom)||'«ASSOCIÉ»')+' : '+(pn||'«…»')+' part'+(pn>1?'s':'')+'</p>'; }).join('');
     var _pres=(''+x.president).trim();
-    var signs=x.assoc.map(function(a){ var an=(''+(a.nom||'')).trim(); var role=(an&&an===_pres)?'Le gérant — Signature':'Associé — Signature'; return '<div class="sg"><b>'+(E(an)||'«associé»')+'</b>'+role+'</div>'; }).join('');
+    var signs=x.assoc.map(function(a){ var an=(''+(a.nom||'')).trim(); var role=(an&&an===_pres)?'Le gérant — Signature':'Associé — Signature'; return '<div class="sg"><b>'+(E(an)||'«ASSOCIÉ»')+'</b>'+role+'</div>'; }).join('');
     return {x:x,c:c,capN:capN,capL:capL,objet:objet,nominal:nominal,nbParts:nbParts,apports:apports,repart:repart,signs:signs,
       preambule:x.assoc.map(function(a){return '<p>'+((typeof stCivil==='function')?stCivil(a):E(a.nom))+'</p>';}).join('')};
   }
@@ -7737,11 +7737,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var A=[];
     A.push(titre('TITRE I — FORME · OBJET · DÉNOMINATION · SIÈGE · DURÉE'));
     A.push(art('ARTICLE 1 — Forme',
-      ['Il est formé une société à responsabilité limitée régie par les dispositions du Code de commerce, notamment ses articles L. 223-1 et suivants, par toutes autres dispositions légales et réglementaires applicables, et par les présents statuts.',
+      ['Il est formé une société à responsabilité limitée régie par les dispositions du Code de commerce, notamment ses articles L. 223-1 et suivants, par toutes autres dispositions légales et réglementaires applicables, et par les présents statuts.',
        'La Société '+(eurl?'ne comporte qu\'un seul associé. Elle peut à tout moment comprendre plusieurs associés à la suite d\'une cession ou transmission de parts, ou de la création de parts nouvelles, dans la limite de cent associés.':'peut comporter de deux à cent associés.'),
        'Les associés ne supportent les pertes qu\'à concurrence de leurs apports.']));
     A.push(art('ARTICLE 2 — Objet',
-      ['La Société a pour objet, en France et à l\'étranger : '+(b.objet?E(b.objet):'«objet social — activités de la société»')+'.',
+      ['La Société a pour objet, en France et à l\'étranger : '+(b.objet?E(b.objet):'«OBJET SOCIAL — ACTIVITÉS DE LA SOCIÉTÉ»')+'.',
        'Et, plus généralement, toutes opérations industrielles, commerciales, financières, mobilières ou immobilières se rattachant directement ou indirectement à cet objet ou susceptibles d\'en faciliter la réalisation.']));
     A.push('<div class="st-art">ARTICLE 3 — Dénomination sociale</div><p>La dénomination sociale est :</p><p class="st-den">'+E(x.denom)+'</p>'
       +'<p>Tous les actes et documents émanant de la Société doivent indiquer la dénomination sociale précédée ou suivie immédiatement des mots « société à responsabilité limitée » ou des initiales « S.A.R.L. »'+(eurl?' (ou « E.U.R.L. »)':'')+' et de l\'énonciation du montant du capital social.</p>');
@@ -7751,17 +7751,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     A.push(art('ARTICLE 5 — Durée',
       ['La durée de la Société est fixée à quatre-vingt-dix-neuf (99) années à compter de son immatriculation au registre du commerce et des sociétés, sauf dissolution anticipée ou prorogation.']));
     A.push(titre('TITRE II — APPORTS · CAPITAL · PARTS SOCIALES'));
-    A.push('<div class="st-art">ARTICLE 6 — Apports</div>'+(b.apports||'<p>«apports des associés»</p>')
+    A.push('<div class="st-art">ARTICLE 6 — Apports</div>'+(b.apports||'<p>«APPORTS DES ASSOCIÉS»</p>')
       +'<p>Soit au total la somme de '+b.capN+' Euros ('+b.capL+' euros), correspondant à '+(b.nbParts||'«…»')+' parts sociales, intégralement libérée ainsi qu\'il résulte de l\'état des souscriptions.</p>');
     A.push('<div class="st-art">ARTICLE 7 — Capital social</div>'
       +'<p>Le capital social est fixé à la somme de '+b.capN+' Euros ('+b.capL+' euros).</p>'
-      +'<p>Il est divisé en '+(b.nbParts||'«…»')+' parts sociales de '+num(b.nominal)+' Euros chacune, entièrement souscrites et réparties entre les associés en proportion de leurs apports :</p>'+(b.repart||'<p>«répartition des parts»</p>'));
+      +'<p>Il est divisé en '+(b.nbParts||'«…»')+' parts sociales de '+num(b.nominal)+' Euros chacune, entièrement souscrites et réparties entre les associés en proportion de leurs apports :</p>'+(b.repart||'<p>«RÉPARTITION DES PARTS»</p>'));
     A.push(art('ARTICLE 8 — Parts sociales',
       ['Les parts sociales ne peuvent être représentées par des titres négociables. Le titre de chaque associé résulte des présents statuts, des actes modificatifs ultérieurs et des cessions régulièrement consenties.',
        'Chaque part sociale confère à son propriétaire un droit proportionnel dans les bénéfices et l\'actif social ; elle est indivisible à l\'égard de la Société.']));
     A.push(art('ARTICLE 9 — Cession et transmission des parts',
       ['Les parts sociales sont librement cessibles entre associés'+(eurl?'':'')+' , ainsi qu\'entre conjoints, ascendants et descendants.',
-       'La cession de parts à des tiers étrangers à la Société est soumise à l\'agrément préalable de la majorité des associés représentant au moins la moitié des parts sociales, conformément à l\'article L. 223-14 du Code de commerce.',
+       'La cession de parts à des tiers étrangers à la Société est soumise à l\'agrément préalable de la majorité des associés représentant au moins la moitié des parts sociales, conformément à l\'article L. 223-14 du Code de commerce.',
        'Toute cession de parts doit être constatée par écrit et devient opposable à la Société après signification ou dépôt d\'un original au siège social.']));
     A.push(titre('TITRE III — GÉRANCE'));
     A.push(art('ARTICLE 10 — Nomination de la gérance',
@@ -7775,7 +7775,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
        'Le gérant est responsable individuellement ou solidairement, selon le cas, envers la Société ou envers les tiers, des infractions aux dispositions légales, de la violation des statuts et des fautes commises dans sa gestion.']));
     A.push(titre('TITRE IV — DÉCISIONS DES ASSOCIÉS'));
     A.push(art('ARTICLE 13 — Décisions collectives',
-      [(eurl?'L\'associé unique exerce les pouvoirs dévolus à l\'assemblée des associés. Ses décisions sont répertoriées dans un registre.':'Les décisions collectives sont prises en assemblée ou par consultation écrite. Les décisions ordinaires sont adoptées par un ou plusieurs associés représentant plus de la moitié des parts sociales ; les décisions extraordinaires (modification des statuts) par les associés représentant au moins les trois quarts des parts sociales, dans les conditions des articles L. 223-29 et L. 223-30 du Code de commerce.')]));
+      [(eurl?'L\'associé unique exerce les pouvoirs dévolus à l\'assemblée des associés. Ses décisions sont répertoriées dans un registre.':'Les décisions collectives sont prises en assemblée ou par consultation écrite. Les décisions ordinaires sont adoptées par un ou plusieurs associés représentant plus de la moitié des parts sociales ; les décisions extraordinaires (modification des statuts) par les associés représentant au moins les trois quarts des parts sociales, dans les conditions des articles L. 223-29 et L. 223-30 du Code de commerce.')]));
     A.push(titre('TITRE V — EXERCICE SOCIAL · COMPTES · RÉSULTAT'));
     A.push(art('ARTICLE 14 — Exercice social',
       ['Chaque exercice social a une durée d\'une année qui commence le 1er janvier et finit le 31 décembre.',
@@ -7825,10 +7825,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     A.push(art('ARTICLE 5 — Durée',
       ['La durée de la Société est fixée à quatre-vingt-dix-neuf (99) années à compter de son immatriculation, sauf dissolution anticipée ou prorogation.']));
     A.push(titre('TITRE II — APPORTS · CAPITAL · PARTS'));
-    A.push('<div class="st-art">ARTICLE 6 — Apports</div>'+(b.apports||'<p>«apports des associés»</p>')
+    A.push('<div class="st-art">ARTICLE 6 — Apports</div>'+(b.apports||'<p>«APPORTS DES ASSOCIÉS»</p>')
       +'<p>Soit au total la somme de '+b.capN+' Euros ('+b.capL+' euros).</p>');
     A.push('<div class="st-art">ARTICLE 7 — Capital social</div>'
-      +'<p>Le capital social est fixé à la somme de '+b.capN+' Euros ('+b.capL+' euros), divisé en '+(b.nbParts||'«…»')+' parts sociales de '+num(b.nominal)+' Euros chacune, attribuées aux associés en proportion de leurs apports :</p>'+(b.repart||'<p>«répartition des parts»</p>'));
+      +'<p>Le capital social est fixé à la somme de '+b.capN+' Euros ('+b.capL+' euros), divisé en '+(b.nbParts||'«…»')+' parts sociales de '+num(b.nominal)+' Euros chacune, attribuées aux associés en proportion de leurs apports :</p>'+(b.repart||'<p>«RÉPARTITION DES PARTS»</p>'));
     A.push(art('ARTICLE 8 — Cession des parts',
       ['Les parts sociales ne peuvent être cédées, à titre onéreux ou gratuit, qu\'avec l\'agrément de tous les associés, conformément à l\'article 1861 du Code civil, sauf dispositions plus favorables prévues aux présents statuts pour les cessions entre associés, conjoints, ascendants ou descendants.',
        'Toute cession est constatée par écrit et rendue opposable à la Société dans les conditions de l\'article 1865 du Code civil.']));
@@ -7990,7 +7990,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     // Résolutions par type
     var R=[];
     if(type==='transfert'){
-      R=[['Transfert du siège social',decide+' de transférer le siège social, actuellement situé '+E(x.siegeComplet)+', à l\'adresse suivante : «nouvelle adresse du siège», à compter de ce jour.'],
+      R=[['Transfert du siège social',decide+' de transférer le siège social, actuellement situé '+E(x.siegeComplet)+', à l\'adresse suivante : «NOUVELLE ADRESSE DU SIÈGE», à compter de ce jour.'],
          ['Modification des statuts',decide+' de modifier en conséquence l\'article des statuts relatif au siège social.'],
          ['Pouvoirs','Tous pouvoirs sont donnés au porteur d\'un original, d\'une copie ou d\'un extrait du présent procès-verbal pour accomplir les formalités de publicité, de dépôt et d\'inscription modificative.']];
     } else if(type==='dirigeant'){
@@ -8002,17 +8002,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
          ['Modification des statuts',decide+' de modifier en conséquence l\'article des statuts relatif à la dénomination sociale.'],
          ['Pouvoirs','Tous pouvoirs sont donnés au porteur d\'un original pour accomplir les formalités légales.']];
     } else if(type==='objet'){
-      R=[['Modification de l\'objet social',decide+' de modifier l\'objet social comme suit : «nouvel objet social», et le cas échéant de l\'étendre aux activités susvisées.'],
+      R=[['Modification de l\'objet social',decide+' de modifier l\'objet social comme suit : «NOUVEL OBJET SOCIAL», et le cas échéant de l\'étendre aux activités susvisées.'],
          ['Modification des statuts',decide+' de modifier en conséquence l\'article des statuts relatif à l\'objet social.'],
          ['Pouvoirs','Tous pouvoirs sont donnés au porteur d\'un original pour accomplir les formalités légales.']];
     } else if(type==='capital'){
-      R=[['Modification du capital social',decide+' de porter le capital social de '+capN+' euros à «nouveau montant» euros, soit une «augmentation/réduction» de «montant» euros, dans les conditions légales.'],
+      R=[['Modification du capital social',decide+' de porter le capital social de '+capN+' euros à «NOUVEAU MONTANT» euros, soit une «AUGMENTATION/RÉDUCTION» de «MONTANT» euros, dans les conditions légales.'],
          ['Modification des statuts',decide+' de modifier en conséquence les articles des statuts relatifs aux apports et au capital social.'],
          ['Pouvoirs','Tous pouvoirs sont donnés au porteur d\'un original pour accomplir les formalités légales.']];
     } else if(type==='dissolution'){
       R=[['Dissolution anticipée',decide+' la dissolution anticipée de la Société à compter de ce jour et sa mise en liquidation amiable.'],
-         ['Nomination du liquidateur',decide+' de nommer «Nom du liquidateur» en qualité de liquidateur, avec les pouvoirs les plus étendus pour réaliser l\'actif et apurer le passif.'],
-         ['Siège de la liquidation','Le siège de la liquidation est fixé à «adresse du siège de la liquidation», adresse à laquelle toute correspondance devra être envoyée.'],
+         ['Nomination du liquidateur',decide+' de nommer «NOM DU LIQUIDATEUR» en qualité de liquidateur, avec les pouvoirs les plus étendus pour réaliser l\'actif et apurer le passif.'],
+         ['Siège de la liquidation','Le siège de la liquidation est fixé à «ADRESSE DU SIÈGE DE LA LIQUIDATION», adresse à laquelle toute correspondance devra être envoyée.'],
          ['Pouvoirs','Tous pouvoirs sont donnés au porteur d\'un original pour accomplir les formalités de publicité et de radiation.']];
     } else { // approbation (défaut)
       type='approbation';
@@ -8033,7 +8033,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       : ('<p>Les associés de la société <b>'+E(x.denom)+'</b>, '+E(formeLbl)+' au capital de '+capN+' euros, dont le siège social est situé '+E(x.siegeComplet)+', se sont réunis en assemblée générale, sur convocation du '+dirig+'.</p>'
         +'<p>Il a été établi une feuille de présence, signée par les associés présents ou représentés, à laquelle sont annexés les pouvoirs des associés représentés. L\'ensemble des '+parts+' composant le capital étant représenté, l\'assemblée peut valablement délibérer.</p>'
         +'<p>Le '+dirig+' préside la séance. Le Président constate que l\'assemblée est régulièrement constituée et peut valablement délibérer sur l\'ordre du jour suivant.</p>');
-    var signs=x.assoc.map(function(a){ var an=(''+(a.nom||'')).trim(); var role=(an&&an===(''+x.president).trim())?('Le '+dirig+' — Signature'):'Associé — Signature'; return '<div class="sg"><b>'+(E(an)||'«associé»')+'</b>'+role+'</div>'; }).join('');
+    var signs=x.assoc.map(function(a){ var an=(''+(a.nom||'')).trim(); var role=(an&&an===(''+x.president).trim())?('Le '+dirig+' — Signature'):'Associé — Signature'; return '<div class="sg"><b>'+(E(an)||'«ASSOCIÉ»')+'</b>'+role+'</div>'; }).join('');
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-hdr"><b>'+E(x.denom)+'</b><div class="sub">'+E(formeLbl)+' au capital de '+capN+' euros</div>'
       +'<div class="sub">Siège social : '+E(x.siegeComplet)+'</div><div class="sub">RCS '+E(x.rcsVille)+'</div></div>'
@@ -9251,8 +9251,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
           '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-pri" onclick="(function(){var t=document.querySelector(\'#ov .ia-clauses\');if(t){var r=document.createRange();r.selectNodeContents(t);var s=getSelection();s.removeAllRanges();s.addRange(r);document.execCommand(\'copy\');s.removeAllRanges();toast(\'Clauses copiées\');}})()">Copier</button>');});
   };
   function demClausesDemo(f,c){var dir=dirigeantMot(f);
-    return 'ARTICLE — OBJET\n'+((c.objetSocial||'La société a pour objet : «activité».'))+'\n\n'
-      +'ARTICLE — CAPITAL SOCIAL\nLe capital social est fixé à '+((c.capital?c.capital+' euros':'«montant» euros'))+', divisé en '+((c.associes||[]).reduce(function(n,a){return n+(Number(a.parts)||0);},0)||'«nombre»')+' '+((f==='SAS'||f==='SASU')?'actions':'parts sociales')+' de «valeur nominale» euros chacune, intégralement souscrites et libérées.\n\n'
+    return 'ARTICLE — OBJET\n'+((c.objetSocial||'La société a pour objet : «ACTIVITÉ».'))+'\n\n'
+      +'ARTICLE — CAPITAL SOCIAL\nLe capital social est fixé à '+((c.capital?c.capital+' euros':'«MONTANT» euros'))+', divisé en '+((c.associes||[]).reduce(function(n,a){return n+(Number(a.parts)||0);},0)||'«NOMBRE»')+' '+((f==='SAS'||f==='SASU')?'actions':'parts sociales')+' de «VALEUR NOMINALE» euros chacune, intégralement souscrites et libérées.\n\n'
       +'ARTICLE — DIRECTION\nLa société est dirigée par un '+dir+', personne physique ou morale, associé ou non, nommé par les associés.\n\n'
       +'ARTICLE — EXERCICE SOCIAL\nL\'exercice social commence le 1er janvier et se termine le 31 décembre de chaque année.\n\n(clauses générées en mode démonstration — activez l\'IA pour une rédaction sur-mesure)';
   }
@@ -9977,7 +9977,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     }).filter(function(x){return x.beneficiaire;});
   };
   window.rbeHTML=function(d){
-    var c=cli(d),denom=(c.denomination||'«dénomination»'),B=window.rbeBeneficiaires(d);
+    var c=cli(d),denom=(c.denomination||'«DÉNOMINATION»'),B=window.rbeBeneficiaires(d);
     var rows=B.length?B.map(function(b){return '<tr><td style="padding:6px;border:1px solid #ddd">'+E(b.nom)+'</td><td style="padding:6px;border:1px solid #ddd;text-align:center">'+(b.pct!=null?(b.pct+' %'):'—')+'</td><td style="padding:6px;border:1px solid #ddd">'+(b.dirigeant?'Représentant légal + détention':'Détention du capital')+'</td></tr>';}).join(''):'<tr><td colspan="3" style="text-align:center;color:#8a7d69;padding:6px">Aucun bénéficiaire effectif identifié (à compléter).</td></tr>';
     return '<div class="doc-gen"><div style="font-family:Georgia,serif;padding:20px 8px;color:#111"><h2 style="text-align:center;font-size:15px">REGISTRE DES BÉNÉFICIAIRES EFFECTIFS</h2>'
       +'<p style="text-align:center">Société <b>'+E(denom)+'</b></p>'
@@ -10147,7 +10147,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   window.pouvoirFormalitesHTML=function(d){
     var x=X(d);var s=x.s;var q=stQualite(x.forme);
     var repFirm=((s.representant||s.dirigeant||s.raison||'AEM CONSEIL')+'').trim();
-    var adrFirm=((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«adresse du mandataire»';
+    var adrFirm=((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«ADRESSE DU MANDATAIRE»';
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-titre">POUVOIR SPÉCIAL</div>'
       +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(Formalités de constitution — Guichet unique électronique des formalités d\'entreprises)</p>'
@@ -10165,16 +10165,16 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   /* ---- DNC : variante « attestation simplifiée » (courte) ---- */
   window.dncSimpleHTML=function(d){
     var x=X(d);var dcl=x.assoc.filter(function(a){return (''+(a.nom||'')).trim()===(''+x.president).trim();})[0]||x.assoc[0]||{};
-    var nom=esc((dcl.nom||x.president||'').trim())||'«nom prénom»';
-    var naiss=dcl.naissance?esc(dcl.naissance):'«…»';var lieu=dcl.lieuNaissance?esc(dcl.lieuNaissance):'«lieu»';
-    var nat=dcl.nationalite?esc(dcl.nationalite):'«…»';var adr=dcl.adresse?esc(dcl.adresse):'«adresse»';
+    var nom=esc((dcl.nom||x.president||'').trim())||'«NOM PRÉNOM»';
+    var naiss=dcl.naissance?esc(dcl.naissance):'«…»';var lieu=dcl.lieuNaissance?esc(dcl.lieuNaissance):'«LIEU»';
+    var nat=dcl.nationalite?esc(dcl.nationalite):'«…»';var adr=dcl.adresse?esc(dcl.adresse):'«ADRESSE»';
     var q=stQualite(x.forme);
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-titre" style="font-size:14px">ATTESTATION SUR L\'HONNEUR DE NON-CONDAMNATION ET DE FILIATION</div>'
       +'<p style="margin-top:18px">Je soussigné <b>'+nom+'</b>, né le '+naiss+' à '+lieu+', de nationalité '+nat+', demeurant '+adr+',</p>'
       +'<p style="margin-top:10px">agissant en qualité de '+q+' de la société <b>'+esc(x.denom)+'</b>,</p>'
       +'<p style="margin-top:10px"><b>atteste sur l\'honneur</b> n\'avoir fait l\'objet d\'aucune condamnation pénale ni sanction civile ou administrative de nature à m\'interdire d\'exercer une activité commerciale ou de gérer, administrer ou diriger une personne morale.</p>'
-      +'<p style="margin-top:8px">Je déclare être le fils / la fille de '+(x.pere?esc(x.pere):'«nom et prénom du père»')+' et de '+(x.mere?esc(x.mere):'«nom et prénom de la mère»')+'.</p>'
+      +'<p style="margin-top:8px">Je déclare être le fils / la fille de '+(x.pere?esc(x.pere):'«NOM ET PRÉNOM DU PÈRE»')+' et de '+(x.mere?esc(x.mere):'«NOM ET PRÉNOM DE LA MÈRE»')+'.</p>'
       +'<div class="st-fin" style="margin-top:34px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
       +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+nom+'</b>Signature (précédée de « Lu et approuvé »)</div></div></div>'
       +'</div></div>';
@@ -10203,12 +10203,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-titre">ATTESTATION DE DOMICILIATION</div>'
       +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(Mise à disposition du local par un tiers)</p>'
-      +'<p style="margin-top:10px">Je soussigné(e) «nom et prénom de l\'hébergeant», demeurant «adresse complète de l\'hébergeant»,</p>'
+      +'<p style="margin-top:10px">Je soussigné(e) «NOM ET PRÉNOM DE L\'HÉBERGEANT», demeurant «ADRESSE COMPLÈTE DE L\'HÉBERGEANT»,</p>'
       +'<p style="margin-top:8px"><b>atteste</b> mettre à la disposition de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+', représentée par '+esc(x.president)+', son '+q+', un local situé '+esc(x.siegeComplet)+' pour y fixer le siège social de ladite société.</p>'
-      +'<p style="margin-top:8px">Cette mise à disposition prend effet à compter du «date d\'effet» et est consentie «à titre gratuit / moyennant une indemnité de «…» euros par mois».</p>'
+      +'<p style="margin-top:8px">Cette mise à disposition prend effet à compter du «DATE D\'EFFET» et est consentie «à titre gratuit / moyennant une indemnité de «…» euros par mois».</p>'
       +'<p style="margin-top:8px">La présente attestation est établie pour servir et valoir ce que de droit, en vue de l\'immatriculation de la société au registre du commerce et des sociétés.</p>'
       +'<div class="st-fin" style="margin-top:30px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+'</p>'
-      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>«L\'hébergeant»</b>Signature (précédée de « Lu et approuvé »)</div></div></div>'
+      +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>«L\'HÉBERGEANT»</b>Signature (précédée de « Lu et approuvé »)</div></div></div>'
       +'</div></div>';
   };
 
@@ -10218,9 +10218,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-titre">CESSION DE '+(isPart(x.forme)?'PARTS SOCIALES':'ACTIONS')+'</div>'
       +'<div style="text-align:center;font-size:11px;margin:-4px 0 14px">'+esc(x.denom)+' — '+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?stNum(x.cap):'«…»')+' euros</div>'
-      +'<p><b>Le cédant :</b> «Nom Prénom du cédant», demeurant «adresse».</p>'
-      +'<p><b>Le cessionnaire :</b> «Nom Prénom du cessionnaire», demeurant «adresse».</p>'
-      +'<p style="margin-top:8px">Le cédant cède au cessionnaire, qui accepte, «nombre» '+des+' de la société '+esc(x.denom)+', moyennant le prix de «montant» euros, dont quittance.</p>'
+      +'<p><b>Le cédant :</b> «NOM PRÉNOM DU CÉDANT», demeurant «ADRESSE».</p>'
+      +'<p><b>Le cessionnaire :</b> «NOM PRÉNOM DU CESSIONNAIRE», demeurant «ADRESSE».</p>'
+      +'<p style="margin-top:8px">Le cédant cède au cessionnaire, qui accepte, «NOMBRE» '+des+' de la société '+esc(x.denom)+', moyennant le prix de «MONTANT» euros, dont quittance.</p>'
       +'<p>Le cessionnaire est propriétaire des '+des+' cédées à compter de ce jour et subrogé dans tous les droits et obligations y attachés.</p>'
       +'<div class="st-fin" style="margin-top:26px"><p>Fait à '+esc(x.villeSignature)+', le '+x.dateActe+', en deux exemplaires.</p>'
       +'<div class="st-sign"><div class="sg"><b>Le Cédant</b>« Bon pour cession »</div><div class="sg"><b>Le Cessionnaire</b>« Bon pour acquisition »</div></div></div>'
@@ -10294,8 +10294,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function isPart(f){return f==='SARL'||f==='EURL'||f==='SCI';}
   function cabInfo(x){var s=x.s||{};
     return {nom:((s.raison||'AEM CONSEIL')+'').trim(),
-      adr:((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«adresse du cabinet»',
-      rep:((s.representant||s.dirigeant||'')+'').trim()||'«représentant du cabinet»',
+      adr:((s.adresse||'')+(s.cp?(' '+s.cp):'')+(s.ville?(' '+s.ville):'')).trim()||'«ADRESSE DU CABINET»',
+      rep:((s.representant||s.dirigeant||'')+'').trim()||'«REPRÉSENTANT DU CABINET»',
       siren:((s.siren||'')+'').trim()};}
   function euros(n){return (typeof stNum==='function')?stNum(n):(''+n);}
 
@@ -10304,7 +10304,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     var x=X(d);var cab=cabInfo(x);
     var client=x.president;
     var honos=(typeof espDocsTotal==='function')?espDocsTotal(d):0;
-    var hTxt=honos>0?(euros(honos)+' € HT'):'«montant» € HT';
+    var hTxt=honos>0?(euros(honos)+' € HT'):'«MONTANT» € HT';
     var objet=(type==='modification')
       ? 'la modification statutaire de la société <b>'+esc(x.denom)+'</b> (« nature de la modification : transfert de siège / changement de dirigeant / cession de titres / modification de l\'objet »)'
       : 'la constitution et l\'immatriculation de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+' au capital de '+(x.cap?euros(x.cap):'«…»')+' euros';
@@ -10355,16 +10355,16 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   /* ---------- ATTESTATION DE FILIATION ---------- */
   window.attestationFiliationHTML=function(d){
     var x=X(d);var dcl=x.assoc.filter(function(a){return (''+(a.nom||'')).trim()===(''+x.president).trim();})[0]||x.assoc[0]||{};
-    var nom=esc((dcl.nom||x.president||'').trim())||'«nom prénom»';
-    var naiss=dcl.naissance?esc(dcl.naissance):'«date de naissance»';
-    var lieu=dcl.lieuNaissance?esc(dcl.lieuNaissance):'«lieu de naissance»';
-    var nat=dcl.nationalite?esc(dcl.nationalite):'«nationalité»';
-    var pere=x.pere?esc(x.pere):'«nom et prénom du père»';
-    var mere=x.mere?esc(x.mere):'«nom et prénom de la mère»';
+    var nom=esc((dcl.nom||x.president||'').trim())||'«NOM PRÉNOM»';
+    var naiss=dcl.naissance?esc(dcl.naissance):'«DATE DE NAISSANCE»';
+    var lieu=dcl.lieuNaissance?esc(dcl.lieuNaissance):'«LIEU DE NAISSANCE»';
+    var nat=dcl.nationalite?esc(dcl.nationalite):'«NATIONALITÉ»';
+    var pere=x.pere?esc(x.pere):'«NOM ET PRÉNOM DU PÈRE»';
+    var mere=x.mere?esc(x.mere):'«NOM ET PRÉNOM DE LA MÈRE»';
     var q=stQualite(x.forme);
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-titre">ATTESTATION DE FILIATION</div>'
-      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(Établie en vue de l\'immatriculation au Registre du commerce et des sociétés)</p>'
+      +'<p style="text-align:center;font-size:11px;margin:-4px 0 16px">(Établie en vue de l\'immatriculation au registre du commerce et des sociétés)</p>'
       +'<p style="margin-top:14px">Je soussigné(e) <b>'+nom+'</b>, né(e) le '+naiss+' à '+lieu+', de nationalité '+nat+',</p>'
       +'<p style="margin-top:10px">agissant en qualité de '+q+' de la société <b>'+esc(x.denom)+'</b>, '+esc(stFormeLabel(x.forme))+' dont le siège social est situé '+esc(x.siegeComplet)+',</p>'
       +'<p style="margin-top:10px"><b>atteste sur l\'honneur</b> être :</p>'
@@ -13739,7 +13739,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +inp('comp-sie','Service des impôts (destinataire)',C.sie,'Ex : SIE de Bobigny',true)
       +inp('comp-signataire','Signataire',C.signataire,'Le Gérant / Nom Prénom')
       +'</div>';
-    var note='<div class="fx-note">Compensation demandée à hauteur de l’IS dû : <b>'+eu2(comp)+'</b>'+(reste>0?(' — crédit de TVA restant après imputation : <b>'+eu2(reste)+'</b>.'):(pf0(C.isDu)>pf0(C.creditTVA)?(' — solde d’IS à régler : <b>'+eu2(pf0(C.isDu)-pf0(C.creditTVA))+'</b>.'):'.'))+' Fondement : art. L.257 du LPF · formulaire 3516-SD.</div>';
+    var note='<div class="fx-note">Compensation demandée à hauteur de l’IS dû : <b>'+eu2(comp)+'</b>'+(reste>0?(' — crédit de TVA restant après imputation : <b>'+eu2(reste)+'</b>.'):(pf0(C.isDu)>pf0(C.creditTVA)?(' — solde d’IS à régler : <b>'+eu2(pf0(C.isDu)-pf0(C.creditTVA))+'</b>.'):'.'))+' Fondement : art. L. 257 du LPF · formulaire 3516-SD.</div>';
     return '<div class="fx-h1">Demande de compensation crédit de TVA / IS</div>'+approvalBanner(d)+note+form
       +'<div class="fx-formact"><button class="fx-btn" onclick="fiscalCompGen(\''+d.id+'\')">📄 Générer le courrier de compensation</button></div>';
   }
@@ -13752,7 +13752,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<p>Madame, Monsieur,</p>'
       +'<p>Nous vous prions de bien vouloir prendre en compte la présente demande de compensation entre deux créances et dettes fiscales dont notre société est actuellement redevable.</p>'
       +'<p>En effet, notre entreprise dispose d’un <b>crédit de TVA d’un montant de '+eu2(pf0(C.creditTVA))+'</b>, et se trouve parallèlement redevable d’un <b>impôt sur les sociétés s’élevant à '+eu2(pf0(C.isDu))+'</b>.</p>'
-      +'<p>Conformément aux dispositions de l’article L.257 du Livre des procédures fiscales, nous vous sollicitons afin que la compensation de ces sommes soit effectuée, à hauteur du montant de l’impôt sur les sociétés dû, soit <b>'+eu2(comp)+'</b>.</p>'
+      +'<p>Conformément aux dispositions de l’article L. 257 du Livre des procédures fiscales, nous vous sollicitons afin que la compensation de ces sommes soit effectuée, à hauteur du montant de l’impôt sur les sociétés dû, soit <b>'+eu2(comp)+'</b>.</p>'
       +'<p>Vous trouverez ci-joint le formulaire dûment rempli de demande d’imputation d’une créance fiscale sur une échéance <b>3516-SD</b>. Nous restons à votre disposition pour tout complément d’information ou pour vous fournir les justificatifs nécessaires à l’appui de cette demande.</p>'
       +'<p>Dans l’attente de votre retour, nous vous prions d’agréer, Madame, Monsieur, l’expression de nos salutations distinguées.</p>'
       +'<div class="ct-sign" style="margin-top:22px"><div class="pv-sign" style="margin-left:auto;text-align:right">'+E(C.signataire||'Le Gérant')+'<br>………………………</div></div>'
@@ -13819,7 +13819,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +inp('pp-dateDoc','Date du document',P.dateDoc,'jj/mm/aaaa')+inp('pp-signataire','Signataire',P.signataire,'Le Gérant / Nom Prénom')
       +'</div>';
     return '<div class="fx-h1">PPSPS — Plan Particulier de Sécurité et de Protection de la Santé</div>'+approvalBanner(d)
-      +'<div class="fx-note">Document conforme à la structure d’un PPSPS BTP (art. R.4532-56 et suivants du Code du travail). Les mesures de prévention et l’hygiène sont pré-remplies : adaptez-les au chantier et au client.</div>'
+      +'<div class="fx-note">Document conforme à la structure d’un PPSPS BTP (art. R. 4532-56 et suivants du Code du travail). Les mesures de prévention et l’hygiène sont pré-remplies : adaptez-les au chantier et au client.</div>'
       +form+'<div class="fx-formact"><button class="fx-btn" onclick="fiscalPpspsGen(\''+d.id+'\')">📄 Générer le PPSPS</button></div>';
   }
   function ppspsDocHTML(d){var P=ppspsData(d);var nl=function(t){return E(t||'').replace(/\n/g,'<br>');};
@@ -16003,7 +16003,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<div style="text-align:center;font-size:12px;margin-bottom:14px">'+entete+'</div>'
       +'<h1 style="text-align:center;font-size:16px;letter-spacing:.5px;margin:16px 0;color:#111">RAPPORT DU COMMISSAIRE À LA TRANSFORMATION</h1>'
       +'<p style="font-weight:700">1. Mission</p>'
-      +'<p>En exécution de la mission qui '+(com?'m\'a':'nous a')+' été confiée, et en application des dispositions de l\'article L. 224-3 du code de commerce, '+(com?'j\'ai':'nous avons')+' établi le présent rapport à l\'occasion du projet de transformation de la société <b>'+esc(S.denomination||'…')+'</b> en <b>'+esc(formeNom(N.formeNouvelle))+'</b>.</p>'
+      +'<p>En exécution de la mission qui '+(com?'m\'a':'nous a')+' été confiée, et en application des dispositions de l\'article L. 224-3 du code de commerce, '+(com?'j\'ai':'nous avons')+' établi le présent rapport à l\'occasion du projet de transformation de la société <b>'+esc(S.denomination||'…')+'</b> en <b>'+esc(formeNom(N.formeNouvelle))+'</b>.</p>'
       +'<p style="font-weight:700;margin-top:12px">2. Diligences</p>'
       +'<p>'+(com?'J\'ai':'Nous avons')+' procédé à l\'examen des comptes de la société, apprécié la valeur des biens composant l\'actif social et vérifié l\'absence d\'avantages particuliers. Ces diligences ont été effectuées conformément à la doctrine professionnelle applicable.</p>'
       +'<p style="font-weight:700;margin-top:12px">3. Conclusion</p>'
@@ -17591,14 +17591,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p>La société '+edV(D,'denomination','DÉNOMINATION')+',<br>dont le siège social est à '+edV(D,'adresse','ADRESSE')+' — '+edV(D,'cp','CP')+' '+edV(D,'ville','VILLE')+',<br>immatriculée au RCS de '+edV(D,'rcsVille','VILLE RCS')+', numéro SIRET '+edV(D,'siret','SIRET')+', code APE '+edV(D,'ape','APE')+',<br>cotisant à l\'URSSAF '+edV(D,'urssaf','URSSAF')+' sous le numéro '+edV(D,'numurssaf','N° URSSAF')+',<br>agissant par l\'intermédiaire de son représentant légal '+edV(D,'representant','REPRÉSENTANT LÉGAL')+'.<br><i>L\'employeur, d\'une part,</i></p>'
     +'<p><b>Et</b><br>'+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM PRÉNOM')+',<br>demeurant à '+edV(D,'saladr','ADRESSE')+' — '+edV(D,'salcp','CP')+' '+edV(D,'salville','VILLE')+'.<br><i>Le salarié, d\'autre part.</i></p>'
     +'<p><b>Il a été convenu ce qui suit :</b></p>'
-    +'<p><b>Article 1 – Engagement.</b> La société '+edV(D,'denomination','LA SOCIÉTÉ')+' engage '+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','LE SALARIÉ')+' en qualité de '+edV(D,'poste','POSTE')+' – '+edV(D,'statut','STATUT')+' – à compter du '+edV(D,'datedebut','DATE')+' pour une durée indéterminée, sous réserve des résultats de la visite médicale d\'embauche devant intervenir avant l\'expiration de la période d\'essai. Le salarié déclare accepter sans réserve cet engagement, aux conditions définies ci-après. La déclaration nominative préalable à l\'embauche a été remise à l\'URSSAF.</p>'
+    +'<p><b>Article 1 – Engagement.</b> La société '+edV(D,'denomination','LA SOCIÉTÉ')+' engage '+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','LE SALARIÉ')+' en qualité de '+edV(D,'poste','POSTE')+' – '+edV(D,'statut','STATUT')+' – à compter du '+edV(D,'datedebut','DATE')+' pour une durée indéterminée, sous réserve des résultats de la visite médicale d\'embauche devant intervenir avant l\'expiration de la période d\'essai. Le salarié déclare accepter sans réserve cet engagement, aux conditions définies ci-après. La déclaration préalable à l\'embauche (DPAE) a été adressée à l\'URSSAF.</p>'
     +'<p><b>Article 2 – Objet du contrat.</b> Le salarié exercera les fonctions suivantes : '+edV(D,'fonctions','FONCTIONS')+'. Ces fonctions sont susceptibles d\'évolution. Ce contrat est soumis aux dispositions de la convention collective '+edV(D,'convention','CONVENTION')+'.</p>'
-    +'<p><b>Article 3 – Période d\'essai.</b> L\'engagement du salarié deviendra définitif à l\'issue d\'une période d\'essai fixée à '+edV(D,'essai','DURÉE')+', et la période d\'essai peut être prolongée. Pendant cette période, chacune des parties pourra, à tout moment, mettre fin au présent contrat, sans qu\'aucune indemnité ni préavis ne soient dus.</p>'
-    +'<p><b>Article 4 – Obligations professionnelles.</b> Le salarié s\'engage à travailler exclusivement pour le compte de l\'employeur et s\'interdit de s\'intéresser directement ou indirectement à toute affaire susceptible de concurrencer celle de l\'employeur. Il s\'engage à observer une discrétion professionnelle absolue et à se conformer aux directives de la direction.</p>'
+    +'<p><b>Article 3 – Période d\'essai.</b> L\'engagement du salarié deviendra définitif à l\'issue d\'une période d\'essai fixée à '+edV(D,'essai','DURÉE')+', renouvelable une fois dans les conditions prévues par la convention collective applicable. Pendant cette période, chacune des parties pourra, à tout moment, mettre fin au présent contrat, sans qu\'aucune indemnité ni préavis ne soient dus.</p>'
+    +'<p><b>Article 4 – Obligations professionnelles.</b> Le salarié s\'engage à travailler exclusivement pour le compte de l\'employeur et s\'interdit de s\'intéresser directement ou indirectement à toute affaire susceptible de concurrencer l\'activité de l\'employeur. Il s\'engage à observer une discrétion professionnelle absolue et à se conformer aux directives de la direction.</p>'
     +'<p><b>Article 5 – Lieu de travail.</b> Le lieu de travail est fixé à '+edV(D,'lieu','LIEU DE TRAVAIL')+'. Le salarié s\'engage à accepter tout déplacement ponctuel entrant dans le cadre de ses fonctions ainsi que toute mutation géographique à l\'intérieur du territoire national.</p>'
     +'<p><b>Article 6 – Horaires de travail.</b> La durée hebdomadaire de travail est de '+edV(D,'dureehebdo','DURÉE HEBDO')+' heures. Les horaires de travail sont '+edV(D,'horaires','HORAIRES')+'.</p>'
-    +'<p><b>Article 7 – Rémunération.</b> En contrepartie de l\'accomplissement de ses fonctions, le salarié percevra un salaire mensuel net de '+edV(D,'salairelettres','MONTANT EN LETTRES')+' '+edV(D,'salaire','SALAIRE')+' € payable le '+edV(D,'jourpaie','JOUR')+' du mois.</p>'
-    +'<p><b>Article 8 – Congés payés.</b> Le salarié bénéficiera des congés payés prévus par les articles L.223-1 et suivants du Code du travail et par la convention collective applicable, soit 30 jours ouvrables par période du 1er juin au 31 mai suivant.</p>'
+    +'<p><b>Article 7 – Rémunération.</b> En contrepartie de l\'accomplissement de ses fonctions, le salarié percevra un salaire mensuel brut de '+edV(D,'salairelettres','MONTANT EN LETTRES')+' '+edV(D,'salaire','SALAIRE')+' € payable le '+edV(D,'jourpaie','JOUR')+' du mois.</p>'
+    +'<p><b>Article 8 – Congés payés.</b> Le salarié bénéficiera des congés payés prévus par les articles L. 3141-1 et suivants du Code du travail et par la convention collective applicable, soit 30 jours ouvrables par période du 1er juin au 31 mai suivant.</p>'
     +'<p><b>Article 9 – Absence et indisponibilité.</b> En cas d\'absence pour maladie ou accident, le salarié devra immédiatement en aviser l\'employeur et en justifier par la production d\'un certificat médical dans les 48 heures.</p>'
     +'<p><b>Article 10 – Rupture du contrat de travail.</b> Chaque partie peut mettre fin au contrat conformément aux dispositions légales et conventionnelles. En cas de démission ou de licenciement pour motif autre qu\'une faute grave, la durée de préavis sera conforme à la convention collective, soit '+edV(D,'preavis','PRÉAVIS')+'. Aucun préavis ne sera dû en cas de faute grave ou lourde ou de force majeure.</p>'
     +'<p><b>Article 11 – Clause de non-concurrence.</b> '+edV(D,'nonconcur','…')+'</p>'
@@ -17611,13 +17611,16 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p>La société '+edV(D,'denomination','DÉNOMINATION')+',<br>dont le siège social est à '+edV(D,'adresse','ADRESSE')+' — '+edV(D,'cp','CP')+' '+edV(D,'ville','VILLE')+',<br>immatriculée au RCS de '+edV(D,'rcsVille','VILLE RCS')+', numéro SIRET '+edV(D,'siret','SIRET')+', code APE '+edV(D,'ape','APE')+',<br>cotisant à l\'URSSAF '+edV(D,'urssaf','URSSAF')+' sous le numéro '+edV(D,'numurssaf','N° URSSAF')+',<br>agissant par l\'intermédiaire de son représentant légal '+edV(D,'representant','REPRÉSENTANT LÉGAL')+' – '+edV(D,'qualite','QUALITÉ')+'.<br><i>L\'employeur, d\'une part,</i></p>'
     +'<p><b>Et</b><br>'+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM PRÉNOM')+',<br>demeurant à '+edV(D,'saladr','ADRESSE')+' — '+edV(D,'salcp','CP')+' '+edV(D,'salville','VILLE')+',<br>né(e) le '+edV(D,'salnaiss','DATE DE NAISSANCE')+' à '+edV(D,'sallieu','LIEU')+', de nationalité '+edV(D,'salnat','NATIONALITÉ')+',<br>immatriculé(e) à la Sécurité sociale sous le numéro '+edV(D,'salss','N° SÉCU')+'.<br><i>Le salarié, d\'autre part.</i></p>'
     +'<p><b>Il a été convenu ce qui suit :</b></p>'
-    +'<p><b>Article 1 – Engagement.</b> La société '+edV(D,'denomination','LA SOCIÉTÉ')+' engage '+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','LE SALARIÉ')+' en qualité de '+edV(D,'poste','POSTE')+' – '+edV(D,'statut','STATUT')+' – à compter du '+edV(D,'datedebut','DATE DE DÉBUT')+' pour une durée déterminée jusqu\'au '+edV(D,'datefin','DATE DE FIN')+', sous réserve des résultats de la visite médicale d\'embauche. La déclaration nominative préalable à l\'embauche a été remise à l\'URSSAF.</p>'
+    +'<p><b>Article 1 – Engagement.</b> La société '+edV(D,'denomination','LA SOCIÉTÉ')+' engage '+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','LE SALARIÉ')+' en qualité de '+edV(D,'poste','POSTE')+' – '+edV(D,'statut','STATUT')+' – à compter du '+edV(D,'datedebut','DATE DE DÉBUT')+' pour une durée déterminée jusqu\'au '+edV(D,'datefin','DATE DE FIN')+', sous réserve des résultats de la visite médicale d\'embauche. La déclaration préalable à l\'embauche (DPAE) a été adressée à l\'URSSAF.</p>'
     +'<p><b>Article 2 – Objet du contrat.</b> Le salarié exercera les fonctions suivantes : '+edV(D,'fonctions','FONCTIONS')+'. Ces fonctions sont susceptibles d\'évolution. Ce contrat est soumis aux dispositions de la convention collective '+edV(D,'convention','CONVENTION')+'.</p>'
-    +'<p><b>Article 3 – Période d\'essai.</b> L\'engagement du salarié deviendra définitif à l\'issue d\'une période d\'essai fixée à '+edV(D,'essai','DURÉE')+', et la période d\'essai peut être prolongée. Pendant cette période, chacune des parties pourra, à tout moment, mettre fin au présent contrat, sans qu\'aucune indemnité ni préavis ne soient dus.</p>'
+    +'<p><b>Article 3 – Période d\'essai.</b> L\'engagement du salarié deviendra définitif à l\'issue d\'une période d\'essai fixée à '+edV(D,'essai','DURÉE')+', renouvelable une fois dans les conditions prévues par la convention collective applicable. Pendant cette période, chacune des parties pourra, à tout moment, mettre fin au présent contrat, sans qu\'aucune indemnité ni préavis ne soient dus.</p>'
     +'<p><b>Article 4 – Obligations professionnelles.</b> Le salarié s\'engage à travailler exclusivement pour le compte de l\'employeur, à observer une discrétion professionnelle absolue et à se conformer aux directives de la direction.</p>'
     +'<p><b>Article 5 – Lieu de travail.</b> Le lieu de travail est fixé à '+edV(D,'lieu','LIEU DE TRAVAIL')+'. Le salarié s\'engage à accepter tout déplacement ponctuel et toute mutation géographique à l\'intérieur du territoire national.</p>'
     +'<p><b>Article 6 – Horaires de travail.</b> La durée hebdomadaire de travail est de '+edV(D,'dureehebdo','DURÉE HEBDO')+' heures. Les horaires de travail sont '+edV(D,'horaires','HORAIRES')+'.</p>'
-    +'<p><b>Article 7 – Rémunération.</b> Le salarié percevra un salaire mensuel de '+edV(D,'salairelettres','MONTANT EN LETTRES')+' '+edV(D,'salaire','SALAIRE')+' € payable le '+edV(D,'jourpaie','JOUR')+' du mois.</p>'
+    +'<p><b>Article 7 – Rémunération.</b> Le salarié percevra un salaire mensuel brut de '+edV(D,'salairelettres','MONTANT EN LETTRES')+' '+edV(D,'salaire','SALAIRE')+' € payable le '+edV(D,'jourpaie','JOUR')+' du mois.</p>'
+    +'<p><b>Article 8 – Congés payés.</b> Le salarié bénéficiera des congés payés prévus par les articles L. 3141-1 et suivants du Code du travail. À défaut de les avoir pris au terme du contrat, il percevra une indemnité compensatrice de congés payés égale à 10 % de la rémunération totale brute perçue.</p>'
+    +'<p><b>Article 9 – Indemnité de fin de contrat.</b> Sauf dans les cas prévus à l\'article L. 1243-10 du Code du travail, le salarié percevra à l\'échéance du terme une indemnité de fin de contrat égale à 10 % de la rémunération totale brute versée pendant la durée du contrat.</p>'
+    +'<p><b>Article 10 – Transmission du contrat.</b> Le présent contrat est transmis au salarié au plus tard dans les deux jours ouvrables suivant l\'embauche, conformément à l\'article L. 1242-13 du Code du travail.</p>'
     +'<p style="margin-top:24px">Fait en deux exemplaires à '+edV(D,'ville','VILLE')+', le '+edV(D,'date','DATE')+'.<br><i>(signatures précédées de la mention manuscrite « Lu et approuvé. Bon pour accord »)</i></p>'
     +'<div class="edsig"><div>L\'employeur<br>'+EDP+'</div><div>Le salarié<br>'+EDP+'</div></div>'
     +'<p class="edfoot"><sup>(1)</sup> Motif du recours au contrat à durée déterminée : '+edV(D,'motif','MOTIF')+'.</p>'
@@ -17626,7 +17629,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     '<div class="edlh">'+edV(D,'denomination','DÉNOMINATION')+'<br>'+edV(D,'adresse','ADRESSE')+' — '+edV(D,'cp','CP')+' '+edV(D,'ville','VILLE')+'<br>NAF : '+edV(D,'ape','APE')+' · SIRET : '+edV(D,'siret','SIRET')+'</div>'
     +'<h1>CERTIFICAT DE TRAVAIL</h1>'
     +'<p>Nous certifions que '+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM PRÉNOM')+', demeurant '+edV(D,'saladr','ADRESSE')+' — '+edV(D,'salcp','CP')+' '+edV(D,'salville','VILLE')+',<br>a été employé(e) par nos soins du '+edV(D,'entree','DATE D\'ENTRÉE')+' au '+edV(D,'sortie','DATE DE SORTIE')+',<br>en qualité de '+edV(D,'emploi','EMPLOI')+' — '+edV(D,'statut','STATUT')+'.</p>'
-    +'<p>En application de l\'article L.911-8 du Code de la sécurité sociale, l\'intéressé(e) bénéficie, le cas échéant, de la portabilité de la prévoyance.</p>'
+    +'<p>En application de l\'article L. 911-8 du Code de la sécurité sociale, l\'intéressé(e) bénéficie, le cas échéant, de la portabilité de la prévoyance.</p>'
     +'<p>Le salarié est libre de tout engagement à la date d\'établissement du présent certificat.</p>'
     +'<p style="margin-top:26px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'
     +'<div class="edsig" style="justify-content:flex-end"><div>Nom, qualité et signature de l\'employeur<br>'+edV(D,'signataire','SIGNATAIRE')+' — '+edV(D,'qualite','QUALITÉ')+'</div></div>'
@@ -17663,7 +17666,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p>Par la présente, nous vous informons que nous envisageons d\'engager à votre égard une procédure de '+edV(D,'motif','MOTIF')+'.</p>'
     +'<p>Conformément aux dispositions légales applicables, nous vous prions de bien vouloir vous présenter le '+edV(D,'dateent','DATE')+' à '+edV(D,'heure','HEURE')+', à '+edV(D,'lieu','LIEU')+', afin d\'avoir un entretien avec '+edV(D,'interloc','INTERLOCUTEUR')+', qui vous indiquera les motifs précis de la décision envisagée.</p>'
     +'<p>Nous vous rappelons que vous avez la possibilité de vous faire assister lors de cet entretien par une personne de votre choix appartenant au personnel de l\'entreprise, ou par un conseiller extérieur inscrit sur la liste établie à cet effet.</p>'
-    +'<p>Veuillez recevoir, '+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM')+', nos salutations distinguées.</p>'
+    +'<p>Nous vous prions d\'agréer, '+edV(D,'salciv','CIVILITÉ')+' '+edV(D,'salnom','NOM')+', l\'expression de nos salutations distinguées.</p>'
     +'<div class="edsig" style="justify-content:flex-end"><div>Signature de l\'employeur<br>'+EDP+'</div></div>'
   );}
   function edTplSoustraitBTP(D){
@@ -17746,7 +17749,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '<div class="edlh" style="text-align:center">'+V('denomination','DÉNOMINATION SOCIALE')+'<br>'+V('forme','FORME')+' au capital de '+V('capital','CAPITAL')+' €<br>Siège social : '+V('siege','ADRESSE DU SIÈGE')+'<br>RCS '+V('rcsVille','VILLE RCS')+' '+V('siren','SIREN')+'</div>'
       +'<h1>PROCÈS-VERBAL DE L\'ASSEMBLÉE GÉNÉRALE '+V('nature','ORDINAIRE / EXTRAORDINAIRE')+'</h1>'
       +'<p>L\'an '+V('annee','ANNÉE')+', le '+V('date','DATE')+', à '+V('lieu','LIEU')+', les associés de la société '+V('denomination','DÉNOMINATION')+' se sont réunis en assemblée générale '+V('nature','ORDINAIRE / EXTRAORDINAIRE')+'.</p>'
-      +'<p>La séance est présidée par '+V('president','PRÉSIDENT DE SÉANCE')+', assisté(e) de '+V('secretaire','SECRÉTAIRE')+' en qualité de secrétaire. Il a été établi une feuille de présence, certifiée exacte, permettant de constater que les associés présents ou représentés possèdent '+V('quorum','QUORUM')+' des parts sociales (ou actions) ; l\'assemblée peut donc valablement délibérer.</p>'
+      +'<p>La séance est présidée par '+V('president','PRÉSIDENT DE SÉANCE')+', assisté(e) de '+V('secretaire','SECRÉTAIRE')+' en qualité de secrétaire. Il a été établi une feuille de présence, certifiée exacte, permettant de constater que les associés présents ou représentés possèdent '+V('quorum','QUORUM')+' du capital social ; l\'assemblée peut donc valablement délibérer.</p>'
       +'<p><b>Ordre du jour</b></p>'+odjHtml
       +'<p>Le président met successivement aux voix les résolutions suivantes :</p>'
       +(vide?'':RES.join(''))
@@ -17771,7 +17774,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p><b>Entre les soussignés :</b></p>'
     +'<p>'+edV(D,'cedant','CÉDANT — CIVILITÉ NOM PRÉNOM')+', demeurant '+edV(D,'cedantadr','ADRESSE')+',<br><i>ci-après « le cédant », d\'une part,</i></p>'
     +'<p><b>Et</b><br>'+edV(D,'cessionnaire','CESSIONNAIRE — CIVILITÉ NOM PRÉNOM')+', demeurant '+edV(D,'cessadr','ADRESSE')+',<br><i>ci-après « le cessionnaire », d\'autre part.</i></p>'
-    +'<p>Le cédant cède et transporte, sous les garanties ordinaires de droit, les '+edV(D,'nombre','NOMBRE')+' actions qu\'il possède dans ladite société à '+edV(D,'cessionnaire','LE CESSIONNAIRE')+', qui accepte.</p>'
+    +'<p>Le cédant cède et transporte, sous les garanties ordinaires de droit, à '+edV(D,'cessionnaire','LE CESSIONNAIRE')+', qui accepte, les '+edV(D,'nombre','NOMBRE')+' actions qu\'il possède dans ladite société.</p>'
     +'<p>Par la présente cession, le cessionnaire devient propriétaire des actions cédées à compter de ce jour, avec tous les droits et obligations qui y sont attachés.</p>'
     +'<p>La présente cession est consentie et acceptée moyennant le prix de '+edV(D,'prix','PRIX')+' €, que le cédant reconnaît avoir reçu.</p>'
     +'<p>Les frais, droits et honoraires des présentes et de leurs suites seront supportés par '+edV(D,'partie','LA PARTIE')+'.</p>'
@@ -17785,9 +17788,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p><b>Entre les soussignés :</b></p>'
     +'<p>'+edV(D,'cedant','CÉDANT — CIVILITÉ NOM PRÉNOM')+', demeurant '+edV(D,'cedantadr','ADRESSE')+',<br><i>ci-après « le cédant », d\'une part,</i></p>'
     +'<p><b>Et</b><br>'+edV(D,'cessionnaire','CESSIONNAIRE — CIVILITÉ NOM PRÉNOM')+', demeurant '+edV(D,'cessadr','ADRESSE')+',<br><i>ci-après « le cessionnaire », d\'autre part.</i></p>'
-    +'<p>Le cédant cède et transporte, sous les garanties ordinaires de droit, '+edV(D,'nombre','NOMBRE')+' parts sociales qu\'il possède dans ladite société à '+edV(D,'cessionnaire','LE CESSIONNAIRE')+', qui accepte.</p>'
+    +'<p>Le cédant cède et transporte, sous les garanties ordinaires de droit, à '+edV(D,'cessionnaire','LE CESSIONNAIRE')+', qui accepte, '+edV(D,'nombre','NOMBRE')+' parts sociales qu\'il possède dans ladite société.</p>'
     +'<p>La présente cession est consentie moyennant le prix de '+edV(D,'prix','PRIX')+' €.</p>'
-    +'<p>La cession est agréée conformément aux statuts et à l\'article L.223-14 du Code de commerce. Elle sera signifiée à la société et publiée conformément à la loi.</p>'
+    +'<p>La cession est agréée conformément aux statuts et à l\'article L. 223-14 du Code de commerce. Elle sera signifiée à la société et publiée conformément à la loi.</p>'
     +'<p>Les frais, droits et honoraires seront supportés par '+edV(D,'partie','LA PARTIE')+'.</p>'
     +'<p style="margin-top:26px">Fait à '+edV(D,'ville','VILLE')+', le '+edV(D,'date','DATE')+', en '+edV(D,'nombre','NOMBRE')+' exemplaires originaux.</p>'
     +'<div class="edsig"><div>Le cédant<br>'+EDP+'</div><div>Le cessionnaire<br>'+EDP+'</div></div>'
@@ -17800,7 +17803,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p><b>Entre les soussignés :</b></p>'
     +'<p>'+edV(D,'cedant','CÉDANT — CIVILITÉ NOM PRÉNOM')+', associé unique, demeurant '+edV(D,'cedantadr','ADRESSE')+',<br><i>ci-après « le cédant », d\'une part,</i></p>'
     +'<p><b>Et</b><br>'+edV(D,'cessionnaire','CESSIONNAIRE — CIVILITÉ NOM PRÉNOM')+', demeurant '+edV(D,'cessadr','ADRESSE')+',<br><i>ci-après « le cessionnaire », d\'autre part.</i></p>'
-    +'<p>Le cédant, associé unique de la société, cède et transporte sous les garanties ordinaires de droit '+edV(D,'nombre','NOMBRE')+' parts sociales qu\'il possède dans ladite société à '+edV(D,'cessionnaire','LE CESSIONNAIRE')+', qui accepte.</p>'
+    +'<p>Le cédant, associé unique de la société, cède et transporte sous les garanties ordinaires de droit à '+edV(D,'cessionnaire','LE CESSIONNAIRE')+', qui accepte, '+edV(D,'nombre','NOMBRE')+' parts sociales qu\'il possède dans ladite société.</p>'
     +'<p>La présente cession est consentie moyennant le prix de '+edV(D,'prix','PRIX')+' €. S\'agissant d\'une société à associé unique, la cession est libre et ne requiert pas d\'agrément. Elle sera signifiée à la société et publiée conformément à la loi.</p>'
     +'<p>Les frais, droits et honoraires seront supportés par '+edV(D,'partie','LA PARTIE')+'.</p>'
     +'<p style="margin-top:26px">Fait à '+edV(D,'ville','VILLE')+', le '+edV(D,'date','DATE')+', en '+edV(D,'nombre','NOMBRE')+' exemplaires originaux.</p>'
@@ -17855,13 +17858,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<p><b>'+edV(D,'domiciliataire','SOCIÉTÉ DE DOMICILIATION')+'</b>, société de domiciliation agréée sous le numéro '+edV(D,'agrement','N° AGRÉMENT')+', dont les locaux sont situés '+loc+', représentée par '+edV(D,'domrep','REPRÉSENTANT')+', <i>ci-après « le Domiciliataire »,</i></p>'
       +'<p><b>ET :</b> la société <b>'+edV(D,'denomination','DÉNOMINATION')+'</b>, '+edV(D,'forme','FORME')+' au capital de '+edV(D,'capital','CAPITAL')+' €, représentée par '+edV(D,'president','REPRÉSENTANT')+', en qualité de '+edV(D,'qualite','QUALITÉ')+', <i>ci-après « la Société domiciliée »,</i></p>'
       +'<p>Il a été convenu ce qui suit :</p>'
-      +art('1','Objet','Le Domiciliataire met à la disposition de la Société domiciliée une adresse afin d\'y établir son siège social, conformément aux articles L.123-11-3 et R.123-166-1 et suivants du Code de commerce.')
+      +art('1','Objet','Le Domiciliataire met à la disposition de la Société domiciliée une adresse afin d\'y établir son siège social, conformément aux articles L. 123-11-3 et R. 123-166-1 et suivants du Code de commerce.')
       +art('2','Désignation des locaux','Le siège social est fixé à : <b>'+loc+'</b>. Le Domiciliataire dispose de la jouissance des locaux et y met à disposition une pièce propre à assurer la confidentialité.')
       +art('3','Durée','Le présent contrat est conclu pour une durée de '+edV(D,'duree','DURÉE')+', à compter du '+edV(D,'datedebut','DATE')+'. Il ne peut être conclu pour une durée inférieure à trois mois.')
       +art('4','Redevance','La Société domiciliée versera une redevance de '+edV(D,'redevance','REDEVANCE')+' € par mois, payable à terme échu. Toute prestation complémentaire fera l\'objet d\'une facturation distincte.')
-      +art('5','Obligations de la Société domiciliée','Utiliser effectivement et exclusivement les locaux comme siège, déclarer tout changement relatif à sa forme, son objet, sa dénomination ou son dirigeant, prendre connaissance du courrier et donner mandat de réception au Domiciliataire.')
-      +art('6','Obligations du Domiciliataire','Mettre les locaux à disposition pendant toute la durée du contrat, tenir les dossiers à la disposition des autorités habilitées, informer le greffe du tribunal de commerce à l\'expiration ou en cas de résiliation.')
-      +art('7','Résiliation','Résiliation par l\'une ou l\'autre des parties par lettre recommandée avec accusé de réception moyennant un préavis d\'un mois ; immédiate en cas de manquement grave.')
+      +art('5','Obligations de la Société domiciliée','La Société domiciliée s\'engage à utiliser effectivement et exclusivement les locaux comme siège, déclarer tout changement relatif à sa forme, son objet, sa dénomination ou son dirigeant, prendre connaissance du courrier et donner mandat de réception au Domiciliataire.')
+      +art('6','Obligations du Domiciliataire','Le Domiciliataire s\'engage à mettre les locaux à disposition pendant toute la durée du contrat, tenir les dossiers à la disposition des autorités habilitées, informer le greffe du tribunal de commerce à l\'expiration ou en cas de résiliation.')
+      +art('7','Résiliation','Le présent contrat peut être résilié par l\'une ou l\'autre des parties par lettre recommandée avec demande d\'avis de réception, moyennant un préavis d\'un mois. La résiliation est immédiate en cas de manquement grave.')
       +art('8','Attribution de juridiction','Tout litige sera soumis aux tribunaux compétents du ressort du siège du Domiciliataire.')
       +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+', en deux exemplaires originaux.</p>'
       +'<div class="edsig"><div>Le Domiciliataire<br>'+EDP+'</div><div>La Société domiciliée<br>'+EDP+'</div></div>'
@@ -17872,7 +17875,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '<h1>ATTESTATION DE DOMICILIATION</h1>'
       +'<p>Je soussigné, '+edV(D,'domrep','REPRÉSENTANT')+', agissant au nom et pour le compte de <b>'+edV(D,'domiciliataire','SOCIÉTÉ DE DOMICILIATION')+'</b>, société de domiciliation,</p>'
       +'<p><b>atteste par la présente</b> que la société <b>'+edV(D,'denomination','DÉNOMINATION')+'</b> ('+edV(D,'forme','FORME')+') est domiciliée dans les locaux situés '+loc+', et que ces locaux sont mis à sa disposition pour y établir son siège social, en vertu du contrat de domiciliation conclu le '+edV(D,'datecontrat','DATE DU CONTRAT')+'.</p>'
-      +'<p>La présente attestation est établie pour servir et valoir ce que de droit, en vue de l\'immatriculation au Registre du Commerce et des Sociétés.</p>'
+      +'<p>La présente attestation est établie pour servir et valoir ce que de droit, en vue de l\'immatriculation au registre du commerce et des sociétés.</p>'
       +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'
       +'<div class="edsig" style="justify-content:flex-end"><div>'+edV(D,'domiciliataire','SOCIÉTÉ')+'<br>'+edV(D,'domrep','REPRÉSENTANT')+'</div></div>'
     );}
@@ -17883,8 +17886,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<p style="margin-top:12px">Je soussigné, <b>'+edV(D,'president','NOM & PRÉNOM')+'</b>, demeurant '+edV(D,'domicile','ADRESSE PERSONNELLE')+', '+edV(D,'qualite','QUALITÉ')+' de la société ci-après référencée :</p>'
       +'<p>Dénomination sociale : <b>'+edV(D,'denomination','DÉNOMINATION')+'</b> ('+edV(D,'forme','FORME')+')</p>'
       +'<p>Siège social : '+edV(D,'siege','ADRESSE DU SIÈGE')+'</p>'
-      +'<p style="margin-top:10px"><b>Déclare</b> fixer le siège social de la société susvisée à mon domicile personnel situé au '+edV(D,'domicile','ADRESSE PERSONNELLE')+', et y exercer une activité, aucune disposition législative ou stipulation contraire ne s\'y opposant, conformément à l\'article L.123-11-1 du Code de commerce.</p>'
-      +'<p>La présente déclaration est établie et produite en vue de l\'immatriculation de la société susvisée au Registre du Commerce et des Sociétés de '+edV(D,'greffe','VILLE DU GREFFE')+'.</p>'
+      +'<p style="margin-top:10px"><b>Déclare</b> fixer le siège social de la société susvisée à mon domicile personnel situé '+edV(D,'domicile','ADRESSE PERSONNELLE')+', et y exercer une activité, aucune disposition législative ou stipulation contraire ne s\'y opposant, conformément à l\'article L. 123-11-1 du Code de commerce.</p>'
+      +'<p>La présente déclaration est établie et produite en vue de l\'immatriculation de la société susvisée au registre du commerce et des sociétés de '+edV(D,'greffe','VILLE DU GREFFE')+'.</p>'
       +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'
       +'<div class="edsig" style="justify-content:flex-end"><div>'+edV(D,'president','SIGNATAIRE')+'<br>Le '+edV(D,'qualite','QUALITÉ')+'</div></div>'
     );}
@@ -17900,7 +17903,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p><b>Deuxième résolution — Nomination du liquidateur</b></p>'
     +'<p>Est nommé(e) liquidateur : '+edV(D,'liquidateur','NOM DU LIQUIDATEUR')+', demeurant '+edV(D,'liquidateuradr','ADRESSE')+', pour toute la durée de la liquidation, investi(e) des pouvoirs les plus étendus pour réaliser l\'actif et apurer le passif.</p>'
     +'<p><b>Troisième résolution — Siège de la liquidation</b></p>'
-    +'<p>Le siège de la liquidation est fixé à '+edV(D,'siegeliq','ADRESSE DE LIQUIDATION')+', adresse à laquelle toute correspondance devra être adressée.</p>'
+    +'<p>Le siège de la liquidation est fixé à '+edV(D,'siegeliq','ADRESSE DE LIQUIDATION')+', adresse à laquelle toute correspondance devra être envoyée.</p>'
     +'<p>L\'ordre du jour étant épuisé, la séance est levée.</p>'
     +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'
     +edS2('Le président de séance','Le liquidateur')
@@ -17914,7 +17917,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p><b>Deuxième résolution — Quitus au liquidateur</b></p>'
     +'<p>L\'assemblée donne au liquidateur quitus entier et sans réserve de sa gestion et le décharge de son mandat.</p>'
     +'<p><b>Troisième résolution — Clôture de la liquidation</b></p>'
-    +'<p>L\'assemblée constate la clôture des opérations de liquidation à compter de ce jour. La société sera radiée du Registre du Commerce et des Sociétés.</p>'
+    +'<p>L\'assemblée constate la clôture des opérations de liquidation à compter de ce jour. La société sera radiée du registre du commerce et des sociétés.</p>'
     +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'
     +edS1('Le liquidateur — '+edV(D,'liquidateur','LIQUIDATEUR'))
   );}
@@ -17939,8 +17942,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p>Et <b>'+edV(D,'denomination','CLIENT / DÉNOMINATION')+'</b>, '+edV(D,'clientadr','ADRESSE')+', représenté(e) par '+edV(D,'clientrep','REPRÉSENTANT')+', ci-après « le Client ».</p>'
     +'<p><b>Article 1 — Objet de la mission</b></p><p>'+edV(D,'objet','DESCRIPTION DE LA MISSION')+'</p>'
     +'<p><b>Article 2 — Honoraires</b></p><p>Les honoraires du Cabinet sont fixés à '+edV(D,'honoraires','MONTANT')+' €, '+edV(D,'periodicite','PÉRIODICITÉ (mensuel, forfait…)')+'. Ils sont exigibles selon les modalités convenues entre les parties.</p>'
-    +'<p><b>Article 3 — Durée & prise d\'effet</b></p><p>La présente mission prend effet le '+edV(D,'dateeffet','DATE D\'EFFET')+'. Elle se poursuit jusqu\'à son terme ou sa résiliation par l\'une des parties moyennant un préavis raisonnable.</p>'
-    +'<p><b>Article 4 — Obligations des parties</b></p><p>Le Client s\'engage à transmettre au Cabinet l\'ensemble des documents et informations nécessaires à la bonne exécution de la mission. Le Cabinet s\'engage à un devoir de conseil et de confidentialité.</p>'
+    +'<p><b>Article 3 — Durée et prise d\'effet</b></p><p>La présente mission prend effet le '+edV(D,'dateeffet','DATE D\'EFFET')+'. Elle se poursuit jusqu\'à son terme ou sa résiliation par l\'une des parties moyennant un préavis de trois mois notifié par lettre recommandée avec demande d\'avis de réception.</p>'
+    +'<p><b>Article 4 — Obligations des parties</b></p><p>Le Client s\'engage à transmettre au Cabinet l\'ensemble des documents et informations nécessaires à la bonne exécution de la mission. Le Cabinet est tenu à un devoir de conseil et de confidentialité.</p>'
     +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+', en deux exemplaires.</p>'
     +edS2('Le Cabinet','Le Client')
   );}
@@ -17987,9 +17990,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p style="text-align:center"><i>(rupture d\'un commun accord d\'un contrat à durée indéterminée)</i></p>'
     +'<p>Entre <b>'+edV(D,'denomination','EMPLOYEUR')+'</b>, représenté(e) par '+edV(D,'representant','REPRÉSENTANT')+', d\'une part,</p>'
     +'<p>Et <b>'+edV(D,'salnom','SALARIÉ — NOM & PRÉNOM')+'</b>, demeurant '+edV(D,'saladr','ADRESSE')+', occupant le poste de '+edV(D,'poste','POSTE')+' depuis le '+edV(D,'entree','DATE D\'ENTRÉE')+', d\'autre part,</p>'
-    +'<p><b>Article 1 — Principe de la rupture</b></p><p>Les parties conviennent, d\'un commun accord, de rompre le contrat de travail à durée indéterminée qui les lie, dans le cadre des articles L.1237-11 et suivants du Code du travail.</p>'
+    +'<p><b>Article 1 — Principe de la rupture</b></p><p>Les parties conviennent, d\'un commun accord, de rompre le contrat de travail à durée indéterminée qui les lie, dans le cadre des articles L. 1237-11 et suivants du Code du travail.</p>'
     +'<p><b>Article 2 — Entretien</b></p><p>Les parties se sont rencontrées lors d\'un entretien le '+edV(D,'dateentretien','DATE DE L\'ENTRETIEN')+', au cours duquel les conditions de la rupture ont été arrêtées.</p>'
-    +'<p><b>Article 3 — Date de rupture</b></p><p>Le contrat prendra fin le '+edV(D,'datefin','DATE DE FIN')+', après expiration du délai de rétractation et homologation de la convention.</p>'
+    +'<p><b>Article 3 — Date de rupture</b></p><p>Le contrat prendra fin le '+edV(D,'datefin','DATE DE FIN')+', après expiration du délai de rétractation de quinze jours calendaires courant à compter de la signature, et homologation de la convention par l\'autorité administrative.</p>'
     +'<p><b>Article 4 — Indemnité spécifique</b></p><p>Le salarié percevra une indemnité spécifique de rupture conventionnelle d\'un montant de '+edV(D,'indemnite','MONTANT')+' €, au moins égale à l\'indemnité légale de licenciement.</p>'
     +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+', en deux exemplaires.</p>'
     +edS2('L\'employeur','Le salarié')
@@ -17999,7 +18002,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p style="text-align:center"><i>(constitution du capital social)</i></p>'
     +'<p>Je soussigné(e) '+edV(D,'signataire','DÉPOSITAIRE — SIGNATAIRE')+', agissant en qualité de '+edV(D,'qualite','QUALITÉ (banque, notaire…)')+' au sein de '+edV(D,'depositaire','ÉTABLISSEMENT DÉPOSITAIRE')+',</p>'
     +'<p>atteste que les fonds constituant le capital social de la société <b>'+edV(D,'denomination','DÉNOMINATION')+'</b>, '+edV(D,'forme','FORME')+' en cours de constitution, dont le siège est '+edV(D,'siege','ADRESSE DU SIÈGE')+', ont été déposés pour un montant de <b>'+edV(D,'capital','CAPITAL')+' €</b> le '+edV(D,'datedepot','DATE DE DÉPÔT')+'.</p>'
-    +'<p>Ces fonds seront tenus indisponibles jusqu\'à la présentation de l\'extrait d\'immatriculation au Registre du Commerce et des Sociétés.</p>'
+    +'<p>Ces fonds seront tenus indisponibles jusqu\'à la présentation de l\'extrait d\'immatriculation au registre du commerce et des sociétés.</p>'
     +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'
     +edS1(edV(D,'signataire','SIGNATAIRE')+' — '+edV(D,'depositaire','DÉPOSITAIRE'))
   );}
@@ -18014,7 +18017,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function edTplRBE(D){D=D||{};return edDocWrap(
     '<div class="edlh">'+edV(D,'denomination','DÉNOMINATION')+' — '+edV(D,'forme','FORME')+'<br>Siège : '+edV(D,'siege','ADRESSE')+'<br>SIREN : '+edV(D,'siren','SIREN')+'</div>'
     +'<h1>DOCUMENT RELATIF AU BÉNÉFICIAIRE EFFECTIF</h1>'
-    +'<p>En application des articles L.561-46 et suivants du Code monétaire et financier, la société susvisée déclare le(s) bénéficiaire(s) effectif(s) suivant(s) :</p>'
+    +'<p>En application des articles L. 561-46 et suivants du Code monétaire et financier, la société susvisée déclare le(s) bénéficiaire(s) effectif(s) suivant(s) :</p>'
     +'<p><b>Bénéficiaire effectif</b><br>Nom & prénom : '+edV(D,'benef','NOM & PRÉNOM')+'<br>Date de naissance : '+edV(D,'benefnaiss','DATE')+'<br>Nationalité : '+edV(D,'benefnat','NATIONALITÉ')+'<br>Adresse : '+edV(D,'benefadr','ADRESSE')+'</p>'
     +'<p><b>Modalités du contrôle :</b> détention de '+edV(D,'benefpct','POURCENTAGE')+' % du capital et/ou des droits de vote — '+edV(D,'modalite','CAPITAL / DROITS DE VOTE')+'.</p>'
     +'<p>Le représentant légal atteste l\'exactitude des informations déclarées.</p>'
@@ -18090,7 +18093,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   function edTplRegistre(D){return edDocWrap(edEmpH(D)+'<h1>REGISTRE UNIQUE DU PERSONNEL</h1>'
     +'<table class="st-tbl" style="margin-top:8px"><thead><tr><th>Nom & prénom</th><th>Emploi</th><th>Contrat</th><th>Entrée</th><th>Sortie</th><th>Nationalité</th><th>N° S.S.</th></tr></thead><tbody>'
     +'<tr><td>'+edV(D,'salnom','NOM & PRÉNOM')+'</td><td>'+edV(D,'emploi','EMPLOI')+'</td><td>'+edV(D,'typecontrat','CONTRAT')+'</td><td>'+edV(D,'entree','ENTRÉE')+'</td><td>'+edV(D,'sortie','SORTIE')+'</td><td>'+edV(D,'nationalite','NATIONALITÉ')+'</td><td>'+edV(D,'numSS','N° S.S.')+'</td></tr>'
-    +'</tbody></table><p style="font-size:11px;color:#555;margin-top:8px">Registre tenu conformément aux articles L.1221-13 et suivants du Code du travail. Une ligne par salarié, dans l\'ordre des embauches.</p>'
+    +'</tbody></table><p style="font-size:11px;color:#555;margin-top:8px">Registre tenu conformément aux articles L. 1221-13 et suivants du Code du travail. Une ligne par salarié, dans l\'ordre des embauches.</p>'
     +'<p style="margin-top:18px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'+edS1('L\'employeur'));}
   /* ===== COMPTABLE / FISCAL ===== */
   function edTplAttRegul(D){return edDocWrap(edLh(D)+'<h1>ATTESTATION DE RÉGULARITÉ FISCALE ET SOCIALE</h1>'
@@ -18099,11 +18102,11 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'+edS1(edV(D,'signataire','SIGNATAIRE')+' — '+edV(D,'qualite','QUALITÉ')));}
   function edTplSommeil(D){return edDocWrap(edLh(D)+'<h1>DÉCISION DE MISE EN SOMMEIL</h1>'
     +'<p>'+edV(D,'dirigeant','DIRIGEANT')+', dirigeant de la société susvisée, décide la mise en sommeil (cessation temporaire d\'activité) de la société à compter du '+edV(D,'dateeffet','DATE D\'EFFET')+', pour une durée maximale de '+edV(D,'duree','DURÉE (24 mois max)')+'.</p>'
-    +'<p>La société conserve son immatriculation ; une inscription modificative sera portée au Registre du Commerce et des Sociétés.</p>'
+    +'<p>La société conserve son immatriculation ; une inscription modificative sera portée au registre du commerce et des sociétés.</p>'
     +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'+edS1(edV(D,'dirigeant','LE DIRIGEANT')));}
   function edTplReprise(D){return edDocWrap(edLh(D)+'<h1>DÉCISION DE REPRISE D\'ACTIVITÉ</h1>'
     +'<p>'+edV(D,'dirigeant','DIRIGEANT')+', dirigeant de la société susvisée, décide la reprise de l\'activité de la société, mise en sommeil, à compter du '+edV(D,'dateeffet','DATE DE REPRISE')+'.</p>'
-    +'<p>Une inscription modificative sera portée au Registre du Commerce et des Sociétés.</p>'
+    +'<p>Une inscription modificative sera portée au registre du commerce et des sociétés.</p>'
     +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'+edS1(edV(D,'dirigeant','LE DIRIGEANT')));}
   function edTplAttNonAct(D){return edDocWrap(edLh(D)+'<h1>ATTESTATION DE NON-ACTIVITÉ</h1>'
     +'<p>Je soussigné(e) '+edV(D,'signataire','SIGNATAIRE')+', '+edV(D,'qualite','QUALITÉ')+' de la société '+edV(D,'denomination','DÉNOMINATION')+', atteste que la société n\'a exercé aucune activité et n\'a réalisé aucun chiffre d\'affaires au titre de la période '+edV(D,'periode','PÉRIODE')+'.</p>'
@@ -18126,7 +18129,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'+edS2('Le mandant','Le mandataire (bon pour pouvoir)'));}
   function edTplMiseDemeure(D){return edDocWrap('<div class="edlh">'+edV(D,'denomination','EXPÉDITEUR')+'<br>'+edV(D,'adresse','ADRESSE')+'</div><h1>MISE EN DEMEURE</h1>'
     +'<p style="text-align:right">'+edV(D,'destinataire','DESTINATAIRE')+'<br>'+edV(D,'destadr','ADRESSE')+'</p>'
-    +'<p><b>Objet : '+edV(D,'objet','OBJET')+' — Lettre recommandée AR</b></p>'
+    +'<p><b>Objet : '+edV(D,'objet','OBJET')+' — Lettre recommandée avec demande d\'avis de réception</b></p>'
     +'<p>Madame, Monsieur,</p><p>Sauf erreur de notre part, vous restez redevable de la somme de <b>'+edV(D,'montant','MONTANT')+' €</b> au titre de '+edV(D,'reference','RÉFÉRENCE (facture, contrat…)')+'.</p>'
     +'<p>Par la présente, nous vous <b>mettons en demeure</b> de régler cette somme sous un délai de '+edV(D,'delai','DÉLAI')+' à compter de la réception de ce courrier. À défaut, nous nous réservons le droit d\'engager toute procédure de recouvrement, avec intérêts et frais à votre charge.</p>'
     +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'+edS1(edV(D,'denomination','L\'EXPÉDITEUR')));}
@@ -18137,7 +18140,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'+edS1(edV(D,'denomination','L\'EXPÉDITEUR')));}
   function edTplResiliation(D){return edDocWrap('<div class="edlh">'+edV(D,'nom','EXPÉDITEUR')+'<br>'+edV(D,'adresse','ADRESSE')+'</div><h1>LETTRE DE RÉSILIATION</h1>'
     +'<p style="text-align:right">'+edV(D,'destinataire','DESTINATAIRE')+'<br>'+edV(D,'destadr','ADRESSE')+'</p>'
-    +'<p><b>Objet : résiliation — '+edV(D,'contrat','CONTRAT / N° ABONNEMENT')+' — Lettre recommandée AR</b></p>'
+    +'<p><b>Objet : résiliation — '+edV(D,'contrat','CONTRAT / N° ABONNEMENT')+' — Lettre recommandée avec demande d\'avis de réception</b></p>'
     +'<p>Madame, Monsieur,</p><p>Par la présente, je vous informe de ma décision de résilier le contrat référencé ci-dessus, pour le motif suivant : '+edV(D,'motif','MOTIF')+'.</p>'
     +'<p>Je vous remercie de prendre en compte cette résiliation à effet du '+edV(D,'dateeffet','DATE D\'EFFET')+', et de m\'adresser une confirmation écrite.</p>'
     +'<p style="margin-top:22px">Fait à '+edV(D,'villesig','VILLE')+', le '+edV(D,'datesig','DATE')+'.</p>'+edS1(edV(D,'nom','SIGNATAIRE')));}
@@ -18175,7 +18178,26 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       +'<div class="edc-line edc-date">Fait à '+edV(D,'villeSignature','VILLE')+', le '+edV(D,'dateActe','DATE')+'</div>'
       +'</div>';
   }
-  function edLibTemplate(k,D){
+  /* Typographie française des actes : apostrophe courbe, et espace insécable
+     devant les ponctuations doubles, à l'intérieur des guillemets et devant
+     % et € — pour qu'aucun signe ne se retrouve seul en début de ligne.
+     On ne touche qu'au texte : les balises et leurs attributs sont laissés tels quels. */
+  var EDT_NB='\u00a0';
+  function edTypoTexte(t){
+    return t.replace(/([A-Za-zÀ-ÿ])(?:&#0?39;|&apos;|')/g,'$1\u2019')
+            .replace(/ ([:;?!])/g, EDT_NB+'$1')
+            .replace(/«\u0020/g,'\u00ab'+EDT_NB).replace(/\u0020»/g, EDT_NB+'\u00bb')
+            .replace(/(\d) ([%\u20ac])/g,'$1'+EDT_NB+'$2');
+  }
+  function edTypo(html){
+    if(typeof html!=='string'||!html) return html;
+    return html.split(/(<[^>]*>)/).map(function(seg){
+      return seg.charAt(0)==='<' ? seg : edTypoTexte(seg);
+    }).join('');
+  }
+  try{ window.edTypo=edTypo; }catch(e){}
+  function edLibTemplate(k,D){ return edTypo(edLibTemplateBrut(k,D)); }
+  function edLibTemplateBrut(k,D){
     D=D||{};
     if(k==='statuts')return edStatutsCover(D)+edSyntheticFill(k,D);
     if(k==='souscripteurs'||k==='pouvoir'||k==='dnc')return edSyntheticFill(k,D);
@@ -20493,7 +20515,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     if(o.dateDebut==null)o.dateDebut='';
     return o; }
 
-  function adrDomComplete(o){ var r=d0(o.adrDom); var loc=[d0(o.cpDom),d0(o.villeDom)].filter(Boolean).join(' '); return (r?r:'«adresse des locaux»')+(loc?(', '+loc):''); }
+  function adrDomComplete(o){ var r=d0(o.adrDom); var loc=[d0(o.cpDom),d0(o.villeDom)].filter(Boolean).join(' '); return (r?r:'«ADRESSE DES LOCAUX»')+(loc?(', '+loc):''); }
 
   /* ===== Contrat de domiciliation ===== */
   window.contratDomiciliationHTML=function(d){
@@ -20501,13 +20523,13 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var forme=x.forme||'SAS'; var qualite=(forme==='SARL'||forme==='EURL'||forme==='SCI')?'gérant':'président';
     var capTxt=(x.cap?(need('stNum')?stNum(x.cap):x.cap):'«…»')+' euros';
     var adrLoc=adrDomComplete(o);
-    var domName=d0(o.domiciliataire)||'«société de domiciliation»';
+    var domName=d0(o.domiciliataire)||'«SOCIÉTÉ DE DOMICILIATION»';
     var rep=d0(o.representant)||'son représentant légal';
-    var agr=d0(o.agrement); var agrTxt=agr?('agréée sous le numéro '+esc2(agr)):'agréée conformément à l’article L.123-11-3 du Code de commerce';
-    var red=d0(o.redevance); var redTxt=red?(esc2(red)+' € par mois'):'«redevance mensuelle»';
+    var agr=d0(o.agrement); var agrTxt=agr?('agréée sous le numéro '+esc2(agr)):'agréée conformément à l’article L. 123-11-3 du Code de commerce';
+    var red=d0(o.redevance); var redTxt=red?(esc2(red)+' € par mois'):'«REDEVANCE MENSUELLE»';
     var dureeTxt=d0(o.duree)||'3 mois, renouvelable par tacite reconduction';
-    var debut=o.dateDebut?dateLongue(o.dateDebut):'«date de début»';
-    var villeSig=d0(x.villeSignature)||d0(o.villeDom)||'«ville»';
+    var debut=o.dateDebut?dateLongue(o.dateDebut):'«DATE DE DÉBUT»';
+    var villeSig=d0(x.villeSignature)||d0(o.villeDom)||'«VILLE»';
     function art(n,t,c){return '<p style="margin-top:12px"><b>Article '+n+' — '+t+'</b></p><p>'+c+'</p>';}
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-titre">CONTRAT DE DOMICILIATION</div>'
@@ -20518,7 +20540,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +'<p>La société <b>'+esc2(x.denom||'«DÉNOMINATION»')+'</b>, '+esc2(forme)+' au capital de '+capTxt+', en cours d’immatriculation, représentée par '+esc2(x.president||'«'+qualite+'»')+', en qualité de '+qualite+',</p>'
       +'<p style="text-align:right;font-style:italic">ci-après « la Société domiciliée »,</p>'
       +'<p style="margin-top:10px">Il a été convenu ce qui suit :</p>'
-      +art('1','Objet','Le Domiciliataire met à la disposition de la Société domiciliée une adresse afin d’y établir le siège social de cette dernière, dans les locaux désignés à l’article 2, conformément aux articles L.123-11-3 et R.123-166-1 et suivants du Code de commerce.')
+      +art('1','Objet','Le Domiciliataire met à la disposition de la Société domiciliée une adresse afin d’y établir le siège social de cette dernière, dans les locaux désignés à l’article 2, conformément aux articles L. 123-11-3 et R. 123-166-1 et suivants du Code de commerce.')
       +art('2','Désignation des locaux','Le siège social de la Société domiciliée est fixé à l’adresse suivante : <b>'+esc2(adrLoc)+'</b>. Le Domiciliataire dispose de la jouissance des locaux et y met à disposition une pièce propre à assurer la confidentialité et à permettre une réunion régulière des organes de la société.')
       +art('3','Durée','Le présent contrat est conclu pour une durée de <b>'+esc2(dureeTxt)+'</b>, à compter du '+esc2(debut)+'. Il ne peut être conclu pour une durée inférieure à trois mois.')
       +art('4','Redevance','En contrepartie des prestations, la Société domiciliée versera une redevance de <b>'+esc2(redTxt)+'</b>, payable à terme échu. Toute prestation complémentaire fera l’objet d’une facturation distincte.')
@@ -20537,15 +20559,15 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.attestationDomiciliationHTML=function(d){
     var x=(need('stDossData')?stDossData(d):{}); var o=dom(d);
     var adrLoc=adrDomComplete(o);
-    var domName=d0(o.domiciliataire)||'«société de domiciliation»';
+    var domName=d0(o.domiciliataire)||'«SOCIÉTÉ DE DOMICILIATION»';
     var rep=d0(o.representant)||'son représentant légal';
-    var villeSig=d0(x.villeSignature)||d0(o.villeDom)||'«ville»';
+    var villeSig=d0(x.villeSignature)||d0(o.villeDom)||'«VILLE»';
     var debut=o.dateDebut?dateLongue(o.dateDebut):dateLongue('');
     return '<div class="st-doc"><div class="st-page">'
       +'<div class="st-titre">ATTESTATION DE DOMICILIATION</div>'
       +'<p style="margin-top:16px">Je soussigné, <b>'+esc2(rep)+'</b>, agissant au nom et pour le compte de <b>'+esc2(domName)+'</b>, société de domiciliation,</p>'
       +'<p style="margin-top:10px"><b>atteste par la présente</b> que la société <b>'+esc2(x.denom||'«DÉNOMINATION»')+'</b> ('+esc2(x.forme||'SAS')+') est domiciliée dans les locaux situés <b>'+esc2(adrLoc)+'</b>, et que ces locaux sont mis à sa disposition pour y établir son siège social, en vertu du contrat de domiciliation conclu le '+esc2(debut)+'.</p>'
-      +'<p style="margin-top:10px">La présente attestation est établie pour servir et valoir ce que de droit, en vue de l’immatriculation de la société susvisée au Registre du Commerce et des Sociétés.</p>'
+      +'<p style="margin-top:10px">La présente attestation est établie pour servir et valoir ce que de droit, en vue de l’immatriculation de la société susvisée au registre du commerce et des sociétés.</p>'
       +'<div class="st-fin" style="margin-top:30px"><p>Fait à '+esc2(villeSig)+', le '+dateLongue('')+'</p>'
       +'<div class="st-sign" style="margin-top:26px"><div class="sg"><b>'+esc2(domName)+'</b><br>'+esc2(rep)+'<br><span style="font-style:italic">Signature et cachet</span></div></div></div>'
       +'</div></div>';
@@ -32437,11 +32459,11 @@ function testLienRdv()  {
       +'Capital social : '+(i.capital?(i.capital+' euros'):'…')+'.\n'
       +'Siège social : '+(i.siege||'…')+'.\n'
       +'Objet social : '+(i.objet||'…')+'.\n'
-      +'Durée : '+(i.duree||'…')+' à compter de son immatriculation au Registre du commerce et des sociétés.\n'
+      +'Durée : '+(i.duree||'…')+' à compter de son immatriculation au registre du commerce et des sociétés.\n'
       +(i.dirigeant?('Gérance / Présidence : '+i.dirigeant+(i.dirAdresse?(', demeurant '+i.dirAdresse):'')+'.\n'):'')
       +(i.cac?('Commissaire aux comptes : '+i.cac+'.\n'):'')
       +(i.dateStatuts?('Statuts signés le '+i.dateStatuts+'.\n'):'')
-      +'\nLa société sera immatriculée au Registre du commerce et des sociétés de '+(i.greffe||'…')+'.';
+      +'\nLa société sera immatriculée au registre du commerce et des sociétés de '+(i.greffe||'…')+'.';
     return t;
   }
   window.at4Avis=avis;
@@ -34502,6 +34524,21 @@ function testLienRdv()  {
    '.e1-ta:focus{outline:none;border-color:#4f9dff}'
   ].join('');
   document.head.appendChild(st);
+})();
+</script>
+<script id="mod-typo">
+/* Les actes produits par le module Traitement suivent la même typographie
+   que ceux des Éditions : apostrophe courbe et espaces insécables. */
+(function(){
+  if(window.__modTypo) return;
+  var t=setInterval(function(){
+    if(typeof window.espDocRender!=='function'||typeof window.edTypo!=='function') return;
+    clearInterval(t);
+    if(window.espDocRender.__typo) return;
+    var _r=window.espDocRender;
+    window.espDocRender=function(d,k){ return window.edTypo(_r.apply(this,arguments)); };
+    window.espDocRender.__typo=1; window.__modTypo=1;
+  },300);
 })();
 </script>
 </body>
