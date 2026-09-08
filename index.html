@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=583;
+var LAST_VER=584;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -31676,58 +31676,65 @@ function testLienRdv()  {
       return requis(d,x.k);
     });
 
-    function C(v,e){ return {v:v,e:e||'ok'}; }
-    var NA=C('n/a','na'), ABS=C('—','abs');
+    /* ed : la source que cette case modifie ; brut : la valeur à éditer */
+    function C(v,e,ed,brut){ return {v:v,e:e||'ok',ed:ed||'',brut:(brut===undefined?v:brut)}; }
+    var NA={v:'n/a',e:'na',ed:''}, ABS={v:'—',e:'abs',ed:''};
 
     var faits=[];
     function fait(l,att,cells,note){ faits.push({l:l,att:att,note:note||'',c:cells}); }
 
     fait('Dénomination', denom||'non renseignée', {
-      statuts: denom?C(court(denom)):ABS, souscripteurs: denom?C(court(denom)):ABS,
-      pouvoir: denom?C(court(denom)):ABS, dnc: denom?C(court(denom)):ABS, piece: NA
+      statuts: C(denom?court(denom):'—', denom?'ok':'abs','denom',denom),
+      souscripteurs: C(denom?court(denom):'—', denom?'ok':'abs','denom',denom),
+      pouvoir: C(denom?court(denom):'—', denom?'ok':'abs','denom',denom),
+      dnc: C(denom?court(denom):'—', denom?'ok':'abs','denom',denom), piece: NA
     }, denom?'':'Aucune dénomination : les actes ne peuvent pas être établis.');
 
     fait('Forme juridique', forme||'non renseignée', {
-      statuts: forme?C(forme):ABS, souscripteurs: NA, pouvoir: forme?C(forme):ABS, dnc: NA, piece: NA
+      statuts: C(forme||'—', forme?'ok':'abs','forme',forme), souscripteurs: NA,
+      pouvoir: C(forme||'—', forme?'ok':'abs','forme',forme), dnc: NA, piece: NA
     });
 
     fait('Capital social', capital>0?eur0(capital):'non renseigné', {
-      statuts: capital>0?C(eur0(capital)):ABS, souscripteurs: capital>0?C(eur0(capital)):ABS,
+      statuts: C(capital>0?eur0(capital):'—', capital>0?'ok':'abs','capital',capital||''),
+      souscripteurs: C(capital>0?eur0(capital):'—', capital>0?'ok':'abs','capital',capital||''),
       pouvoir: NA, dnc: NA, piece: NA
     }, capital>0?'':'Aucun montant de capital au dossier.');
 
     var apOk = !(capital>0 && apports>0 && Math.abs(apports-capital)>0.01);
     fait('Somme des apports', 'doit égaler le capital', {
-      statuts: capital>0?C(eur0(capital)):ABS,
-      souscripteurs: apports>0?C(eur0(apports), apOk?'ok':'div'):ABS,
+      statuts: C(capital>0?eur0(capital):'—', capital>0?'ok':'abs','capital',capital||''),
+      souscripteurs: C(apports>0?eur0(apports):'—', apports>0?(apOk?'ok':'div'):'abs','apports',apports||''),
       pouvoir: NA, dnc: NA, piece: NA
     }, apOk?'':'Écart de '+eur0(Math.abs(apports-capital))+' entre le capital souscrit et les apports déclarés.');
 
     var ptOk = !(parts>0 && vn>0 && capital>0 && Math.abs(parts*vn-capital)>0.01);
     if(parts>0){
       fait('Parts sociales', parts+(vn>0?(' × '+eur0(vn)):' parts'), {
-        statuts: (parts>0&&vn>0)?C(eur0(parts*vn), ptOk?'ok':'div'):ABS,
-        souscripteurs: C(parts+' parts'),
+        statuts: (parts>0&&vn>0)?C(eur0(parts*vn), ptOk?'ok':'div','vn',vn||''):ABS,
+        souscripteurs: C(parts+' parts','ok','parts',parts||''),
         pouvoir: NA, dnc: NA, piece: NA
       }, ptOk?'':'Le produit des parts par leur valeur nominale ne retombe pas sur le capital.');
     }
 
     var dirOk = !(dir && luId && !memeMot(dir,nz(v.nom)));
     fait('Dirigeant', dir||'non désigné', {
-      statuts: dir?C(court(dir,18)):ABS, souscripteurs: dir?C(court(dir,18)):ABS,
-      pouvoir: dir?C(court(dir,18)):ABS, dnc: dir?C(court(dir,18)):ABS,
-      piece: luId?C(court(luId,18), dirOk?'ok':'div'):(idCert?C('non lue','abs'):NA)
+      statuts: C(dir?court(dir,18):'—', dir?'ok':'abs','dirigeant',dir),
+      souscripteurs: C(dir?court(dir,18):'—', dir?'ok':'abs','dirigeant',dir),
+      pouvoir: C(dir?court(dir,18):'—', dir?'ok':'abs','dirigeant',dir),
+      dnc: C(dir?court(dir,18):'—', dir?'ok':'abs','dirigeant',dir),
+      piece: luId?C(court(luId,18), dirOk?'ok':'div','dirigeantLu',luId):(idCert?C('non lue','abs','dirigeantLu',''):NA)
     }, dirOk?'':'Le dirigeant des actes ne correspond pas à l\'identité lue sur la pièce certifiée.');
 
     var sgOk = !(siege && luDom && !memeMot(siege,luDom));
     fait('Siège social', siege||'non renseigné', {
-      statuts: siege?C(court(siege,20)):ABS, souscripteurs: NA,
-      pouvoir: siege?C(court(siege,20)):ABS, dnc: NA,
-      piece: luDom?C(court(luDom,20), sgOk?'ok':'div'):(domCert?C('non lu','abs'):NA)
+      statuts: C(siege?court(siege,20):'—', siege?'ok':'abs','siege',siege), souscripteurs: NA,
+      pouvoir: C(siege?court(siege,20):'—', siege?'ok':'abs','siege',siege), dnc: NA,
+      piece: luDom?C(court(luDom,20), sgOk?'ok':'div','siegeLu',luDom):(domCert?C('non lu','abs','siegeLu',''):NA)
     }, sgOk?'':'Le siège des actes ne correspond pas au justificatif de domiciliation certifié.');
 
     fait('Objet social', objet?court(objet,40):'non renseigné', {
-      statuts: objet?C(court(objet,20)):ABS, souscripteurs: NA, pouvoir: NA, dnc: NA, piece: NA
+      statuts: C(objet?court(objet,20):'—', objet?'ok':'abs','objet',objet), souscripteurs: NA, pouvoir: NA, dnc: NA, piece: NA
     });
 
     fait('Associés', assoc.length?(assoc.length+' associé'+(assoc.length>1?'s':'')):'aucun', {
@@ -31743,6 +31750,99 @@ function testLienRdv()  {
     return {cols:cols, faits:faits, rompus:faits.filter(function(f){return f.rompu;})};
   }
   window.a3Concordance=concordance;
+
+  /* ------------------------------------------------------------------ */
+  /*  CORRECTION À LA MAIN                                               */
+  /*  Une case se modifie dans la table ; comme les actes sont composés   */
+  /*  à la volée depuis la fiche, le document en porte aussitôt la        */
+  /*  valeur corrigée.                                                    */
+  /* ------------------------------------------------------------------ */
+  function nombre(v){ return Math.round((parseFloat(String(v==null?'':v).replace(/[^0-9.,-]/g,'').replace(',','.'))||0)*100)/100; }
+
+  /* Les actes se composent depuis la fiche du client : chaque source écrit à la
+     fois le champ que lit la table et celui que lit le document. */
+  var SOURCES={
+    denom:    {l:'Dénomination',      f:function(d,c,cr,v){ v=nz(v);
+      c.denom=v; c.denomination=v; if(cr.denom!==undefined)cr.denom=v; return true; }},
+    forme:    {l:'Forme juridique',   f:function(d,c,cr,v){ v=nz(v);
+      c.forme=v; if(cr.forme!==undefined)cr.forme=v; return true; }},
+    capital:  {l:'Capital social',    f:function(d,c,cr,v){ var n=nombre(v);
+      cr.capital=cr.capital||{}; cr.capital.montant=n; c.capital=n; return true; }},
+    parts:    {l:'Nombre de parts',   f:function(d,c,cr,v){ var n=nombre(v);
+      cr.capital=cr.capital||{}; cr.capital.parts=n;
+      c.docVars=c.docVars||{}; c.docVars.nbTitres=n;
+      /* les parts se répartissent sur les associés, au prorata de l'existant */
+      var as=(c.associes||[]).filter(function(a){ return a && nz(a.nom); });
+      if(as.length){
+        var t=as.reduce(function(x,a){ return x+(Number(a.parts)||0); },0);
+        if(t>0) as.forEach(function(a){ a.parts=Math.round((Number(a.parts)||0)/t*n); });
+        else { var q=Math.floor(n/as.length); as.forEach(function(a){ a.parts=q; }); }
+        var t2=as.reduce(function(x,a){ return x+(Number(a.parts)||0); },0);
+        if(t2!==n) as[0].parts=(Number(as[0].parts)||0)+(n-t2);
+      }
+      return true; }},
+    vn:       {l:'Valeur nominale',   f:function(d,c,cr,v){ var n=nombre(v);
+      cr.capital=cr.capital||{}; cr.capital.valeurNominale=n;
+      c.docVars=c.docVars||{}; c.docVars.nominal=n; return true; }},
+    dirigeant:{l:'Dirigeant',         f:function(d,c,cr,v){ c.president=nz(v); return true; }},
+    siege:    {l:'Siège social',      f:function(d,c,cr,v){ v=nz(v);
+      cr.siege=v; c.siege=v.replace(/,\s*\d{5}.*$/,'').trim()||v; return true; }},
+    objet:    {l:'Objet social',      f:function(d,c,cr,v){ v=nz(v);
+      cr.objet=v; c.objet=v; c.docVars=c.docVars||{}; c.docVars.objet=v; return true; }},
+    /* la somme des apports se répartit sur les associés, au prorata de l'existant */
+    apports:  {l:'Somme des apports', f:function(d,c,cr,v){
+      var n=nombre(v), as=(c.associes||[]).filter(function(a){ return a && nz(a.nom); });
+      if(!as.length) return false;
+      var tot=as.reduce(function(t,a){ return t+(+a.apport||0); },0);
+      if(tot>0) as.forEach(function(a){ a.apport=Math.round((+a.apport||0)/tot*n*100)/100; });
+      else { var q=Math.round(n/as.length*100)/100; as.forEach(function(a){ a.apport=q; }); }
+      var t2=as.reduce(function(t,a){ return t+(+a.apport||0); },0);
+      if(Math.abs(t2-n)>0.005) as[0].apport=Math.round((as[0].apport+(n-t2))*100)/100;
+      return true; }},
+    /* les deux cases « Pièce » corrigent la lecture, pas le dossier */
+    dirigeantLu:{l:'Identité lue',    f:function(d,c,cr,v){
+      var v2=nz(v).split(/\s+/); d.verif=d.verif||{}; d.verif.extract=d.verif.extract||{};
+      d.verif.extract.prenom=v2.length>1?v2[0]:''; d.verif.extract.nom=v2.length>1?v2.slice(1).join(' '):(v2[0]||'');
+      return true; }},
+    siegeLu:  {l:'Siège lu',          f:function(d,c,cr,v){
+      d.verif=d.verif||{}; d.verif.extract=d.verif.extract||{}; d.verif.extract.siege=nz(v); return true; }}
+  };
+  window.a3Sources=SOURCES;
+
+  /* les actes portent la correction : on horodate ceux qui l'énoncent */
+  function marquerActes(d){
+    d.docs=d.docs||{}; var n=0;
+    ACTES.forEach(function(a){ if(d.docs[a.k]&&d.docs[a.k].genere){ d.docs[a.k].maj=Date.now(); n++; } });
+    return n;
+  }
+
+  window.a3Fixer=function(id,src,val){
+    var d=dossier(id); if(!d) return;
+    var S2=SOURCES[src]; if(!S2) return;
+    var c=cli(d), cr=d.crea=d.crea||{};
+    if(!S2.f(d,c,cr,val)){ if(typeof toast==='function')toast('Cette valeur ne se corrige pas ici.'); return; }
+    var n=(src==='dirigeantLu'||src==='siegeLu')?0:marquerActes(d);
+    try{save();}catch(e){}
+    if(typeof toast==='function')
+      toast(S2.l+' corrigé'+(n?(' — '+n+' acte'+(n>1?'s':'')+' en portent la nouvelle valeur.'):'.'));
+    render(); rafraichirConc();
+  };
+
+  /* clic sur une case : elle devient saisissable, Entrée valide, Échap annule */
+  window.a3Editer=function(el,src,brut){
+    if(!el || el.querySelector('input')) return;
+    var av=el.innerHTML;
+    el.innerHTML='<input class="a3-in" value="'+String(brut==null?'':brut).replace(/"/g,'&quot;')+'">';
+    var i=el.querySelector('input'); if(!i) return;
+    var fini=false;
+    var valide=function(){ if(fini)return; fini=true; a3Fixer(null,src,i.value); };
+    var annule=function(){ if(fini)return; fini=true; el.innerHTML=av; };
+    i.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){ e.preventDefault(); valide(); }
+      else if(e.key==='Escape'){ e.preventDefault(); annule(); } });
+    i.addEventListener('blur',valide);
+    i.focus(); i.select();
+  };
 
   window.a3Analyse=function(id){
     var d=dossier(id); if(!d) return;
@@ -31847,7 +31947,10 @@ function testLienRdv()  {
     var tr=z.faits.map(function(f){
       var tds=z.cols.map(function(x){
         var c=f.c[x.k]||{v:'n/a',e:'na'};
-        return '<td class="a3-c '+c.e+'">'+E(c.v)+'</td>';
+        if(!c.ed) return '<td class="a3-c '+c.e+'">'+E(c.v)+'</td>';
+        return '<td class="a3-c '+c.e+' ed" title="Corriger — les actes en porteront la valeur" '
+          +'onclick="a3Editer(this,\''+c.ed+'\',\''+String(c.brut==null?'':c.brut).replace(/'/g,"\\'").replace(/"/g,'&quot;')+'\')">'
+          +E(c.v)+'</td>';
       }).join('');
       return '<tr class="'+(f.rompu?'rompu':(f.creux?'creux':''))+'">'
         +'<td class="a3-f"><b>'+E(f.l)+'</b><em>'+E(f.att)+'</em></td>'+tds+'</tr>';
@@ -31857,22 +31960,35 @@ function testLienRdv()  {
   }
 
   /* ---------- mini-page : la table de concordance ---------- */
-  window.a3OuvrirConc=function(id){
-    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return;
+  function concHTML(d){
     var z=concordance(d);
     var verdict = z.rompus.length
       ? z.rompus.map(function(f){
           return '<div class="a3-verdict ko"><span>✗</span><div><b>'+E(f.l)+'</b> '+E(f.note)+'</div></div>'; }).join('')
       : '<div class="a3-verdict ok"><span>✓</span><div><b>Les actes concordent.</b> '
         +'Chaque fait est dit de la même manière par tous les actes qui le portent.</div></div>';
-    mpOuvrir('Table de concordance',
-      '<p class="a3-foot" style="margin:0 0 14px">Chaque colonne est un acte, chaque ligne un fait qu\'il énonce. '
-      +'Une case soulignée de rouge dément la valeur portée par les autres actes de sa ligne.</p>'
-      + tableHTML(d) + verdict,
+    return '<p class="a3-foot" style="margin:0 0 14px">Chaque colonne est un acte, chaque ligne un fait qu\'il énonce. '
+      +'Une case soulignée de rouge dément la valeur portée par les autres actes de sa ligne. '
+      +'<b class="a3-edh">Cliquez une case soulignée de bleu pour la corriger</b> : les actes sont composés depuis la '
+      +'fiche, ils en porteront aussitôt la nouvelle valeur.</p>'
+      + tableHTML(d) + verdict;
+  }
+  window.a3OuvrirConc=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return;
+    var z=concordance(d);
+    mpOuvrir('Table de concordance', concHTML(d),
       '<button class="btn btn-ghost" onclick="a3Analyse(null)">Détail des contrôles</button>'
       +'<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
       {sub:(cli(d).denom||d.ref||'dossier')+' · '+z.cols.length+' actes · '+z.faits.length+' faits', taille:'xl'});
   };
+  function rafraichirConc(){
+    var d=dossier(); if(!d) return false;
+    if(typeof mpOuverte!=='function' || !mpOuverte()) return false;
+    if(!window.__mpCour || window.__mpCour.t!=='Table de concordance') return false;
+    var z=concordance(d);
+    return mpMaj(concHTML(d), null, (cli(d).denom||d.ref||'dossier')+' · '+z.cols.length+' actes · '+z.faits.length+' faits');
+  }
+  window.a3RafraichirConc=rafraichirConc;
 
   /* ---------- mini-page : le parapheur ---------- */
   function parapheurHTML(d){
@@ -32025,6 +32141,12 @@ function testLienRdv()  {
    '.a3-conc .a3-f em{font-style:normal}',
    '.a3-c.ok{color:#eef0f4}',
    '.a3-c.na,.a3-c.abs{color:#5f6270;font:400 11.5px/1.5 ui-monospace,Menlo,monospace}',
+   '.a3-c.ed{cursor:text;border-bottom:1px dashed rgba(76,141,255,.42)}',
+   '.a3-c.ed:hover{background:rgba(76,141,255,.09);border-bottom-color:#4c8dff}',
+   '.a3-c.ed.div{border-bottom-color:rgba(210,86,74,.5)}',
+   '.a3-in{width:100%;box-sizing:border-box;background:#0e0e10;border:1px solid #4c8dff;border-radius:4px;color:#eef0f4;font:inherit;font-size:12px;padding:3px 6px}',
+   '.a3-in:focus{outline:none}',
+   '.a3-edh{color:#5ab0ff;font-weight:600}',
    '.a3-conc tr.creux{background:rgba(217,164,65,.04)}',
    '.a3-conc tr.rompu{background:rgba(210,86,74,.07)}',
    '.a3-c.div{color:#e2685c;font-weight:700;position:relative;padding-bottom:12px}',
@@ -32232,7 +32354,7 @@ function testLienRdv()  {
          else if(typeof demEnvoiDirect==='function') ok=demEnvoiDirect(mail,'Annonce légale en cours de publication — AEM CONSEIL',corps); }catch(e){}
     A(d).annonce.prevenu=Date.now(); try{save();}catch(e){}
     if(typeof toast==='function')toast(ok?('Client prévenu ('+mail+').'):'Mail non envoyé — vérifiez la passerelle.');
-    render();
+    render(); rafraichir();
   };
 
   /* ---------- réception de l'attestation ---------- */
@@ -32268,7 +32390,7 @@ function testLienRdv()  {
       a[type].verifie=false;
       try{save();}catch(e){}
       if(typeof toast==='function')toast('Attestation rattachée au dossier — vérifiez la correspondance.');
-      render();
+      render(); rafraichir();
     };
     r.readAsDataURL(f);
   };
@@ -32330,7 +32452,7 @@ function testLienRdv()  {
       try{save();}catch(e){}
       closeModal();
       if(typeof toast==='function')toast('Attestation rattachée — vérifiez la correspondance.');
-      render();
+      render(); rafraichir();
     });
   };
 
@@ -32339,24 +32461,24 @@ function testLienRdv()  {
     if(!a[type].fichier){ if(typeof toast==='function')toast('Aucune attestation au dossier.'); return; }
     var ko=(a[type].controles||[]).filter(function(x){return x.s==='ko';});
     var go=function(){ a[type].verifie=Date.now(); try{save();}catch(e){}
-      if(typeof toast==='function')toast(TYPES[type].pdf+' vérifiée et versée au dossier.'); render(); };
+      if(typeof toast==='function')toast(TYPES[type].pdf+' vérifiée et versée au dossier.'); render(); rafraichir(); };
     if(ko.length && typeof uiConfirm==='function')
       uiConfirm('Le contrôle signale : '+ko[0].d+'\n\nValider malgré tout ?',go,{okLabel:'Valider',danger:true});
     else go();
   };
-  window.at4Devalider=function(id,type){ var d=dossier(id); if(!d)return; A(d)[type].verifie=null; try{save();}catch(e){} render(); };
+  window.at4Devalider=function(id,type){ var d=dossier(id); if(!d)return; A(d)[type].verifie=null; try{save();}catch(e){} render(); rafraichir(); };
   window.at4Ouvrir=function(id,type){
     var d=dossier(id); if(!d)return; var f=A(d)[type].fichier; if(!f)return;
     try{ var w=window.open(); if(w) w.document.write('<iframe src="'+f.data+'" style="border:0;width:100%;height:100%;position:absolute;inset:0"></iframe>'); }catch(e){}
   };
   window.at4Retirer=function(id,type){
-    var go=function(){ var d=dossier(id); if(!d)return; A(d)[type]={}; try{save();}catch(e){} render(); };
+    var go=function(){ var d=dossier(id); if(!d)return; A(d)[type]={}; try{save();}catch(e){} render(); rafraichir(); };
     if(typeof uiConfirm==='function') uiConfirm('Retirer cette attestation du dossier ?',go,{okLabel:'Retirer',danger:true}); else go();
   };
 
   /* ---------- cartes ---------- */
-  function volet(d,type){
-    var T=TYPES[type], a=A(d)[type], i=infos(d);
+  function recuHTML(d,type){
+    var T=TYPES[type], a=A(d)[type];
     var f=a.fichier, ver=!!a.verifie;
     var ctl=(a.controles||[]).map(function(x){
       return '<div class="at4-ctl '+x.s+'"><span>'+(x.s==='ok'?'✓':(x.s==='warn'?'!':'✗'))+'</span>'
@@ -32372,7 +32494,7 @@ function testLienRdv()  {
              :'<button class="btn btn-sm at4-ok" onclick="at4Valider(null,\''+type+'\')">Vérifier et verser au dossier</button>')
         +'<button class="btn btn-sm btn-ghost" onclick="at4Retirer(null,\''+type+'\')">Retirer</button>'
         +'</div></div>'+(ctl?('<div class="at4-ctls">'+ctl+'</div>'):'')
-      : '<div class="at4-att">En attente de '+E(T.pdf.toLowerCase())+'. '
+      : '<div class="at4-att">'+E(T.pdf)+' attendue. '
         +'Elle sera versée au dossier après contrôle de correspondance.</div>';
 
     var etat = ver
@@ -32409,9 +32531,95 @@ function testLienRdv()  {
       +'</div></div>';
   }
 
+  /* ---------- mini-pages ---------- */
+  function voletCorps(d,type){
+    var T=TYPES[type], a=A(d)[type];
+    return '<div class="mp-bar">'
+      +'<button class="btn btn-sm btn-pri" onclick="at4Imprimer(null,\''+type+'\')">Télécharger le dossier</button>'
+      +(type==='annonce'?'<button class="btn btn-sm btn-ghost" onclick="at4CopierAvis(null)">Copier l\'avis</button>'
+        +'<button class="btn btn-sm btn-ghost" onclick="at4Prevenir(null)">Prévenir le client</button>':'')
+      +'<button class="btn btn-sm btn-ghost" onclick="at4Chercher(null,\''+type+'\')">Chercher dans la boîte</button>'
+      +'<label class="btn btn-sm btn-ghost at4-up">Déposer le PDF'
+      +'<input type="file" accept="application/pdf,image/*" style="display:none" onchange="at4Fichier(null,\''+type+'\',this)"></label>'
+      +'</div>'
+      +'<div class="at4-pieces"><b>Dossier à transmettre à '+E(T.dest)+' :</b> '
+      +T.pieces.map(function(p){return E(p);}).join(' · ')+'</div>'
+      +(type==='annonce'&&a.prevenu?('<div class="at4-note">Client prévenu de la mise en publication le '+frd(a.prevenu)+'.</div>'):'')
+      + recuHTML(d,type);
+  }
+  window.at4OuvrirVolet=function(id,type){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return;
+    var T=TYPES[type], a=A(d)[type];
+    mpOuvrir(T.l, voletCorps(d,type),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(a.verifie?('vérifiée le '+frd(a.verifie)):(a.fichier?'reçue — à vérifier':(T.pdf+' attendue'))), taille:'l'});
+  };
+
+  function ficheCorps(d){
+    var i=infos(d);
+    var champs=CHAMPS.map(function(c){
+      return '<div class="at4-fld"><label>'+E(c[1])+'</label>'
+        +'<input value="'+E(i[c[0]]||'')+'" onchange="at4Fiche(null,\''+c[0]+'\',this.value)"></div>';
+    }).join('');
+    return '<p class="at4-p" style="margin-top:0">Reprise du dossier, corrigeable ici. '
+      +'L\'avis est composé à partir de ces informations.</p>'
+      +'<div class="at4-grid">'+champs+'</div>'
+      +'<div class="at4-avis"><b>Avis de constitution</b><pre>'+E(avis(d))+'</pre></div>';
+  }
+  window.at4OuvrirFiche=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return;
+    mpOuvrir('Fiche de publication', ficheCorps(d),
+      '<button class="btn btn-ghost" onclick="at4CopierAvis(null)">Copier l\'avis</button>'
+      +'<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:CHAMPS.length+' mentions exigées de l\'avis de constitution', taille:'l'});
+  };
+
+  /* une action faite dans une mini-page l'y rafraîchit */
+  function rafraichir(){
+    var d=dossier(); if(!d) return false;
+    if(typeof mpOuverte!=='function' || !mpOuverte() || !window.__mpCour) return false;
+    var t=window.__mpCour.t;
+    function sous(k){ var x=A(d)[k];
+      return x.verifie?('vérifiée le '+frd(x.verifie)):(x.fichier?'reçue — à vérifier':(TYPES[k].pdf+' attendue')); }
+    if(t===TYPES.capital.l) return mpMaj(voletCorps(d,'capital'), null, sous('capital'));
+    if(t===TYPES.annonce.l) return mpMaj(voletCorps(d,'annonce'), null, sous('annonce'));
+    if(t==='Fiche de publication') return mpMaj(ficheCorps(d), null);
+    return false;
+  }
+  window.at4Rafraichir=rafraichir;
+
+  /* ---------- la carte d'étape : l'état, et les portes d'entrée ---------- */
   function carte(){
     var d=dossier(); if(!d) return '';
-    return volet(d,'capital')+ficheCard(d)+volet(d,'annonce');
+    var a=A(d), i=infos(d);
+    var manque=CHAMPS.filter(function(c){ return !nz(i[c[0]]); }).length;
+
+    function ligne(cl,mark,titre,det,bouton){
+      return '<div class="at4-etl '+cl+'"><span class="at4-etm">'+mark+'</span>'
+        +'<div class="at4-ett"><b>'+titre+'</b><em>'+det+'</em></div>'+bouton+'</div>';
+    }
+    function etatVolet(type){
+      var x=a[type], T=TYPES[type];
+      var cl=x.verifie?'ok':(x.fichier?'at':'w'), mk=x.verifie?'✓':(x.fichier?'·':'◔');
+      var det=x.verifie?('Vérifiée et versée au dossier le '+frd(x.verifie))
+             :(x.fichier?(E(x.fichier.nom)+' — reçue, à vérifier')
+                        :(T.pdf+' attendue — '+T.dest+'.'));
+      return ligne(cl,mk,T.l,det,
+        '<button class="btn btn-sm '+(x.verifie?'btn-ghost':'btn-pri')+'" onclick="at4OuvrirVolet(null,\''+type+'\')">'
+        +(x.verifie?'Revoir':'Ouvrir')+'</button>');
+    }
+
+    var lFiche=ligne(manque?'at':'ok', manque?'·':'✓', 'Fiche de publication',
+      manque ? (manque+' mention'+(manque>1?'s':'')+' à compléter sur '+CHAMPS.length)
+             : ('Les '+CHAMPS.length+' mentions sont renseignées, l\'avis est prêt à transmettre'),
+      '<button class="btn btn-sm '+(manque?'btn-pri':'btn-ghost')+'" onclick="at4OuvrirFiche(null)">Ouvrir la fiche</button>');
+
+    var n=(a.capital.verifie?1:0)+(a.annonce.verifie?1:0);
+    return '<div class="card crea-capital at4-card"><div class="card-h"><h2>Attestations extérieures</h2>'
+      +'<span class="at4-tag'+(n===2?' ok':'')+'">'+n+'/2 vérifiées</span>'
+      +'</div><div class="card-b"><div class="at4-etat">'
+      + etatVolet('capital') + lFiche + etatVolet('annonce')
+      +'</div></div></div>';
   }
   window.at4Card=carte;
 
@@ -32467,6 +32675,16 @@ function testLienRdv()  {
 
   var st=document.createElement('style'); st.id='at4-mod';
   st.textContent=[
+   '.at4-etat{display:flex;flex-direction:column;gap:1px;background:rgba(127,160,255,.10);border:1px solid rgba(127,160,255,.14);border-radius:10px;overflow:hidden}',
+   '.at4-etl{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:11px;align-items:center;padding:12px 13px;background:#141416}',
+   '.at4-etl.ok{background:rgba(67,181,129,.05)}',
+   '.at4-etl.ko{background:rgba(210,86,74,.06)}',
+   '.at4-etm{text-align:center;font:700 13px/1 ui-monospace,Menlo,monospace;color:#5f6270}',
+   '.at4-etl.ok .at4-etm{color:#43b581}.at4-etl.ko .at4-etm{color:#e2685c}.at4-etl.at .at4-etm{color:#d9a441}.at4-etl.w .at4-etm{color:#74767e}',
+   '.at4-ett{min-width:0}',
+   '.at4-ett b{display:block;font-size:13.5px;font-weight:600}',
+   '.at4-ett em{display:block;font-style:normal;font-size:11.5px;color:#74767e;margin-top:2px;line-height:1.5}',
+   '@media(max-width:640px){.at4-etl{grid-template-columns:22px minmax(0,1fr);row-gap:9px}.at4-etl .btn{grid-column:2}}',
    '.at4-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}',
    '.at4-up{cursor:pointer}',
    '.at4-ok{background:rgba(63,174,114,.14)!important;border-color:rgba(63,174,114,.4)!important;color:#6fe0a6!important}',
@@ -32593,7 +32811,7 @@ function testLienRdv()  {
         +'\n\nConstater le dépôt malgré tout ?',go,{okLabel:'Constater',danger:true});
     else go();
   };
-  window.im5Annuler=function(id){ var d=dossier(id); if(!d)return; delete I(d).depose; try{save();}catch(e){} render(); };
+  window.im5Annuler=function(id){ var d=dossier(id); if(!d)return; delete I(d).depose; try{save();}catch(e){} render(); rafraichir(); };
   window.im5Ref =function(id,v){ var d=dossier(id); if(!d)return; I(d).ref=nz(v); try{save();}catch(e){} };
   window.im5Date=function(id,v){ var d=dossier(id); if(!d)return; I(d).dateDepot=nz(v); try{save();}catch(e){} };
 
@@ -32646,7 +32864,7 @@ function testLienRdv()  {
       if(type==='kbis'){ var sn=siren(f.name); if(sn) im.siren=im.siren||sn; }
       try{save();}catch(e){}
       if(typeof toast==='function')toast(DOCS[type].l+' rattaché — vérifiez la correspondance.');
-      render();
+      render(); rafraichir();
     };
     r.readAsDataURL(f);
   };
@@ -32701,7 +32919,7 @@ function testLienRdv()  {
       try{save();}catch(e){}
       closeModal();
       if(typeof toast==='function')toast(DOCS[type].l+' rattaché — vérifiez la correspondance.');
-      render();
+      render(); rafraichir();
     });
   };
 
@@ -32719,24 +32937,24 @@ function testLienRdv()  {
       try{save();}catch(e){}
       if(typeof toast==='function')
         toast('Immatriculation constatée'+(im.siren?(' — SIREN '+im.siren+' reporté sur la fiche client.'):'.'));
-      render();
+      render(); rafraichir();
     };
     if(ko.length && typeof uiConfirm==='function')
       uiConfirm('Le contrôle signale : '+ko[0].d+'\n\nValider malgré tout ?',go,{okLabel:'Valider',danger:true});
     else go();
   };
-  window.im5Devalider=function(id){ var d=dossier(id); if(!d)return; I(d).verifie=null; try{save();}catch(e){} render(); };
+  window.im5Devalider=function(id){ var d=dossier(id); if(!d)return; I(d).verifie=null; try{save();}catch(e){} render(); rafraichir(); };
   window.im5Ouvrir=function(id,type){
     var d=dossier(id); if(!d)return; var f=I(d)[type]; if(!f)return;
     try{ var w=window.open(); if(w) w.document.write('<iframe src="'+f.data+'" style="border:0;width:100%;height:100%;position:absolute;inset:0"></iframe>'); }catch(e){}
   };
   window.im5Retirer=function(id,type){
     var go=function(){ var d=dossier(id); if(!d)return; var im=I(d); delete im[type]; delete im[type+'Ctl'];
-      if(type==='kbis') im.verifie=null; try{save();}catch(e){} render(); };
+      if(type==='kbis') im.verifie=null; try{save();}catch(e){} render(); rafraichir(); };
     if(typeof uiConfirm==='function') uiConfirm('Retirer ce document du dossier ?',go,{okLabel:'Retirer',danger:true}); else go();
   };
 
-  /* ---------- cartes ---------- */
+  /* ---------- mini-pages ---------- */
   function bloc(d,type){
     var im=I(d), f=im[type], D=DOCS[type];
     var ctl=(im[type+'Ctl']||[]).map(function(x){
@@ -32761,46 +32979,103 @@ function testLienRdv()  {
       +'</div>';
   }
 
-  function carte(){
-    var d=dossier(); if(!d) return '';
-    reprendreAncien(d);
-    var im=I(d), ps=pieces(d), pret=ps.filter(function(p){return p.ok;}).length;
-    var c=cli(d);
-
+  function depotCorps(d){
+    var im=I(d), ps=pieces(d);
     var lignes=ps.map(function(p){
       return '<div class="im5-r '+(p.ok?'ok':'ko')+'"><span class="im5-s">'+(p.ok?'✓':'✗')+'</span>'
         +'<div><b>'+E(p.l)+'</b><em>'+(p.ok?("Produite à l'"+E(p.src)):("Manquante — à obtenir à l'"+E(p.src)))
         +(p.note?(' · '+E(p.note)):'')+'</em></div></div>';
     }).join('');
-
-    var etat = im.verifie ? '<span class="at4-tag ok">immatriculée</span>'
-             : (im.depose ? '<span class="at4-tag">déposée le '+frd(im.depose)+'</span>'
-                          : '<span class="at4-tag g">à déposer</span>');
-
-    return '<div class="card inpi-card im5-card"><div class="card-h"><h2>Dépôt au guichet unique</h2>'+etat
-      +'<span class="sub" style="margin-left:auto">'+pret+'/'+ps.length+' pièces réunies</span></div><div class="card-b">'
-      +'<div class="at4-bar">'
+    return '<div class="mp-bar">'
       +'<button class="btn btn-sm btn-pri" onclick="im5Guichet()">Ouvrir le guichet unique</button>'
       +'<button class="btn btn-sm btn-ghost" onclick="im5Imprimer(null)">Bordereau de dépôt</button>'
       +(im.depose
         ? '<button class="btn btn-sm btn-ghost" onclick="im5Annuler(null)">Annuler le dépôt</button>'
         : '<button class="btn btn-sm at4-ok" onclick="im5Depose(null)">Constater le dépôt</button>')
+      +'<span class="mp-sp mp-nav">'+ps.filter(function(p){return p.ok;}).length+' / '+ps.length+' pièces</span>'
       +'</div>'
       +'<div class="im5-dep">'
       +'<label>N° de formalité<input value="'+E(im.ref||'')+'" placeholder="n° de suivi du guichet" onchange="im5Ref(null,this.value)"></label>'
       +'<label>Date de dépôt<input type="date" max="9999-12-31" value="'+E(im.dateDepot||'')+'" onchange="im5Date(null,this.value)"></label>'
       +'</div>'
-      +'<div class="im5-list">'+lignes+'</div>'
-      +'<div class="im5-sec"><b>Récépissé de dépôt</b></div>'+bloc(d,'recepisse')
-      +'</div></div>'
+      +'<div class="im5-list">'+lignes+'</div>';
+  }
+  window.im5OuvrirDepot=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return;
+    reprendreAncien(d);
+    var ps=pieces(d), n=ps.filter(function(p){return p.ok;}).length;
+    mpOuvrir('Dépôt au guichet unique', depotCorps(d),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(cli(d).denom||d.ref||'dossier')+' · '+n+'/'+ps.length+' pièces réunies'
+        +(I(d).depose?(' · déposé le '+frd(I(d).depose)):''), taille:'l'});
+  };
 
-      +'<div class="card inpi-card im5-card"><div class="card-h"><h2>Extrait K-bis</h2>'
-      +(im.verifie?'<span class="at4-tag ok">vérifié le '+frd(im.verifie)+'</span>':'<span class="at4-tag g">en attente</span>')
-      +'</div><div class="card-b">'
-      +'<div class="im5-siren"><label>SIREN</label>'
+  function receptionCorps(d){
+    var im=I(d), c=cli(d);
+    return '<div class="im5-siren"><label>SIREN</label>'
       +'<input value="'+E(im.siren||c.siren||'')+'" placeholder="9 chiffres" onchange="im5Siren(null,this.value)">'
       +'<span>Reporté sur la fiche du client à la validation.</span></div>'
-      +bloc(d,'kbis')+'</div></div>';
+      +'<div class="mp-h">Récépissé de dépôt</div>'+bloc(d,'recepisse')
+      +'<div class="mp-h">Extrait K-bis</div>'+bloc(d,'kbis');
+  }
+  window.im5OuvrirReception=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return;
+    var im=I(d);
+    mpOuvrir('Réception des pièces', receptionCorps(d),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:im.verifie?('immatriculée — SIREN '+(im.siren||'—')):(im.kbis?'K-bis reçu, à vérifier':'en attente du greffe'), taille:'l'});
+  };
+
+  function rafraichir(){
+    var d=dossier(); if(!d) return false;
+    if(typeof mpOuverte!=='function' || !mpOuverte() || !window.__mpCour) return false;
+    var t=window.__mpCour.t, im=I(d);
+    if(t==='Dépôt au guichet unique'){
+      var ps=pieces(d), n=ps.filter(function(p){return p.ok;}).length;
+      return mpMaj(depotCorps(d), null, (cli(d).denom||d.ref||'dossier')+' · '+n+'/'+ps.length+' pièces réunies'
+        +(im.depose?(' · déposé le '+frd(im.depose)):''));
+    }
+    if(t==='Réception des pièces')
+      return mpMaj(receptionCorps(d), null,
+        im.verifie?('immatriculée — SIREN '+(im.siren||'—')):(im.kbis?'K-bis reçu, à vérifier':'en attente du greffe'));
+    return false;
+  }
+  window.im5Rafraichir=rafraichir;
+
+  /* ---------- la carte d'étape : l'état, et les portes d'entrée ---------- */
+  function carte(){
+    var d=dossier(); if(!d) return '';
+    reprendreAncien(d);
+    var im=I(d), ps=pieces(d), pret=ps.filter(function(p){return p.ok;}).length;
+    var manque=ps.filter(function(p){return !p.ok;});
+
+    function ligne(cl,mark,titre,det,bouton){
+      return '<div class="im5-etl '+cl+'"><span class="im5-etm">'+mark+'</span>'
+        +'<div class="im5-ett"><b>'+titre+'</b><em>'+det+'</em></div>'+bouton+'</div>';
+    }
+
+    var l1=ligne(pret===ps.length?'ok':'ko', pret===ps.length?'✓':'✗', 'Pièces du dossier',
+      pret===ps.length ? ('Les '+ps.length+' pièces exigées au dépôt sont réunies')
+        : (manque.length+' pièce'+(manque.length>1?'s':'')+' manquante'+(manque.length>1?'s':'')+' — '+E(manque[0].l)),
+      '');
+    var l2=ligne(im.depose?'ok':'at', im.depose?'✓':'·', 'Dépôt au guichet unique',
+      im.depose ? ('Déposé le '+frd(im.depose)+(im.ref?(' — formalité '+E(im.ref)):''))
+                : 'Bordereau, n° de formalité et constat du dépôt',
+      '<button class="btn btn-sm '+(im.depose?'btn-ghost':'btn-pri')+'" onclick="im5OuvrirDepot(null)">'
+      +(im.depose?'Revoir':'Ouvrir')+'</button>');
+    var l3=ligne(im.verifie?'ok':(im.kbis?'at':'w'), im.verifie?'✓':(im.kbis?'·':'◔'), 'Récépissé et K-bis',
+      im.verifie ? ('Immatriculée le '+frd(im.verifie)+' — SIREN '+E(im.siren||'—'))
+        : (im.kbis ? 'K-bis reçu — à vérifier avant de clore l\'immatriculation'
+                   : 'En attente du récépissé puis de l\'extrait K-bis'),
+      '<button class="btn btn-sm '+(im.verifie?'btn-ghost':'btn-pri')+'" onclick="im5OuvrirReception(null)">'
+      +(im.verifie?'Revoir':'Ouvrir')+'</button>');
+
+    return '<div class="card inpi-card im5-card"><div class="card-h"><h2>Immatriculation</h2>'
+      +(im.verifie ? '<span class="at4-tag ok">immatriculée</span>'
+        : (im.depose ? '<span class="at4-tag">déposée le '+frd(im.depose)+'</span>'
+                     : '<span class="at4-tag g">à déposer</span>'))
+      +'<span class="sub" style="margin-left:auto">'+pret+'/'+ps.length+' pièces réunies</span>'
+      +'</div><div class="card-b"><div class="im5-etat">'+l1+l2+l3+'</div></div></div>';
   }
   window.im5Card=carte;
 
@@ -32854,6 +33129,16 @@ function testLienRdv()  {
 
   var st=document.createElement('style'); st.id='im5-mod';
   st.textContent=[
+   '.im5-etat{display:flex;flex-direction:column;gap:1px;background:rgba(127,160,255,.10);border:1px solid rgba(127,160,255,.14);border-radius:10px;overflow:hidden}',
+   '.im5-etl{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:11px;align-items:center;padding:12px 13px;background:#141416}',
+   '.im5-etl.ok{background:rgba(67,181,129,.05)}',
+   '.im5-etl.ko{background:rgba(210,86,74,.06)}',
+   '.im5-etm{text-align:center;font:700 13px/1 ui-monospace,Menlo,monospace;color:#5f6270}',
+   '.im5-etl.ok .im5-etm{color:#43b581}.im5-etl.ko .im5-etm{color:#e2685c}.im5-etl.at .im5-etm{color:#d9a441}.im5-etl.w .im5-etm{color:#74767e}',
+   '.im5-ett{min-width:0}',
+   '.im5-ett b{display:block;font-size:13.5px;font-weight:600}',
+   '.im5-ett em{display:block;font-style:normal;font-size:11.5px;color:#74767e;margin-top:2px;line-height:1.5}',
+   '@media(max-width:640px){.im5-etl{grid-template-columns:22px minmax(0,1fr);row-gap:9px}.im5-etl .btn{grid-column:2}}',
    '.im5-list{display:flex;flex-direction:column;gap:1px;background:rgba(127,160,255,.10);border:1px solid rgba(127,160,255,.14);border-radius:10px;overflow:hidden;margin-bottom:14px}',
    '.im5-r{display:grid;grid-template-columns:24px 1fr;gap:10px;padding:9px 13px;background:var(--card,#141416)}',
    '.im5-s{text-align:center;font:700 13px/1.3 inherit}',
@@ -33489,6 +33774,237 @@ function testLienRdv()  {
    '.mp-h{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:#74767e;margin:18px 0 9px}',
    '.mp-h:first-child{margin-top:0}',
    '.mp-nav{display:inline-flex;align-items:center;gap:6px;font:500 11.5px/1 ui-monospace,Menlo,monospace;color:#74767e}'
+  ].join('');
+  document.head.appendChild(st);
+})();
+</script>
+<script id="mod-depot">
+/* ============================================================================
+   mod-depot — Le cabinet dépose lui-même les pièces du client, à n'importe
+   quelle étape : pièce d'identité, justificatif, acte juridique — y compris un
+   document déjà généré, dont on verse ici l'exemplaire signé ou scanné.
+   Les pièces rejoignent le dossier et alimentent l'étape Pièces.
+   ========================================================================== */
+(function(){
+  if(window.__dp) return; window.__dp=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s); }
+  function nz(s){ return String(s==null?'':s).trim(); }
+  function frd(t){ try{ return t?new Date(t).toLocaleDateString('fr-FR'):''; }catch(e){ return ''; } }
+  function ko(n){ n=+n||0; return n>=1048576 ? (Math.round(n/104857.6)/10+' Mo') : (Math.round(n/1024)+' Ko'); }
+
+  function dossier(id){
+    try{
+      if(id) return (DB.dossiers||[]).filter(function(x){return x.id===id;})[0]||null;
+      var s=(typeof state!=='undefined')?state:{};
+      return (DB.dossiers||[]).filter(function(x){return x.id===s.espaceDossier;})[0]
+          || (DB.dossiers||[]).filter(function(x){return !x.archived;})[0] || null;
+    }catch(e){ return null; }
+  }
+
+  /* natures proposées : celles que les étapes savent exploiter, plus les actes */
+  var NATURES=[
+    {k:'cni',       l:"Pièce d'identité",              e:'Pièces'},
+    {k:'domicile',  l:'Justificatif de domiciliation', e:'Pièces'},
+    {k:'bail',      l:'Bail ou contrat de domiciliation', e:'Pièces'},
+    {k:'rib',       l:'Références bancaires (RIB)',    e:'Pièces'},
+    {k:'impot',     l:"Avis d'imposition",             e:'Pièces'},
+    {k:'statuts',   l:'Statuts signés',                e:'Actes',  acte:'statuts'},
+    {k:'dnc',       l:'Déclaration de non-condamnation signée', e:'Actes', acte:'dnc'},
+    {k:'pouvoir',   l:'Pouvoir signé',                 e:'Actes',  acte:'pouvoir'},
+    {k:'capital',   l:'Attestation de dépôt des fonds', e:'Attestations', att:'capital'},
+    {k:'annonce',   l:'Attestation de parution',       e:'Attestations', att:'annonce'},
+    {k:'recepisse', l:'Récépissé de dépôt',            e:'Immatriculation', immat:'recepisse'},
+    {k:'kbis',      l:'Extrait K-bis',                 e:'Immatriculation', immat:'kbis'},
+    {k:'autre',     l:'Autre document',                e:'—'}
+  ];
+  function nature(k){ for(var i=0;i<NATURES.length;i++) if(NATURES[i].k===k) return NATURES[i]; return NATURES[NATURES.length-1]; }
+
+  /* nature devinée d'après le nom du fichier, l'utilisateur peut la corriger */
+  function devine(nom){
+    var t=String(nom||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    if(/kbis|k bis/.test(t)) return 'kbis';
+    if(/recepisse|accuse/.test(t)) return 'recepisse';
+    if(/parution|annonce|legale/.test(t)) return 'annonce';
+    if(/depot|fonds|capital/.test(t)) return 'capital';
+    if(/statut/.test(t)) return 'statuts';
+    if(/non.?condamn|dnc/.test(t)) return 'dnc';
+    if(/pouvoir|mandat/.test(t)) return 'pouvoir';
+    if(/rib|iban|bancaire/.test(t)) return 'rib';
+    if(/bail|domicilia/.test(t)) return 'bail';
+    if(/edf|gaz|loyer|quittance|facture|justificatif.?domicile/.test(t)) return 'domicile';
+    if(/impot|fiscal|avis/.test(t)) return 'impot';
+    if(/cni|identite|passeport|carte|sejour/.test(t)) return 'cni';
+    try{ if(typeof demAttCat==='function'){ var c=demAttCat({name:nom}); if(c&&c.key) return nature(c.key).k; } }catch(e){}
+    return 'autre';
+  }
+
+  function pieces(d){ d.attachments=d.attachments||[]; return d.attachments; }
+
+  /* verser la pièce là où l'étape concernée l'attend */
+  function classer(d,p){
+    var n=nature(p.nat||'autre');
+    if(n.acte){ d.sign=d.sign||{}; d.sign[n.acte]=d.sign[n.acte]||{};
+      d.sign[n.acte].fichier={nom:p.name,type:p.type,data:p.dataUrl,ts:p.ts}; }
+    if(n.att){ d.attest=d.attest||{}; d.attest[n.att]=d.attest[n.att]||{};
+      if(!d.attest[n.att].fichier){
+        d.attest[n.att].fichier={nom:p.name,type:p.type,data:p.dataUrl,ts:p.ts};
+        try{ if(typeof at4Verifier==='function') d.attest[n.att].controles=at4Verifier(d,n.att,p.name); }catch(e){}
+      } }
+    if(n.immat){ d.immat=d.immat||{};
+      if(!d.immat[n.immat]){
+        d.immat[n.immat]={nom:p.name,type:p.type,data:p.dataUrl,ts:p.ts};
+        try{ if(typeof im5Verifier==='function') d.immat[n.immat+'Ctl']=im5Verifier(d,n.immat,p.name); }catch(e){}
+        if(n.immat==='kbis'){ try{ var sn=(typeof im5LireSiren==='function')?im5LireSiren(p.name):''; if(sn&&!d.immat.siren)d.immat.siren=sn; }catch(e){} }
+      } }
+  }
+
+  window.dpDeposer=function(id,input){
+    var d=dossier(id); if(!d||!input||!input.files||!input.files.length) return;
+    var fs=[].slice.call(input.files), reste=fs.length, ajout=[];
+    fs.forEach(function(f){
+      var r=new FileReader();
+      r.onload=function(){
+        var p={name:f.name, type:f.type||'application/octet-stream', size:f.size,
+               dataUrl:''+r.result, dataB64:(''+r.result).split(',')[1]||'',
+               ts:Date.now(), src:'cabinet', nat:devine(f.name)};
+        pieces(d).push(p); classer(d,p); ajout.push(p);
+        if(--reste===0){
+          try{save();}catch(e){}
+          if(typeof toast==='function')
+            toast(ajout.length+' pièce'+(ajout.length>1?'s':'')+' versée'+(ajout.length>1?'s':'')+' au dossier.');
+          render(); rafraichir();
+        }
+      };
+      r.readAsDataURL(f);
+    });
+    input.value='';
+  };
+
+  window.dpNature=function(id,i,k){
+    var d=dossier(id); if(!d) return; var ps=pieces(d), p=ps[i]; if(!p) return;
+    p.nat=k; classer(d,p); try{save();}catch(e){}
+    if(typeof toast==='function')toast('Classée : '+nature(k).l+'.');
+    render(); rafraichir();
+  };
+  window.dpOuvrirPiece=function(id,i){
+    var d=dossier(id); if(!d) return; var p=pieces(d)[i]; if(!p||!p.dataUrl) return;
+    try{ var w=window.open(); if(w) w.document.write('<iframe src="'+p.dataUrl+'" style="border:0;width:100%;height:100%;position:absolute;inset:0"></iframe>'); }catch(e){}
+  };
+  window.dpRetirer=function(id,i){
+    var go=function(){ var d=dossier(id); if(!d) return; pieces(d).splice(i,1);
+      try{save();}catch(e){} render(); rafraichir(); };
+    if(typeof uiConfirm==='function') uiConfirm('Retirer cette pièce du dossier ?',go,{okLabel:'Retirer',danger:true});
+    else go();
+  };
+
+  /* ---------- la mini-page ---------- */
+  function corps(d){
+    var ps=pieces(d);
+    var opts=function(sel){
+      var groupes={}, ordre=[];
+      NATURES.forEach(function(n){ if(!groupes[n.e]){groupes[n.e]=[];ordre.push(n.e);} groupes[n.e].push(n); });
+      return ordre.map(function(g){
+        return '<optgroup label="'+E(g==='—'?'Divers':('Étape '+g))+'">'
+          +groupes[g].map(function(n){ return '<option value="'+n.k+'"'+(n.k===sel?' selected':'')+'>'+E(n.l)+'</option>'; }).join('')
+          +'</optgroup>'; }).join('');
+    };
+    var lignes=ps.map(function(p,i){
+      var n=nature(p.nat||devine(p.name));
+      var dispo=!!p.dataUrl;
+      return '<div class="dp-r">'
+        +'<span class="dp-ic">'+(/pdf/i.test(p.type||p.name||'')?'PDF':(/image/i.test(p.type||'')?'IMG':'DOC'))+'</span>'
+        +'<div class="dp-t"><b>'+E(p.name||'pièce')+'</b>'
+          +'<em>'+(p.size?ko(p.size)+' · ':'')+(p.ts?('versée le '+frd(p.ts)):'annoncée par le client')
+          +(p.src==='cabinet'?' · par le cabinet':'')+'</em></div>'
+        +'<select class="dp-sel" onchange="dpNature(null,'+i+',this.value)">'+opts(n.k)+'</select>'
+        +'<span class="dp-a">'
+        +(dispo?'<button class="btn btn-sm btn-ghost" onclick="dpOuvrirPiece(null,'+i+')">Ouvrir</button>'
+               +'<a class="btn btn-sm btn-ghost" href="'+p.dataUrl+'" download="'+E(p.name)+'">Télécharger</a>'
+              :'<span class="dp-abs">fichier non récupéré</span>')
+        +'<button class="btn btn-sm btn-ghost" onclick="dpRetirer(null,'+i+')">Retirer</button>'
+        +'</span></div>';
+    }).join('');
+
+    return '<div class="mp-bar">'
+      +'<label class="btn btn-sm btn-pri dp-up">Choisir des fichiers'
+      +'<input type="file" multiple accept="application/pdf,image/*,.doc,.docx" style="display:none" onchange="dpDeposer(null,this)"></label>'
+      +'<span class="mp-sp mp-nav">'+ps.length+' pièce'+(ps.length>1?'s':'')+' au dossier</span></div>'
+      +'<div class="dp-zone" id="dp-zone">Glissez les fichiers ici, ou utilisez « Choisir des fichiers ».<br>'
+      +'<span>La nature est devinée du nom du fichier et reste corrigeable ligne à ligne. '
+      +'Un acte déjà généré peut recevoir ici son exemplaire signé.</span></div>'
+      +'<div class="dp-h">Pièces du dossier</div>'
+      +'<div class="dp-list">'+(lignes||'<div class="dp-vide">Aucune pièce au dossier pour l\'instant.</div>')+'</div>';
+  }
+
+  window.dpOuvrir=function(id){
+    var d=dossier(id); if(!d){ if(typeof toast==='function')toast('Aucun dossier ouvert.'); return; }
+    if(typeof mpOuvrir!=='function') return;
+    mpOuvrir('Dépôt de pièces', corps(d),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(d.ref||'dossier')+' · pièces d\'identité, justificatifs et actes', taille:'l'});
+    setTimeout(zone,30);
+  };
+  function rafraichir(){
+    var d=dossier(); if(!d) return false;
+    if(typeof mpOuverte!=='function' || !mpOuverte()) return false;
+    if(!window.__mpCour || window.__mpCour.t!=='Dépôt de pièces') return false;
+    var ok=mpMaj(corps(d), null, (d.ref||'dossier')+' · '+pieces(d).length+' pièce(s)');
+    setTimeout(zone,30); return ok;
+  }
+  /* glisser-déposer sur la zone */
+  function zone(){
+    var z=document.getElementById('dp-zone'); if(!z||z.__on) return; z.__on=1;
+    ['dragenter','dragover'].forEach(function(e){ z.addEventListener(e,function(ev){
+      ev.preventDefault(); ev.stopPropagation(); z.classList.add('on'); }); });
+    ['dragleave','drop'].forEach(function(e){ z.addEventListener(e,function(ev){
+      ev.preventDefault(); ev.stopPropagation(); z.classList.remove('on'); }); });
+    z.addEventListener('drop',function(ev){
+      var fs=ev.dataTransfer&&ev.dataTransfer.files; if(!fs||!fs.length) return;
+      dpDeposer(null,{files:fs, value:''});
+    });
+  }
+
+  /* ---------- le bouton, sur toutes les étapes ---------- */
+  function poser(){
+    var pieds=document.querySelectorAll('.trw-foot .trw-btns');
+    for(var i=0;i<pieds.length;i++){
+      var b=pieds[i];
+      if(b.querySelector('.dp-btn')) continue;
+      var el=document.createElement('button');
+      el.className='trw-b dp-btn';
+      el.textContent='＋ Déposer une pièce';
+      el.onclick=function(){ dpOuvrir(null); };
+      b.insertBefore(el, b.firstChild);
+    }
+  }
+  function graft(){
+    if(window.__dpR || typeof window.render!=='function') return;
+    window.__dpR=1;
+    var _r=window.render;
+    window.render=function(){ var v=_r.apply(this,arguments);
+      try{ setTimeout(poser,0); }catch(e){} return v; };
+  }
+  graft(); setTimeout(graft,0); setTimeout(function(){ graft(); poser(); },1600);
+
+  var st=document.createElement('style'); st.id='dp-mod';
+  st.textContent=[
+   '.dp-btn{border-color:rgba(76,141,255,.45)!important;color:#9cc4ff!important}',
+   '.dp-zone{border:1px dashed #2c3241;border-radius:10px;padding:20px 16px;text-align:center;color:#a6a8b0;font-size:13px;line-height:1.6;background:rgba(255,255,255,.012);margin-bottom:4px}',
+   '.dp-zone span{display:block;margin-top:6px;font-size:11.5px;color:#74767e}',
+   '.dp-zone.on{border-color:#4c8dff;background:rgba(76,141,255,.08);color:#dce9ff}',
+   '.dp-h{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:#74767e;margin:18px 0 9px}',
+   '.dp-list{display:flex;flex-direction:column;gap:1px;background:rgba(127,160,255,.10);border:1px solid rgba(127,160,255,.14);border-radius:10px;overflow:hidden}',
+   '.dp-r{display:grid;grid-template-columns:40px minmax(0,1fr) 210px auto;gap:11px;align-items:center;padding:10px 13px;background:#141416}',
+   '.dp-ic{font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.06em;text-align:center;padding:5px 0;border:1px solid #2c3241;border-radius:4px;color:#74767e}',
+   '.dp-t{min-width:0}',
+   '.dp-t b{display:block;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+   '.dp-t em{display:block;font-style:normal;font-size:11px;color:#74767e;margin-top:2px;font-family:ui-monospace,Menlo,monospace}',
+   '.dp-sel{background:#0e0e10;border:1px solid #2a2a2e;border-radius:7px;color:#eef0f4;font:inherit;font-size:12px;padding:6px 8px;max-width:100%}',
+   '.dp-sel:focus{outline:none;border-color:#4f9dff}',
+   '.dp-a{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}',
+   '.dp-abs{font-size:11px;color:#74767e;font-style:italic}',
+   '.dp-vide{padding:16px;text-align:center;color:#74767e;font-size:12.5px;background:#141416}',
+   '@media(max-width:820px){.dp-r{grid-template-columns:40px minmax(0,1fr);row-gap:8px}.dp-sel,.dp-a{grid-column:2}}'
   ].join('');
   document.head.appendChild(st);
 })();
