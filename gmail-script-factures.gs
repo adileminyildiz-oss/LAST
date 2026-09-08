@@ -9,7 +9,8 @@
    1. Ouvrez le script, collez TOUT ce fichier à la fin.
    2. Dans doGet(e), ajoutez les 2 lignes de routage (voir ci-dessous).
    3. Paramètres du projet ▸ Propriétés du script :
-        SECRET_KEY       = la clé secrète saisie dans Mar'q   (obligatoire)
+        (aucune propriété obligatoire : la clé TOKEN de votre script est
+         réutilisée automatiquement — SECRET_KEY sert seulement de repli)
         FP_DRIVE_FOLDER  = nom du dossier Drive d'archivage   (facultatif)
                            défaut : "AEM CONSEIL - Factures reçues"
         FP_QUERY         = requête Gmail personnalisée        (facultatif)
@@ -50,6 +51,20 @@
 
 var FP_LABEL = 'marq-facture-importee';
 
+/* Contrôle de la clé — s'adapte à votre script :
+   utilise la variable TOKEN si elle existe (cas du script AEM CONSEIL),
+   sinon la propriété SECRET_KEY. Si aucune des deux n'est définie, on laisse
+   passer : doGet(e) a déjà filtré la clé avant d'appeler ces fonctions. */
+function fpAuth(e) {
+  var k = (e && e.parameter && e.parameter.key) || '';
+  var ref = '';
+  try { if (typeof TOKEN !== 'undefined' && TOKEN) ref = String(TOKEN); } catch (err) {}
+  if (!ref) {
+    try { ref = PropertiesService.getScriptProperties().getProperty('SECRET_KEY') || ''; } catch (err) {}
+  }
+  return !ref || k === ref;
+}
+
 /* Réponse JSON — supporte le repli JSONP utilisé par Mar'q (&callback=…). */
 function fpReply(e, obj) {
   var s = JSON.stringify(obj);
@@ -66,16 +81,14 @@ function fpReply(e, obj) {
    ACTION PRINCIPALE : liste les mails de facture avec pièce jointe.
    --------------------------------------------------------------------------- */
 function fpFactures(e) {
-  var P = PropertiesService.getScriptProperties();
-  if ((e.parameter.key || '') !== P.getProperty('SECRET_KEY')) {
-    return { error: 'unauthorized' };
-  }
+  if (!fpAuth(e)) return { error: 'unauthorized' };
 
   var max   = Math.min(Number(e.parameter.max || 30) || 30, 100);
   var jours = Number(e.parameter.jours || 90) || 90;
 
   /* in:anywhere → attrape aussi Spam et Promotions (les factures y tombent souvent).
      -label:… → ne resert pas ce qui a déjà été importé dans Mar'q. */
+  var P = PropertiesService.getScriptProperties();
   var q = P.getProperty('FP_QUERY') ||
       ('in:anywhere -in:trash has:attachment newer_than:' + jours + 'd ' +
        '(facture OR factures OR invoice OR "note d\'honoraires" OR "avis d\'échéance" OR "votre relevé") ' +
@@ -118,10 +131,7 @@ function fpFactures(e) {
    Appelé par Mar'q : action=facture_lue&id=<messageId>
    --------------------------------------------------------------------------- */
 function fpFactureLue(e) {
-  var P = PropertiesService.getScriptProperties();
-  if ((e.parameter.key || '') !== P.getProperty('SECRET_KEY')) {
-    return { error: 'unauthorized' };
-  }
+  if (!fpAuth(e)) return { error: 'unauthorized' };
   var id = e.parameter.id || '';
   if (!id) return { error: 'missing_id' };
   try {
@@ -207,7 +217,9 @@ function fpNum(s) {
    Affiche dans les journaux ce que Mar'q recevra.
    --------------------------------------------------------------------------- */
 function fpTest() {
-  var P = PropertiesService.getScriptProperties();
-  var r = fpFactures({ parameter: { key: P.getProperty('SECRET_KEY'), max: 5 } });
+  var cle = '';
+  try { if (typeof TOKEN !== 'undefined' && TOKEN) cle = String(TOKEN); } catch (err) {}
+  if (!cle) { try { cle = PropertiesService.getScriptProperties().getProperty('SECRET_KEY') || ''; } catch (err) {} }
+  var r = fpFactures({ parameter: { key: cle, max: 5 } });
   Logger.log(JSON.stringify(r, null, 2));
 }
