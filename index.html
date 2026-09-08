@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=578;
+var LAST_VER=579;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -31286,6 +31286,14 @@ function testLienRdv()  {
   }
   graftPanel(); setTimeout(graftPanel,0); setTimeout(graftPanel,1000);
 
+  /* la carte héritée « Validation des informations » se borne à relire les champs
+     extraits : la certification pièce par pièce la remplace entièrement. */
+  function neutraliserAncienne(){
+    if(window.__e3Neut || typeof window.creaValidCard!=='function') return;
+    window.__e3Neut=1; window.creaValidCard=function(){ return ''; };
+  }
+  neutraliserAncienne(); setTimeout(neutraliserAncienne,0); setTimeout(neutraliserAncienne,1000);
+
   var st=document.createElement('style'); st.id='e3-mod';
   st.textContent=[
    '.e3-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px}',
@@ -32020,6 +32028,14 @@ function testLienRdv()  {
   }
   graftPanel(); setTimeout(graftPanel,0); setTimeout(graftPanel,1200);
 
+  /* la carte héritée « Dépôt de capital » fait double emploi avec le volet capital
+     ci-dessus, qui contrôle en outre la correspondance du justificatif. */
+  function neutraliserAncienne(){
+    if(window.__at4Neut || typeof window.creaCapitalCard!=='function') return;
+    window.__at4Neut=1; window.creaCapitalCard=function(){ return ''; };
+  }
+  neutraliserAncienne(); setTimeout(neutraliserAncienne,0); setTimeout(neutraliserAncienne,1200);
+
   var st=document.createElement('style'); st.id='at4-mod';
   st.textContent=[
    '.at4-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}',
@@ -32424,6 +32440,491 @@ function testLienRdv()  {
    '.im5-dep label{display:block;font:600 10.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:#74767e}',
    '.im5-dep input{display:block;width:100%;box-sizing:border-box;margin-top:5px;background:#0e0e10;border:1px solid #2a2a2e;border-radius:8px;padding:8px 10px;color:inherit;font:13px/1.3 inherit;text-transform:none;letter-spacing:0}',
    '.im5-dep input:focus{outline:none;border-color:#4f9dff}'
+  ].join('');
+  document.head.appendChild(st);
+})();
+</script>
+
+<script>
+/* ============================================================================
+   mod-cloture — Étape « Clôture »
+   Trois temps : remise du dossier au client, facturation des honoraires et
+   des débours, puis clôture et archivage du dossier. Les cartes héritées qui
+   faisaient double emploi sont neutralisées.
+   ========================================================================== */
+(function(){
+  if(window.__cl6) return; window.__cl6=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s); }
+  function nz(s){ return String(s==null?'':s).trim(); }
+  function frd(t){ try{ return t?new Date(t).toLocaleDateString('fr-FR'):''; }catch(e){ return ''; } }
+  function eur(n){ n=Math.round((+n||0)*100)/100;
+    return n.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }
+
+  function dossier(id){
+    try{
+      if(id) return (DB.dossiers||[]).filter(function(x){return x.id===id;})[0]||null;
+      var s=(typeof state!=='undefined')?state:{};
+      return (DB.dossiers||[]).filter(function(x){return x.id===s.espaceDossier;})[0]
+          || (DB.dossiers||[]).filter(function(x){return !x.archived;})[0] || null;
+    }catch(e){ return null; }
+  }
+  function C(d){ d.cloture=d.cloture||{}; return d.cloture; }
+  function cli(d){ try{ return (typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{}; }catch(e){ return {}; } }
+  function soc(d){ var x={}; try{ if(typeof stDossData==='function') x=stDossData(d)||{}; }catch(e){} return x; }
+  function forme(d){ var c=cli(d), x=soc(d); return nz(c.forme||x.forme||d.type||'').toUpperCase(); }
+
+  /* ---------- 1. remise du dossier ---------- */
+  function remise(d){
+    var s=d.sign||{}, a=d.attest||{}, im=d.immat||{};
+    return [
+      {l:'Extrait K-bis',                    ok:!!im.kbis,             src:'étape Immatriculation'},
+      {l:'Récépissé de dépôt',               ok:!!im.recepisse,        src:'étape Immatriculation'},
+      {l:'Statuts signés',                   ok:!!(s.statuts&&s.statuts.ok), src:'étape Actes'},
+      {l:'Déclaration de non-condamnation',  ok:!!(s.dnc&&s.dnc.ok),   src:'étape Actes'},
+      {l:'Attestation de dépôt des fonds',   ok:!!(a.capital&&a.capital.verifie),  src:'étape Attestations'},
+      {l:'Attestation de parution',          ok:!!(a.annonce&&a.annonce.verifie),  src:'étape Attestations'}
+    ];
+  }
+  window.cl6Remise=remise;
+
+  window.cl6DossierPDF=function(id){
+    var d=dossier(id); if(!d) return;
+    if(typeof creaImprimerDossier==='function') creaImprimerDossier(d.id);
+    else if(typeof toast==='function') toast('Export du dossier indisponible.');
+  };
+  window.cl6ExportJSON=function(id){
+    var d=dossier(id); if(!d) return;
+    if(typeof creaExportJSON==='function') creaExportJSON(d.id);
+    else if(typeof toast==='function') toast('Export des données indisponible.');
+  };
+  window.cl6Compta=function(id){
+    var d=dossier(id); if(!d) return;
+    C(d).compta=Date.now();
+    if(typeof creaMarquerEnvoye==='function'){ try{ creaMarquerEnvoye(d.id); }catch(e){} }
+    try{save();}catch(e){}
+    if(typeof toast==='function')toast('Dossier transmis au logiciel de comptabilité.');
+    render();
+  };
+
+  function corpsRemise(d){
+    var c=cli(d), x=soc(d), den=nz(c.denom||x.denom), im=d.immat||{};
+    var pieces=remise(d).filter(function(p){return p.ok;}).map(function(p){ return '   • '+p.l+' ;'; }).join('\n');
+    return 'Madame, Monsieur,\n\n'
+      +'Nous avons l\'honneur de vous informer que la société'+(den?(' '+den):'')
+      +' est désormais immatriculée au registre du commerce et des sociétés'
+      +(im.siren?(' sous le numéro '+im.siren):'')+'.\n\n'
+      +'Vous trouverez ci-joint l\'ensemble des pièces constitutives de votre dossier :\n'
+      +(pieces||'   • (pièces à joindre)')+'\n\n'
+      +'Nous appelons votre attention sur les diligences qu\'il vous appartient désormais d\'accomplir :\n'
+      +'   • déclaration des bénéficiaires effectifs, si elle n\'a pas été jointe au dépôt ;\n'
+      +'   • ouverture du compte bancaire professionnel définitif et déblocage des fonds sur présentation du K-bis ;\n'
+      +'   • souscription des assurances obligatoires au regard de votre activité ;\n'
+      +'   • conservation des statuts et du registre des décisions au siège social.\n\n'
+      +'Notre cabinet demeure à votre disposition pour la tenue de votre comptabilité '
+      +'ainsi que pour vos obligations déclaratives.\n\n'
+      +'Nous vous prions d\'agréer, Madame, Monsieur, l\'expression de nos salutations distinguées.\n\n'
+      +'AEM CONSEIL';
+  }
+  window.cl6Apercu=function(id){
+    var d=dossier(id); if(!d) return;
+    openModal('Courrier de remise du dossier',
+      '<pre class="cl6-pre">'+E(corpsRemise(d))+'</pre>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+      +'<button class="btn btn-pri" onclick="closeModal();cl6Remettre(\''+d.id+'\')">Envoyer au client</button>');
+  };
+  window.cl6Remettre=function(id){
+    var d=dossier(id); if(!d) return;
+    var c=cli(d), mail=nz(c.email)||(typeof demReplyTo==='function'?nz(demReplyTo(d)):'');
+    if(!mail){ if(typeof toast==='function')toast('Aucune adresse e-mail au dossier.'); return; }
+    var den=nz(c.denom||soc(d).denom);
+    var sujet='Remise de votre dossier de création'+(den?(' — '+den):'')+' — AEM CONSEIL';
+    var envoye=false;
+    if(typeof demEnvoiSilencieux==='function'){ try{ envoye=!!demEnvoiSilencieux(mail,sujet,corpsRemise(d)); }catch(e){} }
+    if(!envoye){
+      try{ window.location.href='mailto:'+encodeURIComponent(mail)
+        +'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corpsRemise(d)); }catch(e){}
+    }
+    C(d).remis=Date.now(); C(d).remisA=mail;
+    try{save();}catch(e){}
+    if(typeof toast==='function')toast('Dossier remis au client ('+mail+').');
+    render();
+  };
+  window.cl6AnnulerRemise=function(id){ var d=dossier(id); if(!d)return; delete C(d).remis; delete C(d).remisA; try{save();}catch(e){} render(); };
+
+  /* ---------- 2. honoraires et débours ---------- */
+  /* montants indicatifs, à ajuster au dossier : ils restent modifiables ligne à ligne */
+  var BAREME={
+    SARL:{hono:390, al:147}, EURL:{hono:390, al:147},
+    SAS: {hono:450, al:197}, SASU:{hono:450, al:197},
+    SCI: {hono:420, al:189}, SNC: {hono:390, al:193},
+    '':  {hono:390, al:150}
+  };
+  function bareme(d){ return BAREME[forme(d)]||BAREME['']; }
+  function hono(d){
+    var h=C(d).hono;
+    if(!h){
+      var b=bareme(d);
+      h=C(d).hono={
+        honoraires:b.hono,
+        annonce:b.al,
+        greffe:37.45,
+        dbe:21.41,
+        tva:20,
+        divers:0, diversLbl:''
+      };
+    }
+    if(h.tva==null) h.tva=20;
+    return h;
+  }
+  window.cl6Hono=function(id,champ,v){
+    var d=dossier(id); if(!d) return; var h=hono(d);
+    h[champ]=(champ==='diversLbl')?nz(v):(parseFloat(String(v).replace(',','.'))||0);
+    try{save();}catch(e){} render();
+  };
+  /* les débours (greffe, DBE) sont refacturés à l'euro, hors champ de la TVA du cabinet */
+  function totaux(d){
+    var h=hono(d);
+    var taxable=(+h.honoraires||0)+(+h.annonce||0)+(+h.divers||0);
+    var tva=Math.round(taxable*(+h.tva||0))/100;
+    var debours=(+h.greffe||0)+(+h.dbe||0);
+    return {taxable:Math.round(taxable*100)/100, tva:Math.round(tva*100)/100,
+            debours:Math.round(debours*100)/100,
+            total:Math.round((taxable+tva+debours)*100)/100};
+  }
+  window.cl6Totaux=totaux;
+
+  /* les honoraires sont soumis à la TVA ; les débours avancés pour le compte du
+     client sont refacturés à l'euro et font l'objet d'une note distincte */
+  function lignes(d){
+    var h=hono(d), den=nz(cli(d).denom||soc(d).denom), f=forme(d);
+    var out=[{des:'Honoraires de constitution'+(f?(' — '+f):'')+(den?(' — '+den):''), qte:1, pu:+h.honoraires||0}];
+    if(+h.annonce>0) out.push({des:'Annonce légale de constitution', qte:1, pu:+h.annonce});
+    if(+h.divers>0)  out.push({des:nz(h.diversLbl)||'Prestation complémentaire', qte:1, pu:+h.divers});
+    return out;
+  }
+  function lignesDebours(d){
+    var h=hono(d), out=[];
+    if(+h.greffe>0) out.push({des:'Frais de greffe — immatriculation au registre du commerce et des sociétés', qte:1, pu:+h.greffe});
+    if(+h.dbe>0)    out.push({des:'Déclaration des bénéficiaires effectifs', qte:1, pu:+h.dbe});
+    return out;
+  }
+  window.cl6Lignes=lignes;
+  window.cl6LignesDebours=lignesDebours;
+
+  function facturier(){ try{ DB.parametres=DB.parametres||{};
+    if(!Array.isArray(DB.parametres.facturier))DB.parametres.facturier=[];
+    return DB.parametres.facturier; }catch(e){ return []; } }
+  function numero(){
+    var y=(new Date()).getFullYear(), n=0;
+    facturier().forEach(function(f){ var m=(''+(f.numero||'')).match(new RegExp('FAC-'+y+'-(\\d+)')); if(m)n=Math.max(n,+m[1]); });
+    return 'FAC-'+y+'-'+String(n+1).padStart(4,'0');
+  }
+  function emetteur(){ try{ return DB.parametres.facturierEmetteur||{}; }catch(e){ return {}; } }
+  function iso(t){ try{ return new Date(t||Date.now()).toISOString().slice(0,10); }catch(e){ return ''; } }
+  function plusJours(s,n){ try{ var t=new Date(s); t.setDate(t.getDate()+n); return t.toISOString().slice(0,10); }catch(e){ return s; } }
+
+  window.cl6Facturer=function(id){
+    var d=dossier(id); if(!d) return;
+    if(C(d).factureId){ if(typeof toast==='function')toast('Une facture est déjà établie pour ce dossier.'); return; }
+    var h=hono(d), c=cli(d), x=soc(d), im=d.immat||{}, em=emetteur(), t=totaux(d);
+    if(t.total<=0){ if(typeof toast==='function')toast('Renseignez au moins un montant avant d\'établir la facture.'); return; }
+    var d0=iso();
+    function base(num,lig,taux,note){
+      var st=0; lig.forEach(function(l){ st+=(+l.qte||0)*(+l.pu||0); });
+      st=Math.round(st*100)/100;
+      var tv=Math.round(st*(+taux||0))/100;
+      return {
+        id:'inv'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+        numero:num, statut:'emise', modele:'qonto',
+        emNom:em.nom||'AEM CONSEIL', emForme:em.forme||'', emCapital:em.capital||'',
+        emMail:em.mail||'', emAdr:em.adr||'', emTel:em.tel||'',
+        emSiren:em.siren||'', emSiret:em.siret||'', emRcs:em.rcs||'', emApe:em.ape||'',
+        emTva:em.tva||'', emIban:em.iban||'', emBic:em.bic||'',
+        clNom:nz(c.denom||x.denom)||nz(c.nom)||'', clMail:nz(c.email),
+        clAdr:[nz(c.adresse||x.siege), [nz(c.cp||x.cp),nz(c.ville||x.ville)].filter(Boolean).join(' ')].filter(Boolean).join('\n'),
+        clSiret:nz(c.siret)||nz(im.siren), clTva:nz(c.tvaIntra),
+        devise:'EUR', dateEmise:d0, dateEch:plusJours(d0,30), datePresta:iso(im.verifie||Date.now()),
+        bonCmd:nz(d.ref||d.numeroDossier), tva:+taux||0, remise:0,
+        condReg:'Paiement à réception', penalites:'3 fois le taux d’intérêt légal', assurance:'',
+        franchiseTVA:false, autoliq:false, escompte:false, oga:false, showAssur:false,
+        note:note, lignes:lig, total:Math.round((st+tv)*100)/100, ts:Date.now()
+      };
+    }
+    var arr=facturier();
+    var f1=base(numero(), lignes(d), +h.tva||0,
+      'Dossier de constitution '+nz(d.ref||'')+'. Honoraires du cabinet.');
+    arr.push(f1);
+    C(d).factureId=f1.id; C(d).factureNum=f1.numero; C(d).factureLe=Date.now(); C(d).factureTotal=f1.total;
+
+    var ld=lignesDebours(d);
+    if(ld.length){
+      var f2=base(numero(), ld, 0,
+        'Débours avancés pour le compte du client et refacturés à l’euro — sommes hors du champ '
+        +'de la taxe sur la valeur ajoutée (art. 267 II 2° du code général des impôts). '
+        +'Justificatifs tenus à votre disposition.');
+      arr.push(f2);
+      C(d).deboursId=f2.id; C(d).deboursNum=f2.numero; C(d).deboursTotal=f2.total;
+    }
+    try{save();}catch(e){}
+    if(typeof toast==='function')
+      toast('Facture '+f1.numero+' établie ('+eur(f1.total)+')'
+        +(C(d).deboursNum?(' · note de débours '+C(d).deboursNum+' ('+eur(C(d).deboursTotal)+')'):'')+'.');
+    render();
+  };
+  window.cl6VoirFacture=function(id,type){
+    var d=dossier(id); if(!d) return;
+    var fid=(type==='debours')?C(d).deboursId:C(d).factureId;
+    var num=(type==='debours')?C(d).deboursNum:C(d).factureNum;
+    if(!fid) return;
+    if(typeof invVoir==='function'){
+      try{ invVoir(fid); if(typeof go==='function') go('facturier'); return; }catch(e){}
+    }
+    if(typeof toast==='function')toast(nz(num)+' — module Factures.');
+  };
+  window.cl6RetirerFacture=function(id){
+    var go=function(){
+      var d=dossier(id); if(!d) return; var arr=facturier();
+      [C(d).factureId,C(d).deboursId].forEach(function(fid){
+        if(!fid) return; var i=arr.map(function(f){return f.id;}).indexOf(fid); if(i>=0)arr.splice(i,1);
+      });
+      ['factureId','factureNum','factureLe','factureTotal','deboursId','deboursNum','deboursTotal','regle']
+        .forEach(function(k){ delete C(d)[k]; });
+      try{save();}catch(e){} render();
+    };
+    if(typeof uiConfirm==='function')
+      uiConfirm('Retirer la facture et la note de débours du facturier ?',go,{okLabel:'Retirer',danger:true});
+    else go();
+  };
+  window.cl6Regle=function(id){
+    var d=dossier(id); if(!d||!C(d).factureId) return;
+    C(d).regle=C(d).regle?null:Date.now(); try{save();}catch(e){}
+    if(typeof toast==='function')toast(C(d).regle?'Honoraires marqués réglés.':'Règlement annulé.');
+    render();
+  };
+
+  /* ---------- 3. clôture ---------- */
+  var ETAPES=[['demande','Demande'],['pieces','Pièces'],['actes','Actes'],
+              ['attestations','Attestations'],['immatriculation','Immatriculation']];
+  function controles(d){
+    var c=C(d);
+    return [
+      {l:'Dossier remis au client', ok:!!c.remis,
+       d:c.remis?('Adressé le '+frd(c.remis)+(c.remisA?(' à '+c.remisA):'')):'Le client n’a pas encore reçu son dossier.'},
+      {l:'Honoraires facturés', ok:!!c.factureId,
+       d:c.factureId
+         ? ('Facture '+nz(c.factureNum)+' — '+eur(c.factureTotal)
+            +(c.deboursNum?(' · note de débours '+nz(c.deboursNum)+' — '+eur(c.deboursTotal)):'')
+            +(c.regle?' · réglées':' · en attente de règlement'))
+         : 'Aucune facture établie.'},
+      {l:'Transmission à la comptabilité', ok:!!c.compta,
+       d:c.compta?('Transmis le '+frd(c.compta)):'Le dossier n’a pas été transmis au logiciel de comptabilité.'}
+    ];
+  }
+  window.cl6Controles=controles;
+
+  window.cl6Cloturer=function(id){
+    var d=dossier(id); if(!d) return;
+    var ko=controles(d).filter(function(x){return !x.ok;});
+    var go=function(){
+      C(d).le=Date.now(); d.statut='Clôturé';
+      d.crea=d.crea||{}; d.crea.cloture=true;
+      (d.historique=d.historique||[]).unshift({d:(typeof today==='function'?today():''),t:'Dossier clôturé'});
+      try{save();}catch(e){}
+      if(typeof toast==='function')toast('Dossier clôturé.');
+      render();
+    };
+    if(ko.length && typeof uiConfirm==='function')
+      uiConfirm('Il reste à accomplir :\n'+ko.map(function(x){return '• '+x.l;}).join('\n')
+        +'\n\nClôturer le dossier malgré tout ?',go,{okLabel:'Clôturer',danger:true});
+    else go();
+  };
+  window.cl6Rouvrir=function(id){
+    var go=function(){ var d=dossier(id); if(!d)return;
+      delete C(d).le; d.crea=d.crea||{}; d.crea.cloture=false;
+      if(d.statut==='Clôturé') d.statut='En cours';
+      try{save();}catch(e){} render(); };
+    if(typeof uiConfirm==='function') uiConfirm('Rouvrir le dossier ?',go,{okLabel:'Rouvrir'}); else go();
+  };
+  window.cl6Archiver=function(id){
+    var go=function(){ var d=dossier(id); if(!d)return;
+      d.archived=true; try{save();}catch(e){}
+      if(typeof toast==='function')toast('Dossier archivé.'); render(); };
+    if(typeof uiConfirm==='function')
+      uiConfirm('Archiver le dossier ? Il quittera la liste des dossiers en cours.',go,{okLabel:'Archiver'});
+    else go();
+  };
+
+  /* ---------- cartes ---------- */
+  function carte(){
+    var d=dossier(); if(!d) return '';
+    var c=C(d), h=hono(d), t=totaux(d), rm=remise(d);
+    var pret=rm.filter(function(p){return p.ok;}).length;
+
+    /* 1. remise */
+    var lignesRm=rm.map(function(p){
+      return '<div class="cl6-r '+(p.ok?'ok':'ko')+'"><span class="cl6-s">'+(p.ok?'✓':'✗')+'</span>'
+        +'<div><b>'+E(p.l)+'</b><em>'+(p.ok?("Au dossier — "+E(p.src)):("Absente — voir "+E(p.src)))+'</em></div></div>';
+    }).join('');
+
+    var carte1='<div class="card crea-cloture cl6-card"><div class="card-h"><h2>Remise du dossier au client</h2>'
+      +(c.remis?'<span class="at4-tag ok">remis le '+frd(c.remis)+'</span>':'<span class="at4-tag g">à remettre</span>')
+      +'<span class="sub" style="margin-left:auto">'+pret+'/'+rm.length+' pièces</span></div><div class="card-b">'
+      +'<div class="at4-bar">'
+      +'<button class="btn btn-sm btn-ghost" onclick="cl6DossierPDF(null)">Dossier complet (PDF)</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="cl6Apercu(null)">Lire le courrier</button>'
+      +(c.remis
+        ? '<button class="btn btn-sm btn-ghost" onclick="cl6AnnulerRemise(null)">Annuler la remise</button>'
+        : '<button class="btn btn-sm btn-pri" onclick="cl6Apercu(null)">Remettre au client</button>')
+      +'</div>'
+      +'<div class="cl6-list">'+lignesRm+'</div>'
+      +'</div></div>';
+
+    /* 2. honoraires */
+    function ch(k,l,v,sfx){
+      return '<label class="cl6-f"><span>'+E(l)+'</span>'
+        +'<input type="number" step="0.01" min="0" value="'+(v||0)+'" '
+        +(c.factureId?'disabled ':'')+'onchange="cl6Hono(null,\''+k+'\',this.value)">'
+        +(sfx?('<em>'+E(sfx)+'</em>'):'')+'</label>';
+    }
+    var carte2='<div class="card crea-cloture cl6-card"><div class="card-h"><h2>Honoraires et débours</h2>'
+      +(c.factureId
+        ? ('<span class="at4-tag ok">facture '+E(c.factureNum)+'</span>'
+           +(c.deboursNum?('<span class="at4-tag">débours '+E(c.deboursNum)+'</span>'):''))
+        : '<span class="at4-tag g">à facturer</span>')
+      +'</div><div class="card-b">'
+      +'<div class="cl6-grid">'
+      +ch('honoraires','Honoraires de constitution',h.honoraires)
+      +ch('annonce','Annonce légale',h.annonce)
+      +ch('greffe','Débours — greffe',h.greffe,'refacturé à l’euro')
+      +ch('dbe','Débours — bénéficiaires effectifs',h.dbe,'refacturé à l’euro')
+      +'<label class="cl6-f"><span>Prestation complémentaire</span>'
+      +'<input value="'+E(h.diversLbl||'')+'" placeholder="désignation" '
+      +(c.factureId?'disabled ':'')+'onchange="cl6Hono(null,\'diversLbl\',this.value)"></label>'
+      +ch('divers','Montant complémentaire',h.divers)
+      +ch('tva','TVA (%)',h.tva)
+      +'</div>'
+      +'<div class="cl6-tot"><span>Honoraires HT <b>'+eur(t.taxable)+'</b></span>'
+      +'<span>TVA <b>'+eur(t.tva)+'</b></span>'
+      +'<span>Facture <b>'+eur(t.taxable+t.tva)+'</b></span>'
+      +'<span>Note de débours <b>'+eur(t.debours)+'</b></span>'
+      +'<span class="cl6-ttc">Dû par le client <b>'+eur(t.total)+'</b></span></div>'
+      +'<p class="cl6-note">Montants indicatifs, à ajuster au dossier. Deux pièces sont établies : la '
+      +'<b>facture d’honoraires</b> soumise à la TVA, et une <b>note de débours</b> pour les sommes '
+      +'avancées au greffe, refacturées à l’euro et hors du champ de la TVA.</p>'
+      +'<div class="at4-bar">'
+      +(c.factureId
+        ? '<button class="btn btn-sm btn-ghost" onclick="cl6VoirFacture(null)">Ouvrir la facture</button>'
+          +(c.deboursId?'<button class="btn btn-sm btn-ghost" onclick="cl6VoirFacture(null,\'debours\')">Ouvrir la note de débours</button>':'')
+          +'<button class="btn btn-sm '+(c.regle?'btn-ghost':'at4-ok')+'" onclick="cl6Regle(null)">'
+          +(c.regle?('Réglée le '+frd(c.regle)+' — annuler'):'Marquer réglée')+'</button>'
+          +'<button class="btn btn-sm btn-ghost" onclick="cl6RetirerFacture(null)">Retirer la facture</button>'
+        : '<button class="btn btn-sm btn-pri" onclick="cl6Facturer(null)">Établir la facture</button>')
+      +'</div></div></div>';
+
+    /* 3. clôture */
+    var w=d.wf||{};
+    var recap=ETAPES.map(function(s){
+      var ok=!!w[s[0]];
+      return '<div class="cl6-e'+(ok?' ok':'')+'"><span>'+(ok?'✓':'—')+'</span>'
+        +'<b>'+E(s[1])+'</b><em>'+(ok&&typeof w[s[0]]==='number'?frd(w[s[0]]):'')+'</em></div>';
+    }).join('');
+    var ctl=controles(d).map(function(x){
+      return '<div class="at4-ctl '+(x.ok?'ok':'warn')+'"><span>'+(x.ok?'✓':'!')+'</span>'
+        +'<div><b>'+E(x.l)+'</b> '+E(x.d)+'</div></div>';
+    }).join('');
+
+    var carte3='<div class="card crea-cloture cl6-card"><div class="card-h"><h2>Clôture et archivage</h2>'
+      +(c.le?'<span class="at4-tag ok">clôturé le '+frd(c.le)+'</span>':'<span class="at4-tag g">en cours</span>')
+      +'</div><div class="card-b">'
+      +'<div class="cl6-recap">'+recap+'</div>'
+      +'<div class="at4-ctls">'+ctl+'</div>'
+      +'<div class="at4-bar" style="margin-top:12px">'
+      +'<button class="btn btn-sm btn-ghost" onclick="cl6ExportJSON(null)">Exporter les données (JSON)</button>'
+      +(c.compta
+        ? '<button class="btn btn-sm btn-ghost" disabled>Transmis à la comptabilité</button>'
+        : '<button class="btn btn-sm btn-ghost" onclick="cl6Compta(null)">Transmettre à la comptabilité</button>')
+      +(c.le
+        ? '<button class="btn btn-sm btn-ghost" onclick="cl6Rouvrir(null)">Rouvrir le dossier</button>'
+          +(d.archived?'':'<button class="btn btn-sm btn-ghost" onclick="cl6Archiver(null)">Archiver</button>')
+        : '<button class="btn btn-sm at4-ok" onclick="cl6Cloturer(null)">Clôturer le dossier</button>')
+      +'</div></div></div>';
+
+    return carte1+carte2+carte3;
+  }
+  window.cl6Card=carte;
+
+  /* ---------- verrou ---------- */
+  function graftValider(){
+    if(typeof window.trwValider!=='function' || window.__cl6TV) return;
+    window.__cl6TV=1;
+    var _v=window.trwValider;
+    window.trwValider=function(id,key){
+      if(key==='cloture'){
+        var d=dossier(id);
+        if(d && !C(d).le){
+          if(typeof toast==='function')
+            toast('Étape bloquée — clôturez le dossier depuis la carte « Clôture et archivage ».');
+          return;
+        }
+      }
+      return _v.apply(this,arguments);
+    };
+  }
+  graftValider(); setTimeout(graftValider,0); setTimeout(graftValider,1400);
+
+  /* ---------- greffe dans le parcours ---------- */
+  function graftPanel(){
+    var _p=window.espPanel;
+    if(typeof _p!=='function' || window.__cl6PE) return;
+    window.__cl6PE=1;
+    var w=function(d,list,id){ var h=_p.apply(this,arguments);
+      try{
+        if(typeof h==='string' && h.indexOf('cl6-card')<0){
+          var c=carte();
+          if(c){ var m=h.replace(/(<\/div>\s*<\/div>\s*)$/, c+'$1'); h=(m!==h)?m:(h+c); }
+        }
+      }catch(e){}
+      return h; };
+    w.__cl6=1; window.espPanel=w;
+  }
+  graftPanel(); setTimeout(graftPanel,0); setTimeout(graftPanel,1400);
+
+  /* les cartes héritées font double emploi avec les étapes du parcours */
+  function neutraliser(){
+    if(window.__cl6Neut) return;
+    var n=0;
+    if(typeof window.creaDossierCard==='function'){ window.creaDossierCard=function(){return '';}; n++; }
+    if(typeof window.creaClotureCard==='function'){ window.creaClotureCard=function(){return '';}; n++; }
+    if(typeof window.dossierFinalisationCard==='function'){ window.dossierFinalisationCard=function(){return '';}; n++; }
+    if(n>=3) window.__cl6Neut=1;
+  }
+  neutraliser(); setTimeout(neutraliser,0); setTimeout(neutraliser,1400);
+
+  var st=document.createElement('style'); st.id='cl6-mod';
+  st.textContent=[
+   '.cl6-list{display:flex;flex-direction:column;gap:1px;background:rgba(127,160,255,.10);border:1px solid rgba(127,160,255,.14);border-radius:10px;overflow:hidden}',
+   '.cl6-r{display:grid;grid-template-columns:24px 1fr;gap:10px;padding:9px 13px;background:var(--card,#141416)}',
+   '.cl6-s{text-align:center;font:700 13px/1.3 inherit}',
+   '.cl6-r.ok .cl6-s{color:#43b581}.cl6-r.ko .cl6-s{color:#e2685c}',
+   '.cl6-r b{display:block;font-size:13px}',
+   '.cl6-r em{display:block;font-style:normal;font-size:11.5px;color:#74767e;margin-top:2px}',
+   '.cl6-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:11px 14px;margin-bottom:12px}',
+   '.cl6-f{display:block}',
+   '.cl6-f>span{display:block;font:600 10.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:#74767e}',
+   '.cl6-f input{display:block;width:100%;box-sizing:border-box;margin-top:5px;background:#0e0e10;border:1px solid #2a2a2e;border-radius:8px;padding:8px 10px;color:inherit;font:13px/1.3 inherit}',
+   '.cl6-f input:focus{outline:none;border-color:#4f9dff}',
+   '.cl6-f input:disabled{opacity:.55;cursor:not-allowed}',
+   '.cl6-f>em{display:block;font-style:normal;font-size:11px;color:#74767e;margin-top:4px}',
+   '.cl6-tot{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:baseline;padding:11px 13px;border:1px solid rgba(127,160,255,.16);border-radius:10px;background:rgba(127,160,255,.05);font-size:12px;color:#a6a8b0}',
+   '.cl6-tot b{color:#eef0f4;font-size:13.5px;margin-left:5px}',
+   '.cl6-tot .cl6-ttc{margin-left:auto}.cl6-tot .cl6-ttc b{color:#7fb2ff;font-size:15px}',
+   '.cl6-note{font-size:11.5px;color:#74767e;line-height:1.55;margin:9px 0 12px}',
+   '.cl6-recap{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}',
+   '.cl6-e{display:flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid #242427;border-radius:999px;background:#0d0d0f;font-size:12px;color:#74767e}',
+   '.cl6-e.ok{border-color:rgba(67,181,129,.4);background:rgba(67,181,129,.08);color:#a6a8b0}',
+   '.cl6-e span{font-weight:700}.cl6-e.ok span{color:#43b581}',
+   '.cl6-e b{color:#eef0f4;font-weight:600}.cl6-e em{font-style:normal;font-size:11px}',
+   '.cl6-pre{white-space:pre-wrap;font:12.5px/1.7 inherit;margin:0;color:#c9cbd2;max-height:60vh;overflow:auto}'
   ].join('');
   document.head.appendChild(st);
 })();
