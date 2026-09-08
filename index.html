@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=587;
+var LAST_VER=588;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -5496,7 +5496,9 @@ window.modalDemandeView=function(id){
       '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
       +(a.mail?'<button class="btn btn-ghost" onclick="attEnvoyer(\''+id+'\')">Envoyer au client</button>':'')
       +'<button class="btn btn-pri" onclick="signImprimer()">Imprimer / PDF</button>');
-    setTimeout(fvFitView,30);
+    /* l'aperçu doit être mis à l'échelle comme les autres documents ;
+       la fonction appelée ici n'existait pas et l'exception laissait le cadrage en plan. */
+    setTimeout(function(){ try{ if(typeof docFitView==='function')docFitView(); }catch(e){} },30);
   };
   window.attMaj=function(id){var ty=(document.getElementById('att-type')||{}).value||'prise';window.__attType=ty;var w=document.getElementById('att-prev');if(w)w.innerHTML=attDocHTML(id,ty);};
   window.attEnvoyer=function(id){var a=attData(id);if(!a.mail)return toast('Aucune adresse e-mail client.');
@@ -18415,7 +18417,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
       '.ed2-preview{max-height:calc(100vh - 96px);overflow:auto;background:transparent;border:0;border-radius:0;padding:8px 0 48px}',
       '.ed2-pages{display:flex;flex-direction:column;align-items:center;gap:26px;transform-origin:top center;transition:transform .12s}',
       '.ed2-page{position:relative;background:#fff;color:#111;width:794px;height:1123px;box-sizing:border-box;box-shadow:none;border:0;flex:none;overflow:hidden}',
-      '.ed2-page-in{padding:64px 60px;height:100%;box-sizing:border-box;font-family:Georgia,"Times New Roman",serif;font-size:13.5px;line-height:1.6;color:#111}',
+      '.ed2-page-in{padding:18mm;height:100%;box-sizing:border-box;font-family:Georgia,"Times New Roman",serif;font-size:12.5px;line-height:1.6;color:#111}',
       '.ed2-page-in,.ed2-page-in *:not(.edp){color:#111!important;-webkit-text-fill-color:#111}',
       '.ed2-page-in .edp,.ed2-page-in .edp *{-webkit-text-fill-color:#7a5c00}',
       '.ed2-page-in .edoc h1{font-size:16px;text-align:center;text-transform:uppercase;letter-spacing:.02em;margin:0 0 20px;color:#111}',
