@@ -49,6 +49,7 @@ function doGet(e) {
 
   } else if (p.action === 'factures')      { payload = fpFactures(e);
   } else if (p.action === 'facture_lue')   { payload = fpFactureLue(e);
+  } else if (p.action === 'attachments')   { payload = mailPieces(e);
 
   } else if (p.action === 'agenda_liste')  { payload = agListe(e);
   } else if (p.action === 'agenda_creer')  { payload = agCreer(e);
@@ -69,10 +70,17 @@ function doGet(e) {
         var msgs = threads[t].getMessages();
         for (var i = 0; i < msgs.length; i++) {
           var m = msgs[i];
+          var att = [];
+          try {
+            att = m.getAttachments().map(function (a) {
+              return { name: a.getName(), type: a.getContentType(), size: a.getSize() };
+            });
+          } catch (err) {}
           mails.push({
             id: m.getId(), from: m.getFrom(), subject: m.getSubject(),
             date: m.getDate().toISOString(),
-            body: (m.getPlainBody() || '').slice(0, 4000)
+            body: (m.getPlainBody() || '').slice(0, 4000),
+            att: att
           });
         }
       }
@@ -365,6 +373,32 @@ function rdvPage(p) {
 }
 
 /* ==========================================================================
+   PIÈCES JOINTES D'UN MESSAGE
+   Mar'q les réclame message par message (action=attachments&id=…) afin de
+   n'alourdir la relève que lorsque c'est nécessaire.
+   ========================================================================== */
+function mailPieces(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  var id = e.parameter.id || '';
+  if (!id) return { error: 'missing_id' };
+  var LIMITE = 9 * 1024 * 1024;   // au-delà, seul le descriptif est renvoyé
+  var meta = e.parameter.meta === '1';
+  try {
+    var out = GmailApp.getMessageById(id).getAttachments().map(function (a) {
+      var o = { name: a.getName(), type: a.getContentType(), size: a.getSize() };
+      if (!meta && o.size <= LIMITE) {
+        try { o.dataB64 = Utilities.base64Encode(a.getBytes()); }
+        catch (err) { o.error = String(err); }
+      } else if (!meta) {
+        o.error = 'fichier trop volumineux (' + Math.round(o.size / 1048576) + ' Mo)';
+      }
+      return o;
+    });
+    return { attachments: out };
+  } catch (err) { return { error: String(err) }; }
+}
+
+/* ==========================================================================
    FACTURES PRESTATAIRES
    ========================================================================== */
 function fpFactures(e) {
@@ -483,6 +517,14 @@ function testCompte() {
 }
 
 function testFactures() { Logger.log(JSON.stringify(fpFactures({ parameter: { key: TOKEN, max: 5 } }), null, 2)); }
+function testPieces()   {
+  var t = GmailApp.search('has:attachment newer_than:30d', 0, 1);
+  if (!t.length) { Logger.log('Aucun message récent avec pièce jointe.'); return; }
+  var m = t[0].getMessages()[0];
+  Logger.log('Message : ' + m.getSubject());
+  Logger.log(JSON.stringify(mailPieces({ parameter: { key: TOKEN, id: m.getId(), meta: '1' } }), null, 2));
+}
+
 function testAgenda()   { Logger.log(JSON.stringify(agListe({ parameter: { key: TOKEN } }), null, 2)); }
 function testCreneaux() { Logger.log(JSON.stringify(rdvCreneaux().slice(0, 12), null, 2)); }
 function testLienRdv()  {
