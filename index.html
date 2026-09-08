@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=565;
+var LAST_VER=566;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -30298,6 +30298,81 @@ function testLienRdv()  {
   }
   graftAccept(); setTimeout(graftAccept,0); setTimeout(graftAccept,600);
 
+  /* ---------- invitation réelle : le rendez-vous part dans Google Agenda ----------
+     Le bouton « Notifier » n'envoie qu'un e-mail. Ici l'événement est créé dans
+     l'agenda du cabinet avec ses invités : chacun reçoit l'invitation Google
+     (Oui / Non / Peut-être) et l'événement s'ajoute à son propre agenda. */
+  function mails(raw){
+    var m=String(raw||'').match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g);
+    return m?m.filter(function(x,i,a){return a.indexOf(x)===i;}):[];
+  }
+  function live(id,fb){ var el=document.getElementById(id); return el?el.value:(fb||''); }
+
+  window.agwInviter=function(id){
+    var r=rdvData().filter(function(x){return x.id===id;})[0];
+    if(!r){ if(typeof toast==='function')toast('Rendez-vous introuvable.'); return; }
+    var c=gw(); if(!c||!c.url){ if(typeof toast==='function')toast('Reliez d\'abord l\'agenda (bouton « Configurer la passerelle »).'); return; }
+
+    var inv=mails(live('ag-invites', r.invites));
+    if(!inv.length){ if(typeof toast==='function')toast('Ajoutez au moins un e-mail de participant.');
+      var el=document.getElementById('ag-invites'); if(el)el.focus(); return; }
+    var date=live('ag-date', r.date), heure=live('ag-heure', r.heure)||'09:00';
+    if(!date){ if(typeof toast==='function')toast('Indiquez une date.'); return; }
+    var objet=live('ag-objet', r.objet), cli=live('ag-cli', r.clientNom),
+        lieu=live('ag-lieu', r.lieu), note=live('ag-note', r.note);
+    var titre=(cli?(cli+' — '):'')+(objet||'Rendez-vous');
+    var q='&titre='+encodeURIComponent(titre)+'&date='+encodeURIComponent(date)
+         +'&heure='+encodeURIComponent(heure)+'&lieu='+encodeURIComponent(lieu||'')
+         +'&notes='+encodeURIComponent(note||'')+'&invites='+encodeURIComponent(inv.join(','));
+
+    var creer=function(){
+      if(typeof toast==='function')toast('Envoi de l\'invitation…');
+      call('agenda_creer',q,function(j){
+        if(!j||j.error||!j.ok){
+          if(typeof toast==='function')toast('Échec : '+((j&&j.error)||'agenda injoignable — le script est-il déployé en nouvelle version ?'));
+          return;
+        }
+        r.gid=j.id; r.src=r.src||'marq'; r.invites=inv.join(', ');
+        r.invited=Date.now(); r.invitedTo=inv.length;
+        try{save();}catch(e){}
+        if(typeof toast==='function')
+          toast('Invitation envoyée à '+inv.length+' participant'+(inv.length>1?'s':'')+' — le rendez-vous est dans l\'agenda du cabinet.');
+        try{ if(typeof closeModal==='function')closeModal(); }catch(e){}
+        render();
+      });
+    };
+    if(r.gid) call('agenda_suppr','&id='+encodeURIComponent(r.gid),function(){ creer(); });
+    else creer();
+  };
+
+  /* bouton « Envoyer l'invitation » dans la fiche du rendez-vous */
+  function graftFiche(){
+    var _ae=window.agEdit;
+    if(typeof _ae!=='function'||_ae.__agw) return;
+    var w=function(id){
+      var o=_ae.apply(this,arguments);
+      setTimeout(function(){
+        try{
+          var nf=document.querySelector('.ag-notif'); if(!nf||document.querySelector('.agw-inv')) return;
+          var r=rdvData().filter(function(x){return x.id===id;})[0]; if(!r) return;
+          var b=document.createElement('button');
+          b.className='btn btn-ghost agw-inv';
+          b.setAttribute('title',"Créer le rendez-vous dans l'agenda du cabinet et envoyer l'invitation Google aux participants");
+          b.textContent = r.gid ? '↻ Mettre à jour l\'invitation' : '📨 Envoyer l\'invitation';
+          b.onclick=function(){ window.agwInviter(id); };
+          nf.parentNode.insertBefore(b,nf);
+          if(r.gid){
+            var t=document.createElement('span'); t.className='agw-ingcal'; t.textContent='dans l\'agenda ✓';
+            nf.parentNode.insertBefore(t,b);
+          }
+        }catch(e){}
+      },0);
+      return o;
+    };
+    w.__agw=1; window.agEdit=w;
+  }
+  graftFiche(); setTimeout(graftFiche,0); setTimeout(graftFiche,700);
+
   /* pastille sur l'entrée Agenda de la navigation */
   function badge(){
     try{
@@ -30357,6 +30432,8 @@ function testLienRdv()  {
    '.agw-help{color:#8f97a6;font-size:12.5px;line-height:1.5;margin:12px 0 0}',
    '.agw-code{width:100%;box-sizing:border-box;height:300px;background:#0a0b0e;border:1px solid #26272d;border-radius:10px;color:#cfe0ff;font:11.5px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:11px}',
    '.nav-badge-agw{margin-left:auto;background:#4d8dff;color:#fff;border-radius:20px;padding:1px 7px;font:600 10.5px/1.7 inherit}',
+   '.agw-inv{border-color:rgba(77,141,255,.45)!important;color:#8fb4ff!important}',
+   '.agw-ingcal{align-self:center;font:500 11.5px/1 inherit;color:#43b581;margin-right:2px}',
    '@media(max-width:900px){.agw-row{grid-template-columns:1fr;gap:6px}.agw-c4{justify-content:flex-start}}'
   ].join('');
   document.head.appendChild(st);
