@@ -1125,7 +1125,7 @@ function demSyncConfig(){var c=demSyncCfg();
     +'<label style="margin-top:8px">Clé secrète (TOKEN du script)</label><input id="dem-sync-key" value="'+esc(c.key||'')+'" placeholder="identique au TOKEN du script">'
     +'<div class="smtp-box"><label class="smtp-check"><input type="checkbox" id="dem-sync-smtp" '+(c.smtp==='1'?'checked':'')+'><span class="smtp-txt"><b>Envoi direct SMTP</b> — les mails (documents, décisions, réponses) partent directement du serveur SMTP de Gmail (aemconseil.sas@gmail.com), sans ouvrir Gmail</span></label>'
     +'<div class="hint" style="margin-top:6px;font-size:11px">Chaque envoi affiche d\'abord une fenêtre de vérification (destinataire, sujet, message) avant de partir. Le bouton « Ouvrir Gmail » reste disponible en repli.</div></div>',
-    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-ghost" onclick="demSmtpScript()">📜 Script Gmail (modèle)</button><button class="btn btn-ghost" onclick="demDiag()">🔎 Diagnostic de bout en bout</button><button class="btn btn-ghost" onclick="demSyncTest()">🔌 Tester la connexion</button><button class="btn btn-ghost" onclick="demSmtpTest()">📤 Tester l\'envoi SMTP</button><button class="btn btn-pri" onclick="demSyncSave()">💾 Enregistrer & synchroniser</button>');}
+    '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-ghost" onclick="if(typeof agwScript===&#39;function&#39;)agwScript();else demSmtpScript()">📜 Script Google (complet)</button><button class="btn btn-ghost" onclick="demDiag()">🔎 Diagnostic de bout en bout</button><button class="btn btn-ghost" onclick="demSyncTest()">🔌 Tester la connexion</button><button class="btn btn-ghost" onclick="demSmtpTest()">📤 Tester l\'envoi SMTP</button><button class="btn btn-pri" onclick="demSyncSave()">💾 Enregistrer & synchroniser</button>');}
 function demSmtpScriptCode(){
   return ['var TOKEN=\'CHANGE-MOI\'; // même clé que dans Mar’q',
   'function doGet(e){',
@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=562;
+var LAST_VER=563;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -30237,6 +30237,15 @@ function testLienRdv()  {
     }catch(e){}
   }
   graftOauth(); setTimeout(graftOauth,0); setTimeout(graftOauth,600);
+
+  /* Le modèle minimal de 20 lignes écrasait le script complet : on l'aiguille
+     vers la version complète (mail + factures + agenda + rendez-vous). */
+  function graftScript(){
+    if(typeof window.demSmtpScript==='function' && !window.demSmtpScript.__agw){
+      var f=function(){ return window.agwScript(); }; f.__agw=1; window.demSmtpScript=f;
+    }
+  }
+  graftScript(); setTimeout(graftScript,0); setTimeout(graftScript,600);
   graftPage(); setTimeout(graftPage,0); setTimeout(graftPage,500);
 
   /* le mail d'acceptation du dossier porte le lien de prise de rendez-vous */
