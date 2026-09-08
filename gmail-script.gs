@@ -473,6 +473,15 @@ function fpNum(s) {
 /* ==========================================================================
    TESTS depuis l'éditeur (Exécuter ▸ choisir la fonction)
    ========================================================================== */
+function testCompte() {
+  var m = '(inconnu)', a = '(inconnu)', id = '(inconnu)';
+  try { m = Session.getEffectiveUser().getEmail(); } catch (err) {}
+  try { var c = cal(); a = c.getName(); id = c.getId(); } catch (err) { a = 'ACCES REFUSE : ' + err; }
+  Logger.log('Compte propriétaire du script : ' + m);
+  Logger.log('Agenda utilisé               : ' + a + '   [' + id + ']');
+  Logger.log('Les mails lus et les rendez-vous créés le sont sur CE compte.');
+}
+
 function testFactures() { Logger.log(JSON.stringify(fpFactures({ parameter: { key: TOKEN, max: 5 } }), null, 2)); }
 function testAgenda()   { Logger.log(JSON.stringify(agListe({ parameter: { key: TOKEN } }), null, 2)); }
 function testCreneaux() { Logger.log(JSON.stringify(rdvCreneaux().slice(0, 12), null, 2)); }
