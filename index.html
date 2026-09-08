@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=580;
+var LAST_VER=581;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -31469,6 +31469,130 @@ function testLienRdv()  {
   }
   window.a3Controles=controles;
 
+  /* ------------------------------------------------------------------ */
+  /*  TABLE DE CONCORDANCE                                               */
+  /*  Les faits en lignes, les actes en colonnes. Une contradiction n'est */
+  /*  pas un message : c'est une case qui ne dit pas comme sa voisine.    */
+  /* ------------------------------------------------------------------ */
+  var COLS=[
+    {k:'statuts',       l:'Statuts'},
+    {k:'souscripteurs', l:'Souscript.'},
+    {k:'pouvoir',       l:'Pouvoir'},
+    {k:'piece',         l:'Pièce'}
+  ];
+  function eur0(n){ try{ return Math.round(+n||0).toLocaleString('fr-FR')+' €'; }catch(e){ return (n||0)+' €'; } }
+  function court(v,n){ v=nz(v); n=n||19; return v.length>n ? (v.slice(0,n-1)+'…') : v; }
+  /* Deux libellés désignent-ils la même chose ? On compare les mots qui portent
+     du sens : les abréviations de voie sont développées, le code postal et les
+     mots de liaison sont écartés. « 12 r. des Lilas, Versailles » vaut donc
+     « 12 rue des Lilas, 78000 Versailles ». */
+  var VOIE={r:'rue',av:'avenue',bd:'boulevard',bld:'boulevard',pl:'place',imp:'impasse',
+            ch:'chemin',rte:'route',st:'saint',ste:'sainte',sq:'square',all:'allee',qu:'quai'};
+  var LIAISON={de:1,du:1,des:1,la:1,le:1,les:1,l:1,d:1,et:1,a:1,au:1,aux:1,en:1};
+  function mots(x){
+    return String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9]+/g,' ').trim().split(' ')
+      .map(function(m){ return VOIE[m]||m; })
+      .filter(function(m){ return m && !LIAISON[m] && !/^\d{5}$/.test(m); });
+  }
+  function memeMot(a,b){
+    var A=mots(a), B=mots(b);
+    if(!A.length||!B.length) return true;
+    var petit=A.length<=B.length?A:B, grand=A.length<=B.length?B:A;
+    var n=petit.filter(function(m){ return grand.indexOf(m)>=0; }).length;
+    return n>=Math.ceil(petit.length*0.75);
+  }
+
+  function concordance(d){
+    var c=cli(d), cr=d.crea||{}, cap=cr.capital||{};
+    var v=(d.verif&&d.verif.extract)||{}, cert=(d.verif&&d.verif.cert)||{};
+    var assoc=(c.associes||[]).filter(function(a){ return a && nz(a.nom); });
+
+    var denom=nz(c.denom||cr.denom), forme=nz(c.forme||cr.forme);
+    var capital=+(cap.montant||c.capital||0);
+    var apports=assoc.reduce(function(s,a){ return s+(+(a.apport||0)); },0);
+    var parts=+(cap.parts||c.parts||0), vn=+(cap.valeurNominale||0);
+    var siege=nz(cr.siege||c.siege||c.adresse);
+    var objet=nz(cr.objet||c.objet||(c.activites||[]).join(', '));
+    var dir=nz(c.president);
+    var luId=(nz(v.prenom)+' '+nz(v.nom)).trim();
+    var luDom=nz(v.siege||v.adresse);
+    var idCert=!!(cert.cni&&cert.cni.ok), domCert=!!((cert.domicile&&cert.domicile.ok)||(cert.bail&&cert.bail.ok));
+
+    /* colonnes réellement présentes au dossier */
+    var cols=COLS.filter(function(x){
+      if(x.k==='piece') return idCert||domCert||!!luId||!!luDom;
+      return requis(d,x.k);
+    });
+
+    function C(v,e){ return {v:v,e:e||'ok'}; }
+    var NA=C('n/a','na'), ABS=C('—','abs');
+
+    var faits=[];
+    function fait(l,att,cells,note){ faits.push({l:l,att:att,note:note||'',c:cells}); }
+
+    fait('Dénomination', denom||'non renseignée', {
+      statuts: denom?C(court(denom)):ABS, souscripteurs: denom?C(court(denom)):ABS,
+      pouvoir: denom?C(court(denom)):ABS, dnc: denom?C(court(denom)):ABS, piece: NA
+    }, denom?'':'Aucune dénomination : les actes ne peuvent pas être établis.');
+
+    fait('Forme juridique', forme||'non renseignée', {
+      statuts: forme?C(forme):ABS, souscripteurs: NA, pouvoir: forme?C(forme):ABS, dnc: NA, piece: NA
+    });
+
+    fait('Capital social', capital>0?eur0(capital):'non renseigné', {
+      statuts: capital>0?C(eur0(capital)):ABS, souscripteurs: capital>0?C(eur0(capital)):ABS,
+      pouvoir: NA, dnc: NA, piece: NA
+    }, capital>0?'':'Aucun montant de capital au dossier.');
+
+    var apOk = !(capital>0 && apports>0 && Math.abs(apports-capital)>0.01);
+    fait('Somme des apports', 'doit égaler le capital', {
+      statuts: capital>0?C(eur0(capital)):ABS,
+      souscripteurs: apports>0?C(eur0(apports), apOk?'ok':'div'):ABS,
+      pouvoir: NA, dnc: NA, piece: NA
+    }, apOk?'':'Écart de '+eur0(Math.abs(apports-capital))+' entre le capital souscrit et les apports déclarés.');
+
+    var ptOk = !(parts>0 && vn>0 && capital>0 && Math.abs(parts*vn-capital)>0.01);
+    if(parts>0){
+      fait('Parts sociales', parts+(vn>0?(' × '+eur0(vn)):' parts'), {
+        statuts: (parts>0&&vn>0)?C(eur0(parts*vn), ptOk?'ok':'div'):ABS,
+        souscripteurs: C(parts+' parts'),
+        pouvoir: NA, dnc: NA, piece: NA
+      }, ptOk?'':'Le produit des parts par leur valeur nominale ne retombe pas sur le capital.');
+    }
+
+    var dirOk = !(dir && luId && !memeMot(dir,nz(v.nom)));
+    fait('Dirigeant', dir||'non désigné', {
+      statuts: dir?C(court(dir,18)):ABS, souscripteurs: dir?C(court(dir,18)):ABS,
+      pouvoir: dir?C(court(dir,18)):ABS, dnc: dir?C(court(dir,18)):ABS,
+      piece: luId?C(court(luId,18), dirOk?'ok':'div'):(idCert?C('non lue','abs'):NA)
+    }, dirOk?'':'Le dirigeant des actes ne correspond pas à l\'identité lue sur la pièce certifiée.');
+
+    var sgOk = !(siege && luDom && !memeMot(siege,luDom));
+    fait('Siège social', siege||'non renseigné', {
+      statuts: siege?C(court(siege,20)):ABS, souscripteurs: NA,
+      pouvoir: siege?C(court(siege,20)):ABS, dnc: NA,
+      piece: luDom?C(court(luDom,20), sgOk?'ok':'div'):(domCert?C('non lu','abs'):NA)
+    }, sgOk?'':'Le siège des actes ne correspond pas au justificatif de domiciliation certifié.');
+
+    fait('Objet social', objet?court(objet,40):'non renseigné', {
+      statuts: objet?C(court(objet,20)):ABS, souscripteurs: NA, pouvoir: NA, dnc: NA, piece: NA
+    });
+
+    fait('Associés', assoc.length?(assoc.length+' associé'+(assoc.length>1?'s':'')):'aucun', {
+      statuts: assoc.length?C(assoc.length+''):ABS,
+      souscripteurs: assoc.length?C(assoc.length+' ligne'+(assoc.length>1?'s':'')):C('vide','abs'),
+      pouvoir: NA, dnc: NA, piece: NA
+    }, assoc.length?'':'Aucun associé saisi : la liste des souscripteurs sera vide.');
+
+    faits.forEach(function(f){
+      f.rompu=cols.some(function(x){ var cl=f.c[x.k]; return cl && cl.e==='div'; });
+      f.creux=!f.rompu && cols.some(function(x){ var cl=f.c[x.k]; return cl && cl.e==='abs'; });
+    });
+    return {cols:cols, faits:faits, rompus:faits.filter(function(f){return f.rompu;})};
+  }
+  window.a3Concordance=concordance;
+
   window.a3Analyse=function(id){
     var d=dossier(id); if(!d) return;
     var r=controles(d);
@@ -31554,32 +31678,65 @@ function testLienRdv()  {
     if(typeof uiConfirm==='function') uiConfirm('Constater la signature de tous les actes ?',go,{okLabel:'Constater'}); else go();
   };
 
-  /* ---------- carte ---------- */
+  /* ---------- carte : la table de concordance et le parapheur ---------- */
+  var GRIFFES=[
+    "M5 27c7 1 12-5 15-12s2-13-2-12-4 10 1 15 12 6 18 1 8-10 12-9 4 9 11 9 13-6 17-12",
+    "M7 28c6-2 8-12 13-17s8-3 6 5-8 13-5 16 11-2 15-8 5-9 9-6 3 8 9 7 11-7 15-12",
+    "M4 26c8 2 14-4 17-11s1-12-3-11-3 10 3 14 14 4 20-3 8-9 13-7"
+  ];
+  function griffe(i){
+    return '<svg class="a3-griffe" viewBox="0 0 118 34" aria-hidden="true">'
+      +'<path d="'+GRIFFES[i%GRIFFES.length]+'" fill="none" stroke="#43b581" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  }
+
+  function tableHTML(d){
+    var z=concordance(d);
+    var th=z.cols.map(function(x){ return '<th>'+E(x.l)+'</th>'; }).join('');
+    var tr=z.faits.map(function(f){
+      var tds=z.cols.map(function(x){
+        var c=f.c[x.k]||{v:'n/a',e:'na'};
+        return '<td class="a3-c '+c.e+'">'+E(c.v)+'</td>';
+      }).join('');
+      return '<tr class="'+(f.rompu?'rompu':(f.creux?'creux':''))+'">'
+        +'<td class="a3-f"><b>'+E(f.l)+'</b><em>'+E(f.att)+'</em></td>'+tds+'</tr>';
+    }).join('');
+    return '<div class="a3-conc-w"><table class="a3-conc">'
+      +'<thead><tr><th class="a3-fh">Fait</th>'+th+'</tr></thead><tbody>'+tr+'</tbody></table></div>';
+  }
+
   function carte(){
     var d=dossier(); if(!d) return '';
     var as=actes(d), sg=aSigner(d), ok=signes(d), s=S(d);
-    var an=d.actesAnalyse;
+    var z=concordance(d);
     var voie=d.signVoie&&d.signVoie.voie;
 
-    var etatAn = !an
-      ? '<div class="a3-band n">Lancez l\'analyse de conformité avant de présenter les actes à la signature.</div>'
-      : (an.ko
-        ? '<div class="a3-band ko"><b>'+an.ko+' anomalie'+(an.ko>1?'s':'')+'</b> relevée'+(an.ko>1?'s':'')+' à la dernière analyse — à corriger avant signature.</div>'
-        : '<div class="a3-band ok">Analyse de conformité passée'+(an.warn?(' — '+an.warn+' point(s) à vérifier'):' sans réserve')+'.</div>');
+    /* la contradiction se dit une fois, sous la table, en toutes lettres */
+    var verdict = z.rompus.length
+      ? z.rompus.map(function(f){
+          return '<div class="a3-verdict ko"><span>✗</span><div><b>'+E(f.l)+'</b> '+E(f.note)+'</div></div>';
+        }).join('')
+      : '<div class="a3-verdict ok"><span>✓</span><div><b>Les actes concordent.</b> '
+        +'Chaque fait est dit de la même manière par tous les actes qui le portent.</div></div>';
 
-    var lignes=as.map(function(a){
+    /* parapheur : une feuille par acte, avec sa ligne de signature */
+    var i=0;
+    var feuilles=as.map(function(a){
       var g=genere(d,a.k), si=!!(s[a.k]&&s[a.k].ok);
-      var st = !a.sign ? '<span class="a3-tag g">sans signature</span>'
-             : (si ? '<span class="a3-tag ok">signé</span>' : '<span class="a3-tag">à signer</span>');
-      return '<div class="a3-r'+(si?' ok':'')+'">'
-        +'<span class="a3-s">'+(si?'✓':(g?'·':'–'))+'</span>'
-        +'<div class="a3-t"><b>'+E(a.l)+'</b><em>'+E(a.note)+'</em></div>'
-        +'<div class="a3-a">'+st
-        +(g&&typeof espDocVoir==='function'?('<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+a.k+'\')">Voir</button>'):'')
+      var pied;
+      if(!a.sign) pied='<span class="a3-lg">sans signature — versé au dépôt</span>';
+      else if(si) pied='<span class="a3-lg sig">signé le '+new Date(s[a.k].ts).toLocaleDateString('fr-FR')+griffe(i++)+'</span>';
+      else if(g) pied='<span class="a3-lg att">en attente de signature</span>';
+      else pied='<span class="a3-lg">acte non généré</span>';
+      return '<div class="a3-feuille'+(si?' sig':(a.sign&&g?' att':''))+'">'
+        +'<span class="a3-nom">'+E(a.l)+'</span>'
+        +'<span class="a3-note">'+E(a.note)+'</span>'
+        +pied
+        +'<span class="a3-acts">'
+        +(g&&typeof espDocVoir==='function'?('<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+a.k+'\')">Ouvrir</button>'):'')
         +(a.sign&&g?(si
             ? '<button class="btn btn-sm btn-ghost" onclick="a3Devalider(null,\''+a.k+'\')">Annuler</button>'
-            : '<button class="btn btn-sm a3-ok" onclick="a3Signer(null,\''+a.k+'\')">Constater la signature</button>'):'')
-        +'</div></div>';
+            : '<button class="btn btn-sm a3-ok" onclick="a3Signer(null,\''+a.k+'\')">Constater</button>'):'')
+        +'</span></div>';
     }).join('');
 
     var voieTxt = voie==='rdv'
@@ -31588,16 +31745,27 @@ function testLienRdv()  {
         ? '<div class="a3-voie">Actes envoyés à la signature électronique le '+new Date(d.signVoie.ts).toLocaleDateString('fr-FR')+'.</div>'
         : '');
 
-    return '<div class="card crea-gen a3-card"><div class="card-h"><h2>Conformité et signature</h2>'
-      +'<span class="a3-cpt'+(sg.length&&ok.length===sg.length?' ok':'')+'">'+ok.length+'/'+sg.length+' signés</span>'
+    return '<div class="card crea-gen a3-card"><div class="card-h"><h2>Table de concordance</h2>'
+      +(z.rompus.length
+        ? '<span class="a3-cpt ko">'+z.rompus.length+' fait'+(z.rompus.length>1?'s':'')+' rompu'+(z.rompus.length>1?'s':'')+'</span>'
+        : '<span class="a3-cpt ok">actes concordants</span>')
+      +'<span class="a3-q">'+z.cols.length+' actes · '+z.faits.length+' faits</span>'
+      +'</div><div class="card-b">'
+      + tableHTML(d) + verdict
+      +'<p class="a3-foot">Chaque colonne est un acte, chaque ligne un fait qu\'il énonce. '
+      +'Une case soulignée de rouge dément la valeur portée par les autres actes de sa ligne. '
+      +'<button class="a3-lien" onclick="a3Analyse(null)">Voir le détail des contrôles</button></p>'
+      +'</div></div>'
+
+      +'<div class="card crea-gen a3-card"><div class="card-h"><h2>Parapheur</h2>'
+      +'<span class="a3-cpt'+(sg.length&&ok.length===sg.length?' ok':'')+'">'+ok.length+' signés sur '+sg.length+'</span>'
       +'</div><div class="card-b">'
       +'<div class="a3-bar">'
-      +'<button class="btn btn-sm btn-pri" onclick="a3Analyse(null)">Analyse de conformité</button>'
-      +'<button class="btn btn-sm btn-ghost" onclick="a3Rdv(null)">Prise de rendez-vous</button>'
+      +'<button class="btn btn-sm btn-pri" onclick="a3Rdv(null)">Rendez-vous au cabinet</button>'
       +'<button class="btn btn-sm btn-ghost" onclick="a3Yousign(null)">Signature électronique</button>'
       +(sg.length&&ok.length<sg.length?'<button class="btn btn-sm btn-ghost" onclick="a3ToutSigner(null)">Tout constater signé</button>':'')
-      +'</div>'+etatAn+voieTxt
-      +'<div class="a3-list2">'+(lignes||'<div class="a3-vide">Aucun acte généré. Générez les documents ci-dessus.</div>')+'</div>'
+      +'</div>'+voieTxt
+      +'<div class="a3-paraph">'+(feuilles||'<div class="a3-vide">Aucun acte généré. Générez les documents ci-dessus.</div>')+'</div>'
       +'</div></div>';
   }
   window.a3Card=carte;
@@ -31647,6 +31815,43 @@ function testLienRdv()  {
   var st=document.createElement('style'); st.id='a3-mod';
   st.textContent=[
    '.a3-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}',
+   /* — table de concordance — */
+   '.a3-q{margin-left:auto;font:500 11px/1 ui-monospace,Menlo,monospace;color:#74767e;font-variant-numeric:tabular-nums}',
+   '.a3-conc-w{overflow-x:auto;border:1px solid #242428;border-radius:8px;margin-bottom:12px}',
+   '@media(max-width:1500px){.a3-conc th,.a3-conc td{padding-left:8px;padding-right:8px}}',
+   '.a3-conc{width:100%;table-layout:fixed;border-collapse:collapse;font-size:12px}',
+   '.a3-conc th{padding:8px 10px;text-align:left;background:#191d25;border-bottom:1px solid #242428;vertical-align:bottom;font:600 9.5px/1.4 ui-monospace,Menlo,monospace;letter-spacing:.09em;text-transform:uppercase;color:#74767e;hyphens:none}',
+   '.a3-conc th.a3-fh{width:29%}',
+   '.a3-conc td{padding:8px 10px;border-bottom:1px solid #242428;vertical-align:top;font-variant-numeric:tabular-nums}',
+   '.a3-conc tr:last-child td{border-bottom:0}',
+   '.a3-conc .a3-f{color:#a6a8b0;font-size:12px}',
+   '.a3-conc .a3-f b{display:block;color:#eef0f4;font-weight:600;font-size:12.5px}',
+   '.a3-conc .a3-f em{font-style:normal}',
+   '.a3-c.ok{color:#eef0f4}',
+   '.a3-c.na,.a3-c.abs{color:#5f6270;font:400 11.5px/1.5 ui-monospace,Menlo,monospace}',
+   '.a3-conc tr.creux{background:rgba(217,164,65,.04)}',
+   '.a3-conc tr.rompu{background:rgba(210,86,74,.07)}',
+   '.a3-c.div{color:#e2685c;font-weight:700;position:relative;padding-bottom:12px}',
+   '.a3-c.div::after{content:"";position:absolute;left:10px;right:10px;bottom:6px;height:2px;background:#e2685c;opacity:.55}',
+   '.a3-verdict{display:grid;grid-template-columns:18px 1fr;gap:10px;padding:11px 13px;border-radius:8px;border:1px solid;font-size:12.5px;line-height:1.6;margin-bottom:8px}',
+   '.a3-verdict span{text-align:center;font-weight:700}',
+   '.a3-verdict.ok{border-color:rgba(67,181,129,.32);background:rgba(67,181,129,.07);color:#a6a8b0}',
+   '.a3-verdict.ok span{color:#43b581}.a3-verdict.ok b{color:#43b581}',
+   '.a3-verdict.ko{border-color:rgba(210,86,74,.35);background:rgba(210,86,74,.07);color:#a6a8b0}',
+   '.a3-verdict.ko span{color:#e2685c}.a3-verdict.ko b{color:#e2685c}',
+   '.a3-lien{background:none;border:0;padding:0;color:#5ab0ff;font:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px}',
+   /* — parapheur — */
+   '.a3-paraph{display:grid;grid-template-columns:repeat(auto-fit,minmax(176px,1fr));gap:11px}',
+   '.a3-feuille{border:1px solid #242428;border-radius:8px;background:#191d25;padding:13px;display:flex;flex-direction:column;gap:8px;min-height:140px;min-width:0}',
+   '.a3-feuille.sig{border-color:rgba(67,181,129,.32)}',
+   '.a3-nom{font-size:13.5px;font-weight:600;line-height:1.3;overflow-wrap:break-word}',
+   '.a3-note{font-size:11.5px;color:#74767e;line-height:1.5;overflow-wrap:break-word}',
+   '.a3-lg{margin-top:auto;padding-top:9px;border-top:1px dashed #2c3241;min-height:38px;display:flex;align-items:flex-end;gap:8px;font:500 10.5px/1.4 ui-monospace,Menlo,monospace;color:#5f6270}',
+   '.a3-lg.sig{color:#43b581;border-top-style:solid;border-top-color:rgba(67,181,129,.3)}',
+   '.a3-lg.att{color:#d9a441}',
+   '.a3-griffe{width:104px;height:30px;margin-left:auto;flex:none}',
+   '.a3-acts{display:flex;gap:6px;flex-wrap:wrap}',
+   '.a3-vide{grid-column:1/-1;padding:16px;text-align:center;color:#74767e;font-size:12.5px}',
    '.a3-ok{background:rgba(63,174,114,.14)!important;border-color:rgba(63,174,114,.4)!important;color:#6fe0a6!important}',
    '.a3-cpt{margin-left:10px;border:1px solid rgba(143,151,166,.4);color:#8f97a6;border-radius:20px;padding:2px 9px;font:600 11px/1.6 inherit}',
    '.a3-cpt.ok{border-color:rgba(67,181,129,.5);color:#43b581;background:rgba(67,181,129,.10)}',
@@ -32958,5 +33163,67 @@ function testLienRdv()  {
 })();
 </script>
 
+<script id="mod-bande">
+/* ============================================================================
+   mod-bande — L'avancement du dossier n'est pas un pourcentage, c'est un
+   inventaire. La barre de progression du bandeau laisse la place aux huit
+   pièces exigées au dépôt, chacune acquise ou non, visibles depuis toute étape.
+   ========================================================================== */
+(function(){
+  if(window.__bd8) return; window.__bd8=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s); }
+
+  function bande(d){
+    var ps=null;
+    try{ if(typeof im5Pieces==='function') ps=im5Pieces(d); }catch(e){}
+    if(!ps||!ps.length) return '';
+    var faites=ps.filter(function(p){return p.ok;}).length;
+    var seg=ps.map(function(p){
+      return '<i class="'+(p.ok?'a':'')+'" title="'+E(p.l)+(p.ok?' — au dossier':' — manquante')+'"></i>';
+    }).join('');
+    var w=null; try{ w=(d&&d.wf&&d.wf.__v6)?d.wf:null; }catch(e){}
+    var et='';
+    if(w){
+      var K=['demande','pieces','actes','attestations','immatriculation','cloture'];
+      var n=K.filter(function(k){return w[k];}).length;
+      et='<span class="bd8-et">'+n+'/6 étapes</span>';
+    }
+    return '<div class="bd8"><span class="bd8-l">Pièces du dépôt</span>'
+      +'<span class="bd8-j">'+seg+'</span>'
+      +'<span class="bd8-n">'+faites+' / '+ps.length+'</span>'+et+'</div>';
+  }
+  window.bd8Bande=bande;
+
+  function graft(){
+    var _p=window.espPanel;
+    if(typeof _p!=='function' || window.__bd8PE) return;
+    window.__bd8PE=1;
+    var w=function(d,list,id){
+      var h=_p.apply(this,arguments);
+      try{
+        if(typeof h==='string' && d && h.indexOf('class="bd8"')<0){
+          var b=bande(d);
+          /* le bloc entier, libellé compris : en laisser une partie déséquilibrerait le balisage */
+          if(b) h=h.replace(/<div class="tr-prog">[\s\S]*?<\/span>\s*<\/div>/, b);
+        }
+      }catch(e){}
+      return h; };
+    w.__bd8=1; window.espPanel=w;
+  }
+  graft(); setTimeout(graft,0); setTimeout(graft,1500);
+
+  var st=document.createElement('style'); st.id='bd8-mod';
+  st.textContent=[
+   '.bd8{display:flex;align-items:center;gap:13px;margin-top:12px;flex-wrap:wrap}',
+   '.bd8-l{font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.15em;text-transform:uppercase;color:#74767e;white-space:nowrap}',
+   '.bd8-j{display:flex;gap:3px;flex:1;min-width:180px}',
+   '.bd8-j i{flex:1;height:15px;border-radius:1px;background:#1f2430;border-bottom:2px solid #2c3241;font-style:normal}',
+   '.bd8-j i.a{background:linear-gradient(180deg,#3a6fd8,#2f6fe0);border-bottom-color:#4c8dff}',
+   '.bd8-n{font:600 12px/1 ui-monospace,Menlo,monospace;color:#a6a8b0;font-variant-numeric:tabular-nums;white-space:nowrap}',
+   '.bd8-et{font:500 11px/1 ui-monospace,Menlo,monospace;color:#74767e;white-space:nowrap}'
+  ].join('');
+  document.head.appendChild(st);
+})();
+</script>
 </body>
 </html>
