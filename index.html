@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=575;
+var LAST_VER=576;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -31610,6 +31610,394 @@ function testLienRdv()  {
    '.a3-l em{display:block;font-style:normal;font-size:12px;color:#8f97a6;margin-top:2px;line-height:1.5}',
    '.a3-foot,.a3-p{font-size:12.5px;color:#8f97a6;line-height:1.6;margin:12px 0 0}',
    '.a3-vide{color:#74767e;font-size:12.5px;padding:12px}'
+  ].join('');
+  document.head.appendChild(st);
+})();
+</script>
+
+<script>
+/* ============================================================================
+   mod-attestations — Étape « Attestations »
+   Deux attestations à obtenir, dans l'ordre où elles s'enchaînent :
+   le dépôt des fonds, puis la parution de l'annonce légale. Même mécanique
+   pour les deux : constituer le dossier à transmettre, recevoir le PDF,
+   vérifier qu'il porte bien sur ce dossier, puis valider.
+   ========================================================================== */
+(function(){
+  if(window.__at4) return; window.__at4=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s); }
+  function nz(s){ return String(s==null?'':s).trim(); }
+  function norm(s){ return String(s==null?'':s).toLowerCase().normalize('NFD')
+    .replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
+  function frd(t){ try{ return new Date(t).toLocaleDateString('fr-FR'); }catch(e){ return ''; } }
+
+  var TYPES={
+    capital:{l:'Dépôt de capital', pdf:"Attestation de dépôt des fonds",
+      dest:'la banque ou le notaire dépositaire',
+      rx:/depot|fonds|capital|souscription/,
+      pieces:['Statuts signés','Pièce d\'identité du dirigeant','Liste des souscripteurs et répartition des parts','Justificatif du siège social']},
+    annonce:{l:'Annonce légale', pdf:"Attestation de parution",
+      dest:'le journal d\'annonces légales',
+      rx:/annonce|parution|publication|jal|juripresse/,
+      pieces:['Statuts signés','Avis de constitution à publier']}
+  };
+
+  function dossier(id){
+    try{
+      if(id) return (DB.dossiers||[]).filter(function(x){return x.id===id;})[0]||null;
+      var s=(typeof state!=='undefined')?state:{};
+      return (DB.dossiers||[]).filter(function(x){return x.id===s.espaceDossier;})[0]
+          || (DB.dossiers||[]).filter(function(x){return !x.archived;})[0] || null;
+    }catch(e){ return null; }
+  }
+  function A(d){ d.attest=d.attest||{}; d.attest.capital=d.attest.capital||{}; d.attest.annonce=d.attest.annonce||{}; return d.attest; }
+  function cli(d){ try{ return (typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{}; }catch(e){ return {}; } }
+
+  /* ---------- informations de publication ---------- */
+  function infos(d){
+    var c=cli(d), cr=d.crea||{}, cap=cr.capital||{};
+    var f=(d.attest&&d.attest.fiche)||{};
+    var dir=nz(c.president);
+    return {
+      denom:      f.denom      || nz(c.denom||cr.denom),
+      sigle:      f.sigle      || nz(cr.sigle||c.sigle),
+      forme:      f.forme      || nz(c.forme||cr.forme),
+      capital:    f.capital    || nz(cap.montant||c.capital),
+      siege:      f.siege      || nz(cr.siege||c.siege||c.adresse),
+      objet:      f.objet      || nz(cr.objet||c.objet||(c.activites||[]).join(', ')),
+      duree:      f.duree      || nz(cr.duree||'99 ans'),
+      dirigeant:  f.dirigeant  || dir,
+      dirAdresse: f.dirAdresse || nz(c.adresse),
+      greffe:     f.greffe     || nz(cr.greffe||c.ville),
+      dateStatuts:f.dateStatuts|| nz(cr.dateStatuts||''),
+      cac:        f.cac        || ''
+    };
+  }
+  window.at4Infos=infos;
+
+  var CHAMPS=[
+    ['denom','Dénomination sociale'],['sigle','Sigle (facultatif)'],['forme','Forme juridique'],
+    ['capital','Capital social (€)'],['siege','Siège social'],['objet','Objet social'],
+    ['duree','Durée de la société'],['dirigeant','Dirigeant'],['dirAdresse','Adresse du dirigeant'],
+    ['greffe','Greffe d\'immatriculation'],['dateStatuts','Date de signature des statuts'],
+    ['cac','Commissaire aux comptes (facultatif)']
+  ];
+  window.at4Fiche=function(id,k,v){
+    var d=dossier(id); if(!d)return; var a=A(d); a.fiche=a.fiche||{}; a.fiche[k]=v; try{save();}catch(e){}
+  };
+
+  /* texte de l'avis de constitution, aux mentions exigées */
+  function avis(d){
+    var i=infos(d);
+    var t='Avis est donné de la constitution de la société '+(i.forme||'…')+' '
+      +(i.denom||'…')+(i.sigle?(' ('+i.sigle+')'):'')+'.\n\n'
+      +'Capital social : '+(i.capital?(i.capital+' euros'):'…')+'.\n'
+      +'Siège social : '+(i.siege||'…')+'.\n'
+      +'Objet social : '+(i.objet||'…')+'.\n'
+      +'Durée : '+(i.duree||'…')+' à compter de son immatriculation au Registre du commerce et des sociétés.\n'
+      +(i.dirigeant?('Gérance / Présidence : '+i.dirigeant+(i.dirAdresse?(', demeurant '+i.dirAdresse):'')+'.\n'):'')
+      +(i.cac?('Commissaire aux comptes : '+i.cac+'.\n'):'')
+      +(i.dateStatuts?('Statuts signés le '+i.dateStatuts+'.\n'):'')
+      +'\nLa société sera immatriculée au Registre du commerce et des sociétés de '+(i.greffe||'…')+'.';
+    return t;
+  }
+  window.at4Avis=avis;
+  window.at4CopierAvis=function(id){
+    var t=avis(dossier(id));
+    var ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select();
+    var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+    if(!ok&&navigator.clipboard){ navigator.clipboard.writeText(t); ok=true; }
+    document.body.removeChild(ta);
+    if(typeof toast==='function')toast(ok?'Avis de constitution copié — collez-le sur le site du journal.':'Copie impossible.');
+  };
+
+  /* dossier à transmettre, imprimable */
+  window.at4Imprimer=function(id,type){
+    var d=dossier(id); if(!d) return; var i=infos(d), T=TYPES[type];
+    var lignes=CHAMPS.map(function(c){ var v=i[c[0]]; return v?('<tr><td>'+E(c[1])+'</td><td>'+E(v)+'</td></tr>'):''; }).join('');
+    var html='<div class="doc-page"><h1 style="font-size:17px;margin:0 0 4px">'+E(T.l)+' — dossier à transmettre</h1>'
+      +'<p style="margin:0 0 14px;font-size:12px">Société '+E(i.denom||'—')+' · dossier '+E(d.ref||'')+' · établi le '+frd(Date.now())+'</p>'
+      +'<h2 style="font-size:13px;margin:14px 0 6px">Informations de la société</h2>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'+lignes+'</table>'
+      +'<h2 style="font-size:13px;margin:16px 0 6px">Pièces jointes au dossier</h2><ul style="font-size:12px;margin:0;padding-left:18px">'
+      +T.pieces.map(function(p){ return '<li>'+E(p)+'</li>'; }).join('')+'</ul>'
+      +(type==='annonce'?('<h2 style="font-size:13px;margin:16px 0 6px">Avis de constitution à publier</h2>'
+        +'<pre style="white-space:pre-wrap;font:12px/1.6 inherit;margin:0">'+E(avis(d))+'</pre>'):'')
+      +'<p style="margin-top:18px;font-size:11px">AEM CONSEIL — destinataire : '+E(T.dest)+'</p></div>';
+    var z=document.getElementById('print-area');
+    if(z){ z.innerHTML=html; window.print(); }
+    else { var w=window.open('','_blank'); if(w){ w.document.write('<meta charset="utf-8">'+html); w.document.close(); w.print(); } }
+  };
+
+  /* ---------- prévenir le client ---------- */
+  window.at4Prevenir=function(id){
+    var d=dossier(id); if(!d)return; var c=cli(d), mail=nz(c.email);
+    if(!mail){ if(typeof toast==='function')toast('Aucune adresse e-mail au dossier.'); return; }
+    var i=infos(d);
+    var corps='Madame, Monsieur,\n\n'
+      +'Nous vous informons que l\'avis de constitution de votre société'+(i.denom?(' '+i.denom):'')
+      +' a été transmis pour publication au journal d\'annonces légales.\n\n'
+      +'L\'attestation de parution nous sera adressée sous quelques jours ; elle sera jointe au dossier '
+      +'d\'immatriculation déposé auprès du guichet unique.\n\n'
+      +'Nous restons à votre disposition et reviendrons vers vous dès réception.\n\n'
+      +'Nous vous prions d\'agréer, Madame, Monsieur, l\'expression de nos salutations distinguées.\n\nAEM CONSEIL';
+    var ok=false;
+    try{ if(typeof demEnvoiSilencieux==='function') ok=demEnvoiSilencieux(mail,'Annonce légale en cours de publication — AEM CONSEIL',corps);
+         else if(typeof demEnvoiDirect==='function') ok=demEnvoiDirect(mail,'Annonce légale en cours de publication — AEM CONSEIL',corps); }catch(e){}
+    A(d).annonce.prevenu=Date.now(); try{save();}catch(e){}
+    if(typeof toast==='function')toast(ok?('Client prévenu ('+mail+').'):'Mail non envoyé — vérifiez la passerelle.');
+    render();
+  };
+
+  /* ---------- réception de l'attestation ---------- */
+  /* contrôle de correspondance : le document porte-t-il bien sur ce dossier ? */
+  function verifier(d,type,texte){
+    var i=infos(d), t=norm(texte), out=[];
+    var den=norm(i.denom);
+    if(den && t.indexOf(den)>=0) out.push({s:'ok',l:'Dénomination',d:i.denom+' figure sur le document.'});
+    else if(den) out.push({s:'ko',l:'Dénomination',d:'« '+i.denom+' » ne figure pas sur le document — risque de confusion de dossier.'});
+    if(type==='capital' && i.capital){
+      var m=String(i.capital).replace(/[^0-9]/g,'');
+      (m && t.replace(/[^0-9]/g,' ').indexOf(m)>=0)
+        ? out.push({s:'ok',l:'Montant',d:i.capital+' € concorde avec le capital du dossier.'})
+        : out.push({s:'warn',l:'Montant',d:'Le montant de '+i.capital+' € n\'a pas été retrouvé : à vérifier à l\'œil.'});
+    }
+    if(type==='annonce'){
+      /^.*(parution|publie|publication|annonce).*$/.test(t)
+        ? out.push({s:'ok',l:'Nature',d:'Le document se présente bien comme une attestation de parution.'})
+        : out.push({s:'warn',l:'Nature',d:'La nature du document n\'a pas pu être confirmée.'});
+    }
+    return out;
+  }
+  window.at4Verifier=verifier;
+
+  window.at4Fichier=function(id,type,inp){
+    var d=dossier(id); if(!d||!inp||!inp.files||!inp.files[0]) return;
+    var f=inp.files[0], r=new FileReader();
+    r.onload=function(){
+      var a=A(d);
+      a[type].fichier={nom:f.name, type:f.type, data:r.result, ts:Date.now()};
+      /* contrôle sur ce qui est lisible sans ouvrir le PDF : le nom du fichier */
+      a[type].controles=verifier(d,type,f.name);
+      a[type].verifie=false;
+      try{save();}catch(e){}
+      if(typeof toast==='function')toast('Attestation rattachée au dossier — vérifiez la correspondance.');
+      render();
+    };
+    r.readAsDataURL(f);
+  };
+
+  /* recherche dans la boîte : on propose, l'expert rattache */
+  window.at4Chercher=function(id,type){
+    var d=dossier(id); if(!d) return;
+    var c={}; try{ c=(typeof demSyncCfg==='function')?demSyncCfg():{}; }catch(e){}
+    if(!c||!c.url){ if(typeof toast==='function')toast('Passerelle non configurée (Paramètres → Communication).'); return; }
+    var i=infos(d), T=TYPES[type], den=norm(i.denom);
+    if(typeof toast==='function')toast('Recherche de l\'attestation dans la boîte…');
+    var base=c.url+(c.url.indexOf('?')>=0?'&':'?')+'key='+encodeURIComponent(c.key||'');
+    var fin=function(j){
+      var mails=(j&&j.mails)||[];
+      var cand=mails.filter(function(m){
+        var t=norm((m.subject||'')+' '+(m.body||''));
+        var pj=(m.att||[]).length>0;
+        return pj && T.rx.test(t) && (!den || t.indexOf(den)>=0);
+      });
+      if(!cand.length){
+        openModal('Attestation non trouvée',
+          '<p class="at4-p">Aucun message récent ne porte à la fois une pièce jointe, la mention « '+E(T.pdf)+' » '
+          +'et la dénomination « '+E(i.denom||'—')+' ».</p>'
+          +'<p class="at4-p">Vous pouvez déposer le fichier à la main dès qu\'il arrive.</p>',
+          '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>');
+        return;
+      }
+      window.__at4Cand=cand;
+      openModal('Attestation trouvée dans la boîte',
+        '<p class="at4-p">'+cand.length+' message'+(cand.length>1?'s':'')+' correspond'+(cand.length>1?'ent':'')
+        +' à ce dossier. Vérifiez l\'expéditeur avant de rattacher.</p>'
+        +'<div class="at4-cand">'+cand.map(function(m,k){
+          return '<div class="at4-c"><div><b>'+E(m.subject||'(sans objet)')+'</b>'
+            +'<span>'+E(m.from||'')+' · '+E(String(m.date||'').slice(0,10))+' · '
+            +(m.att||[]).map(function(a){return E(a.name||'pièce');}).join(', ')+'</span></div>'
+            +'<button class="btn btn-sm btn-pri" onclick="at4Rattacher(\''+d.id+'\',\''+type+'\','+k+')">Rattacher</button></div>';
+        }).join('')+'</div>',
+        '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>');
+    };
+    try{
+      fetch(base,{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
+        var j=null; try{ j=JSON.parse(t); }catch(e){}
+        if(j) fin(j); else if(typeof demJsonp==='function') demJsonp(base,fin); else fin(null);
+      }).catch(function(){ if(typeof demJsonp==='function') demJsonp(base,fin); else fin(null); });
+    }catch(e){ fin(null); }
+  };
+
+  window.at4Rattacher=function(id,type,k){
+    var d=dossier(id), m=(window.__at4Cand||[])[k]; if(!d||!m) return;
+    if(typeof demFetchAtts!=='function'){ if(typeof toast==='function')toast('Récupération indisponible.'); return; }
+    if(typeof toast==='function')toast('Récupération de la pièce…');
+    demFetchAtts(m.id,function(list){
+      var pdf=(list||[]).filter(function(x){ return /pdf/i.test(x.type||x.name||''); })[0]||(list||[])[0];
+      if(!pdf){ if(typeof toast==='function')toast('Aucune pièce exploitable dans ce message.'); return; }
+      var a=A(d);
+      a[type].fichier={nom:pdf.name,type:pdf.type,data:'data:'+(pdf.type||'application/pdf')+';base64,'+pdf.dataB64,ts:Date.now(),mail:m.subject};
+      a[type].controles=verifier(d,type,(m.subject||'')+' '+(m.body||'')+' '+(pdf.name||''));
+      a[type].verifie=false;
+      try{save();}catch(e){}
+      closeModal();
+      if(typeof toast==='function')toast('Attestation rattachée — vérifiez la correspondance.');
+      render();
+    });
+  };
+
+  window.at4Valider=function(id,type){
+    var d=dossier(id); if(!d)return; var a=A(d);
+    if(!a[type].fichier){ if(typeof toast==='function')toast('Aucune attestation au dossier.'); return; }
+    var ko=(a[type].controles||[]).filter(function(x){return x.s==='ko';});
+    var go=function(){ a[type].verifie=Date.now(); try{save();}catch(e){}
+      if(typeof toast==='function')toast(TYPES[type].pdf+' vérifiée et versée au dossier.'); render(); };
+    if(ko.length && typeof uiConfirm==='function')
+      uiConfirm('Le contrôle signale : '+ko[0].d+'\n\nValider malgré tout ?',go,{okLabel:'Valider',danger:true});
+    else go();
+  };
+  window.at4Devalider=function(id,type){ var d=dossier(id); if(!d)return; A(d)[type].verifie=null; try{save();}catch(e){} render(); };
+  window.at4Ouvrir=function(id,type){
+    var d=dossier(id); if(!d)return; var f=A(d)[type].fichier; if(!f)return;
+    try{ var w=window.open(); if(w) w.document.write('<iframe src="'+f.data+'" style="border:0;width:100%;height:100%;position:absolute;inset:0"></iframe>'); }catch(e){}
+  };
+  window.at4Retirer=function(id,type){
+    var go=function(){ var d=dossier(id); if(!d)return; A(d)[type]={}; try{save();}catch(e){} render(); };
+    if(typeof uiConfirm==='function') uiConfirm('Retirer cette attestation du dossier ?',go,{okLabel:'Retirer',danger:true}); else go();
+  };
+
+  /* ---------- cartes ---------- */
+  function volet(d,type){
+    var T=TYPES[type], a=A(d)[type], i=infos(d);
+    var f=a.fichier, ver=!!a.verifie;
+    var ctl=(a.controles||[]).map(function(x){
+      return '<div class="at4-ctl '+x.s+'"><span>'+(x.s==='ok'?'✓':(x.s==='warn'?'!':'✗'))+'</span>'
+        +'<div><b>'+E(x.l)+'</b> '+E(x.d)+'</div></div>'; }).join('');
+
+    var recu = f
+      ? '<div class="at4-recu'+(ver?' ok':'')+'">'
+        +'<div class="at4-f"><b>'+E(T.pdf)+'</b><span>'+E(f.nom)+' · reçue le '+frd(f.ts)+'</span></div>'
+        +'<div class="at4-fa">'
+        +'<button class="btn btn-sm btn-ghost" onclick="at4Ouvrir(null,\''+type+'\')">Ouvrir</button>'
+        +'<a class="btn btn-sm btn-ghost" href="'+f.data+'" download="'+E(f.nom)+'">Télécharger</a>'
+        +(ver?'<button class="btn btn-sm btn-ghost" onclick="at4Devalider(null,\''+type+'\')">Annuler la validation</button>'
+             :'<button class="btn btn-sm at4-ok" onclick="at4Valider(null,\''+type+'\')">Vérifier et verser au dossier</button>')
+        +'<button class="btn btn-sm btn-ghost" onclick="at4Retirer(null,\''+type+'\')">Retirer</button>'
+        +'</div></div>'+(ctl?('<div class="at4-ctls">'+ctl+'</div>'):'')
+      : '<div class="at4-att">En attente de '+E(T.pdf.toLowerCase())+'. '
+        +'Elle sera versée au dossier après contrôle de correspondance.</div>';
+
+    var etat = ver
+      ? '<span class="at4-tag ok">vérifiée le '+frd(a.verifie)+'</span>'
+      : (f ? '<span class="at4-tag">à vérifier</span>' : '<span class="at4-tag g">en attente</span>');
+
+    return '<div class="card '+(type==='capital'?'crea-capital':'al-card')+' at4-card"><div class="card-h">'
+      +'<h2>'+E(T.l)+'</h2>'+etat+'</div><div class="card-b">'
+      +'<div class="at4-bar">'
+      +'<button class="btn btn-sm btn-pri" onclick="at4Imprimer(null,\''+type+'\')">Télécharger le dossier</button>'
+      +(type==='annonce'?'<button class="btn btn-sm btn-ghost" onclick="at4CopierAvis(null)">Copier l\'avis</button>'
+        +'<button class="btn btn-sm btn-ghost" onclick="at4Prevenir(null)">Prévenir le client</button>':'')
+      +'<button class="btn btn-sm btn-ghost" onclick="at4Chercher(null,\''+type+'\')">Chercher dans la boîte</button>'
+      +'<label class="btn btn-sm btn-ghost at4-up">Déposer le PDF'
+      +'<input type="file" accept="application/pdf,image/*" style="display:none" onchange="at4Fichier(null,\''+type+'\',this)"></label>'
+      +'</div>'
+      +'<div class="at4-pieces"><b>Dossier à transmettre à '+E(T.dest)+' :</b> '
+      +T.pieces.map(function(p){return E(p);}).join(' · ')+'</div>'
+      +(type==='annonce'&&A(d).annonce.prevenu?('<div class="at4-note">Client prévenu de la mise en publication le '+frd(A(d).annonce.prevenu)+'.</div>'):'')
+      +recu+'</div></div>';
+  }
+
+  function ficheCard(d){
+    var i=infos(d);
+    var champs=CHAMPS.map(function(c){
+      return '<div class="at4-fld"><label>'+E(c[1])+'</label>'
+        +'<input value="'+E(i[c[0]]||'')+'" onchange="at4Fiche(null,\''+c[0]+'\',this.value)"></div>';
+    }).join('');
+    return '<div class="card al-card at4-fiche"><div class="card-h"><h2>Fiche de publication</h2>'
+      +'<span class="sub" style="margin-left:auto">mentions exigées de l\'avis de constitution</span></div><div class="card-b">'
+      +'<p class="at4-p">Reprise du dossier, corrigeable ici. L\'avis est composé à partir de ces informations.</p>'
+      +'<div class="at4-grid">'+champs+'</div>'
+      +'<div class="at4-avis"><b>Avis de constitution</b><pre>'+E(avis(d))+'</pre></div>'
+      +'</div></div>';
+  }
+
+  function carte(){
+    var d=dossier(); if(!d) return '';
+    return volet(d,'capital')+ficheCard(d)+volet(d,'annonce');
+  }
+  window.at4Card=carte;
+
+  /* ---------- verrou : les deux attestations vérifiées ---------- */
+  function graftValider(){
+    if(typeof window.trwValider!=='function' || window.__at4TV) return;
+    window.__at4TV=1;
+    var _v=window.trwValider;
+    window.trwValider=function(id,key){
+      if(key==='attestations'){
+        var d=dossier(id);
+        if(d){
+          var a=A(d), manque=[];
+          if(!a.capital.verifie) manque.push(TYPES.capital.pdf);
+          if(!a.annonce.verifie) manque.push(TYPES.annonce.pdf);
+          if(manque.length){
+            if(typeof toast==='function')
+              toast('Étape bloquée — en attente de : '+manque.join(' et ')+'.');
+            return;
+          }
+        }
+      }
+      return _v.apply(this,arguments);
+    };
+  }
+  graftValider(); setTimeout(graftValider,0); setTimeout(graftValider,1200);
+
+  function graftPage(){
+    var _pe=window.pageEspace;
+    if(typeof _pe!=='function' || window.__at4PE) return;
+    window.__at4PE=1;
+    var w=function(){ var h=_pe.apply(this,arguments);
+      try{ if(typeof h==='string' && h.indexOf('at4-card')<0) h+=carte(); }catch(e){}
+      return h; };
+    w.__at4=1; window.pageEspace=w;
+  }
+  graftPage(); setTimeout(graftPage,0); setTimeout(graftPage,1200);
+
+  var st=document.createElement('style'); st.id='at4-mod';
+  st.textContent=[
+   '.at4-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}',
+   '.at4-up{cursor:pointer}',
+   '.at4-ok{background:rgba(63,174,114,.14)!important;border-color:rgba(63,174,114,.4)!important;color:#6fe0a6!important}',
+   '.at4-tag{margin-left:10px;border:1px solid rgba(215,160,58,.4);background:rgba(215,160,58,.10);color:#e8c67e;border-radius:20px;padding:2px 9px;font:600 10.5px/1.6 inherit}',
+   '.at4-tag.ok{border-color:rgba(67,181,129,.45);background:rgba(67,181,129,.10);color:#43b581}',
+   '.at4-tag.g{border-color:rgba(143,151,166,.35);background:none;color:#74767e}',
+   '.at4-pieces{font-size:12px;color:#8f97a6;line-height:1.55;margin-bottom:12px}',
+   '.at4-pieces b{color:#a6a8b0}',
+   '.at4-note{font-size:12px;color:#8fb4ff;margin-bottom:10px}',
+   '.at4-att{border:1px dashed #2a2a2e;border-radius:8px;padding:14px;color:#74767e;font-size:12.5px;line-height:1.6}',
+   '.at4-recu{display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:1px solid rgba(76,141,255,.3);background:rgba(76,141,255,.06);border-radius:8px;padding:11px 13px}',
+   '.at4-recu.ok{border-color:rgba(63,174,114,.4);background:rgba(63,174,114,.07)}',
+   '.at4-f{flex:1;min-width:180px}',
+   '.at4-f b{display:block;font-size:13px}',
+   '.at4-f span{display:block;font-size:11.5px;color:#74767e;margin-top:2px}',
+   '.at4-fa{display:flex;gap:6px;flex-wrap:wrap}',
+   '.at4-ctls{margin-top:10px;display:flex;flex-direction:column;gap:6px}',
+   '.at4-ctl{display:grid;grid-template-columns:16px 1fr;gap:8px;font-size:12px;line-height:1.5;color:#8f97a6}',
+   '.at4-ctl span{text-align:center;font-weight:700}',
+   '.at4-ctl.ok span{color:#43b581}.at4-ctl.warn span{color:#d7a03a}.at4-ctl.ko span{color:#e2685c}',
+   '.at4-ctl b{color:#eef0f4}',
+   '.at4-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:9px 12px;margin-bottom:14px}',
+   '.at4-fld label{display:block;font-size:11px;color:#74767e;margin-bottom:3px}',
+   '.at4-fld input{width:100%;box-sizing:border-box;background:#0e0e10;border:1px solid #2a2a2e;border-radius:6px;color:inherit;padding:6px 9px;font:13px/1.3 inherit}',
+   '.at4-avis{border:1px solid #2a2a2e;border-radius:8px;padding:12px 14px;background:#0e0e10}',
+   '.at4-avis b{display:block;font-size:11px;color:#74767e;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}',
+   '.at4-avis pre{white-space:pre-wrap;margin:0;font:12.5px/1.65 inherit;color:#a6a8b0}',
+   '.at4-p{font-size:12.5px;color:#8f97a6;line-height:1.6;margin:0 0 12px}',
+   '.at4-cand{display:flex;flex-direction:column;gap:8px}',
+   '.at4-c{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid #2a2a2e;border-radius:8px;padding:10px 12px}',
+   '.at4-c b{display:block;font-size:13px}',
+   '.at4-c span{display:block;font-size:11.5px;color:#74767e;margin-top:2px}'
   ].join('');
   document.head.appendChild(st);
 })();
