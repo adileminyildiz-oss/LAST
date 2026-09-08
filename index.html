@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=582;
+var LAST_VER=583;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -31161,15 +31161,16 @@ function testLienRdv()  {
     if(typeof toast==='function')
       toast(n? (n+' écart(s) relevé(s) entre les documents et le dossier.')
               : 'Aucun écart : les informations lues concordent avec le dossier.');
-    render();
+    render(); rafraichir();
   };
 
-  window.e3Sel=function(id,k){ var d=dossier(id); if(!d)return; V(d).sel=k; try{save();}catch(e){} render(); };
+  window.e3Sel=function(id,k){ var d=dossier(id); if(!d)return; V(d).sel=k; try{save();}catch(e){} render(); rafraichir(); };
   window.e3Nav=function(id,pas){
     var d=dossier(id); if(!d)return; var ps=pieces(d); if(!ps.length)return;
     var v=V(d), i=0;
     for(var j=0;j<ps.length;j++) if(ps[j].k===v.sel) i=j;
     i=(i+pas+ps.length)%ps.length; v.sel=ps[i].k; try{save();}catch(e){} render();
+    if(!rafraichir() && typeof e3Ouvrir==='function' && mpOuverte && mpOuverte()) e3Ouvrir(null,v.sel);
   };
   window.e3Certifier=function(id,k){
     var d=dossier(id); if(!d)return; var v=V(d);
@@ -31180,13 +31181,13 @@ function testLienRdv()  {
       if(typeof toast==='function')toast('Pièce certifiée.');
       var ps=pieces(d), reste=ps.filter(function(p){ return !(v.cert[p.k]&&v.cert[p.k].ok); });
       if(reste.length) v.sel=reste[0].k;
-      render();
+      render(); rafraichir();
     };
     if(ec.length && typeof uiConfirm==='function')
       uiConfirm('Cette pièce présente '+ec.length+' écart(s) non tranché(s). La certifier malgré tout ?',go,{okLabel:'Certifier'});
     else go();
   };
-  window.e3Decertifier=function(id,k){ var d=dossier(id); if(!d)return; delete V(d).cert[k]; try{save();}catch(e){} render(); };
+  window.e3Decertifier=function(id,k){ var d=dossier(id); if(!d)return; delete V(d).cert[k]; try{save();}catch(e){} render(); rafraichir(); };
   /* Où écrire la valeur lue lorsqu'on retient la pièce plutôt que le dossier. */
   function poser(d,f,val){
     var c={}; try{ c=(typeof clientById==='function')?(clientById((d.clientIds||[])[0])||{}):{}; }catch(e){}
@@ -31217,7 +31218,7 @@ function testLienRdv()  {
       if(typeof toast==='function')toast('Lecture alignée sur le dossier.');
     }
     v.ecarts[k]=(v.ecarts[k]||[]).filter(function(x){return x.f!==f;});
-    try{save();}catch(e){} render();
+    try{save();}catch(e){} render(); rafraichir();
   };
 
   window.e3Corriger=function(id,k,f){
@@ -31227,7 +31228,7 @@ function testLienRdv()  {
     v.ecarts[k]=(v.ecarts[k]||[]).filter(function(x){return x.f!==f;});
     try{save();}catch(e){}
     if(typeof toast==='function')toast('Information alignée sur le dossier.');
-    render();
+    render(); rafraichir();
   };
 
   /* ---------- rendu ---------- */
@@ -31240,37 +31241,14 @@ function testLienRdv()  {
     return '<div class="e3-noprev">Aperçu non disponible pour ce format.</div>';
   }
 
-  function carte(){
-    var d=dossier(); if(!d) return '';
-    var v=V(d), ps=pieces(d);
-    if(!ps.length)
-      return '<div class="card crea-valid e3-card"><div class="card-h"><h2>Relevé des pièces</h2></div>'
-        +'<div class="card-b"><div class="e3-vide">Aucune pièce au dossier. '
-        +'Les documents transmis par le client apparaîtront ici pour être relevés puis certifiés.</div></div></div>';
-
-    if(!v.sel || !ps.some(function(p){return p.k===v.sel;})) v.sel=ps[0].k;
-    var cur=ps.filter(function(p){return p.k===v.sel;})[0]||ps[0];
-    var certN=ps.filter(function(p){ return v.cert[p.k]&&v.cert[p.k].ok; }).length;
-    var ec=(v.ecarts[v.sel]||[]);
-    var ecN=ec.filter(function(x){return x.type==='ecart';}).length;
-    var certifiee=!!(v.cert[v.sel]&&v.cert[v.sel].ok);
-    var sa=saisies(d);
-    var rang=0; ps.forEach(function(p,i){ if(p.k===v.sel) rang=i+1; });
-
-    /* onglets des pièces : la chemise, en ligne */
-    var tabs=ps.map(function(p){
-      var c=v.cert[p.k]&&v.cert[p.k].ok, e=(v.ecarts[p.k]||[]).filter(function(x){return x.type==='ecart';}).length;
-      return '<button class="e3-tab'+(p.k===v.sel?' on':'')+(c?' ok':(e?' ko':''))+'" onclick="e3Sel(null,\''+p.k+'\')">'
-        +'<span class="e3-tm">'+(c?'✓':(e?'✗':'·'))+'</span>'+E(p.libelle)+'</button>';
-    }).join('');
-
-    /* le relevé : à gauche ce que le dossier affirme, à droite ce que la pièce montre */
-    var lignes=(CHAMPS[v.sel]||CHAMPS.autre).map(function(f){
+  /* ---------- la mini-page de relevé d'une pièce ---------- */
+  function releveHTML(d,k){
+    var v=V(d), sa=saisies(d), ec=(v.ecarts[k]||[]);
+    var lignes=(CHAMPS[k]||CHAMPS.autre).map(function(f){
       var lu=String(v.extract[f]==null?'':v.extract[f]).trim();
       var sai=String(sa[f]==null?'':sa[f]).trim();
       var e=ec.filter(function(x){return x.f===f;})[0];
       var div=!!(e&&e.type==='ecart');
-      var mark=div?'✗':(lu?'✓':'·');
       var cellLu = div
         ? '<b><span class="e3-barre">'+E(lu)+'</span><span class="e3-prop">→ '+E(sai)+'</span></b>'
         : '<b>'+(lu?E(lu):'<span class="e3-abs">non lu</span>')+'</b>';
@@ -31278,45 +31256,113 @@ function testLienRdv()  {
         +'<s>'+E(LBL[f]||f)+'</s>'
         +'<b>'+(sai?E(sai):'<span class="e3-abs">—</span>')+'</b>'
         +cellLu
-        +'<i>'+mark+'</i>'
+        +'<i>'+(div?'✗':(lu?'✓':'·'))+'</i>'
         +(div
           ? '<div class="e3-arb">'
-            +'<button class="e3-b p" onclick="e3Retenir(null,\''+v.sel+'\',\''+f+'\',\'piece\')">Retenir « '+E(lu)+' »</button>'
-            +'<button class="e3-b" onclick="e3Retenir(null,\''+v.sel+'\',\''+f+'\',\'dossier\')">Conserver la saisie</button>'
+            +'<button class="e3-b p" onclick="e3Retenir(null,\''+k+'\',\''+f+'\',\'piece\')">Retenir « '+E(lu)+' »</button>'
+            +'<button class="e3-b" onclick="e3Retenir(null,\''+k+'\',\''+f+'\',\'dossier\')">Conserver la saisie</button>'
             +'</div>' : '')
         +'</div>';
     }).join('');
+    return '<div class="e3-releve">'
+      +'<div class="e3-lh"><s>Information</s><b>Saisi au dossier</b><b>Lu sur la pièce</b><i></i></div>'
+      +(lignes||'<div class="e3-none">Aucune information attendue pour cette nature de pièce.</div>')
+      +'</div>';
+  }
+
+  function miniHTML(d,k){
+    var v=V(d), ps=pieces(d);
+    var cur=ps.filter(function(p){return p.k===k;})[0]||ps[0]; if(!cur) return '';
+    var ec=(v.ecarts[k]||[]).filter(function(x){return x.type==='ecart';});
+    var certifiee=!!(v.cert[k]&&v.cert[k].ok);
+    var rang=0; ps.forEach(function(p,i){ if(p.k===k) rang=i+1; });
 
     var bandeau = certifiee
-      ? '<div class="e3-band ok"><span>✓</span><div>Pièce certifiée le '+new Date(v.cert[v.sel].ts).toLocaleDateString('fr-FR')+'.</div></div>'
-      : (ecN
-        ? '<div class="e3-band ko"><span>✗</span><div><b>'+ecN+' écart'+(ecN>1?'s':'')+' relevé'+(ecN>1?'s':'')+'.</b> '
-          +'Tranchez chaque ligne rouge — retenir la pièce reporte la valeur lue au dossier, conserver la saisie aligne la lecture.</div></div>'
+      ? '<div class="e3-band ok"><span>✓</span><div>Pièce certifiée le '+new Date(v.cert[k].ts).toLocaleDateString('fr-FR')+'.</div></div>'
+      : (ec.length
+        ? '<div class="e3-band ko"><span>✗</span><div><b>'+ec.length+' écart'+(ec.length>1?'s':'')+' relevé'+(ec.length>1?'s':'')+'.</b> '
+          +'Tranchez chaque ligne rouge : retenir la pièce reporte la valeur lue au dossier, conserver la saisie aligne la lecture.</div></div>'
         : (v.testeLe
           ? '<div class="e3-band ok"><span>✓</span><div>Aucun écart relevé sur cette pièce.</div></div>'
           : '<div class="e3-band n"><span>·</span><div>Lancez le test de conformité : chaque information lue sera confrontée à la saisie du dossier.</div></div>'));
 
-    return '<div class="card crea-valid e3-card"><div class="card-h"><h2>Relevé des pièces</h2>'
-      +(certifiee?'<span class="e3-cpt ok">certifiée</span>':(ecN?('<span class="e3-cpt ko">'+ecN+' écart'+(ecN>1?'s':'')+'</span>'):'<span class="e3-cpt">à contrôler</span>'))
-      +'<span class="sub" style="margin-left:auto">'+certN+'/'+ps.length+' certifiées · '+E(cur.nom)+'</span></div>'
-      +'<div class="card-b">'
-      +'<div class="e3-tabs">'+tabs+'</div>'
-      +'<div class="e3-split">'
-        +'<div class="e3-releve">'
-          +'<div class="e3-lh"><s>Information</s><b>Saisi au dossier</b><b>Lu sur la pièce</b><i></i></div>'
-          +(lignes||'<div class="e3-none">Aucune information attendue pour cette nature de pièce.</div>')
-        +'</div>'
-        +'<div class="e3-papier"><div class="e3-pl">Pièce '+rang+' sur '+ps.length+' — '+E(cur.libelle)+'</div>'
-          +apercu(cur.piece)+'</div>'
-      +'</div>'
-      + bandeau
-      +'<div class="e3-bar">'
-      +'<button class="btn btn-sm btn-pri" onclick="e3Tester(null)">Test de conformité</button>'
+    return '<div class="mp-bar">'
+      +'<button class="btn btn-sm btn-pri" onclick="e3Tester(null,\''+k+'\')">Test de conformité</button>'
       +(certifiee
-        ? '<button class="btn btn-sm btn-ghost" onclick="e3Decertifier(null,\''+v.sel+'\')">Retirer la certification</button>'
-        : '<button class="btn btn-sm e3-cert" onclick="e3Certifier(null,\''+v.sel+'\')">Certifier cette pièce</button>')
-      +'<button class="btn btn-sm btn-ghost" onclick="e3Nav(null,-1)">‹ Précédente</button>'
-      +'<button class="btn btn-sm btn-ghost" onclick="e3Nav(null,1)">Suivante ›</button>'
+        ? '<button class="btn btn-sm btn-ghost" onclick="e3Decertifier(null,\''+k+'\')">Retirer la certification</button>'
+        : '<button class="btn btn-sm e3-cert" onclick="e3Certifier(null,\''+k+'\')">Certifier cette pièce</button>')
+      +'<span class="mp-sp mp-nav">'
+      +'<button class="btn btn-sm btn-ghost" onclick="e3Nav(null,-1)">‹</button>'
+      +'pièce '+rang+' / '+ps.length
+      +'<button class="btn btn-sm btn-ghost" onclick="e3Nav(null,1)">›</button></span>'
+      +'</div>'
+      +'<div class="e3-split">'+releveHTML(d,k)
+      +'<div class="e3-papier"><div class="e3-pl">'+E(cur.libelle)+' — '+E(cur.nom)+'</div>'+apercu(cur.piece)+'</div>'
+      +'</div>'+bandeau;
+  }
+
+  /* ouvre, rafraîchit, ferme */
+  window.e3Ouvrir=function(id,k){
+    var d=dossier(id); if(!d) return; var v=V(d), ps=pieces(d);
+    if(!ps.length){ if(typeof toast==='function')toast('Aucune pièce au dossier.'); return; }
+    if(!k || !ps.some(function(p){return p.k===k;})) k=v.sel||ps[0].k;
+    v.sel=k; try{save();}catch(e){}
+    var cur=ps.filter(function(p){return p.k===k;})[0];
+    if(typeof mpOuvrir!=='function'){ render(); return; }
+    mpOuvrir('Relevé de la pièce', miniHTML(d,k),
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>',
+      {sub:cur.libelle+' · '+cur.nom, taille:'xl'});
+  };
+  function rafraichir(){
+    var d=dossier(); if(!d) return false;
+    if(typeof mpOuverte!=='function' || !mpOuverte()) return false;
+    var v=V(d), ps=pieces(d), k=v.sel; if(!ps.some(function(p){return p.k===k;})) return false;
+    var cur=ps.filter(function(p){return p.k===k;})[0];
+    return mpMaj(miniHTML(d,k), null, cur.libelle+' · '+cur.nom);
+  }
+  window.e3Rafraichir=rafraichir;
+
+  /* ---------- la carte d'étape : l'état, et les portes d'entrée ---------- */
+  function carte(){
+    var d=dossier(); if(!d) return '';
+    var v=V(d), ps=pieces(d);
+    if(!ps.length)
+      return '<div class="card crea-valid e3-card"><div class="card-h"><h2>Certification des pièces</h2></div>'
+        +'<div class="card-b"><div class="e3-vide">Aucune pièce au dossier. '
+        +'Les documents transmis par le client apparaîtront ici pour être relevés puis certifiés.</div></div></div>';
+
+    var certN=ps.filter(function(p){ return v.cert[p.k]&&v.cert[p.k].ok; }).length;
+    var ecTot=ps.reduce(function(n,p){ return n+(v.ecarts[p.k]||[]).filter(function(x){return x.type==='ecart';}).length; },0);
+
+    var lignes=ps.map(function(p){
+      var c=!!(v.cert[p.k]&&v.cert[p.k].ok);
+      var e=(v.ecarts[p.k]||[]).filter(function(x){return x.type==='ecart';}).length;
+      var etat = c ? '<span class="e3-et ok">certifiée</span>'
+               : (e ? '<span class="e3-et ko">'+e+' écart'+(e>1?'s':'')+'</span>'
+                    : (v.testeLe?'<span class="e3-et at">à certifier</span>':'<span class="e3-et">à relever</span>'));
+      return '<div class="e3-row'+(c?' ok':(e?' ko':''))+'">'
+        +'<span class="e3-rm">'+(c?'✓':(e?'✗':'·'))+'</span>'
+        +'<div class="e3-rt"><b>'+E(p.libelle)+'</b><em>'+E(p.nom)+'</em></div>'
+        +etat
+        +'<button class="btn btn-sm '+(c?'btn-ghost':'btn-pri')+'" onclick="e3Ouvrir(null,\''+p.k+'\')">'
+        +(c?'Revoir':'Relever')+'</button>'
+        +'</div>';
+    }).join('');
+
+    var etat = certN===ps.length
+      ? '<div class="e3-band ok"><span>✓</span><div>Les '+ps.length+' pièces sont certifiées. L\'étape peut être validée.</div></div>'
+      : (ecTot
+        ? '<div class="e3-band ko"><span>✗</span><div><b>'+ecTot+' écart'+(ecTot>1?'s':'')+' à trancher.</b> Ouvrez la pièce concernée pour arbitrer.</div></div>'
+        : '<div class="e3-band n"><span>·</span><div>Ouvrez chaque pièce pour confronter ce qui y est lu à ce que le dossier affirme, puis la certifier.</div></div>');
+
+    return '<div class="card crea-valid e3-card"><div class="card-h"><h2>Certification des pièces</h2>'
+      +'<span class="e3-cpt'+(certN===ps.length?' ok':(ecTot?' ko':''))+'">'+certN+'/'+ps.length+' certifiées</span>'
+      +'</div><div class="card-b">'
+      +'<div class="e3-rows">'+lignes+'</div>'
+      + etat
+      +'<div class="e3-bar">'
+      +'<button class="btn btn-sm btn-pri" onclick="e3Ouvrir(null)">Ouvrir le relevé</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="e3Tester(null)">Tester toutes les pièces</button>'
       +'</div>'
       +'</div></div>';
   }
@@ -31378,6 +31424,23 @@ function testLienRdv()  {
    '.e3-cpt.ko{border-color:rgba(210,86,74,.5);color:#e2685c;background:rgba(210,86,74,.09)}',
    /* — onglets des pièces — */
    '.e3-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:13px}',
+   /* — sommaire de l'étape : une ligne par pièce, l'état, la porte d'entrée — */
+   '.e3-rows{display:flex;flex-direction:column;gap:1px;background:rgba(127,160,255,.10);border:1px solid rgba(127,160,255,.14);border-radius:10px;overflow:hidden;margin-bottom:12px}',
+   '.e3-row{display:grid;grid-template-columns:22px minmax(0,1fr) auto auto;gap:11px;align-items:center;padding:10px 13px;background:#141416}',
+   '.e3-row.ok{background:rgba(67,181,129,.05)}',
+   '.e3-row.ko{background:rgba(210,86,74,.05)}',
+   '.e3-rm{text-align:center;font:700 13px/1 ui-monospace,Menlo,monospace;color:#5f6270}',
+   '.e3-row.ok .e3-rm{color:#43b581}.e3-row.ko .e3-rm{color:#e2685c}',
+   '.e3-rt{min-width:0}',
+   '.e3-rt b{display:block;font-size:13px;font-weight:600}',
+   '.e3-rt em{display:block;font-style:normal;font-size:11px;color:#74767e;margin-top:2px;font-family:ui-monospace,Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+   '.e3-et{font:600 10.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:3px;border:1px solid #2c3241;color:#74767e;white-space:nowrap}',
+   '.e3-et.ok{border-color:rgba(67,181,129,.45);color:#43b581;background:rgba(67,181,129,.08)}',
+   '.e3-et.ko{border-color:rgba(210,86,74,.45);color:#e2685c;background:rgba(210,86,74,.08)}',
+   '.e3-et.at{border-color:rgba(217,164,65,.42);color:#d9a441;background:rgba(217,164,65,.08)}',
+   '@media(max-width:640px){.e3-row{grid-template-columns:22px minmax(0,1fr);row-gap:8px}.e3-et,.e3-row .btn{grid-column:2}}',
+   /* dans la mini-page, la place ne manque plus : relevé et pièce côte à côte */
+   '@media(min-width:1100px){.mp .e3-split{grid-template-columns:minmax(0,1fr) minmax(0,1.02fr)}}',
    '.e3-tab{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:999px;border:1px solid #242428;background:#141416;color:#a6a8b0;font:500 12px/1 inherit;cursor:pointer}',
    '.e3-tab:hover{border-color:#2c3241;color:#eef0f4}',
    '.e3-tab .e3-tm{font:700 11px/1 ui-monospace,Menlo,monospace;color:#5f6270}',
@@ -31409,7 +31472,7 @@ function testLienRdv()  {
    '.e3-b.p{border-color:rgba(67,181,129,.45);background:rgba(67,181,129,.1);color:#43b581}',
    /* — le plan papier : la pièce telle qu'elle existe — */
    '.e3-papier{background:#f6f3ec;border:1px solid #ddd6c7;border-radius:8px;padding:11px;display:flex;flex-direction:column;gap:9px;min-width:0}',
-   '.e3-pl{font:600 9.5px/1.4 ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;color:#8a877f}',
+   '.e3-pl{font:600 9.5px/1.4 ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;color:#6a6760}',
    '.e3-papier .e3-img{display:block;margin:0 auto;max-width:100%;max-height:360px;object-fit:contain;border:1px solid #ddd6c7;border-radius:4px;background:#fff}',
    '.e3-papier .e3-pdf{width:100%;height:360px;border:1px solid #ddd6c7;border-radius:4px;background:#fff}',
    '.e3-papier .e3-noprev{border:1px dashed #c9c2b2;border-radius:4px;padding:44px 18px;text-align:center;color:#8a877f;font-size:12.5px;line-height:1.6;background:#fffdf8}',
@@ -31724,7 +31787,7 @@ function testLienRdv()  {
            else if(typeof demEnvoiDirect==='function') ok=demEnvoiDirect(mail,'Signature des actes — AEM CONSEIL',corps); }catch(e){}
       d.signVoie={voie:'rdv', ts:Date.now(), envoye:ok}; try{save();}catch(e){}
       if(typeof toast==='function')toast(ok?('Rendez-vous de signature proposé à '+mail):'Mail non envoyé — vérifiez la passerelle.');
-      render();
+      render(); majParapheur();
     };
     if(typeof agwInvite==='function') agwInvite(nom,mail,d.ref||'','Signature des actes de constitution',envoi);
     else envoi('');
@@ -31750,15 +31813,16 @@ function testLienRdv()  {
     if(!docs.length){ if(typeof toast==='function')toast('Aucun acte généré à faire signer.'); return; }
     d.signVoie={voie:'yousign', ts:Date.now(), envoye:true, n:docs.length}; try{save();}catch(e){}
     if(typeof toast==='function')toast(docs.length+' acte(s) envoyé(s) à la signature électronique de '+mail+'.');
-    render();
+    render(); majParapheur();
   };
 
+  function majParapheur(){ try{ if(typeof a3RafraichirParapheur==='function') a3RafraichirParapheur(); }catch(e){} }
   window.a3Signer=function(id,k){
     var d=dossier(id); if(!d) return; var s=S(d);
     s[k]={ok:true, ts:Date.now(), voie:(d.signVoie&&d.signVoie.voie)||'cabinet'};
-    try{save();}catch(e){} render();
+    try{save();}catch(e){} render(); majParapheur();
   };
-  window.a3Devalider=function(id,k){ var d=dossier(id); if(!d)return; delete S(d)[k]; try{save();}catch(e){} render(); };
+  window.a3Devalider=function(id,k){ var d=dossier(id); if(!d)return; delete S(d)[k]; try{save();}catch(e){} render(); majParapheur(); };
   window.a3ToutSigner=function(id){
     var d=dossier(id); if(!d)return;
     var go=function(){ aSigner(d).forEach(function(a){ S(d)[a.k]={ok:true,ts:Date.now(),voie:(d.signVoie&&d.signVoie.voie)||'cabinet'}; });
@@ -31792,22 +31856,27 @@ function testLienRdv()  {
       +'<thead><tr><th class="a3-fh">Fait</th>'+th+'</tr></thead><tbody>'+tr+'</tbody></table></div>';
   }
 
-  function carte(){
-    var d=dossier(); if(!d) return '';
-    var as=actes(d), sg=aSigner(d), ok=signes(d), s=S(d);
+  /* ---------- mini-page : la table de concordance ---------- */
+  window.a3OuvrirConc=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return;
     var z=concordance(d);
-    var voie=d.signVoie&&d.signVoie.voie;
-
-    /* la contradiction se dit une fois, sous la table, en toutes lettres */
     var verdict = z.rompus.length
       ? z.rompus.map(function(f){
-          return '<div class="a3-verdict ko"><span>✗</span><div><b>'+E(f.l)+'</b> '+E(f.note)+'</div></div>';
-        }).join('')
+          return '<div class="a3-verdict ko"><span>✗</span><div><b>'+E(f.l)+'</b> '+E(f.note)+'</div></div>'; }).join('')
       : '<div class="a3-verdict ok"><span>✓</span><div><b>Les actes concordent.</b> '
         +'Chaque fait est dit de la même manière par tous les actes qui le portent.</div></div>';
+    mpOuvrir('Table de concordance',
+      '<p class="a3-foot" style="margin:0 0 14px">Chaque colonne est un acte, chaque ligne un fait qu\'il énonce. '
+      +'Une case soulignée de rouge dément la valeur portée par les autres actes de sa ligne.</p>'
+      + tableHTML(d) + verdict,
+      '<button class="btn btn-ghost" onclick="a3Analyse(null)">Détail des contrôles</button>'
+      +'<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(cli(d).denom||d.ref||'dossier')+' · '+z.cols.length+' actes · '+z.faits.length+' faits', taille:'xl'});
+  };
 
-    /* parapheur : une feuille par acte, avec sa ligne de signature */
-    var i=0;
+  /* ---------- mini-page : le parapheur ---------- */
+  function parapheurHTML(d){
+    var as=actes(d), s=S(d), i=0;
     var feuilles=as.map(function(a){
       var g=genere(d,a.k), si=!!(s[a.k]&&s[a.k].ok);
       var pied;
@@ -31817,8 +31886,7 @@ function testLienRdv()  {
       else pied='<span class="a3-lg">acte non généré</span>';
       return '<div class="a3-feuille'+(si?' sig':(a.sign&&g?' att':''))+'">'
         +'<span class="a3-nom">'+E(a.l)+'</span>'
-        +'<span class="a3-note">'+E(a.note)+'</span>'
-        +pied
+        +'<span class="a3-note">'+E(a.note)+'</span>'+pied
         +'<span class="a3-acts">'
         +(g&&typeof espDocVoir==='function'?('<button class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+a.k+'\')">Ouvrir</button>'):'')
         +(a.sign&&g?(si
@@ -31826,35 +31894,64 @@ function testLienRdv()  {
             : '<button class="btn btn-sm a3-ok" onclick="a3Signer(null,\''+a.k+'\')">Constater</button>'):'')
         +'</span></div>';
     }).join('');
-
+    var sg=aSigner(d), ok=signes(d), voie=d.signVoie&&d.signVoie.voie;
     var voieTxt = voie==='rdv'
       ? '<div class="a3-voie">Rendez-vous de signature proposé au client le '+new Date(d.signVoie.ts).toLocaleDateString('fr-FR')+'.</div>'
       : (voie==='yousign'
         ? '<div class="a3-voie">Actes envoyés à la signature électronique le '+new Date(d.signVoie.ts).toLocaleDateString('fr-FR')+'.</div>'
         : '');
-
-    return '<div class="card crea-gen a3-card"><div class="card-h"><h2>Table de concordance</h2>'
-      +(z.rompus.length
-        ? '<span class="a3-cpt ko">'+z.rompus.length+' fait'+(z.rompus.length>1?'s':'')+' rompu'+(z.rompus.length>1?'s':'')+'</span>'
-        : '<span class="a3-cpt ok">actes concordants</span>')
-      +'<span class="a3-q">'+z.cols.length+' actes · '+z.faits.length+' faits</span>'
-      +'</div><div class="card-b">'
-      + tableHTML(d) + verdict
-      +'<p class="a3-foot">Chaque colonne est un acte, chaque ligne un fait qu\'il énonce. '
-      +'Une case soulignée de rouge dément la valeur portée par les autres actes de sa ligne. '
-      +'<button class="a3-lien" onclick="a3Analyse(null)">Voir le détail des contrôles</button></p>'
-      +'</div></div>'
-
-      +'<div class="card crea-gen a3-card"><div class="card-h"><h2>Parapheur</h2>'
-      +'<span class="a3-cpt'+(sg.length&&ok.length===sg.length?' ok':'')+'">'+ok.length+' signés sur '+sg.length+'</span>'
-      +'</div><div class="card-b">'
-      +'<div class="a3-bar">'
+    return '<div class="mp-bar">'
       +'<button class="btn btn-sm btn-pri" onclick="a3Rdv(null)">Rendez-vous au cabinet</button>'
       +'<button class="btn btn-sm btn-ghost" onclick="a3Yousign(null)">Signature électronique</button>'
       +(sg.length&&ok.length<sg.length?'<button class="btn btn-sm btn-ghost" onclick="a3ToutSigner(null)">Tout constater signé</button>':'')
+      +'<span class="mp-sp mp-nav">'+ok.length+' signés sur '+sg.length+'</span>'
       +'</div>'+voieTxt
-      +'<div class="a3-paraph">'+(feuilles||'<div class="a3-vide">Aucun acte généré. Générez les documents ci-dessus.</div>')+'</div>'
-      +'</div></div>';
+      +'<div class="a3-paraph">'+(feuilles||'<div class="a3-vide">Aucun acte généré.</div>')+'</div>';
+  }
+  window.a3OuvrirParapheur=function(id){
+    var d=dossier(id); if(!d||typeof mpOuvrir!=='function') return;
+    mpOuvrir('Parapheur', parapheurHTML(d),
+      '<button class="btn btn-pri" onclick="closeModal()">Fermer</button>',
+      {sub:(cli(d).denom||d.ref||'dossier')+' · actes à signer', taille:'l'});
+  };
+  function rafraichirParapheur(){
+    var d=dossier(); if(!d) return false;
+    if(typeof mpOuverte!=='function' || !mpOuverte()) return false;
+    if(!window.__mpCour || window.__mpCour.t!=='Parapheur') return false;
+    return mpMaj(parapheurHTML(d), null);
+  }
+  window.a3RafraichirParapheur=rafraichirParapheur;
+
+  /* ---------- la carte d'étape : l'état, et les portes d'entrée ---------- */
+  function carte(){
+    var d=dossier(); if(!d) return '';
+    var as=actes(d), sg=aSigner(d), ok=signes(d), s=S(d);
+    var z=concordance(d);
+    var gen=as.filter(function(a){ return genere(d,a.k); }).length;
+
+    function ligne(cl,mark,titre,det,bouton){
+      return '<div class="a3-etl '+cl+'"><span class="a3-etm">'+mark+'</span>'
+        +'<div class="a3-ett"><b>'+titre+'</b><em>'+det+'</em></div>'+bouton+'</div>';
+    }
+
+    var l1=ligne(gen===as.length?'ok':'at', gen===as.length?'✓':'·', 'Actes générés',
+      gen+' acte'+(gen>1?'s':'')+' sur '+as.length+' établi'+(gen>1?'s':'')+' depuis la fiche société', '');
+    var l2=ligne(z.rompus.length?'ko':'ok', z.rompus.length?'✗':'✓', 'Concordance des actes',
+      z.rompus.length
+        ? (z.rompus.length+' fait'+(z.rompus.length>1?'s':'')+' rompu'+(z.rompus.length>1?'s':'')+' — '+E(z.rompus[0].l))
+        : (z.faits.length+' faits confrontés à '+z.cols.length+' actes, sans contradiction'),
+      '<button class="btn btn-sm '+(z.rompus.length?'btn-pri':'btn-ghost')+'" onclick="a3OuvrirConc(null)">Ouvrir la table</button>');
+    var l3=ligne(sg.length&&ok.length===sg.length?'ok':'at', (sg.length&&ok.length===sg.length)?'✓':'·', 'Signatures',
+      sg.length ? (ok.length+' signé'+(ok.length>1?'s':'')+' sur '+sg.length+' acte'+(sg.length>1?'s':'')+' à signer')
+                : 'Aucun acte à signer pour l\'instant',
+      '<button class="btn btn-sm '+(sg.length&&ok.length<sg.length?'btn-pri':'btn-ghost')+'" onclick="a3OuvrirParapheur(null)">Ouvrir le parapheur</button>');
+
+    return '<div class="card crea-gen a3-card"><div class="card-h"><h2>Conformité et signature</h2>'
+      +(z.rompus.length
+        ? '<span class="a3-cpt ko">'+z.rompus.length+' fait'+(z.rompus.length>1?'s':'')+' rompu'+(z.rompus.length>1?'s':'')+'</span>'
+        : '<span class="a3-cpt ok">actes concordants</span>')
+      +'<span class="a3-q">'+ok.length+'/'+sg.length+' signés</span>'
+      +'</div><div class="card-b"><div class="a3-etat">'+l1+l2+l3+'</div></div></div>';
   }
   window.a3Card=carte;
 
@@ -31905,6 +32002,17 @@ function testLienRdv()  {
    '.a3-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}',
    /* — table de concordance — */
    '.a3-q{margin-left:auto;font:500 11px/1 ui-monospace,Menlo,monospace;color:#74767e;font-variant-numeric:tabular-nums}',
+   /* — sommaire de l'étape : trois lignes d'état, deux portes — */
+   '.a3-etat{display:flex;flex-direction:column;gap:1px;background:rgba(127,160,255,.10);border:1px solid rgba(127,160,255,.14);border-radius:10px;overflow:hidden}',
+   '.a3-etl{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:11px;align-items:center;padding:12px 13px;background:#141416}',
+   '.a3-etl.ok{background:rgba(67,181,129,.05)}',
+   '.a3-etl.ko{background:rgba(210,86,74,.06)}',
+   '.a3-etm{text-align:center;font:700 13px/1 ui-monospace,Menlo,monospace;color:#5f6270}',
+   '.a3-etl.ok .a3-etm{color:#43b581}.a3-etl.ko .a3-etm{color:#e2685c}.a3-etl.at .a3-etm{color:#d9a441}',
+   '.a3-ett{min-width:0}',
+   '.a3-ett b{display:block;font-size:13.5px;font-weight:600}',
+   '.a3-ett em{display:block;font-style:normal;font-size:11.5px;color:#74767e;margin-top:2px;line-height:1.5}',
+   '@media(max-width:640px){.a3-etl{grid-template-columns:22px minmax(0,1fr);row-gap:9px}.a3-etl .btn{grid-column:2}}',
    '.a3-conc-w{overflow-x:auto;border:1px solid #242428;border-radius:8px;margin-bottom:12px}',
    '@media(max-width:1500px){.a3-conc th,.a3-conc td{padding-left:8px;padding-right:8px}}',
    '.a3-conc{width:100%;table-layout:fixed;border-collapse:collapse;font-size:12px}',
@@ -33309,6 +33417,78 @@ function testLienRdv()  {
    '.bd8-j i.a{background:linear-gradient(180deg,#3a6fd8,#2f6fe0);border-bottom-color:#4c8dff}',
    '.bd8-n{font:600 12px/1 ui-monospace,Menlo,monospace;color:#a6a8b0;font-variant-numeric:tabular-nums;white-space:nowrap}',
    '.bd8-et{font:500 11px/1 ui-monospace,Menlo,monospace;color:#74767e;white-space:nowrap}'
+  ].join('');
+  document.head.appendChild(st);
+})();
+</script>
+<script id="mod-minipage">
+/* ============================================================================
+   mod-minipage — Une mini-page est une fenêtre de travail : on l'ouvre, on la
+   remplit, on la referme. Les cartes d'étape n'affichent plus que l'état et les
+   points d'entrée ; le détail vit ici. Bâti sur la modale du logiciel, élargi
+   selon le contenu, et rafraîchissable sans être refermé.
+   ========================================================================== */
+(function(){
+  if(window.__mp) return; window.__mp=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s); }
+  var TAILLES={m:'mp-m', l:'mp-l', xl:'mp-xl'};
+
+  function boite(){ return document.querySelector('#ov .modal'); }
+  function nettoie(){ var m=boite(); if(!m) return;
+    m.classList.remove('mp','mp-m','mp-l','mp-xl'); }
+
+  /* titre + sous-titre : on sait toujours sur quoi l'on travaille */
+  function entete(t,sub){
+    return E(t)+(sub?('<span class="mp-sub">'+E(sub)+'</span>'):'');
+  }
+
+  window.mpOuvrir=function(t,corps,pied,opt){
+    opt=opt||{};
+    if(typeof openModal!=='function') return;
+    openModal(entete(t,opt.sub), corps, pied||'<button class="btn btn-pri" onclick="closeModal()">Fermer</button>');
+    var m=boite(); if(m){ m.classList.add('mp'); m.classList.add(TAILLES[opt.taille]||'mp-l'); }
+    window.__mpCour={t:t, sub:opt.sub, taille:opt.taille};
+  };
+  window.mpOuverte=function(){
+    var o=document.getElementById('ov');
+    return !!(o && o.classList.contains('show') && boite() && boite().classList.contains('mp'));
+  };
+  /* remplace le contenu sans refermer : les actions d'une mini-page la rafraîchissent */
+  window.mpMaj=function(corps,pied,sub){
+    if(!mpOuverte()) return false;
+    var b=document.getElementById('ov-b'); if(b) b.innerHTML=corps;
+    if(pied!=null){ var f=document.getElementById('ov-f'); if(f) f.innerHTML=pied; }
+    if(sub!==undefined && window.__mpCour){
+      var t=document.getElementById('ov-t');
+      if(t) t.innerHTML=entete(window.__mpCour.t, sub);
+      window.__mpCour.sub=sub;
+    }
+    return true;
+  };
+  window.mpFermer=function(){ if(typeof closeModal==='function') closeModal(); };
+
+  /* la modale peut être fermée par la croix, la touche ou le fond : on nettoie */
+  function graftClose(){
+    if(window.__mpCl || typeof window.closeModal!=='function') return;
+    window.__mpCl=1;
+    var _c=window.closeModal;
+    window.closeModal=function(){ nettoie(); window.__mpCour=null; return _c.apply(this,arguments); };
+  }
+  graftClose(); setTimeout(graftClose,0); setTimeout(graftClose,1500);
+
+  var st=document.createElement('style'); st.id='mp-mod';
+  st.textContent=[
+   'html body #ov .modal.mp{max-width:none;width:min(96vw,1040px)}',
+   'html body #ov .modal.mp.mp-m{width:min(94vw,720px)}',
+   'html body #ov .modal.mp.mp-xl{width:min(97vw,1280px)}',
+   'html body #ov .modal.mp .modal-b{max-height:76vh;padding:18px}',
+   '.mp-sub{display:block;margin-top:3px;font:400 11.5px/1.4 ui-monospace,Menlo,monospace;color:#74767e;letter-spacing:.02em}',
+   /* barre d'outils et sections internes, communes à toutes les mini-pages */
+   '.mp-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 0 14px;margin-bottom:14px;border-bottom:1px solid #242428}',
+   '.mp-bar .mp-sp{margin-left:auto}',
+   '.mp-h{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:#74767e;margin:18px 0 9px}',
+   '.mp-h:first-child{margin-top:0}',
+   '.mp-nav{display:inline-flex;align-items:center;gap:6px;font:500 11.5px/1 ui-monospace,Menlo,monospace;color:#74767e}'
   ].join('');
   document.head.appendChild(st);
 })();
