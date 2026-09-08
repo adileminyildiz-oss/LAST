@@ -3322,7 +3322,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=561;
+var LAST_VER=562;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -30171,17 +30171,72 @@ function testLienRdv()  {
   };
 
   /* ---------- greffes ---------- */
+  /* La connexion OAuth ne fonctionne pas depuis l'application de bureau
+     (Google refuse l'origine « null ») : la carte de liaison est remplacée
+     par l'état de la passerelle, seule voie opérationnelle. */
+  function liaisonCard(){
+    var c=gw(), s=store(), ok=!!(c&&c.url&&c.key), sync=!!s.lastSync;
+    return '<div class="agw-link'+(ok?' ok':'')+'">'
+      +'<div class="agw-link-h">Agenda du cabinet'
+      +'<span class="agw-st '+(ok&&sync?'on':(ok?'wait':'off'))+'">'
+      +(ok&&sync?'Relié':(ok?'Passerelle prête — jamais synchronisé':'Non relié'))+'</span></div>'
+      +'<div class="agw-link-b">'
+      +(ok
+        ? 'Les rendez-vous passent par la passerelle du cabinet (<b>aemconseil.sas@gmail.com</b>) — aucun identifiant Google à saisir.'
+          +(sync?(' Dernière lecture le '+String(s.lastSync).slice(8,10)+'/'+String(s.lastSync).slice(5,7)+'.'):'')
+        : 'Reliez d\'abord la boîte mail du cabinet : l\'agenda utilise la même passerelle, sans identifiant Google supplémentaire.')
+      +'</div>'
+      +'<div class="agw-bar" style="margin:10px 0 0">'
+      +(ok?'<button class="btn btn-sm btn-pri" onclick="agwSync()">↻ Synchroniser l\'agenda</button>':'')
+      +'<button class="btn btn-sm '+(ok?'btn-ghost':'btn-pri')+'" onclick="if(typeof demSyncConfig===\'function\')demSyncConfig()">Configurer la passerelle</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="agwScript()">⚙ Script Google</button>'
+      +'</div></div>';
+  }
+
   function graftPage(){
     var _pa=window.pageAgenda;
     if(typeof _pa!=='function'||_pa.__agw) return;
     var w=function(){ var h=_pa.apply(this,arguments);
-      try{ if(typeof h==='string' && h.indexOf('agw-card')<0){
-        var i=h.indexOf('<div class="card');
-        h = (i>=0) ? (h.slice(0,i)+card()+h.slice(i)) : (h+card());
-      } }catch(e){}
-      return h; };
+      try{ graftOauth(); }catch(e){}
+      try{
+        if(typeof h!=='string') return h;
+        var box=document.createElement('div'); box.innerHTML=h;
+        var old=box.querySelector('.ag-sync');
+        if(old){ var d=document.createElement('div'); d.innerHTML=liaisonCard();
+                 old.parentNode.replaceChild(d.firstChild,old); }
+        if(!box.querySelector('.agw-card')){
+          var d2=document.createElement('div'); d2.innerHTML=card();
+          var first=box.querySelector('.card');
+          if(first&&first.parentNode) first.parentNode.insertBefore(d2.firstChild,first);
+          else box.appendChild(d2.firstChild);
+        }
+        return box.innerHTML;
+      }catch(e){ return h; }
+    };
     w.__agw=1; window.pageAgenda=w;
   }
+
+  /* l'ancienne voie OAuth ne peut pas aboutir ici : on la redirige */
+  function graftOauth(){
+    if(window.agSyncNow && !window.agSyncNow.__agw){
+      var f=function(){ return window.agwSync(); }; f.__agw=1; window.agSyncNow=f;
+    }
+    if(window.agSyncConfig && !window.agSyncConfig.__agw){
+      var g=function(){ if(typeof demSyncConfig==='function') return demSyncConfig();
+                        if(typeof toast==='function') toast('Paramètres → Communication → Boîte mail.'); };
+      g.__agw=1; window.agSyncConfig=g;
+    }
+    /* nettoie une configuration OAuth restée en place (URL collée dans le Client ID) */
+    try{
+      var cf=DB.parametres&&DB.parametres.agendaCfg;
+      if(cf){ var sale=false;
+        if(/^https?:/i.test(cf.clientId||'')){ cf.clientId=''; sale=true; }
+        if(/^https?:/i.test(cf.calId||'')){ cf.calId='aemconseil.sas@gmail.com'; sale=true; }
+        if(sale) try{save();}catch(e){}
+      }
+    }catch(e){}
+  }
+  graftOauth(); setTimeout(graftOauth,0); setTimeout(graftOauth,600);
   graftPage(); setTimeout(graftPage,0); setTimeout(graftPage,500);
 
   /* le mail d'acceptation du dossier porte le lien de prise de rendez-vous */
@@ -30247,6 +30302,15 @@ function testLienRdv()  {
   var st=document.createElement('style'); st.id='agw-mod';
   st.textContent=[
    '.agw-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}',
+   '.agw-link{border:1px solid var(--bd,#232a38);border-radius:12px;padding:13px 16px;margin-bottom:14px;background:var(--card,#0f1116)}',
+   '.agw-link.ok{border-color:rgba(77,141,255,.35)}',
+   '.agw-link-h{display:flex;align-items:center;gap:10px;font:600 13.5px/1.3 inherit;margin-bottom:5px}',
+   '.agw-link-b{color:#8f97a6;font-size:13px;line-height:1.5}',
+   '.agw-st{display:inline-flex;align-items:center;gap:6px;font:500 12px/1 inherit;color:#8f97a6}',
+   '.agw-st::before{content:"";width:7px;height:7px;border-radius:50%;background:#8f97a6}',
+   '.agw-st.on{color:#43b581}.agw-st.on::before{background:#43b581}',
+   '.agw-st.wait{color:#d7a03a}.agw-st.wait::before{background:#d7a03a}',
+   '.agw-st.off{color:#e2685c}.agw-st.off::before{background:#e2685c}',
    '.agw-err{border:1px solid #5c2c2c;background:rgba(226,104,92,.09);border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:13px;color:#e2685c}',
    '.agw-empty{color:#8f97a6;font-size:13.5px;padding:14px 2px}',
    '.agw-badge{margin-left:10px;background:#4d8dff;color:#fff;border-radius:20px;padding:2px 9px;font:600 11px/1.6 inherit}',
