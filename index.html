@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=599;
+var LAST_VER=600;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -35188,7 +35188,8 @@ function testLienRdv()  {
   window.psSetMois=function(id,m,k,v){ var x=salById(id); if(!x)return;
     x.mois[m]=x.mois[m]||{}; x.mois[m][k]=v; try{save();}catch(e){} psPaint(); };
   window.psAddSal=function(){ var s=PS();
-    s.salaries.push(fixSal({sal:{nom:'Nouveau salarié'}}));
+    var x=fixSal({sal:{nom:'Nouveau salarié'}}); s.salaries.push(x);
+    window.__psSel=x.id; window.__psTab='sal';
     try{save();}catch(e){} psPaint(); };
   window.psDelSal=function(id){ var s=PS(); var x=salById(id); if(!x)return;
     var go=function(){ s.salaries=s.salaries.filter(function(y){return y.id!==id;});
@@ -35211,7 +35212,8 @@ function testLienRdv()  {
   function lab(l,c){ return '<label class="ps-f"><span>'+E(l)+'</span>'+c+'</label>'; }
 
   function tabSalaries(){
-    var s=PS();
+    var s=PS(), sel=window.__psSel;
+    if(sel && sel!=='@par'){ var un=salById(sel); if(un) return ficheSal(un,s); }
     var emp='<div class="ps-card"><h3>Employeur</h3><div class="ps-grid">'
       +lab('Nom',fldE('nom',s.emp.nom))+lab('Adresse',fldE('adr',s.emp.adr))
       +lab('CP et ville',fldE('cpv',s.emp.cpv))+lab('Numéro APE',fldE('ape',s.emp.ape))
@@ -35235,10 +35237,12 @@ function testLienRdv()  {
       +lab('Formation professionnelle (%)',fldP('forma',s.par.forma))
       +lab('Taxe d\u2019apprentissage (%)',fldP('appr',s.par.appr))
       +'</div></div>';
-    var list=s.salaries.map(function(x){
+    return emp+par;
+  }
+  function ficheSal(x,s){
       var c=cumulSal(x);
       return '<div class="ps-card ps-sal"><div class="ps-sal-h"><h3>'+E(x.sal.nom||'Salarié')+'</h3>'
-        +'<span class="ps-badge">'+c.mois+' mois · brut '+fr(c.brut)+' €</span>'
+        +'<span class="ps-badge">'+c.mois+' mois · brut '+fr(c.brut)+' € · net '+fr(c.netPay)+' €</span>'
         +'<button class="ps-b ps-b-x" onclick="psDelSal(\''+x.id+'\')">Supprimer</button></div>'
         +'<div class="ps-grid">'
         +lab('Nom et prénom',fldS(x.id,'sal.nom',x.sal.nom))+lab('Adresse',fldS(x.id,'sal.adr',x.sal.adr))
@@ -35247,12 +35251,14 @@ function testLienRdv()  {
         +lab('Qualification',fldS(x.id,'sal.quali',x.sal.quali))+lab('Date d’ancienneté',fldS(x.id,'sal.anc',x.sal.anc))
         +lab('Taux horaire par défaut (€)',fldS(x.id,'tauxDefaut',x.tauxDefaut,s.par.smicH))
         +lab('Taux de prélèvement à la source (%)',fldS(x.id,'par.pas',(x.par||{}).pas,'0'))
-        +lab('Congés N-1 — dû / pris',fldS(x.id,'cp.n1du',x.cp.n1du,'dû')+fldS(x.id,'cp.n1pris',x.cp.n1pris,'pris'))
-        +lab('Congés N — dû / pris',fldS(x.id,'cp.ndu',x.cp.ndu,'dû')+fldS(x.id,'cp.npris',x.cp.npris,'pris'))
+        +lab('Congés N-1 — dû / pris','<div class="ps-duo">'+fldS(x.id,'cp.n1du',x.cp.n1du,'dû')+fldS(x.id,'cp.n1pris',x.cp.n1pris,'pris')+'</div>')
+        +lab('Congés N — dû / pris','<div class="ps-duo">'+fldS(x.id,'cp.ndu',x.cp.ndu,'dû')+fldS(x.id,'cp.npris',x.cp.npris,'pris')+'</div>')
+        +'</div></div>'
+        +'<div class="ps-card"><h3>Bulletins de l\u2019année</h3><div class="ps-mbar">'
+        +M.map(function(m,i){ var r=calcMois(x,m);
+            return '<button class="ps-m'+(r?' done':'')+'" onclick="psBulletin(\''+x.id+'\',\''+m+'\')">'
+              +ML[i].slice(0,4)+(r?(' · '+fr(r.netPay)):' · —')+'</button>'; }).join('')
         +'</div></div>';
-    }).join('');
-    return emp+par+(list||'<div class="ps-empty">Aucun salarié. Ajoutez-en un pour commencer.</div>')
-      +'<button class="ps-b ps-b-add" onclick="psAddSal()">+ Ajouter un salarié</button>';
   }
 
   function tabSaisie(){
@@ -35262,7 +35268,8 @@ function testLienRdv()  {
     if(!s.salaries.length) return bar+'<div class="ps-empty">Aucun salarié.</div>';
     var rows=s.salaries.map(function(x){
       var e=x.mois[m]||{}, r=calcMois(x,m);
-      return '<tr><td class="ps-l">'+E(x.sal.nom||'Salarié')+'</td>'
+      return '<tr'+(x.id===window.__psSel?' class="ps-cur"':'')+'><td class="ps-l">'
+        +'<button class="ps-lk" onclick="psSel(\''+x.id+'\')">'+E(x.sal.nom||'Salarié')+'</button></td>'
         +'<td>'+fldM(x.id,m,'heures',e.heures,s.par.heuresMois)+'</td>'
         +'<td>'+fldM(x.id,m,'taux',e.taux,(x.tauxDefaut||s.par.smicH))+'</td>'
         +'<td>'+fldM(x.id,m,'absH',e.absH,'0')+'</td>'
@@ -35287,9 +35294,8 @@ function testLienRdv()  {
   function tabMensuel(){
     var s=PS();
     if(!s.salaries.length) return '<div class="ps-empty">Aucun salarié.</div>';
-    var sel=window.__psSel||s.salaries[0].id, x=salById(sel)||s.salaries[0];
-    var pick='<div class="ps-mbar">'+s.salaries.map(function(y){
-      return '<button class="ps-m'+(y.id===x.id?' on':'')+'" onclick="psSel(\''+y.id+'\')">'+E(y.sal.nom||'Salarié')+'</button>'; }).join('')+'</div>';
+    var sel=window.__psSel, x=(sel&&sel!=='@par'?salById(sel):null)||s.salaries[0];
+    var pick='';
     var t={brut:0,cs:0,cp:0,ni:0,pas:0,np:0,h:0};
     var rows=M.map(function(m,i){ var r=calcMois(x,m);
       if(!r) return '<tr class="ps-vide"><td class="ps-l">'+ML[i]+'</td><td colspan="6" class="ps-n">non saisi</td>'
@@ -35320,7 +35326,8 @@ function testLienRdv()  {
     var rows=s.salaries.map(function(x){ var c=cumulSal(x);
       g.brut=r2(g.brut+c.brut); g.cs=r2(g.cs+c.cotSal); g.cp=r2(g.cp+c.cotPat); g.ni=r2(g.ni+c.netImp);
       g.pas=r2(g.pas+c.pas); g.np=r2(g.np+c.netPay); g.h=r2(g.h+c.heures); g.cout=r2(g.cout+c.cout);
-      return '<tr><td class="ps-l">'+E(x.sal.nom||'Salarié')+'</td><td class="ps-n">'+c.mois+'</td>'
+      return '<tr'+(x.id===window.__psSel?' class="ps-cur"':'')+'><td class="ps-l">'
+        +'<button class="ps-lk" onclick="psSel(\''+x.id+'\')">'+E(x.sal.nom||'Salarié')+'</button></td><td class="ps-n">'+c.mois+'</td>'
         +'<td class="ps-n">'+fr(c.brut)+'</td><td class="ps-n">'+fr(c.cotSal)+'</td>'
         +'<td class="ps-n">'+fr(c.cotPat)+'</td><td class="ps-n">'+fr(c.netImp)+'</td>'
         +'<td class="ps-n">'+fr(c.pas)+'</td><td class="ps-n ps-strong">'+fr(c.netPay)+'</td>'
@@ -35337,6 +35344,22 @@ function testLienRdv()  {
       +'<td class="ps-n">'+f2(g.h)+'</td><td class="ps-n">'+fr(g.cout)+'</td></tr></table></div></div>';
   }
 
+  function rail(s){
+    var sel=window.__psSel;
+    return '<aside class="ps-rail">'
+      +'<div class="ps-rh">Salariés</div>'
+      +(s.salaries.length?s.salaries.map(function(x){ var c=cumulSal(x);
+          return '<button class="ps-ri'+(x.id===sel?' on':'')+'" onclick="psSel(\''+x.id+'\')">'
+            +'<span class="ps-ri-n">'+E(x.sal.nom||'Salarié')+'</span>'
+            +'<span class="ps-ri-m">'+E(x.sal.emploi||'—')+' · '+c.mois+'/12</span></button>'; }).join('')
+        :'<div class="ps-ri-vide">Aucun salarié</div>')
+      +'<button class="ps-ri ps-ri-add" onclick="psAddSal()">+ Ajouter un salarié</button>'
+      +'<div class="ps-rh">Dossier</div>'
+      +'<button class="ps-ri'+(sel==='@par'?' on':'')+'" onclick="psSel(\'@par\')">'
+      +'<span class="ps-ri-n">Employeur &amp; paramètres</span>'
+      +'<span class="ps-ri-m">'+E(s.emp.nom||'à renseigner')+'</span></button>'
+      +'</aside>';
+  }
   function psPaint(){
     var ov=document.getElementById('pf-ov'); if(!ov||window.__pfTpl!=='__psuivi') return;
     var t=window.__psTab||'sal', s=PS();
@@ -35352,7 +35375,7 @@ function testLienRdv()  {
       +annees().map(function(a){ return '<button class="ps-exb'+(a===PSroot().courante?' on':'')+'" onclick="psAnnee(\''+a+'\')">'+a+'</button>'; }).join('')
       +'<button class="ps-exb ps-exb-add" onclick="psAjouterAnnee()" title="Ouvrir un nouvel exercice">+</button>'
       +(annees().length>1?('<button class="ps-exb ps-exb-x" onclick="psSupprimerAnnee(\''+PSroot().courante+'\')" title="Supprimer cet exercice">×</button>'):'')
-      +'</div></div><div class="ps-content">'+body+'</div></div>';
+      +'</div></div><div class="ps-cols">'+rail(s)+'<div class="ps-content">'+body+'</div></div></div>';
     css();
   }
   window.psPaint=psPaint;
@@ -35379,6 +35402,53 @@ function testLienRdv()  {
       }catch(e){}
       return o; }; window.paie26Set.__ps=1; } }catch(e){}
 
+  /* ── Le bulletin ouvert depuis le plan de travail devient une vue de travail :
+     on y change de salarié et de mois sans repasser par les onglets. ───────── */
+  window.psGoto=function(id,m){ var x=salById(id); if(!x)return;
+    var e=x.mois[m]||{};
+    if(!(n(e.heures)>0 && n(e.taux)>0)){   /* un mois vide s'amorce sur les valeurs par défaut */
+      var st=PS(); x.mois[m]={heures:st.par.heuresMois, taux:(x.tauxDefaut||st.par.smicH)};
+      try{save();}catch(e2){}
+    }
+    window.__psMois=m; window.__psSel=id; window.paie26Open(docFor(x,m)); };
+  window.psMoisRel=function(d){ var doc=window.__pfDoc; if(!doc||!doc.__ps)return;
+    var i=M.indexOf(doc.__ps.mois)+d; if(i<0||i>11)return; psGoto(doc.__ps.sal,M[i]); };
+  window.psRetour=function(){ window.__psBack=null; try{save();}catch(e){} window.paieSuiviOpen(); };
+  function navBulletin(){
+    var doc=window.__pfDoc; if(!doc||!doc.__ps) return;
+    var top=document.querySelector('#pf-ov .pf-top'); if(!top||top.querySelector('.psnav')) return;
+    var s=PS(), x=salById(doc.__ps.sal), m=doc.__ps.mois, i=M.indexOf(m);
+    if(!x) return;
+    var c=cumulSal(x), r=calcMois(x,m);
+    var d=document.createElement('div'); d.className='psnav';
+    d.innerHTML='<button class="psnav-b psnav-back" onclick="psRetour()">‹ Plan de travail</button>'
+      +'<select class="psnav-s" onchange="psGoto(this.value,\''+m+'\')">'
+      +s.salaries.map(function(y){ return '<option value="'+y.id+'"'+(y.id===x.id?' selected':'')+'>'+E(y.sal.nom||'Salarié')+'</option>'; }).join('')
+      +'</select>'
+      +'<button class="psnav-b'+(i<=0?' off':'')+'" onclick="psMoisRel(-1)" title="Mois précédent">‹</button>'
+      +'<select class="psnav-s psnav-m" onchange="psGoto(\''+x.id+'\',this.value)">'
+      +M.map(function(k,j){ var rempli=moisRempli(x,k);
+          return '<option value="'+k+'"'+(k===m?' selected':'')+'>'+ML[j]+(rempli?'':' — à faire')+'</option>'; }).join('')
+      +'</select>'
+      +'<button class="psnav-b'+(i>=11?' off':'')+'" onclick="psMoisRel(1)" title="Mois suivant">›</button>'
+      +'<span class="psnav-c">Cumul '+E(s.annee)+' · brut <b>'+fr(c.brut)+' €</b> · net <b>'+fr(c.netPay)+' €</b>'
+      +(r?(' · ce mois <b>'+fr(r.netPay)+' €</b>'):'')+'</span>';
+    var t=top.querySelector('.pf-title');
+    if(t&&t.nextSibling) top.insertBefore(d,t.nextSibling); else top.appendChild(d);
+  }
+  /* paie26Open appelle son rendu interne : on accroche les deux points d'entrée. */
+  try{ var _r26=window.paie26Render; if(typeof _r26==='function'&&!_r26.__ps){
+    window.paie26Render=function(){ var o=_r26.apply(this,arguments);
+      try{ navBulletin(); }catch(e){} return o; }; window.paie26Render.__ps=1; } }catch(e){}
+  try{ var _o26=window.paie26Open; if(typeof _o26==='function'&&!_o26.__ps){
+    window.paie26Open=function(){ var o=_o26.apply(this,arguments);
+      try{ navBulletin(); }catch(e){} return o; }; window.paie26Open.__ps=1; } }catch(e){}
+  /* Le cumul de la barre suit chaque frappe du volet de saisie. */
+  try{ var _s26=window.paie26Set; if(typeof _s26==='function'&&!_s26.__psnav){
+    window.paie26Set=function(k,v){ var o=_s26.apply(this,arguments);
+      try{ var d=document.querySelector('#pf-ov .psnav'); if(d){ d.remove(); navBulletin(); } }catch(e){}
+      return o; }; window.paie26Set.__psnav=1; } }catch(e){}
+
   /* Retour au plan de travail à la fermeture d'un bulletin ouvert depuis lui */
   try{ var _c=window.pfCloseAsk; if(typeof _c==='function'&&!_c.__ps){
     window.pfCloseAsk=function(){ var b=window.__psBack;
@@ -35399,7 +35469,29 @@ function testLienRdv()  {
     +'.ps-exb.on{background:rgba(120,170,255,.2);border-color:rgba(120,170,255,.42);font-weight:600}'
     +'.ps-exb-add{font-size:14px;line-height:1;padding:4px 10px}'
     +'.ps-exb-x{color:#ff8a8a;border-color:rgba(255,120,120,.28);font-size:14px;line-height:1;padding:4px 9px}'
-    +'.ps-content{flex:1;overflow:auto;padding:14px 16px 28px}'
+    +'.ps-cols{flex:1;display:flex;min-height:0}'
+    +'.ps-content{flex:1;overflow:auto;padding:14px 16px 28px;min-width:0}'
+    +'.ps-rail{width:214px;flex:none;border-right:1px solid rgba(255,255,255,.10);overflow:auto;'
+    +'padding:12px 10px 20px;display:flex;flex-direction:column;gap:2px;background:rgba(255,255,255,.02)}'
+    +'.ps-rh{font-size:10px;letter-spacing:.1em;text-transform:uppercase;opacity:.5;margin:10px 8px 4px}'
+    +'.ps-rh:first-child{margin-top:2px}'
+    +'.ps-ri{display:flex;flex-direction:column;gap:1px;width:100%;text-align:left;border:0;'
+    +'background:transparent;color:inherit;font:inherit;padding:8px 10px;border-radius:9px;cursor:pointer}'
+    +'.ps-ri:hover{background:rgba(255,255,255,.06)}'
+    +'.ps-ri.on{background:rgba(120,170,255,.16)}'
+    +'.ps-ri-n{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    +'.ps-ri.on .ps-ri-n{color:#9ec4ff}'
+    +'.ps-ri-m{font-size:11px;opacity:.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    +'.ps-ri-add{color:#9ec4ff;font-size:12.5px;margin-top:4px}'
+    +'.ps-ri-vide{padding:8px 10px;font-size:12px;opacity:.5}'
+    +'.ps-lk{border:0;background:none;color:inherit;font:inherit;padding:0;cursor:pointer;'
+    +'text-align:left;border-bottom:1px solid transparent}'
+    +'.ps-lk:hover{border-bottom-color:currentColor}'
+    +'.ps-cur td{background:rgba(120,170,255,.09)}'
+    +'.ps-m.done{border-color:rgba(120,170,255,.32)}'
+    +'@media(max-width:900px){.ps-cols{flex-direction:column}'
+    +'.ps-rail{width:auto;flex-direction:row;flex-wrap:wrap;border-right:0;'
+    +'border-bottom:1px solid rgba(255,255,255,.10)}.ps-rh{width:100%}}'
     +'.ps-card{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px 16px;margin-bottom:14px;'
     +'background:rgba(255,255,255,.025)}'
     +'.ps-card h3{margin:0 0 10px;font-size:13.5px;letter-spacing:.02em}'
@@ -35409,7 +35501,8 @@ function testLienRdv()  {
     +'.ps-i{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.14);border-radius:8px;'
     +'padding:7px 9px;color:inherit;font:inherit;font-size:13px;width:100%;box-sizing:border-box}'
     +'.ps-i:focus{outline:none;border-color:#2f8fff;box-shadow:0 0 0 3px rgba(47,143,255,.18)}'
-    +'.ps-f .ps-i+.ps-i{margin-top:5px}'
+    +'.ps-duo{display:grid;grid-template-columns:1fr 1fr;gap:6px}'
+    +'.ps-duo .ps-i{margin:0}'
     +'.ps-num{text-align:right;font-variant-numeric:tabular-nums}'
     +'.ps-scroll{overflow:auto}'
     +'.ps-t{width:100%;border-collapse:collapse;font-size:12.5px}'
@@ -35433,7 +35526,18 @@ function testLienRdv()  {
     +'.ps-sal-h{display:flex;align-items:center;gap:10px;margin-bottom:8px}'
     +'.ps-sal-h h3{margin:0;flex:1}'
     +'.ps-badge{font-size:11px;opacity:.7;font-variant-numeric:tabular-nums}'
-    +'.ps-empty{padding:24px 4px;opacity:.6;font-size:13px}';
+    +'.ps-empty{padding:24px 4px;opacity:.6;font-size:13px}'
+    +'.psnav{display:flex;align-items:center;gap:7px;margin-left:18px;flex-wrap:wrap}'
+    +'.psnav-b{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:inherit;'
+    +'font:inherit;font-size:12px;padding:6px 11px;border-radius:8px;cursor:pointer}'
+    +'.psnav-b:hover{background:rgba(255,255,255,.1)}'
+    +'.psnav-b.off{opacity:.35;pointer-events:none}'
+    +'.psnav-back{border-color:rgba(120,170,255,.4);color:#9ec4ff}'
+    +'.psnav-s{border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.35);color:inherit;'
+    +'font:inherit;font-size:12px;padding:6px 9px;border-radius:8px;cursor:pointer;max-width:190px}'
+    +'.psnav-m{min-width:132px}'
+    +'.psnav-c{font-size:11.5px;opacity:.72;margin-left:6px;font-variant-numeric:tabular-nums}'
+    +'.psnav-c b{opacity:1;font-weight:600}';
   function css(){ try{ var st=document.getElementById('ps-css');
     if(!st){ st=document.createElement('style'); st.id='ps-css'; st.textContent=CSS; }
     document.head.appendChild(st); }catch(e){} }
