@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=613;
+var LAST_VER=614;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -36744,6 +36744,115 @@ function testLienRdv()  {
    +'.fi-reg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:4px 18px}.fi-reg-it{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12.5px}.fi-reg-l{flex:0 0 150px;opacity:.65}.fi-reg-v{flex:1;word-break:break-word}'
    +'.fi-reg-sub{margin:12px 0 4px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.7}.fi-reg-links{margin-top:12px;font-size:12px;opacity:.85}.fi-reg-links a{color:#5ab0ff}'
    +'.fi-reg-btn{margin-left:6px;white-space:nowrap}';
+  document.head.appendChild(st);
+})();
+</script>
+
+<script>
+/* ===== sommaire.js — Formulaire : format « Sommaire ancré + dossier en direct » (v614) =====
+   Trois colonnes : sommaire des sections (état complet / manques, clic = défilement),
+   fiche continue au centre (toutes les sections visibles, plus de parcours 1-6),
+   dossier en direct à droite (récapitulatif, informations en ligne, manques, brouillon).
+   Les champs remplis depuis internet portent un liseré bleu. 100 % additif : la page
+   est réorganisée après son rendu, les champs et les fonctions existants sont inchangés. */
+(function(){
+  if(window.__ffSommaire) return; window.__ffSommaire=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function FD(){ return (window.__formData&&typeof window.__formData==='object')?window.__formData:{}; }
+  function g(o,p){ var ks=p.split('.'); for(var i=0;i<ks.length;i++){ o=o&&o[ks[i]]; if(o==null)return ''; } return (typeof o==='object')?'':String(o); }
+  function slug(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+  function titleOf(c){ var h=c.querySelector('.card-h h2, summary'); return h?h.textContent.trim():''; }
+  function fields(c){ return Array.prototype.filter.call(c.querySelectorAll('input,select,textarea'),function(i){ var t=(i.type||'').toLowerCase(); return !i.readOnly&&!i.disabled&&t!=='button'&&t!=='submit'&&t!=='checkbox'&&t!=='radio'&&t!=='file'&&!i.closest('.fi-reg,.fi-drafts,.ff-side,.ff-rail'); }); }
+  function filled(i){ return String(i.value==null?'':i.value).trim()!==''; }
+  function etat(c){ var fs=fields(c); var blocs=c.querySelectorAll('.fi-assoc').length;
+    if(!fs.length){ return blocs?{k:'ok',n:0,t:0,f:0}:{k:'empty',n:0,t:0,f:0}; }
+    var f=fs.filter(filled).length; var n=fs.length-f;
+    return {k:(n===0?'ok':(f===0?'empty':'warn')),n:n,t:fs.length,f:f}; }
+  function manques(){ try{ var m=window.formManques&&window.formManques(); if(Array.isArray(m))return m.map(function(x){return (typeof x==='string')?x:(x&&(x.label||x.l||x.txt))||'';}).filter(Boolean); }catch(e){} return []; }
+  var MK={siege:'Transfert de siège social',dirigeant:'Changement de dirigeant',denomination:'Changement de dénomination',objet:'Changement d\'objet social',capital:'Modification de capital',transformation:'Transformation de la forme sociale',cession:'Cession de parts / d\'actions',dissolution:'Dissolution & mise en liquidation',radiation:'Clôture de liquidation & radiation',cloture:'Changement de date de clôture'};
+
+  /* ---------- Mise en page ---------- */
+  function layout(){ if(typeof state==='undefined'||state.page!=='formulaire')return; var wrap=document.querySelector('#view .fi-wrap'); if(!wrap||wrap.dataset.ff)return;
+    wrap.dataset.ff='1'; wrap.classList.add('ff'); wrap.classList.remove('wz4on');
+    Array.prototype.forEach.call(wrap.querySelectorAll('.wz4-pills,.wz4-nav'),function(e){ e.remove(); });
+    Array.prototype.forEach.call(wrap.children,function(c){ if(c.style&&c.style.display==='none')c.style.display=''; });
+    var act=wrap.querySelector('.fi-actions'); if(act)act.style.display='';
+    var grid=document.createElement('div'); grid.className='ff-grid';
+    var rail=document.createElement('nav'); rail.className='ff-rail'; rail.setAttribute('aria-label','Sommaire du formulaire');
+    var fiche=document.createElement('div'); fiche.className='ff-fiche';
+    var side=document.createElement('aside'); side.className='ff-side';
+    var kids=Array.prototype.slice.call(wrap.children);
+    kids.forEach(function(c){ if(c.classList&&c.classList.contains('fi-actions'))return; fiche.appendChild(c); });
+    grid.appendChild(rail); grid.appendChild(fiche); grid.appendChild(side); wrap.insertBefore(grid,wrap.firstChild);
+    paint(); }
+  function sections(){ var f=document.querySelector('#view .ff-fiche'); if(!f)return []; return Array.prototype.filter.call(f.children,function(c){ return c.classList&&c.classList.contains('fi-card')&&!c.classList.contains('fi-head')&&!c.classList.contains('fi-drafts')&&!c.classList.contains('fi-reg')&&!c.classList.contains('fi-reco-card'); }); }
+
+  /* ---------- Sommaire ---------- */
+  function paintRail(){ var rail=document.querySelector('#view .ff-rail'); if(!rail)return; var secs=sections(); var tot=0,fil=0; var cur=rail.getAttribute('data-on')||'';
+    var items=secs.map(function(c,i){ var t=titleOf(c)||('Section '+(i+1)); var id='ff-'+slug(t).slice(0,40); c.id=id; var s=etat(c); tot+=s.t; fil+=s.f;
+      return '<div class="it'+(cur===id?' on':'')+'" data-id="'+id+'" title="'+E(t)+(s.n?(' — '+s.n+' champ(s) vide(s)'):'')+'"><b class="ff-dot '+s.k+'"></b><span>'+E(t)+'</span>'+(s.n&&s.k==='warn'?('<small>'+s.n+'</small>'):'')+'</div>'; }).join('');
+    var ml=manques(); var pct=tot?Math.round(fil/tot*100):0;
+    var reco=document.querySelector('#view .fi-reco-card'); var recoIt=reco?'<div class="it reco" data-id="ff-reco"><b class="ff-dot acc"></b><span>Recommandation</span></div>':''; if(reco)reco.id='ff-reco';
+    rail.innerHTML='<div class="h">Sommaire</div>'+items+recoIt+'<div class="h" style="margin-top:8px">Complétude</div><div class="ff-prog"><div class="ff-bar"><b style="width:'+pct+'%"></b></div><div class="ff-prog-t">'+fil+' / '+tot+' champs · '+(ml.length?(ml.length+' manque'+(ml.length>1?'s':'')):'aucun manque')+'</div></div>';
+    Array.prototype.forEach.call(rail.querySelectorAll('.it'),function(it){ it.addEventListener('click',function(){ var el=document.getElementById(it.getAttribute('data-id')); if(!el)return; rail.setAttribute('data-on',it.getAttribute('data-id')); Array.prototype.forEach.call(rail.querySelectorAll('.it'),function(x){x.classList.toggle('on',x===it);}); try{ el.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){ el.scrollIntoView(); } var f=fields(el)[0]; if(f)setTimeout(function(){ try{f.focus({preventScroll:true});}catch(e){} },350); }); }); }
+  function railFollow(){ var rail=document.querySelector('#view .ff-rail'); if(!rail)return; var secs=sections(); var best=null,bd=1e9; var y=90;
+    secs.forEach(function(c){ var r=c.getBoundingClientRect(); var d=Math.abs(r.top-y); if(r.bottom>y&&d<bd){bd=d;best=c;} }); if(!best&&secs.length){ best=secs[secs.length-1]; }
+    if(best){ rail.setAttribute('data-on',best.id); Array.prototype.forEach.call(rail.querySelectorAll('.it'),function(x){x.classList.toggle('on',x.getAttribute('data-id')===best.id);}); } }
+
+  /* ---------- Dossier en direct ---------- */
+  function kv(l,v){ return '<div class="ff-kv"><span>'+E(l)+'</span><b>'+(v?E(v):'<em>—</em>')+'</b></div>'; }
+  function paintSide(){ var side=document.querySelector('#view .ff-side'); if(!side)return; var o=FD(); var modif=(o.nature==='modification'); var R=o.extra&&o.extra.registre; var ml=manques();
+    var rec; if(modif){ rec=kv('Société',g(o,'modif.societe.denomination'))+kv('Forme',(g(o,'modif.societe.forme')||'').toUpperCase())+kv('SIREN',g(o,'modif.societe.siren'))+kv('Modification',MK[g(o,'modif.kind')]||g(o,'modif.kind')||'—')+kv('Date d\'effet',g(o,'modif.dates.effet'))+kv('Signataire',(g(o,'modif.signataire.prenom')+' '+g(o,'modif.signataire.nom')).trim()); }
+    else{ var cap=g(o,'societe.capital'); rec=kv('Société',g(o,'societe.denomination'))+kv('Forme',(o.type||'sas').toUpperCase())+kv('Capital',cap?(cap.replace(/\B(?=(\d{3})+(?!\d))/g,' ')+' €'):'')+kv('Dirigeant',(g(o,'direction.prenom')+' '+g(o,'direction.nom')).trim())+kv('Siège',[g(o,'siege.cp'),g(o,'siege.ville')].filter(Boolean).join(' '))+kv('Clôture',g(o,'dates.clotureAnnuelle'))+kv('Contact',g(o,'contact.email')); }
+    var q=modif?g(o,'modif.societe.siren'):(g(o,'societe.siret')||g(o,'societe.siren'));
+    var online; if(window.__regBusy){ online='<div class="ff-hint">Recherche en cours…</div>'; }
+    else if(R){ var okS=(R.sources||[]).filter(function(s){return s.ok;}).length; online='<div class="ff-hint"><b>'+E(R.nb||0)+'</b> informations · '+okS+'/'+(R.sources||[]).length+' sources · '+E(R.denom||'')+'</div><div class="ff-btns"><button type="button" class="btn btn-sm btn-pri" onclick="formRegistreAppliquer(\'vides\')">Compléter les vides</button><button type="button" class="btn btn-sm btn-ghost" onclick="formRegistreAppliquer(\'tout\')">Tout appliquer</button><button type="button" class="btn btn-sm btn-ghost" onclick="ffVoirEnLigne()">Voir le détail</button></div>'; }
+    else{ online='<div class="ff-hint">Saisissez le '+(modif?'SIREN':'SIRET ou SIREN')+' : la société est pré-remplie depuis les registres (INSEE / INPI, BODACC, convention collective).</div>'+(q&&q.replace(/\D/g,'').length>=9?'<div class="ff-btns"><button type="button" class="btn btn-sm btn-pri" onclick="formRegistre(\''+E(q.replace(/\D/g,''))+'\')">Rechercher en ligne</button></div>':''); }
+    var mq=ml.length?('<ul class="ff-mq">'+ml.slice(0,10).map(function(x){return '<li>'+E(x)+'</li>';}).join('')+(ml.length>10?('<li>… et '+(ml.length-10)+' autre(s)</li>'):'')+'</ul>'):'<div class="ff-hint ok">Rien à signaler — le dossier est complet.</div>';
+    var dr=null; try{ dr=(DB.parametres.formDrafts||[])[0]; }catch(e){}
+    side.innerHTML='<div class="card ff-card"><div class="card-b"><h5>Dossier en direct</h5>'+rec+'</div></div>'
+      +'<div class="card ff-card"><div class="card-b"><h5>🌐 En ligne'+(R?' <span class="ff-tag ok">'+((R.sources||[]).filter(function(s){return s.ok;}).length)+' sources</span>':'')+'</h5>'+online+'</div></div>'
+      +'<div class="card ff-card"><div class="card-b"><h5>À compléter'+(ml.length?' <span class="ff-tag warn">'+ml.length+'</span>':'')+'</h5>'+mq+'</div></div>'
+      +'<div class="card ff-card"><div class="card-b"><h5>Brouillon</h5><div class="ff-hint">'+(dr&&dr.ts?('Dernier : '+E(dr.label||'')+' · '+E(new Date(dr.ts).toLocaleString('fr-FR'))):'Aucun brouillon nommé pour l\'instant.')+'</div><div class="ff-btns"><button type="button" class="btn btn-sm btn-ghost" onclick="formBrouillon()">Enregistrer le brouillon</button></div><div class="ff-hint dim">La saisie est enregistrée automatiquement avant toute mise à jour.</div></div></div>'; }
+  window.ffVoirEnLigne=function(){ try{ var o=FD(); o.extra=o.extra||{}; delete o.extra.registreMasque; if(typeof render==='function')render(); setTimeout(function(){ var p=document.querySelector('#view .fi-reg'); if(p)p.scrollIntoView({behavior:'smooth',block:'start'}); },80); }catch(e){} };
+
+  /* ---------- Liseré bleu : champs remplis depuis internet ---------- */
+  function autoVals(R){ if(!R)return null; var v=[R.denom,R.sigle,R.siren,R.siret,R.siegeSiret,R.tva,R.ape,R.capital,R.objet,R.rcsVille,R.tribunal]; var a=R.adresse||{}; v.push(a.rue,a.cp,a.ville,[a.rue,(a.cp+' '+a.ville).trim()].filter(Boolean).join(', '));
+    (R.dirigeants||[]).forEach(function(d){ v.push(d.nom,d.prenom,d.qualite,d.nationalite); }); if(R.type)v.push(R.type); if(R.creation){ var p=String(R.creation).slice(0,10).split('-'); if(p.length===3)v.push(p[2]+'/'+p[1]+'/'+p[0]); }
+    if(R.cloture){ var m=parseInt(String(R.cloture).slice(5,7),10); var M=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre']; v.push(parseInt(String(R.cloture).slice(8,10),10)+' '+(M[m-1]||'')); }
+    var set={}; v.forEach(function(x){ if(x!=null&&String(x).trim()!=='')set[String(x).trim().toLowerCase()]=1; }); return set; }
+  function paintAuto(){ var f=document.querySelector('#view .ff-fiche'); if(!f)return; var o=FD(); var set=autoVals(o.extra&&o.extra.registre);
+    Array.prototype.forEach.call(f.querySelectorAll('input,select,textarea'),function(i){ var on=!!(set&&filled(i)&&set[String(i.value).trim().toLowerCase()]); i.classList.toggle('ff-auto',on); }); }
+
+  function paint(){ try{ paintRail(); paintSide(); paintAuto(); railFollow(); }catch(e){} }
+  var t=null; function later(){ clearTimeout(t); t=setTimeout(paint,220); }
+  document.addEventListener('input',function(ev){ if(ev.target&&ev.target.closest&&ev.target.closest('#view .ff-fiche'))later(); },true);
+  document.addEventListener('change',function(ev){ if(ev.target&&ev.target.closest&&ev.target.closest('#view .ff-fiche'))later(); },true);
+  document.addEventListener('scroll',function(){ if(document.querySelector('#view .ff-rail')){ clearTimeout(window.__ffSc); window.__ffSc=setTimeout(railFollow,80); } },true);
+  try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var out=_r.apply(this,arguments); try{ layout(); }catch(e){} return out; }; } }catch(e){}
+  try{ layout(); }catch(e){}
+
+  var st=document.createElement('style'); st.id='ff-sommaire-mod'; st.textContent=
+    '.fi-wrap.ff{max-width:none!important;margin:0!important}.fi-wrap.ff .fi-actions-col{max-width:none}'
+   +'.ff-grid{display:grid;grid-template-columns:186px minmax(0,1fr) 240px;gap:16px;align-items:start}'
+   +'.ff-rail,.ff-side{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;scrollbar-width:thin}'
+   +'.ff-rail{background:#0e1117;border:1px solid #232830;border-radius:12px;padding:8px}'
+   +'.ff-rail .h{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#7c8594!important;padding:6px 8px 4px;font-weight:600}'
+   +'.ff-rail .it{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:12.5px;color:#aeb6c2!important;line-height:1.25}'
+   +'.ff-rail .it span{color:inherit!important;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ff-rail .it:hover{background:#171c25}'
+   +'.ff-rail .it.on{background:#1b2130;color:#fff!important;box-shadow:inset 2px 0 0 #4f9dff}'
+   +'html body .ff-rail .ff-dot{display:inline-block;width:8px;height:8px;min-width:0;padding:0;margin:0;border-radius:50%;background:#2f3541;flex:none;font-size:0;line-height:0}html body .ff-rail .ff-dot.ok{background:#3fbf7f}html body .ff-rail .ff-dot.warn{background:#e0a100}html body .ff-rail .ff-dot.acc{background:#4f9dff}'
+   +'.ff-rail .it small{font:10px ui-monospace,Menlo,monospace;color:#e0a100!important;background:rgba(224,161,0,.12);border-radius:999px;padding:1px 6px}'
+   +'.ff-prog{padding:4px 8px 6px}.ff-bar{height:5px;border-radius:3px;background:#232830;overflow:hidden}.ff-bar b{display:block;height:100%;background:#4f9dff;transition:width .3s}.ff-prog-t{font:10.5px ui-monospace,Menlo,monospace;color:#7c8594!important;margin-top:5px}'
+   +'.ff-fiche>.fi-card{margin-top:12px;scroll-margin-top:14px}.ff-fiche>.fi-card:first-child,.ff-fiche>.fi-head{margin-top:0}.ff-fiche>.fi-head+.fi-card{margin-top:12px}'
+   +'.ff-side .ff-card{margin:0 0 10px}.ff-side .ff-card .card-b{padding:12px 14px}.ff-side h5{margin:0 0 8px;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:8px}'
+   +'.ff-kv{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.06)}.ff-kv span{color:#8d95a5!important}.ff-kv b{font-weight:500;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}.ff-kv em{color:#5d6575!important;font-style:normal}'
+   +'.ff-hint{font-size:11.5px;color:#aeb6c2!important;line-height:1.45}.ff-hint.ok{color:#3fbf7f!important}.ff-hint.dim{color:#7c8594!important;margin-top:6px;font-size:10.5px}.ff-hint b{color:#fff!important}'
+   +'.ff-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.ff-btns .btn{width:auto}'
+   +'.ff-mq{margin:0;padding-left:16px;font-size:11.5px;color:#e0a100!important;line-height:1.5}.ff-mq li{color:#f0c85a!important}'
+   +'.ff-tag{font:600 10px ui-monospace,Menlo,monospace;border-radius:999px;padding:1px 7px;border:1px solid}.ff-tag.ok{color:#3fbf7f!important;border-color:rgba(63,191,127,.45)}.ff-tag.warn{color:#e0a100!important;border-color:rgba(224,161,0,.45)}'
+   +'html body .ff-fiche input.ff-auto,html body .ff-fiche select.ff-auto,html body .ff-fiche textarea.ff-auto{border-color:rgba(79,157,255,.6)!important;box-shadow:inset 0 0 0 1px rgba(79,157,255,.18)!important}'
+   +'@media(max-width:1100px){.ff-grid{grid-template-columns:1fr}.ff-rail,.ff-side{position:static;max-height:none}.ff-rail{display:flex;flex-wrap:wrap;gap:2px}.ff-rail .h,.ff-prog{width:100%}}';
   document.head.appendChild(st);
 })();
 </script>
