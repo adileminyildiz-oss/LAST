@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=602;
+var LAST_VER=603;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -23249,8 +23249,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var mutPatMt=r2(brut*mutP/100);
     var csgBase=r2(r2(brut*PARAM.csgBase/100)+mutPatMt);
     var plaf=Math.min(brut, PARAM.pmss);
-    /* Taux patronaux à seuil : maladie 7 % jusqu'à 2,5 SMIC puis 13 % ; allocations familiales
-       3,45 % jusqu'à 3,5 SMIC puis 5,25 %. */
+    /* Taux patronaux à seuil : maladie 7 % jusqu'au seuil du barème 2026 (2,25 SMIC) puis 13 % ;
+       allocations familiales 3,45 % sous 3,3 SMIC puis 5,25 %. Les seuils suivent BAR26. */
     var smicM=num(PARAM.smicMensuel)||1801.80;
     /* « Autres contributions dues par l'employeur » : le gabarit n'offre qu'un rang, mais
        la ligne agrège plusieurs contributions distinctes, chacune avec sa base et son taux.
@@ -23268,7 +23268,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     };
     var autMt=0; Object.keys(aut).forEach(function(x){ aut[x].mt=r2(aut[x].base*aut[x].tx/100); autMt=r2(autMt+aut[x].mt); });
     var txAutres=brut?(autMt/brut*100):0;
-    var txMal=(brut<=r2(2.5*smicM))?7.00:13.00, txFam=(brut<=r2(3.5*smicM))?3.45:5.25;
+    var B26=window.BAR26||{}, sMal=+B26.malSeuil||2.25, sFam=+B26.famSeuil||3.3;
+    var txMal=(brut<=r2(sMal*smicM))?7.00:13.00, txFam=(brut<r2(sFam*smicM))?3.45:5.25;
     var totSalDed=0, totSal=0, totPat=0, byCode={};
     var lignes=COTIS().map(function(c){
       var sal=c.sal==='MUTS'?mutS:(c.sal==='MUTP'?mutP:c.sal);
@@ -23373,7 +23374,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     return '<div class="pfs-row pfs-row-text pfs-row-taux"><label>Taux appliqués d\u2019office</label><div class="pfs-cols pfs-cols1">'
       +'<div class="pe-taux"><div class="pe-taux-h"><span>Cotisation</span><span>Salarial</span><span>Patronal</span></div>'
       +li.map(function(x){return '<div class="pe-taux-r"><span>'+E(x[0])+'</span><span>'+E(x[1])+'</span><span>'+E(x[2])+'</span></div>';}).join('')
-      +'</div><div class="pe-taux-n">Maladie 7 % jusqu\u2019à 2,5 SMIC puis 13 % · Allocations familiales 3,45 % jusqu\u2019à 3,5 SMIC puis 5,25 %.</div></div></div>'
+      +'</div><div class="pe-taux-n">Maladie 7 % jusqu\u2019à 2,25 SMIC puis 13 % · Allocations familiales 3,45 % sous 3,3 SMIC puis 5,25 % (seuils du barème 2026).</div></div></div>'
       +autresDetail(d); }
   function absEditor(d){
     var rows=(d.abs||[]).map(function(a,i){
@@ -24090,7 +24091,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   var DEFYEAR={
     2024:{'paie.smic':11.65,'paie.smicMensuel':1766.92,'paie.pmss':3864,'paie.pass':46368,'paie.csgBase':98.25,'paie.csgDed':6.80,'paie.csgNd':2.90,'fisc.isReduit':15,'fisc.isSeuil':42500,'fisc.isNormal':25,'fisc.tva20':20,'fisc.tva10':10,'fisc.tva55':5.5,'fisc.tva21':2.1,'seuil.franchiseServices':36800,'seuil.franchiseVentes':91900,'seuil.microBNC':77700,'seuil.microBIC':188700},
     2025:{'paie.smic':11.88,'paie.smicMensuel':1801.80,'paie.pmss':3925,'paie.pass':47100,'paie.csgBase':98.25,'paie.csgDed':6.80,'paie.csgNd':2.90,'fisc.isReduit':15,'fisc.isSeuil':42500,'fisc.isNormal':25,'fisc.tva20':20,'fisc.tva10':10,'fisc.tva55':5.5,'fisc.tva21':2.1,'seuil.franchiseServices':37500,'seuil.franchiseVentes':85000,'seuil.microBNC':77700,'seuil.microBIC':188700},
-    2026:{'paie.smic':11.88,'paie.smicMensuel':1801.80,'paie.pmss':3925,'paie.pass':47100,'paie.csgBase':98.25,'paie.csgDed':6.80,'paie.csgNd':2.90,'fisc.isReduit':15,'fisc.isSeuil':42500,'fisc.isNormal':25,'fisc.tva20':20,'fisc.tva10':10,'fisc.tva55':5.5,'fisc.tva21':2.1,'seuil.franchiseServices':37500,'seuil.franchiseVentes':85000,'seuil.microBNC':77700,'seuil.microBIC':188700}
+    2026:{'paie.smic':12.02,'paie.smicMensuel':1823.07,'paie.pmss':4005,'paie.pass':48060,'paie.csgBase':98.25,'paie.csgDed':6.80,'paie.csgNd':2.90,'fisc.isReduit':15,'fisc.isSeuil':42500,'fisc.isNormal':25,'fisc.tva20':20,'fisc.tva10':10,'fisc.tva55':5.5,'fisc.tva21':2.1,'seuil.franchiseServices':37500,'seuil.franchiseVentes':85000,'seuil.microBNC':77700,'seuil.microBIC':188700}
   };
   var KNOWN=Object.keys(DEFYEAR).map(Number).sort(function(a,b){return a-b;});
   function defYear(y){ y=+y; if(DEFYEAR[y]) return DEFYEAR[y]; var pick=KNOWN[0]; for(var i=0;i<KNOWN.length;i++){ if(KNOWN[i]<=y) pick=KNOWN[i]; } return DEFYEAR[pick]; } /* report de l'année connue la plus proche */
@@ -34873,6 +34874,10 @@ function testLienRdv()  {
     ['Réduction générale',[['rgT','Coefficient T sous 50 salariés'],['rgT50','Coefficient T à 50 salariés et plus'],['rgSeuil','Plafond d’application (en SMIC)']]],
     ['Divers',[['pas','Taux de prélèvement à la source par défaut (%)'],['panierTaux','Panier repas (€ par jour)'],['cpMois','Congés acquis par mois travaillé (jours)']]]
   ];
+  /* Les références (SMIC, plafond, CSG) suivent le barème central de Paramètres → Barèmes, année 2026 */
+  try{ if(typeof window.barGet==='function'){ var bg=function(k){ var v=window.barGet(k,2026); return (v&&isFinite(v))?v:null; };
+    BAR26.smicH=bg('paie.smic')||BAR26.smicH; BAR26.smicM=bg('paie.smicMensuel')||BAR26.smicM; BAR26.pss=bg('paie.pmss')||BAR26.pss;
+    BAR26.csgBase=bg('paie.csgBase')||BAR26.csgBase; BAR26.csgDed=bg('paie.csgDed')||BAR26.csgDed; BAR26.csgNd=bg('paie.csgNd')||BAR26.csgNd; } }catch(e){}
   try{ window.BAR26=BAR26; window.BAR26_LIB=BAR26_LIB; }catch(e){}
 
   function D26(doc){ doc.data=doc.data||{}; var d=doc.data;
