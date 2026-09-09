@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=600;
+var LAST_VER=601;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -23349,7 +23349,12 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   function row(lbl,inp){ return '<div class="pfs-row pfs-row-text"><label>'+E(lbl)+'</label><div class="pfs-cols pfs-cols1">'+inp+'</div></div>'; }
   function selfld(k,v,opts){ return '<select class="pfs-i pfs-text" onchange="pfPaieXSet(\''+k+'\',this.value)">'
     +opts.map(function(o){return '<option value="'+E(o[0])+'"'+(String(v)===o[0]?' selected':'')+'>'+E(o[1])+'</option>';}).join('')+'</select>'; }
-  function grp(t,rows){ return '<div class="pfs-grp"><div class="pfs-gh">'+E(t)+'</div>'+rows+'</div>'; }
+  var GRP_KEY={'Société (employeur)':'soc','Salarié':'sal','Période':'per','Congés payés':'cp','Montants à payer':'mt','Absences du mois':'abs','Taux (pré-remplis — modifiables)':'taux','Cumuls & report annuel (facultatif — auto si vide)':'cum','Valeurs figées sur le bulletin':'fix'};
+  function grp(t,rows){ return '<div class="pfs-grp"'+(GRP_KEY[t]?' data-g="'+GRP_KEY[t]+'"':'')+'><div class="pfs-gh">'+E(t)+'</div>'+rows+'</div>'; }
+  function overGrp(d){ var o=d.over||{}, ks=Object.keys(o).filter(function(k){ return String(o[k]).trim()!==''; }); if(!ks.length) return '';
+    return grp('Valeurs figées sur le bulletin', ks.map(function(k){
+      return '<div class="pfs-row pfs-row-text"><label>'+E(pexTitre(k))+'</label><div class="pfs-cols pfs-cols1 pfs-fix"><span>'+E(o[k])+'</span><button class="pff-del" title="Revenir au calcul" onclick="pfPaieXOverDel(\''+k+'\')">×</button></div></div>'; }).join('')
+      +'<div class="pe-taux-n">Ces cases ont été saisies directement sur le bulletin : elles ne suivent plus le calcul tant qu’elles sont figées.</div>'); }
   /* Rappel des taux appliqués sans saisie : ils dépendent du barème et du niveau de salaire. */
   function autresDetail(d){ var r=compute(d), a=r.aut, K=['fnal','csa','dial','forma','vm'];
     return '<div class="pfs-row pfs-row-text pfs-row-taux"><label>Dont « autres contributions »</label><div class="pfs-cols pfs-cols1">'
@@ -23384,6 +23389,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     return '<div class="pf-side"><div class="pf-side-h">Fiche de paie — calcul automatique</div>'
       +'<div class="pf-side-sub">Saisissez les montants et les absences : les taux arrivent pré-remplis et les cotisations, le net imposable et le net à payer se calculent seuls.</div>'
       +'<div class="pe-live">À payer au salarié <b>'+fr(r.netAPayer)+' €</b> · Cotisations employeur <b>'+fr(r.totPat)+' €</b> · Coût total <b>'+fr(r.coutEmp)+' €</b></div>'
+      +overGrp(d)
       +grp('Société (employeur)', row('Dénomination',fld('emp.nom',d.emp.nom))+row('Adresse',fld('emp.adr',d.emp.adr))+row('CP & ville',fld('emp.cp',d.emp.cp,'CP','style="width:70px;display:inline-block"')+' '+fld('emp.ville',d.emp.ville,'Ville','style="width:58%;display:inline-block"'))+row('SIRET',fld('emp.siret',d.emp.siret))+row('Code NAF',fld('emp.naf',d.emp.naf)))
       +grp('Salarié', row('Nom',fld('sal.nom',d.sal.nom))+row('Adresse',fld('sal.adr',d.sal.adr))+row('CP & ville',fld('sal.cp',d.sal.cp,'CP','style="width:70px;display:inline-block"')+' '+fld('sal.ville',d.sal.ville,'Ville','style="width:58%;display:inline-block"'))+row('Matricule',fld('sal.matricule',d.sal.matricule))+row('N° Sécurité sociale',fld('sal.nss',d.sal.nss))+row('Emploi',fld('sal.emploi',d.sal.emploi))+row('Statut',fld('sal.statut',d.sal.statut,'Cadre / Non cadre'))+row('Entré(e) le',fld('sal.entree',d.sal.entree))+row('Coefficient',fld('sal.coeff',d.sal.coeff)))
       +grp('Période', row('Mois (AAAA-MM)',fld('per.mois',d.per.mois,'2026-07'))+row('Paiement le',fld('per.paieLe',d.per.paieLe))+row('Du',fld('per.du',d.per.du))+row('Au',fld('per.au',d.per.au)))
@@ -23457,6 +23463,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
           else if(s.d==='netimp')dv2=r.netImp; else if(s.d==='netpay')dv2=r.netAPayer; else dv2=0;
           v=fd((ovv2!=null&&(''+ovv2).trim()!=='')?num(ovv2):dv2); }
       }catch(e){}
+      try{ var ovr=(d.over||{})[k]; if(ovr!=null && String(ovr).trim()!=='') v=String(ovr); }catch(e){}
       out[k]=v;
     });
     return out;
@@ -23482,15 +23489,18 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     return z; }
   function renderDoc(doc){
     var tpl=window.PF_TPL&&window.PF_TPL['paie']; if(!tpl||!tpl.pages[0])return '<div style="padding:20px;color:#111;background:#fff">Modèle de bulletin indisponible.</div>';
-    var pg=tpl.pages[0], cells=buildCells(doc), d=D(doc); d.ov=d.ov||{};
-    var zs=pexZoneSizes(pg.fields,cells);
+    var pg=tpl.pages[0], cells=buildCells(doc), d=D(doc); d.ov=d.ov||{}; d.over=d.over||{};
+    var zs=pexZoneSizes(pg.fields,cells), ed=!!window.__pexEdit;
     var flds=pg.fields.map(function(f){ var k=f[0], o=f[5]||{}, mapped=!!PAIE_MAP[k];
       if(!mapped) return '';
-      var v=cells[k]||''; if(!v) return '';
+      var v=cells[k]||''; if(!v && !ed) return '';
+      var fixe=(d.over[k]!=null && String(d.over[k]).trim()!=='');
       var jc=(o.al==='right'?'flex-end':o.al==='center'?'center':'flex-start');
       var fs=zs[pexZone(f)]||PEX_FS;
       var base='position:absolute;left:'+f[1]+'%;top:'+f[2]+'%;width:'+f[3]+'%;height:'+f[4]+'%;box-sizing:border-box;font:'+fs+'px '+PEX_FAM+';display:flex;align-items:center;justify-content:'+jc+';padding:0 1px;color:#000!important;-webkit-text-fill-color:#000!important;overflow:hidden;white-space:nowrap;line-height:1';
-      return '<div class="pex-c" style="'+PA(base+';background:transparent')+'">'+E(v)+'</div>';
+      return '<div class="pex-c'+(ed?' pex-ed':'')+(ed&&!v?' pex-empty':'')+(fixe?' pex-fixe':'')+'" data-k="'+k+'"'
+        +(ed?' contenteditable="true" spellcheck="false" title="'+E(pexTitre(k))+'"':'')
+        +' style="'+PA(base+';background:transparent')+'">'+E(v)+'</div>';
     }).join('');
     return '<div class="pex-page" style="position:relative;width:794px;height:1123px;margin:0 auto;box-shadow:0 8px 30px rgba(0,0,0,.25)"><img class="pex-bg" src="'+(PEX_BG||pg.img)+'" style="position:absolute;inset:0;width:100%;height:100%;display:block">'+flds+'</div>';
   }
@@ -23530,15 +23540,78 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   window.paieExactDoc=function(doc){ return renderDoc(doc); };
   function render(){
     var ov=document.getElementById('pf-ov'); if(!ov)return; var doc=window.__pfDoc;
-    var tb='<div class="pf-top"><div class="pf-title"><b>Fiche de paie</b><span>Bulletin calculé automatiquement</span></div>'
+    var ed=!!window.__pexEdit, nOver=Object.keys((doc.data||{}).over||{}).filter(function(k){ return String(doc.data.over[k]).trim()!==''; }).length;
+    var SECS=[['soc','Société'],['sal','Salarié'],['per','Période'],['cp','Congés'],['mt','Montants'],['abs','Absences'],['taux','Taux'],['cum','Cumuls']];
+    var tools='<div class="pex-tools">'
+      +'<button class="pf-b'+(ed?' pex-on':'')+'" onclick="pfPaieXEdit()" title="Modifier chaque valeur directement sur le bulletin">'+(ed?'✓ Modification en cours':'✎ Modifier sur le bulletin')+'</button>'
+      +'<button class="pf-b" onclick="pfPaieXReset()"'+(nOver?'':' disabled')+' title="Retirer les valeurs figées à la main et revenir au calcul">↺ Rétablir le calcul'+(nOver?' ('+nOver+')':'')+'</button>'
+      +'<span class="pex-tools-sep"></span>'
+      +SECS.map(function(x){ return '<button class="pex-chip" onclick="pfPaieXGoto(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('')
+      +'</div>';
+    var tb='<div class="pf-top"><div class="pf-title"><b>Fiche de paie</b><span>'+(ed?'Cliquez une valeur du bulletin pour la modifier · Entrée ou Tab pour valider':'Bulletin calculé automatiquement')+'</span></div>'+tools
       +'<div class="pf-act"><button class="pf-b pf-pri" onclick="pfPrintCur()">'+(window.PF_ICPRINT||'')+'Imprimer</button><button class="pf-b" onclick="pfSaveDoc()">'+(window.PF_ICSAVE||'')+'Enregistrer</button><button class="pf-x" onclick="pfCloseAsk()" title="Fermer sans enregistrer">✕</button></div></div>';
     ov.innerHTML=tb+'<div class="pf-body">'+sideHTML(doc)+'<div class="pf-scroll"><div id="pe-doc" class="pe-doc-host">'+window.paieExactDoc(doc)+'</div></div></div>';
+    pexBind();
   }
+  /* ── Modification directe sur le bulletin ────────────────────────────────
+     Chaque case du bulletin sait à quelle saisie elle correspond : la valeur
+     tapée sur la feuille est reportée dans la donnée d'origine, et la barre
+     latérale suit. Une case purement calculée peut être figée à la main ;
+     elle est alors soulignée, et « Rétablir le calcul » la libère. */
+  var PEX_LIB={'emp.nom':'Dénomination','emp.adr':'Adresse de la société','emp.cp':'CP société','emp.ville':'Ville société','emp.siret':'SIRET','emp.naf':'Code NAF',
+    'per.paieLe':'Paiement le','per.du':'Période du','per.au':'Période au','sal.nom':'Nom du salarié','sal.adr':'Adresse du salarié','sal.cp':'CP salarié','sal.ville':'Ville salarié',
+    'sal.matricule':'Matricule','sal.nss':'N° Sécurité sociale','sal.entree':'Entré(e) le','sal.emploi':'Emploi','sal.niveau':'Niveau','sal.position':'Position','sal.echelon':'Échelon','sal.coeff':'Coefficient'};
+  function pexTitre(k){ var m=PAIE_MAP[k]||{};
+    if(m.t==='v') return PEX_LIB[m.f]||m.f;
+    if(m.t==='heures') return 'Heures du mois'; if(m.t==='th') return 'Taux horaire';
+    if(m.t==='abs') return 'Absence '+(m.i+1)+(m.f==='lib'?' — libellé':m.f==='h'?' — heures':' (calculé)');
+    if(m.t==='nav') return m.f==='base'?'Transport — base remboursée':m.f==='pct'?'Transport — part employeur (%)':'Transport (calculé)';
+    if(m.t==='ov'||m.t==='cum') return 'Cumul / report — '+m.ov;
+    return 'Valeur calculée — modifiable : elle sera figée'; }
+  function pexSideSel(k){ var m=PAIE_MAP[k]||{};
+    if(m.t==='v') return "[oninput^=\"pfPaieXSet('"+m.f+"'\"]";
+    if(m.t==='heures') return "[oninput^=\"pfPaieXSet('heures'\"]"; if(m.t==='th') return "[oninput^=\"pfPaieXSet('tauxH'\"]";
+    if(m.t==='abs'&&(m.f==='lib'||m.f==='h')) return "[oninput^=\"pfPaieXAbs("+m.i+",'"+m.f+"'\"]";
+    if(m.t==='nav'&&m.f==='base') return "[oninput^=\"pfPaieXSet('navBase'\"]"; if(m.t==='nav'&&m.f==='pct') return "[oninput^=\"pfPaieXSet('navPct'\"]";
+    if(m.t==='ov'||m.t==='cum') return "[oninput^=\"pfPaieXOv('"+m.ov+"'\"]";
+    return null; }
+  function pexBind(){ var host=document.getElementById('pe-doc'); if(!host||host.__pex) return; host.__pex=1;
+    host.addEventListener('focusin',function(ev){ var c=ev.target.closest&&ev.target.closest('.pex-c.pex-ed'); if(!c) return;
+      document.querySelectorAll('#pf-ov .pfs-focus').forEach(function(x){ x.classList.remove('pfs-focus'); });
+      var sel=pexSideSel(c.getAttribute('data-k')), inp=sel?document.querySelector('#pf-ov .pf-side '+sel):null;
+      if(inp){ inp.classList.add('pfs-focus'); try{ inp.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
+      c.__v0=c.textContent; });
+    host.addEventListener('keydown',function(ev){ var c=ev.target.closest&&ev.target.closest('.pex-c.pex-ed'); if(!c) return;
+      if(ev.key==='Enter'){ ev.preventDefault(); c.blur(); }
+      if(ev.key==='Escape'){ ev.preventDefault(); c.textContent=c.__v0||''; c.blur(); } });
+    host.addEventListener('focusout',function(ev){ var c=ev.target.closest&&ev.target.closest('.pex-c.pex-ed'); if(!c) return;
+      var t=c.textContent.replace(/\u00a0/g,' ').trim(); if(t===(c.__v0||'').trim()) return;
+      window.pfPaieXCell(c.getAttribute('data-k'),t); }); }
+  window.pfPaieXEdit=function(){ window.__pexEdit=!window.__pexEdit; render(); if(typeof toast==='function') toast(window.__pexEdit?'Cliquez une valeur du bulletin pour la modifier.':'Modification terminée.'); };
+  window.pfPaieXCell=function(k,t){ var doc=window.__pfDoc; if(!doc) return; var d=D(doc), m=PAIE_MAP[k]; if(!m) return;
+    var num=t.replace(/\s/g,'').replace(',','.');
+    if(m.t==='v') setPath(d,m.f,t);
+    else if(m.t==='heures') d.heures=num; else if(m.t==='th') d.tauxH=num;
+    else if(m.t==='abs'&&(m.f==='lib'||m.f==='h')){ d.abs=d.abs||[]; while(d.abs.length<=m.i) d.abs.push({lib:'',h:''}); d.abs[m.i][m.f]=(m.f==='h'?num:t); }
+    else if(m.t==='nav'&&m.f==='base') d.navBase=num; else if(m.t==='nav'&&m.f==='pct') d.navPct=num;
+    else if(m.t==='ov'||m.t==='cum'){ d.ov=d.ov||{}; d.ov[m.ov]=num; }
+    else { d.over=d.over||{}; if(t==='') delete d.over[k]; else d.over[k]=t; }
+    doc.updated=Date.now(); try{save();}catch(e){} render();
+    try{ var c=document.querySelector('#pe-doc .pex-c[data-k="'+k+'"]'); if(c){ c.classList.add('pex-flash'); } }catch(e){} };
+  window.pfPaieXOverDel=function(k){ var doc=window.__pfDoc; if(!doc) return; var d=D(doc); if(d.over) delete d.over[k]; try{save();}catch(e){} render(); };
+  window.pfPaieXReset=function(){ var doc=window.__pfDoc; if(!doc) return; var d=D(doc);
+    var go=function(){ d.over={}; try{save();}catch(e){} render(); if(typeof toast==='function') toast('Valeurs figées retirées : le bulletin est de nouveau entièrement calculé.'); };
+    if(typeof uiConfirm==='function') uiConfirm('Retirer toutes les valeurs figées à la main et revenir au calcul ?',go); else go(); };
+  window.pfPaieXGoto=function(sec){ var side=document.querySelector('#pf-ov .pf-side'); if(!side) return;
+    var g=side.querySelector('.pfs-grp[data-g="'+sec+'"]'); if(!g) return;
+    try{ g.scrollIntoView({block:'start',behavior:'smooth'}); }catch(e){ g.scrollIntoView(); }
+    side.querySelectorAll('.pfs-grp.pfs-hl').forEach(function(x){ x.classList.remove('pfs-hl'); }); g.classList.add('pfs-hl');
+    setTimeout(function(){ g.classList.remove('pfs-hl'); },1400); };
   window.pfPaieExactRender=render;
   window.pfPaieExactOpen=function(doc){ if(!doc)return; doc.data=doc.data||{}; window.__pfDoc=doc; window.__pfTpl='__paiex';
     var ov=document.getElementById('pf-ov'); if(!ov){ov=document.createElement('div');ov.id='pf-ov';document.body.appendChild(ov);}
     ov.className='pf-ov show'+(document.body.classList.contains('dark')?' dark':''); document.body.style.overflow='hidden'; render(); };
-  window.pfPaieXPrint=function(){ var doc=window.__pfDoc; if(!doc)return; var html=window.paieExactDoc(doc);
+  window.pfPaieXPrint=function(){ var doc=window.__pfDoc; if(!doc)return; var ed0=window.__pexEdit; window.__pexEdit=false; var html=window.paieExactDoc(doc); window.__pexEdit=ed0;
     var css='@page{size:A4;margin:0}*{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}body{margin:0;background:#fff}.pex-page{width:210mm!important;height:297mm!important;box-shadow:none!important;position:relative;overflow:hidden;page-break-after:avoid}.pex-bg{position:absolute;inset:0;width:100%!important;height:100%!important;display:block}.pex-c{position:absolute;display:flex;align-items:center;line-height:1;color:#000!important;-webkit-text-fill-color:#000!important;overflow:hidden;white-space:nowrap;padding:0 1px}.pex-ov{border:none!important;background:transparent!important}';
     var w=window.open('','_blank'); if(!w){if(typeof toast==='function')toast('Autorisez les fenêtres.');return;}
     w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Bulletin de salaire</title><style>'+css+'</style></head><body>'+html+'</body></html>'); w.document.close(); setTimeout(function(){try{w.focus();w.print();}catch(e){}},300); };
@@ -23571,7 +23644,23 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     +'.pff-line{border:1px solid rgba(120,140,170,.3);border-radius:8px;padding:8px;margin-bottom:8px;background:rgba(120,150,190,.06)}'
     +'.pff-line-h{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:700;color:#7f9ac0;margin-bottom:5px}'
     +'.pff-del{background:rgba(220,70,70,.15);border:1px solid rgba(220,70,70,.4);color:#e57373;border-radius:5px;width:22px;height:22px;cursor:pointer;line-height:1;font-size:15px}'
-    +'.pff-add{width:100%;margin-top:2px;padding:7px;border:1px dashed rgba(79,157,255,.5);background:rgba(79,157,255,.10);color:#5ab0ff;border-radius:8px;cursor:pointer;font-weight:600}';
+    +'.pff-add{width:100%;margin-top:2px;padding:7px;border:1px dashed rgba(79,157,255,.5);background:rgba(79,157,255,.10);color:#5ab0ff;border-radius:8px;cursor:pointer;font-weight:600}'
+    +'.pex-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}'
+    +'.pex-tools .pf-b.pex-on{border-color:#2f8fff;background:rgba(47,143,255,.18);color:#cfe3ff}'
+    +'.pex-tools .pf-b[disabled]{opacity:.4;pointer-events:none}'
+    +'.pex-tools-sep{width:1px;height:22px;background:#2a2b31;margin:0 4px}'
+    +'.pex-chip{height:26px;padding:0 10px;border-radius:999px;border:1px solid #2a2b31;background:#17181d;color:#aab6c8;font:inherit;font-size:11.5px;cursor:pointer}'
+    +'.pex-chip:hover{border-color:#2f8fff;color:#dbe3ef}'
+    +'#pe-doc .pex-c.pex-ed{outline:1px dashed rgba(47,143,255,.55);outline-offset:-1px;cursor:text;border-radius:2px}'
+    +'#pe-doc .pex-c.pex-ed:hover{background:rgba(47,143,255,.10)!important}'
+    +'#pe-doc .pex-c.pex-ed:focus{outline:2px solid #2f8fff;background:#fffbe6!important;z-index:2}'
+    +'#pe-doc .pex-c.pex-empty{outline-color:rgba(160,170,190,.45)}'
+    +'#pe-doc .pex-c.pex-fixe{box-shadow:inset 0 -2px 0 #e0a100}'
+    +'#pe-doc .pex-c.pex-flash{animation:pexFlash 1.2s ease-out}'
+    +'@keyframes pexFlash{0%{background:rgba(224,161,0,.45)!important}100%{background:transparent}}'
+    +'.pfs-grp.pfs-hl{box-shadow:0 0 0 2px rgba(47,143,255,.55);border-radius:8px}'
+    +'.pfs-i.pfs-focus{border-color:#2f8fff!important;box-shadow:0 0 0 3px rgba(47,143,255,.28)!important}'
+    +'.pfs-fix{display:flex;align-items:center;gap:6px}.pfs-fix span{flex:1;padding:6px 8px;border:1px dashed rgba(224,161,0,.6);border-radius:7px;font-variant-numeric:tabular-nums;font-size:12px}';
   function inject(){ if(document.getElementById('pe-css'))return; var s=document.createElement('style'); s.id='pe-css'; s.textContent=PE_CSS+PE_SIDE_CSS; document.head.appendChild(s); }
   inject();
 })();
@@ -34728,124 +34817,176 @@ function testLienRdv()  {
   function pc(v){ return (Math.round(v*1e6)/1e4).toFixed(4).replace('.',','); }
 
   /* DONNEES — paramètres du classeur (C11→C15, U4→U11) */
-  var PAR26={ pss:4005, smicH:12.02, smicM:1823.03, heuresMois:151.67, at:2.80,
-              mutuelle:true, mutCout:72.09, mutSal:50, mutPat:50, pas:0,
-              seuilMal:3803.04, plafRetPat:3170, panierTaux:6.60 };
+  /* ── BARÈME 2026 ─────────────────────────────────────────────────────────
+     Toutes les cotisations, leurs taux et leurs seuils, en un seul endroit.
+     Chaque valeur est reprise dans le volet « Barème » et modifiable par
+     exercice. Les seuils s'expriment en SMIC mensuels, comme dans la
+     réglementation, et non en euros figés. */
+  var BAR26={
+    /* Références */
+    pss:4005, smicH:12.02, smicM:1823.07, heuresMois:151.67,
+    /* Santé */
+    malRed:7.00, malPlein:13.00, malSeuil:2.25,          /* maladie-maternité-invalidité-décès */
+    prevSal:0.60, prevPat:0.60, prevCadrePat:1.50,        /* prévoyance : contrat d'entreprise + 1,50 % cadres sur T1 */
+    mutuelle:'OUI', mutCout:72.09, mutSal:50, mutPat:50,
+    at:2.80,                                              /* accident du travail : taux notifié à l'entreprise */
+    /* Retraite */
+    vpSal:6.90, vpPat:8.55,                               /* vieillesse plafonnée */
+    vdSal:0.40, vdPat:2.02,                               /* vieillesse déplafonnée */
+    t1Sal:3.15, t1Pat:4.72, ceg1Sal:0.86, ceg1Pat:1.29,   /* Agirc-Arrco tranche 1 + CEG */
+    t2Sal:8.64, t2Pat:12.95, ceg2Sal:1.08, ceg2Pat:1.62,  /* tranche 2 + CEG, de 1 à 8 plafonds */
+    cetSal:0.14, cetPat:0.21,                             /* CET, si brut > plafond */
+    apecSal:0.024, apecPat:0.036,                         /* cadres, sur 4 plafonds */
+    /* Famille · chômage */
+    famRed:3.45, famPlein:5.25, famSeuil:3.3,
+    chom:4.00, ags:0.25,                                  /* sur 4 plafonds */
+    /* Autres contributions employeur */
+    fnalRed:0.10, fnalPlein:0.50, csa:0.30, dial:0.016, forma:'', appr:0.68, vm:0, eff:'<11',
+    /* CSG-CRDS */
+    csgBase:98.25, csgDed:6.80, csgNd:2.90,               /* abattement 1,75 % jusqu'à 4 plafonds */
+    /* Réduction générale */
+    rgT:0.3193, rgT50:0.3233, rgSeuil:1.6,
+    /* Divers */
+    pas:0, panierTaux:6.60, cpMois:2.5, plafRetPat:''
+  };
+  /* Libellés du barème, dans l'ordre du bulletin, pour le volet et la maquette */
+  var BAR26_LIB=[
+    ['Références',[['pss','Plafond mensuel de la Sécurité sociale (€)'],['smicH','SMIC horaire (€)'],['smicM','SMIC mensuel (€)'],['heuresMois','Heures mensuelles de référence']]],
+    ['Santé',[['malRed','Maladie — taux réduit (%)'],['malPlein','Maladie — taux plein (%)'],['malSeuil','Maladie — seuil du taux réduit (en SMIC)'],
+              ['prevSal','Prévoyance — part salariale (%)'],['prevPat','Prévoyance — part patronale (%)'],['prevCadrePat','Prévoyance cadres — patronale sur T1 (%)'],
+              ['mutuelle','Mutuelle (OUI / NON)'],['mutCout','Mutuelle — cotisation mensuelle (€)'],['mutSal','Mutuelle — part salariale (%)'],['mutPat','Mutuelle — part patronale (%)'],
+              ['at','Accident du travail — taux notifié (%)']]],
+    ['Retraite',[['vpSal','Vieillesse plafonnée — salariale (%)'],['vpPat','Vieillesse plafonnée — patronale (%)'],
+                 ['vdSal','Vieillesse déplafonnée — salariale (%)'],['vdPat','Vieillesse déplafonnée — patronale (%)'],
+                 ['t1Sal','Agirc-Arrco T1 — salariale (%)'],['t1Pat','Agirc-Arrco T1 — patronale (%)'],['ceg1Sal','CEG T1 — salariale (%)'],['ceg1Pat','CEG T1 — patronale (%)'],
+                 ['t2Sal','Agirc-Arrco T2 — salariale (%)'],['t2Pat','Agirc-Arrco T2 — patronale (%)'],['ceg2Sal','CEG T2 — salariale (%)'],['ceg2Pat','CEG T2 — patronale (%)'],
+                 ['cetSal','CET — salariale (%)'],['cetPat','CET — patronale (%)'],['apecSal','APEC cadres — salariale (%)'],['apecPat','APEC cadres — patronale (%)']]],
+    ['Famille · chômage',[['famRed','Allocations familiales — taux réduit (%)'],['famPlein','Allocations familiales — taux plein (%)'],['famSeuil','Allocations familiales — seuil (en SMIC)'],
+                          ['chom','Assurance chômage (%)'],['ags','AGS (%)']]],
+    ['Autres contributions employeur',[['eff','Effectif (<11 · 11-49 · >=50)'],['fnalRed','FNAL sous 50 salariés — plafonné (%)'],['fnalPlein','FNAL 50 salariés et plus (%)'],
+                                       ['csa','Contribution solidarité autonomie (%)'],['dial','Contribution au dialogue social (%)'],
+                                       ['forma','Formation professionnelle (%) — vide : 0,55 ou 1,00 selon l’effectif'],['appr','Taxe d’apprentissage (%)'],['vm','Versement mobilité (%)']]],
+    ['CSG-CRDS',[['csgBase','Assiette (% du brut)'],['csgDed','CSG déductible (%)'],['csgNd','CSG-CRDS non déductible (%)']]],
+    ['Réduction générale',[['rgT','Coefficient T sous 50 salariés'],['rgT50','Coefficient T à 50 salariés et plus'],['rgSeuil','Plafond d’application (en SMIC)']]],
+    ['Divers',[['pas','Taux de prélèvement à la source par défaut (%)'],['panierTaux','Panier repas (€ par jour)'],['cpMois','Congés acquis par mois travaillé (jours)']]]
+  ];
+  try{ window.BAR26=BAR26; window.BAR26_LIB=BAR26_LIB; }catch(e){}
 
   function D26(doc){ doc.data=doc.data||{}; var d=doc.data;
     d.emp=d.emp||{nom:'',adr:'',cpv:'',ape:'',siret:'',urssaf:''};
-    d.sal=d.sal||{nom:'',adr:'',cpv:'',nss:'',conv:'',emploi:'',quali:'',anc:''};
+    d.sal=d.sal||{nom:'',adr:'',cpv:'',nss:'',conv:'',emploi:'',quali:'',anc:'',statut:''};
     d.per=d.per||{du:'',au:'',payeLe:''};
     d.el=d.el||{}; d.par=d.par||{}; d.cp=d.cp||{};
     var e=d.el, p=d.par, c=d.cp;
-    if(e.heures==null)e.heures=String(PAR26.heuresMois);
-    if(e.taux==null)e.taux=String(PAR26.smicH);
-    if(e.absH==null)e.absH=''; if(e.hs25==null)e.hs25=''; if(e.hs50==null)e.hs50='';
-    if(e.prime==null)e.prime=''; if(e.panierNb==null)e.panierNb='';
-    ['pss','smicH','smicM','heuresMois','at','mutCout','mutSal','mutPat','pas'].forEach(function(k){
-      if(p[k]==null)p[k]=String(PAR26[k]); });
-    if(p.mutuelle==null)p.mutuelle='OUI';
-    if(p.eff==null)p.eff='<11'; if(p.vm==null)p.vm='0';
-    if(p.forma==null)p.forma=''; if(p.appr==null)p.appr='';
-    if(c.n1du==null)c.n1du=''; if(c.n1pris==null)c.n1pris='';
-    if(c.ndu==null)c.ndu=''; if(c.npris==null)c.npris='';
+    if(e.heures==null)e.heures=String(BAR26.heuresMois);
+    if(e.taux==null)e.taux=String(BAR26.smicH);
+    ['absH','hs25','hs50','prime','panierNb','indemn','cpPris'].forEach(function(k){ if(e[k]==null)e[k]=''; });
+    Object.keys(BAR26).forEach(function(k){ if(p[k]==null)p[k]=String(BAR26[k]); });
+    ['n1du','n1pris','ndu','npris'].forEach(function(k){ if(c[k]==null)c[k]=''; });
     return d; }
 
   /* ── MOTEUR ─────────────────────────────────────────────────────────────
-     Les références entre crochets renvoient à la feuille du mois du classeur. */
+     Structure du classeur, taux du barème 2026. Les repères entre crochets
+     renvoient aux cellules de la feuille de mois d'origine. */
   function calc26(d){
-    var e=d.el, p=d.par;
-    var PSS=n(p.pss)||PAR26.pss, SMICH=n(p.smicH)||PAR26.smicH, SMICM=n(p.smicM)||PAR26.smicM;
-    var mut=(String(p.mutuelle||'OUI').toUpperCase()!=='NON');
+    var e=d.el, p=d.par||{};
+    function P(k){ var v=p[k]; if(v===''||v==null) v=BAR26[k]; return n(v); }
+    var PSS=P('pss')||BAR26.pss, SMICH=P('smicH')||BAR26.smicH, SMICM=P('smicM')||BAR26.smicM;
+    var mut=(String(p.mutuelle||BAR26.mutuelle).toUpperCase()!=='NON');
+    var cadre=/cadre/i.test(String((d.sal||{}).statut||'')) && !/non/i.test(String((d.sal||{}).statut||''));
+    var eff=String(p.eff||'<11'), e11=(eff!=='<11'), e50=(eff==='>=50');
 
+    /* Éléments de rémunération */
     var h=n(e.heures), tx=n(e.taux);
-    var salBase=r2(h*tx);                                   /* F16 =ROUND(D16*E16,2) */
+    var salBase=r2(h*tx);                                             /* F16 */
     var absH=n(e.absH), absTx=(e.absTaux!=null&&e.absTaux!=='')?n(e.absTaux):tx;
-    var absMt=-r2(absH*absTx);                              /* F17 =-ROUND(D17*E17,2) */
-    var h25=n(e.hs25), tx25=r2(tx*1.25), mt25=h25>0?(h25*tx25):0;   /* F18, E18=E17*1,25 */
-    var h50=n(e.hs50), tx50=r2(tx*1.5),  mt50=h50>0?(h50*tx50):0;   /* F19, E19=E17*1,5  */
-    var prime=n(e.prime);                                   /* F20 */
-    var brut=r2(salBase+absMt+mt25+mt50+prime);             /* F21 =SUM(F16:F20) */
+    var absMt=-r2(absH*absTx);                                        /* F17 */
+    var h25=n(e.hs25), tx25=r2(tx*1.25), mt25=h25>0?r2(h25*tx25):0;   /* F18 */
+    var h50=n(e.hs50), tx50=r2(tx*1.5),  mt50=h50>0?r2(h50*tx50):0;   /* F19 */
+    var prime=n(e.prime);                                             /* F20 */
+    var brut=r2(salBase+absMt+mt25+mt50+prime);                       /* F21 */
+    var panNb=n(e.panierNb), panTx=panNb>0?P('panierTaux'):0, panier=r2(panNb*panTx);   /* J20 */
+    var indemn=n(e.indemn);                                           /* indemnités non soumises (transport, frais) */
+    var hTrav=r2(h+h25+h50-absH);
 
-    var panNb=n(e.panierNb), panTx=panNb>0?((e.panierTaux!=null&&e.panierTaux!=='')?n(e.panierTaux):PAR26.panierTaux):0;
-    var panier=r2(panNb*panTx);                             /* J20 =H20*I20 */
+    /* Assiettes */
+    var plaf=Math.min(brut,PSS), plaf4=Math.min(brut,PSS*4);
+    var t2=brut>PSS?r2(Math.min(brut-PSS,PSS*7)):0;
 
-    var plafSal=Math.min(brut,PSS);                         /* =IF(F21>H16,H16,F21) */
     var L=[], byc={};
     function add(code,lib,grp,bs,ts,bp,tp,ms,mp){
       var o={code:code,lib:lib,grp:grp,bs:bs,ts:ts,bp:bp,tp:tp,
-             ms:(ms!=null?ms:(bs!=null?-r2(bs*ts/100):null)),
-             mp:(mp!=null?mp:(bp!=null?-r2(bp*tp/100):null))};
+        ms:(ms!=null?ms:((bs!=null&&ts)?-r2(bs*ts/100):null)),
+        mp:(mp!=null?mp:((bp!=null&&tp)?-r2(bp*tp/100):null))};
       L.push(o); byc[code]=o; return o; }
 
     /* Santé */
-    var txMal=(brut>n(p.seuilMal||PAR26.seuilMal))?13:7;     /* I27 =IF(F21>3803,04;13%;7%) */
-    add('mal','Sécurité Sociale - Maladie Maternité Invalidité Décès','Santé',null,null,brut,txMal);
-    var prev=add('prev','Complémentaire Incapacité Invalidité Décès','Santé',plafSal,0.60,plafSal,0.60);
+    var txMal=(brut<=SMICM*P('malSeuil'))?P('malRed'):P('malPlein');
+    add('mal','Sécurité sociale — maladie, maternité, invalidité, décès','Santé',null,null,brut,txMal);
+    var prev=add('prev','Prévoyance — incapacité, invalidité, décès','Santé',plaf,P('prevSal'),plaf,P('prevPat'));
+    if(cadre && P('prevCadrePat')>0) add('prevc','Prévoyance cadres (1,50 % T1)','Santé',null,null,plaf,P('prevCadrePat'));
     var mutL=null;
-    if(mut && n(p.mutCout)>0){                               /* E29 =IF(F21>0;DONNEES!U5;0) */
-      var bm=brut>0?n(p.mutCout):0;
-      mutL=add('mut','Complémentaire Santé',' Santé',bm,n(p.mutSal),bm,n(p.mutPat));
-      mutL.grp='Santé';
-    }
-    add('at','Accident Du Travail - Maladies Professionnelles','Santé',null,null,brut,n(p.at));
+    if(mut && P('mutCout')>0){ var bm=brut>0?P('mutCout'):0;
+      mutL=add('mut','Complémentaire santé','Santé',bm,P('mutSal'),bm,P('mutPat')); }
+    add('at','Accident du travail — maladies professionnelles','Santé',null,null,brut,P('at'));
 
     /* Retraite */
-    add('ssp','Sécurité Sociale Plafonnée','Retraite',plafSal,6.90,Math.min(brut,n(p.plafRetPat||PAR26.plafRetPat)),8.55); /* H32 =IF(F21>3170;3170;F21) */
-    add('ssd','Sécurité Sociale Déplafonnée','Retraite',brut,0.40,brut,1.90);
-    add('ct1','Complémentaire Tranche 1','Retraite',plafSal,4.01,plafSal,6.01);
-    if(brut>PSS){
-      /* Tranche 2 : du plafond à huit plafonds, soit sept plafonds au plus.
-         Le classeur retombait à un seul plafond au-delà de huit (E35). */
-      var b2=r2(Math.min(brut-PSS, PSS*7));
-      add('ct2','Complémentaire Tranche 2','Retraite',b2,9.72,b2,14.60);
-      add('cet','Complémentaire CET','Retraite',brut,0.14,brut,0.21);
+    var plafPat=(p.plafRetPat!==''&&p.plafRetPat!=null)?Math.min(brut,n(p.plafRetPat)):plaf;
+    add('vp','Sécurité sociale plafonnée','Retraite',plaf,P('vpSal'),plafPat,P('vpPat'));
+    add('vd','Sécurité sociale déplafonnée','Retraite',brut,P('vdSal'),brut,P('vdPat'));
+    add('t1','Complémentaire tranche 1 (Agirc-Arrco + CEG)','Retraite',plaf,r2(P('t1Sal')+P('ceg1Sal')),plaf,r2(P('t1Pat')+P('ceg1Pat')));
+    if(t2>0){
+      add('t2','Complémentaire tranche 2 (Agirc-Arrco + CEG)','Retraite',t2,r2(P('t2Sal')+P('ceg2Sal')),t2,r2(P('t2Pat')+P('ceg2Pat')));
+      add('cet','Contribution d’équilibre technique','Retraite',brut,P('cetSal'),brut,P('cetPat'));
     }
-    /* Autres */
-    var txFam=(brut<SMICM*3.5)?3.45:5.25;                    /* I38 */
-    add('fam','Famille','Autres',null,null,brut,txFam);
-    add('cho','Assurance Chômage','Autres',null,null,Math.min(brut,PSS*4),4.20); /* H39 */
-    /* Le classeur portait 1,546 % sur le brut (I40) et 0,10 % sur la tranche plafonnée
-       (I41). Le premier taux est la somme de quatre contributions distinctes — solidarité
-       autonomie 0,30, dialogue social 0,016, formation 0,55, apprentissage 0,68 — et le
-       second est le FNAL. Chacune a désormais sa ligne, sa base et son seuil ; à effectif
-       inférieur à onze et sans versement mobilité, le total est inchangé. */
-    var eff=String(p.eff||'<11'), e11=(eff!=='<11'), e50=(eff==='>=50');
+    if(cadre) add('apec','APEC','Retraite',plaf4,P('apecSal'),plaf4,P('apecPat'));
+
+    /* Famille · chômage */
+    var txFam=(brut<SMICM*P('famSeuil'))?P('famRed'):P('famPlein');
+    add('fam','Allocations familiales','Famille',null,null,brut,txFam);
+    add('chom','Assurance chômage','Chômage',null,null,plaf4,P('chom'));
+    add('ags','AGS','Chômage',null,null,plaf4,P('ags'));
+
+    /* Autres contributions employeur */
     var txForma=(p.forma!==''&&p.forma!=null)?n(p.forma):(e11?1.00:0.55);
-    var txAppr =(p.appr!==''&&p.appr!=null)?n(p.appr):0.68;
-    var txVm   = e11?n(p.vm):0;
-    add('fnal',"Fonds national d'aide au logement",'Autres',null,null,e50?brut:plafSal,e50?0.50:0.10);
-    add('csa','Contribution solidarité autonomie','Autres',null,null,brut,0.30);
-    add('dial','Contribution au dialogue social','Autres',null,null,brut,0.016);
+    add('fnal','Fonds national d’aide au logement','Autres',null,null,e50?brut:plaf,e50?P('fnalPlein'):P('fnalRed'));
+    add('csa','Contribution solidarité autonomie','Autres',null,null,brut,P('csa'));
+    add('dial','Contribution au dialogue social','Autres',null,null,brut,P('dial'));
     add('forma','Formation professionnelle','Autres',null,null,brut,txForma);
-    add('appr','Taxe d\u2019apprentissage','Autres',null,null,brut,txAppr);
-    if(txVm>0) add('vm','Versement mobilité','Autres',null,null,brut,txVm);
+    add('appr','Taxe d’apprentissage','Autres',null,null,brut,P('appr'));
+    if(e11 && P('vm')>0) add('vm','Versement mobilité','Autres',null,null,brut,P('vm'));
 
-    /* CSG — E42 =(F21*0,9825)-G28-G29 : les parts salariales de prévoyance
-       et de mutuelle, négatives, se réintègrent à l'assiette. */
-    var baseCsg=r2(brut*0.9825-(prev.ms||0)-(mutL?(mutL.ms||0):0));
-    var csgD=add('csgd',"CSG Déductible de l'Impôt sur le Revenu",'CSG',baseCsg,6.80,null,null);
-    var csgN=add('csgn',"CSG/CRDS non Déductible de l'Impot sur le Revenu",'CSG',baseCsg,2.90,null,null);
+    /* CSG-CRDS : abattement sur le brut, les parts salariales de prévoyance et de
+       mutuelle réintégrées à l'assiette — E42 du classeur, où elles sont négatives. */
+    var baseCsg=r2(brut*P('csgBase')/100-(prev.ms||0)-(mutL?(mutL.ms||0):0));
+    add('csgd','CSG déductible de l’impôt sur le revenu','CSG',baseCsg,P('csgDed'),null,null);
+    var csgN=add('csgn','CSG-CRDS non déductible de l’impôt sur le revenu','CSG',baseCsg,P('csgNd'),null,null);
 
-    /* Réduction générale — H45 / I45 / J45 */
-    var red=null, hTrav=r2(h+h25+h50-absH);
-    if(brut>0 && brut<SMICM*1.6){
-      var coef=(0.2809/0.6)*(1.6*hTrav*SMICH/brut-1);
-      red=add('red','Exonérations de Cotisations Employeur','Exonérations',null,null,brut,coef*100,null,r2(brut*coef));
-      red.tp=coef*100;
+    /* Réduction générale des cotisations patronales : coefficient T selon l'effectif,
+       dégressif jusqu'au plafond d'application, formule I45 du classeur. */
+    var T=e50?P('rgT50'):P('rgT'), seuil=P('rgSeuil'), red=null;
+    if(brut>0 && brut<SMICM*seuil && T>0){
+      var coef=Math.min(T,(T/0.6)*(seuil*hTrav*SMICH/brut-1));
+      if(coef>0) red=add('red','Réduction générale des cotisations patronales','Exonérations',null,null,brut,coef*100,null,r2(brut*coef));
     }
 
-    var totSal=0, totPat=0;
-    L.forEach(function(o){ totSal=r2(totSal+(o.ms||0)); totPat=r2(totPat+(o.mp||0)); });
-
-    var netImp=r2(brut+totSal-(csgN.ms||0));                 /* J56 =+F21+G54-G44-E47 */
-    var pasTx=n(p.pas), pas=-r2(netImp*pasTx/100);           /* J58 =-J56*DONNEES!U11 */
-    var netPay=r2(brut+totSal+panier+pas);                   /* J60 =F21+G54+J20+J58 */
+    /* Totaux */
+    var totSal=0, totPat=0, fam={};
+    L.forEach(function(o){ totSal=r2(totSal+(o.ms||0)); totPat=r2(totPat+(o.mp||0));
+      fam[o.grp]=r2((fam[o.grp]||0)+(o.mp||0)); });
+    var netImp=r2(brut+totSal-(csgN.ms||0)+(mutL?-(mutL.mp||0):0));   /* J56 + part patronale mutuelle imposable */
+    var pasTx=P('pas'), pas=-r2(netImp*pasTx/100);                      /* J58 */
+    var netAvant=r2(brut+totSal+panier+indemn);
+    var netPay=r2(netAvant+pas);                                         /* J60 */
+    var cout=r2(brut-totPat+panier+indemn);                             /* coût employeur : brut + charges patronales + remboursements */
+    /* Congés payés du mois : acquis si le mois compte du travail effectif */
+    var cpAcq=(hTrav>0)?P('cpMois'):0, cpPris=n(e.cpPris);
 
     return {salBase:salBase,absMt:absMt,tx25:tx25,mt25:mt25,tx50:tx50,mt50:mt50,prime:prime,
-      brut:brut,panNb:panNb,panTx:panTx,panier:panier,PSS:PSS,lignes:L,byc:byc,
-      totSal:totSal,totPat:totPat,netImp:netImp,pasTx:pasTx,pas:pas,netPay:netPay,
-      hTrav:hTrav,cotis:r2(-totSal-totPat),partPat:r2(-totPat)};
+      brut:brut,panNb:panNb,panTx:panTx,panier:panier,indemn:indemn,PSS:PSS,lignes:L,byc:byc,fam:fam,
+      totSal:totSal,totPat:totPat,netImp:netImp,pasTx:pasTx,pas:pas,netAvant:netAvant,netPay:netPay,
+      hTrav:hTrav,cotis:r2(-totSal-totPat),partPat:r2(-totPat),cout:cout,cadre:cadre,
+      cpAcq:cpAcq,cpPris:cpPris,txMal:txMal,txFam:txFam};
   }
   window.paie26Calc=function(doc){ return calc26(D26(doc)); };
   window.paie26CalcData=function(d){ return calc26(d); };
@@ -34862,6 +35003,8 @@ function testLienRdv()  {
   }
   window.paie26Doc=function(doc){
     var d=D26(doc), r=calc26(d), e=d.el, p=d.par, c=d.cp, em=d.emp, sa=d.sal, pe=d.per;
+    var cpv=function(v){ return (v===''||v==null)?'':f2(n(v)); };
+    var cum=null; try{ if(doc.__ps && typeof window.psCumulDoc==='function') cum=window.psCumulDoc(doc); }catch(e){}
     var el=''
       +'<tr><td class="p26-l">Salaire de base</td><td class="p26-n">'+f2(n(e.heures))+'</td><td class="p26-n">'+f2(n(e.taux))+'</td><td class="p26-n">'+fr(r.salBase)+'</td></tr>'
       +(n(e.absH)?'<tr><td class="p26-l p26-in">Absences</td><td class="p26-n">'+f2(n(e.absH))+'</td><td class="p26-n">'+f2((e.absTaux!=null&&e.absTaux!=='')?n(e.absTaux):n(e.taux))+'</td><td class="p26-n">'+fr(r.absMt)+'</td></tr>':'')
@@ -34883,7 +35026,7 @@ function testLienRdv()  {
         +'<div class="p26-part"><div class="p26-pt">SALARIÉ :</div>'
           +idn('Nom et Prénom :',sa.nom)+idn('Adresse :',sa.adr)+idn('CP et Ville :',sa.cpv)
           +idn('Numéro SS :',sa.nss)+idn('Convention collective :',sa.conv)+idn('Emploi :',sa.emploi)
-          +idn('Qualification :',sa.quali)+idn('Date d’ancienneté :',sa.anc)+'</div>'
+          +idn('Qualification :',sa.quali)+idn('Statut :',sa.statut||'Non cadre')+idn('Date d’ancienneté :',sa.anc)+'</div>'
       +'</div>'
       +'<div class="p26-two">'
         +'<table class="p26-t p26-el"><tr><th></th><th class="p26-n">NOMBRE</th><th class="p26-n">TAUX</th><th class="p26-n">TOTAL</th></tr>'
@@ -34891,7 +35034,9 @@ function testLienRdv()  {
         +'<table class="p26-t p26-side"><tr><th colspan="3" class="p26-n">Plafond SS&nbsp;: '+fr(r.PSS)+'</th></tr>'
           +'<tr><th class="p26-n">NOMBRE</th><th class="p26-n">TAUX</th><th class="p26-n">TOTAL</th></tr>'
           +'<tr><td class="p26-l" colspan="3">Panier repas</td></tr>'
-          +'<tr><td class="p26-n">'+(r.panNb?f2(r.panNb):'—')+'</td><td class="p26-n">'+(r.panTx?f2(r.panTx):'—')+'</td><td class="p26-n">'+(r.panier?fr(r.panier):'—')+'</td></tr></table>'
+          +'<tr><td class="p26-n">'+(r.panNb?f2(r.panNb):'—')+'</td><td class="p26-n">'+(r.panTx?f2(r.panTx):'—')+'</td><td class="p26-n">'+(r.panier?fr(r.panier):'—')+'</td></tr>'
+          +'<tr><td class="p26-l" colspan="3">Indemnités non soumises (transport, frais)</td></tr>'
+          +'<tr><td class="p26-n">—</td><td class="p26-n">—</td><td class="p26-n">'+(r.indemn?fr(r.indemn):'—')+'</td></tr></table>'
       +'</div>'
       +'<table class="p26-t p26-cot">'
         +'<tr class="p26-hh"><th rowspan="2" class="p26-l">COTISATIONS</th><th colspan="3">PART SALARIALE</th><th colspan="3">PART PATRONALE</th></tr>'
@@ -34901,18 +35046,21 @@ function testLienRdv()  {
       +'</table>'
       +'<table class="p26-t p26-nets">'
         +'<tr><td class="p26-l">Salaire net imposable</td><td class="p26-n">'+fr(r.netImp)+'</td></tr>'
-        +'<tr><td class="p26-l">PAS — taux nominatif DGFiP ('+pc(r.pasTx/100)+'&nbsp;%)</td><td class="p26-n">'+fr(r.pas)+'</td></tr>'
+        +'<tr><td class="p26-l">Prélèvement à la source — base '+fr(r.netImp)+' × '+pc(r.pasTx/100)+'&nbsp;%</td><td class="p26-n">'+fr(r.pas)+'</td></tr>'
+        +'<tr><td class="p26-l">Net à payer avant impôt sur le revenu</td><td class="p26-n">'+fr(r.netAvant)+'</td></tr>'
         +'<tr class="p26-net"><td class="p26-l">Net à payer</td><td class="p26-n">'+fr(r.netPay)+'</td></tr>'
+        +'<tr><td class="p26-l">Total versé par l’employeur (brut + charges patronales + indemnités)</td><td class="p26-n">'+fr(r.cout)+'</td></tr>'
       +'</table>'
       +'<div class="p26-two2">'
         +'<div class="p26-paye">Payé le&nbsp;: <b>'+E(pe.payeLe||'')+'</b></div>'
         +'<table class="p26-t p26-cp"><tr><th></th><th class="p26-n">Congés payés N-1</th><th class="p26-n">Congés payés N</th></tr>'
-          +'<tr><td class="p26-l">Dû</td><td class="p26-n">'+E(c.n1du||'')+'</td><td class="p26-n">'+E(c.ndu||'')+'</td></tr>'
-          +'<tr><td class="p26-l">Pris</td><td class="p26-n">'+E(c.n1pris||'')+'</td><td class="p26-n">'+E(c.npris||'')+'</td></tr>'
+          +'<tr><td class="p26-l">Dû</td><td class="p26-n">'+cpv(c.n1du)+'</td><td class="p26-n">'+cpv(c.ndu)+'</td></tr>'
+          +'<tr><td class="p26-l">Pris</td><td class="p26-n">'+cpv(c.n1pris)+'</td><td class="p26-n">'+cpv(c.npris)+'</td></tr>'
           +'<tr class="p26-tot"><td class="p26-l">Reste</td><td class="p26-n">'+f2(n(c.n1du)-n(c.n1pris))+'</td><td class="p26-n">'+f2(n(c.ndu)-n(c.npris))+'</td></tr></table>'
       +'</div>'
       +'<table class="p26-t p26-cum"><tr><th class="p26-l">LES CUMULS</th><th class="p26-n">BRUTS</th><th class="p26-n">COTISATIONS</th><th class="p26-n">NET IMPOSABLE</th><th class="p26-n">HEURES TRAVAILLÉES</th><th class="p26-n">PART PATRONALE</th></tr>'
-        +'<tr><td class="p26-l">Période</td><td class="p26-n">'+fr(r.brut)+'</td><td class="p26-n">'+fr(r.cotis)+'</td><td class="p26-n">'+fr(r.netImp)+'</td><td class="p26-n">'+f2(r.hTrav)+'</td><td class="p26-n">'+fr(r.partPat)+'</td></tr></table>'
+        +'<tr><td class="p26-l">Période</td><td class="p26-n">'+fr(r.brut)+'</td><td class="p26-n">'+fr(r.cotis)+'</td><td class="p26-n">'+fr(r.netImp)+'</td><td class="p26-n">'+f2(r.hTrav)+'</td><td class="p26-n">'+fr(r.partPat)+'</td></tr>'
+        +(cum?('<tr><td class="p26-l">Cumul '+E(cum.annee)+'</td><td class="p26-n">'+fr(cum.brut)+'</td><td class="p26-n">'+fr(cum.cotis)+'</td><td class="p26-n">'+fr(cum.netImp)+'</td><td class="p26-n">'+f2(cum.heures)+'</td><td class="p26-n">'+fr(cum.cotPat)+'</td></tr>'):'')+'</table>'
       +'<div class="p26-foot">Dans votre intérêt et pour vous aider à faire valoir vos droits, conservez ce bulletin de paie sans limitation de durée.</div>'
       +'</div></div>';
   };
@@ -34925,17 +35073,34 @@ function testLienRdv()  {
   function grp(t,r){ return '<div class="pfs-grp"><div class="pfs-gh">'+E(t)+'</div>'+r+'</div>'; }
   function side26(doc){
     var d=D26(doc), r=calc26(d), e=d.el, p=d.par, c=d.cp, em=d.emp, sa=d.sal, pe=d.per;
+    var ws=!!doc.__ps;   /* bulletin ouvert depuis le plan de travail : congés calculés, barème de l'exercice */
+    function cpl(du,pr){ return '<div class="pe-cp"><span>'+f2(n(du))+'</span><span>'+f2(n(pr))+'</span><b>'+f2(n(du)-n(pr))+'</b></div>'; }
+    var cpBloc = ws
+      ? row('N-1 — dû / pris / reste',cpl(c.n1du,c.n1pris))
+        + row('N — dû / pris / reste',cpl(c.ndu,c.npris))
+        + row('Congés pris ce mois (jours)',fld('el.cpPris',e.cpPris,'0'))
+        + '<div class="pfs-note">'+f2(n(p.cpMois))+' j acquis par mois travaillé · période du 1er juin au 31 mai, remise à zéro au 1er juin · report d’ouverture saisi dans la fiche du salarié.</div>'
+      : row('N-1 — dû / pris',fld('cp.n1du',c.n1du,'dû')+' '+fld('cp.n1pris',c.n1pris,'pris'))
+        + row('N — dû / pris',fld('cp.ndu',c.ndu,'dû')+' '+fld('cp.npris',c.npris,'pris'))
+        + row('Congés pris ce mois (jours)',fld('el.cpPris',e.cpPris,'0'));
+    var bar=BAR26_LIB.map(function(g){
+      return grp('Barème 2026 — '+g[0], g[1].map(function(kv){ var k=kv[0];
+        if(k==='eff') return row(kv[1],sel('par.eff',p.eff,['<11','11-49','>=50']));
+        if(k==='mutuelle') return row(kv[1],sel('par.mutuelle',p.mutuelle,['OUI','NON']));
+        return row(kv[1],fld('par.'+k,p[k],String(BAR26[k]))); }).join('')); }).join('');
     return '<div class="pf-side"><div class="pf-side-h">Fiche de paie — modèle 2026</div>'
-      +'<div class="pf-side-sub">Moteur repris du classeur de base : mêmes assiettes, mêmes taux, mêmes formules. Saisissez les montants ; tout le reste se calcule.</div>'
-      +'<div class="pe-live">À payer <b>'+fr(r.netPay)+' €</b> · Net imposable <b>'+fr(r.netImp)+' €</b> · Part patronale <b>'+fr(r.partPat)+' €</b></div>'
-      +grp('Montants à payer',
-          row('Heures du mois',fld('el.heures',e.heures,String(PAR26.heuresMois)))
-        + row('Taux horaire (€)',fld('el.taux',e.taux,String(PAR26.smicH)))
+      +'<div class="pf-side-sub">Barème 2026 : toutes les cotisations, leurs taux et leurs seuils sont pré-remplis et modifiables. Saisissez les éléments du mois ; tout le reste se calcule.</div>'
+      +'<div class="pe-live">À payer <b>'+fr(r.netPay)+' €</b> · Net imposable <b>'+fr(r.netImp)+' €</b> · Part patronale <b>'+fr(r.partPat)+' €</b> · Coût employeur <b>'+fr(r.cout)+' €</b></div>'
+      +grp('Éléments du mois',
+          row('Heures du mois',fld('el.heures',e.heures,String(p.heuresMois||BAR26.heuresMois)))
+        + row('Taux horaire (€)',fld('el.taux',e.taux,String(p.smicH||BAR26.smicH)))
         + row('Heures d’absence',fld('el.absH',e.absH,'0'))
         + row('Heures supplémentaires à 25 %',fld('el.hs25',e.hs25,'0'))
         + row('Heures supplémentaires à 50 %',fld('el.hs50',e.hs50,'0'))
         + row('Prime (€)',fld('el.prime',e.prime,'0'))
-        + row('Paniers repas — nombre',fld('el.panierNb',e.panierNb,'0')))
+        + row('Paniers repas — nombre',fld('el.panierNb',e.panierNb,'0'))
+        + row('Indemnités non soumises — transport, frais (€)',fld('el.indemn',e.indemn,'0'))
+        + row('Prélèvement à la source — taux (%)',fld('par.pas',p.pas,'0')))
       +grp('Période',
           row('Du',fld('per.du',pe.du,'01/01/2026'))+row('Au',fld('per.au',pe.au,'31/01/2026'))
         + row('Payé le',fld('per.payeLe',pe.payeLe,'31/01/2026')))
@@ -34947,34 +35112,24 @@ function testLienRdv()  {
           row('Nom et prénom',fld('sal.nom',sa.nom))+row('Adresse',fld('sal.adr',sa.adr))
         + row('CP et ville',fld('sal.cpv',sa.cpv))+row('Numéro de Sécurité sociale',fld('sal.nss',sa.nss))
         + row('Convention collective',fld('sal.conv',sa.conv))+row('Emploi',fld('sal.emploi',sa.emploi))
-        + row('Qualification',fld('sal.quali',sa.quali))+row('Date d’ancienneté',fld('sal.anc',sa.anc)))
-      +grp('Congés payés',
-          row('N-1 — dû / pris',fld('cp.n1du',c.n1du,'dû')+' '+fld('cp.n1pris',c.n1pris,'pris'))
-        + row('N — dû / pris',fld('cp.ndu',c.ndu,'dû')+' '+fld('cp.npris',c.npris,'pris')))
-      +grp('Paramètres (pré-remplis — modifiables)',
-          row('Plafond mensuel Sécurité sociale (€)',fld('par.pss',p.pss))
-        + row('SMIC horaire (€)',fld('par.smicH',p.smicH))
-        + row('SMIC mensuel (€)',fld('par.smicM',p.smicM))
-        + row('Taux accident du travail (%)',fld('par.at',p.at))
-        + row('Mutuelle',sel('par.mutuelle',p.mutuelle,['OUI','NON']))
-        + row('Coût de la mutuelle (€)',fld('par.mutCout',p.mutCout))
-        + row('Mutuelle — part salariale (%)',fld('par.mutSal',p.mutSal))
-        + row('Mutuelle — part patronale (%)',fld('par.mutPat',p.mutPat))
-        + row('Taux de prélèvement à la source (%)',fld('par.pas',p.pas))
-        + row('Effectif de l\u2019entreprise',sel('par.eff',p.eff,['<11','11-49','>=50']))
-        + row('Versement mobilité (%)',fld('par.vm',p.vm,'0'))
-        + row('Formation professionnelle (%)',fld('par.forma',p.forma,'auto'))
-        + row('Taxe d\u2019apprentissage (%)',fld('par.appr',p.appr,'0.68'))
-        + tauxAuto26(d))
+        + row('Qualification',fld('sal.quali',sa.quali))+row('Statut',sel('sal.statut',sa.statut||'Non cadre',['Non cadre','Cadre']))
+        + row('Date d’ancienneté',fld('sal.anc',sa.anc)))
+      +grp('Congés payés',cpBloc)
+      +grp('Taux appliqués ce mois',tauxAuto26(d))
+      +'<details class="pfs-det"><summary>Barème 2026 — toutes les cotisations (modifiables)</summary>'+bar+'</details>'
       +'</div>';
   }
-  function tauxAuto26(d){ var r=calc26(d);
-    return '<div class="pfs-row pfs-row-text pfs-row-taux"><label>Taux appliqués d’office</label><div class="pfs-cols pfs-cols1">'
+  function tauxAuto26(d){ var r=calc26(d), p=d.par||{}; function P(k){ var v=p[k]; if(v===''||v==null)v=BAR26[k]; return n(v); }
+    var SM=P('smicM')||BAR26.smicM;
+    return '<div class="pfs-row pfs-row-text pfs-row-taux"><label>Cotisation · salarial · patronal</label><div class="pfs-cols pfs-cols1">'
       +'<div class="pe-taux"><div class="pe-taux-h"><span>Cotisation</span><span>Salarial</span><span>Patronal</span></div>'
       +r.lignes.map(function(o){ return '<div class="pe-taux-r"><span>'+E(o.lib)+'</span>'
         +'<span>'+((o.ts!=null&&o.ts!==0)?pc(o.ts/100):'—')+'</span>'
         +'<span>'+((o.tp!=null&&o.tp!==0)?pc(o.tp/100):'—')+'</span></div>'; }).join('')
-      +'</div><div class="pe-taux-n">Maladie 7 % jusqu’à '+fr(PAR26.seuilMal)+' €, 13 % au-delà · Famille 3,45 % sous 3,5 SMIC, 5,25 % au-delà · réduction générale calculée par la formule du classeur.</div></div></div>'; }
+      +'</div><div class="pe-taux-n">Maladie '+f2(P('malRed'))+' % jusqu’à '+f2(P('malSeuil'))+' SMIC ('+fr(SM*P('malSeuil'))+' €), '+f2(P('malPlein'))+' % au-delà · '
+      +'Allocations familiales '+f2(P('famRed'))+' % sous '+f2(P('famSeuil'))+' SMIC ('+fr(SM*P('famSeuil'))+' €), '+f2(P('famPlein'))+' % au-delà · '
+      +'chômage et AGS sur 4 plafonds · tranche 2 de 1 à 8 plafonds · réduction générale T = '+String(P('rgT'))+' jusqu’à '+f2(P('rgSeuil'))+' SMIC'
+      +(r.cadre?' · statut cadre : prévoyance 1,50 % T1 et APEC.':'.')+'</div></div></div>'; }
 
   /* ── OUVERTURE ET RENDU ──────────────────────────────────────────────── */
   function setPath(d,k,v){ var p=k.split('.'); if(p.length===1){ d[k]=v; return; }
@@ -35012,7 +35167,14 @@ function testLienRdv()  {
   var BOOST=':not(#p26x):not(#p26x):not(#p26x)';
   var SEL='html body'+BOOST+' .p26-page', SEL2='#p26-doc'+BOOST+' .p26-page';
   function R(sub,decl){ return SEL+' '+sub+'{'+decl+'}'+SEL2+' '+sub+'{'+decl+'}'; }
-  var P26CSS='.p26-a4{display:flex;justify-content:center}'
+  var P26CSS='.pe-cp{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:12px;font-variant-numeric:tabular-nums;text-align:right}'
+    +'.pe-cp span,.pe-cp b{padding:6px 8px;border:1px solid rgba(255,255,255,.14);border-radius:7px;background:rgba(0,0,0,.25)}'
+    +'.pe-cp b{border-color:rgba(120,170,255,.4)}'
+    +'.pfs-note{font-size:11px;opacity:.65;line-height:1.4;margin:2px 0 6px}'
+    +'.pfs-det{margin:6px 0 14px;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:0 10px}'
+    +'.pfs-det summary{cursor:pointer;font-size:12.5px;font-weight:600;padding:10px 0}'
+    +'.pfs-det .pfs-grp{margin-top:6px}'
+    +'.p26-a4{display:flex;justify-content:center}'
     +SEL+','+SEL2+'{width:210mm;min-height:297mm;box-sizing:border-box;padding:12mm 11mm;'
     +'background:#fff!important;color:#111418!important;-webkit-text-fill-color:#111418!important;'
     +'font:10.5px/1.35 Arial,"Helvetica Neue",Helvetica,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.25)}'
@@ -35084,13 +35246,12 @@ function testLienRdv()  {
   function fr(v){ if(isNaN(v))v=0; var g=v<0; v=Math.abs(v); var p=v.toFixed(2).split('.');
     p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,' '); return (g?'-':'')+p[0]+','+p[1]; }
   var M=['01','02','03','04','05','06','07','08','09','10','11','12'];
+  var FAM=['Santé','Retraite','Famille','Chômage','Autres'];
   var ML=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
   /* ── Données ─────────────────────────────────────────────────────────── */
   function empVide(){ return {nom:'',adr:'',cpv:'',ape:'',siret:'',urssaf:''}; }
-  function parDefaut(){ return {pss:'4005',smicH:'12.02',smicM:'1823.03',heuresMois:'151.67',at:'2.80',
-    mutuelle:'OUI',mutCout:'72.09',mutSal:'50',mutPat:'50',pas:'0',
-    eff:'<11',vm:'0',forma:'',appr:''}; }
+  function parDefaut(){ var o={}, B=window.BAR26||{}; Object.keys(B).forEach(function(k){ o[k]=String(B[k]); }); return o; }
   function exVide(){ return {emp:empVide(),par:parDefaut(),salaries:[]}; }
   /* Le magasin tient un exercice par année. L'ancien format, à plat, est repris. */
   function PSroot(){
@@ -35120,13 +35281,39 @@ function testLienRdv()  {
   }
   function fixSal(x){
     x.id=x.id||('s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
-    x.sal=x.sal||{nom:'',adr:'',cpv:'',nss:'',conv:'',emploi:'',quali:'',anc:''};
+    x.sal=x.sal||{nom:'',adr:'',cpv:'',nss:'',conv:'',emploi:'',quali:'',anc:'',statut:''};
+    if(x.sal.statut==null) x.sal.statut='';
     x.cp=x.cp||{n1du:'',n1pris:'',ndu:'',npris:''};
     x.par=x.par||{};
     x.mois=x.mois||{};
     M.forEach(function(m){ x.mois[m]=x.mois[m]||{}; });
     return x;
   }
+  /* ── Congés payés ────────────────────────────────────────────────────────
+     La période court du 1er juin au 31 mai. Chaque mois travaillé ouvre
+     cpMois jours sur la période N ; les jours pris s'imputent d'abord sur
+     N-1, puis sur N. Au 1er juin, N devient N-1 et N repart de zéro. Le
+     report d'ouverture (situation au 1er janvier) se saisit sur la fiche. */
+  function hTravMois(x,m){ var e=x.mois[m]||{}; if(!(n(e.heures)>0&&n(e.taux)>0)) return 0;
+    return n(e.heures)+n(e.hs25)+n(e.hs50)-n(e.absH); }
+  function cpEtat(x,m){
+    var s=PS(), cpm=n(s.par.cpMois)||n((window.BAR26||{}).cpMois)||2.5, o=x.cp||{};
+    var st={n1du:n(o.n1du),n1pris:n(o.n1pris),ndu:n(o.ndu),npris:n(o.npris),perdus:0,acq:0,pris:0,mois:[]};
+    var fin=M.indexOf(m); if(fin<0) fin=11;
+    for(var j=0;j<=fin;j++){
+      if(j===5){ /* 1er juin : la période N devient N-1, la période N repart */
+        st.perdus=r2(st.perdus+Math.max(0,st.n1du-st.n1pris));
+        st.n1du=st.ndu; st.n1pris=st.npris; st.ndu=0; st.npris=0; }
+      var acq=hTravMois(x,M[j])>0?cpm:0; st.ndu=r2(st.ndu+acq);
+      var pr=n((x.mois[M[j]]||{}).cpPris), rest1=Math.max(0,r2(st.n1du-st.n1pris)), a1=Math.min(pr,rest1);
+      st.n1pris=r2(st.n1pris+a1); st.npris=r2(st.npris+(pr-a1));
+      st.acq=r2(st.acq+acq); st.pris=r2(st.pris+pr);
+      st.mois.push({m:M[j],acq:acq,pris:pr,n1:r2(st.n1du-st.n1pris),nn:r2(st.ndu-st.npris),bascule:j===5});
+    }
+    st.solde=r2(st.n1du-st.n1pris+st.ndu-st.npris);
+    return st;
+  }
+  window.psCpEtat=function(id,m){ var x=salById(id); return x?cpEtat(x,m):null; };
   /* Le document d'un mois pointe les objets du magasin : ce que l'on corrige
      dans le bulletin est corrigé dans le suivi, et réciproquement. */
   function docFor(x,m){
@@ -35139,19 +35326,27 @@ function testLienRdv()  {
     Object.keys(x.par||{}).forEach(function(k){ if(x.par[k]!=='' && x.par[k]!=null) par[k]=x.par[k]; });
     return {id:'ps-'+x.id+'-'+m, k:'fichepaie26', __ps:{sal:x.id,mois:m},
       titre:'Bulletin '+ML[i]+' '+an+' — '+(x.sal.nom||'salarié'),
-      data:{emp:s.emp, sal:x.sal, cp:x.cp, par:par, el:el,
+      data:{emp:s.emp, sal:x.sal, cp:cpEtat(x,m), par:par, el:el,
             per:{du:'01/'+m+'/'+an, au:fin+'/'+m+'/'+an, payeLe:fin+'/'+m+'/'+an}}};
   }
   function moisRempli(x,m){ var e=x.mois[m]||{}; return n(e.heures)>0 && n(e.taux)>0; }
   function calcMois(x,m){ if(!moisRempli(x,m)) return null; return window.paie26CalcData(docFor(x,m).data); }
-  function cumulSal(x){
-    var t={brut:0,cotSal:0,cotPat:0,netImp:0,pas:0,netPay:0,heures:0,cout:0,mois:0};
-    M.forEach(function(m){ var r=calcMois(x,m); if(!r) return; t.mois++;
-      t.brut=r2(t.brut+r.brut); t.cotSal=r2(t.cotSal-r.totSal); t.cotPat=r2(t.cotPat-r.totPat);
+  function cumulSal(x,jusqua){
+    var t={brut:0,hs:0,prime:0,panier:0,indemn:0,cotSal:0,cotPat:0,red:0,netImp:0,pas:0,netPay:0,heures:0,cout:0,mois:0,fam:{}};
+    FAM.forEach(function(f){ t.fam[f]=0; });
+    var fin=jusqua?M.indexOf(jusqua):11;
+    M.forEach(function(m,i){ if(i>fin) return; var r=calcMois(x,m); if(!r) return; t.mois++;
+      t.brut=r2(t.brut+r.brut); t.hs=r2(t.hs+r.mt25+r.mt50); t.prime=r2(t.prime+r.prime); t.panier=r2(t.panier+r.panier); t.indemn=r2(t.indemn+r.indemn);
+      t.cotSal=r2(t.cotSal-r.totSal); t.cotPat=r2(t.cotPat-r.totPat); t.red=r2(t.red+(r.byc.red?r.byc.red.mp:0));
       t.netImp=r2(t.netImp+r.netImp); t.pas=r2(t.pas-r.pas); t.netPay=r2(t.netPay+r.netPay);
-      t.heures=r2(t.heures+r.hTrav); t.cout=r2(t.cout+r.brut+(-r.totPat)); });
+      t.heures=r2(t.heures+r.hTrav); t.cout=r2(t.cout+r.cout);
+      FAM.forEach(function(f){ t.fam[f]=r2(t.fam[f]-(r.fam[f]||0)); }); });
+    t.cotis=r2(t.cotSal+t.cotPat); t.cpSolde=cpEtat(x,jusqua||'12').solde;
     return t;
   }
+  /* Cumul de l'exercice jusqu'au mois du bulletin ouvert, pour la ligne « LES CUMULS » */
+  window.psCumulDoc=function(doc){ if(!doc||!doc.__ps) return null; var x=salById(doc.__ps.sal); if(!x) return null;
+    var c=cumulSal(x,doc.__ps.mois); c.annee=PS().annee; return c; };
 
   /* ── Écriture ────────────────────────────────────────────────────────── */
   function salById(id){ return PS().salaries.filter(function(x){return x.id===id;})[0]; }
@@ -35171,7 +35366,8 @@ function testLienRdv()  {
         neuf.salaries=(src.salaries||[]).map(function(x){
           var y=fixSal({tauxDefaut:x.tauxDefaut, par:JSON.parse(JSON.stringify(x.par||{})),
                         sal:JSON.parse(JSON.stringify(x.sal||{}))});
-          y.cp={n1du:x.cp&&x.cp.ndu||'',n1pris:'',ndu:'',npris:''};  /* les congés N deviennent N-1 */
+          var st=cpEtat(x,'12');   /* situation au 31 décembre : report d'ouverture du nouvel exercice */
+          y.cp={n1du:String(st.n1du),n1pris:String(st.n1pris),ndu:String(st.ndu),npris:String(st.npris)};
           return y; });
       }
       R.annees[v]=neuf; R.courante=v; window.__psSel=null; try{save();}catch(e){} psPaint(); };
@@ -35219,24 +35415,16 @@ function testLienRdv()  {
       +lab('CP et ville',fldE('cpv',s.emp.cpv))+lab('Numéro APE',fldE('ape',s.emp.ape))
       +lab('Numéro SIRET',fldE('siret',s.emp.siret))+lab('URSSAF',fldE('urssaf',s.emp.urssaf))
       +'</div></div>';
-    var par='<div class="ps-card"><h3>Paramètres de l’année '+E(s.annee)+'</h3><div class="ps-grid">'
-      +lab('Plafond mensuel Sécurité sociale (€)',fldP('pss',s.par.pss))
-      +lab('SMIC horaire (€)',fldP('smicH',s.par.smicH))
-      +lab('SMIC mensuel (€)',fldP('smicM',s.par.smicM))
-      +lab('Heures du mois',fldP('heuresMois',s.par.heuresMois))
-      +lab('Taux accident du travail (%)',fldP('at',s.par.at))
-      +lab('Mutuelle (OUI / NON)',fldP('mutuelle',s.par.mutuelle))
-      +lab('Coût de la mutuelle (€)',fldP('mutCout',s.par.mutCout))
-      +lab('Mutuelle — part salariale (%)',fldP('mutSal',s.par.mutSal))
-      +lab('Mutuelle — part patronale (%)',fldP('mutPat',s.par.mutPat))
-      +lab('Effectif de l\u2019entreprise',
-        '<select class="ps-i" onchange="psSetPar(\'eff\',this.value)">'
-        +['<11','11-49','>=50'].map(function(o){return '<option'+(String(s.par.eff)===o?' selected':'')+'>'+o+'</option>';}).join('')
-        +'</select>')
-      +lab('Versement mobilité (%)',fldP('vm',s.par.vm))
-      +lab('Formation professionnelle (%)',fldP('forma',s.par.forma))
-      +lab('Taxe d\u2019apprentissage (%)',fldP('appr',s.par.appr))
-      +'</div></div>';
+    var LIB=window.BAR26_LIB||[], B=window.BAR26||{};
+    var par='<div class="ps-card"><h3>Barème 2026 — exercice '+E(s.annee)+'</h3>'
+      +'<div class="ps-note">Toutes les cotisations, leurs taux et leurs seuils, appliqués à chaque bulletin de l’exercice. Les seuils s’expriment en SMIC mensuels. Chaque valeur reste modifiable ; vide = valeur du barème.</div>'
+      +LIB.map(function(g){ return '<h4 class="ps-h4">'+E(g[0])+'</h4><div class="ps-grid">'+g[1].map(function(kv){ var k=kv[0];
+          if(k==='eff') return lab(kv[1],'<select class="ps-i" onchange="psSetPar(\'eff\',this.value)">'
+            +['<11','11-49','>=50'].map(function(o){return '<option'+(String(s.par.eff)===o?' selected':'')+'>'+o+'</option>';}).join('')+'</select>');
+          if(k==='mutuelle') return lab(kv[1],'<select class="ps-i" onchange="psSetPar(\'mutuelle\',this.value)">'
+            +['OUI','NON'].map(function(o){return '<option'+(String(s.par.mutuelle).toUpperCase()===o?' selected':'')+'>'+o+'</option>';}).join('')+'</select>');
+          return lab(kv[1],fldP(k,s.par[k],String(B[k]))); }).join('')+'</div>'; }).join('')
+      +'</div>';
     return emp+par;
   }
   function ficheSal(x,s){
@@ -35248,17 +35436,20 @@ function testLienRdv()  {
         +lab('Nom et prénom',fldS(x.id,'sal.nom',x.sal.nom))+lab('Adresse',fldS(x.id,'sal.adr',x.sal.adr))
         +lab('CP et ville',fldS(x.id,'sal.cpv',x.sal.cpv))+lab('Numéro de Sécurité sociale',fldS(x.id,'sal.nss',x.sal.nss))
         +lab('Convention collective',fldS(x.id,'sal.conv',x.sal.conv))+lab('Emploi',fldS(x.id,'sal.emploi',x.sal.emploi))
-        +lab('Qualification',fldS(x.id,'sal.quali',x.sal.quali))+lab('Date d’ancienneté',fldS(x.id,'sal.anc',x.sal.anc))
+        +lab('Qualification',fldS(x.id,'sal.quali',x.sal.quali))
+        +lab('Statut','<select class="ps-i" onchange="psSetSal(\''+x.id+'\',\'sal.statut\',this.value)">'
+          +['Non cadre','Cadre'].map(function(o){return '<option'+((x.sal.statut||'Non cadre')===o?' selected':'')+'>'+o+'</option>';}).join('')+'</select>')
+        +lab('Date d’ancienneté',fldS(x.id,'sal.anc',x.sal.anc))
         +lab('Taux horaire par défaut (€)',fldS(x.id,'tauxDefaut',x.tauxDefaut,s.par.smicH))
         +lab('Taux de prélèvement à la source (%)',fldS(x.id,'par.pas',(x.par||{}).pas,'0'))
-        +lab('Congés N-1 — dû / pris','<div class="ps-duo">'+fldS(x.id,'cp.n1du',x.cp.n1du,'dû')+fldS(x.id,'cp.n1pris',x.cp.n1pris,'pris')+'</div>')
-        +lab('Congés N — dû / pris','<div class="ps-duo">'+fldS(x.id,'cp.ndu',x.cp.ndu,'dû')+fldS(x.id,'cp.npris',x.cp.npris,'pris')+'</div>')
+        +lab('Congés au 1er janvier — N-1 dû / pris','<div class="ps-duo">'+fldS(x.id,'cp.n1du',x.cp.n1du,'dû')+fldS(x.id,'cp.n1pris',x.cp.n1pris,'pris')+'</div>')
+        +lab('Congés au 1er janvier — N dû / pris','<div class="ps-duo">'+fldS(x.id,'cp.ndu',x.cp.ndu,'dû')+fldS(x.id,'cp.npris',x.cp.npris,'pris')+'</div>')
         +'</div></div>'
         +'<div class="ps-card"><h3>Bulletins de l\u2019année</h3><div class="ps-mbar">'
         +M.map(function(m,i){ var r=calcMois(x,m);
             return '<button class="ps-m'+(r?' done':'')+'" onclick="psBulletin(\''+x.id+'\',\''+m+'\')">'
               +ML[i].slice(0,4)+(r?(' · '+fr(r.netPay)):' · —')+'</button>'; }).join('')
-        +'</div></div>';
+        +'</div></div>'+cpCard(x);
   }
 
   function tabSaisie(){
@@ -35277,6 +35468,8 @@ function testLienRdv()  {
         +'<td>'+fldM(x.id,m,'hs50',e.hs50,'0')+'</td>'
         +'<td>'+fldM(x.id,m,'prime',e.prime,'0')+'</td>'
         +'<td>'+fldM(x.id,m,'panierNb',e.panierNb,'0')+'</td>'
+        +'<td>'+fldM(x.id,m,'indemn',e.indemn,'0')+'</td>'
+        +'<td>'+fldM(x.id,m,'cpPris',e.cpPris,'0')+'</td>'
         +'<td class="ps-n">'+(r?fr(r.brut):'—')+'</td>'
         +'<td class="ps-n ps-strong">'+(r?fr(r.netPay):'—')+'</td>'
         +'<td><button class="ps-b ps-b-doc" onclick="psBulletin(\''+x.id+'\',\''+m+'\')">Bulletin</button></td></tr>';
@@ -35284,65 +35477,149 @@ function testLienRdv()  {
     var tot=s.salaries.reduce(function(a,x){ var r=calcMois(x,m); if(r){a.b=r2(a.b+r.brut);a.n=r2(a.n+r.netPay);a.p=r2(a.p-r.totPat);} return a; },{b:0,n:0,p:0});
     return bar+'<div class="ps-card"><h3>Éléments de '+ML[M.indexOf(m)]+' '+E(s.annee)+'</h3>'
       +'<div class="ps-scroll"><table class="ps-t"><tr><th class="ps-l">Salarié</th><th>Heures</th><th>Taux</th>'
-      +'<th>Absences</th><th>HS 25 %</th><th>HS 50 %</th><th>Prime</th><th>Paniers</th>'
+      +'<th>Absences</th><th>HS 25 %</th><th>HS 50 %</th><th>Prime</th><th>Paniers</th><th>Indemnités</th><th>Congés pris</th>'
       +'<th class="ps-n">Brut</th><th class="ps-n">Net à payer</th><th></th></tr>'+rows
-      +'<tr class="ps-tot"><td class="ps-l">Total du mois</td><td colspan="7"></td>'
+      +'<tr class="ps-tot"><td class="ps-l">Total du mois</td><td colspan="9"></td>'
       +'<td class="ps-n">'+fr(tot.b)+'</td><td class="ps-n">'+fr(tot.n)+'</td>'
       +'<td class="ps-n">'+fr(tot.p)+' pat.</td></tr></table></div></div>';
   }
+
+  function pct(a,b){ return b>0?((Math.round(a/b*1000)/10).toFixed(1).replace('.',',')+' %'):'—'; }
+  function kpi(l,v,u){ return '<div class="ps-kpi"><span>'+E(l)+'</span><b>'+v+(u?' <i>'+u+'</i>':'')+'</b></div>'; }
+  function famCols(r){ return FAM.map(function(f){ return '<td class="ps-n">'+fr(-(r.fam&&r.fam[f]||0))+'</td>'; }).join(''); }
 
   function tabMensuel(){
     var s=PS();
     if(!s.salaries.length) return '<div class="ps-empty">Aucun salarié.</div>';
     var sel=window.__psSel, x=(sel&&sel!=='@par'?salById(sel):null)||s.salaries[0];
-    var pick='';
-    var t={brut:0,cs:0,cp:0,ni:0,pas:0,np:0,h:0};
-    var rows=M.map(function(m,i){ var r=calcMois(x,m);
-      if(!r) return '<tr class="ps-vide"><td class="ps-l">'+ML[i]+'</td><td colspan="6" class="ps-n">non saisi</td>'
-        +'<td><button class="ps-b ps-b-doc" onclick="psBulletin(\''+x.id+'\',\''+m+'\')">Bulletin</button></td></tr>';
-      t.brut=r2(t.brut+r.brut); t.cs=r2(t.cs-r.totSal); t.cp=r2(t.cp-r.totPat);
-      t.ni=r2(t.ni+r.netImp); t.pas=r2(t.pas-r.pas); t.np=r2(t.np+r.netPay); t.h=r2(t.h+r.hTrav);
-      return '<tr><td class="ps-l">'+ML[i]+'</td><td class="ps-n">'+fr(r.brut)+'</td>'
-        +'<td class="ps-n">'+fr(-r.totSal)+'</td><td class="ps-n">'+fr(-r.totPat)+'</td>'
+    var t={h:0,brut:0,hs:0,pr:0,pan:0,cs:0,cp:0,red:0,ni:0,pas:0,np:0,cout:0};
+    var rows=M.map(function(m,i){ var r=calcMois(x,m), cp=cpEtat(x,m);
+      if(!r) return '<tr class="ps-vide"><td class="ps-l">'+ML[i]+'</td><td colspan="12" class="ps-n">non saisi</td>'
+        +'<td class="ps-n">'+f2(cp.solde)+'</td><td><button class="ps-b ps-b-doc" onclick="psBulletin(\''+x.id+'\',\''+m+'\')">Bulletin</button></td></tr>';
+      var hs=r2(r.mt25+r.mt50), pan=r2(r.panier+r.indemn), red=r.byc.red?r.byc.red.mp:0;
+      t.h=r2(t.h+r.hTrav); t.brut=r2(t.brut+r.brut); t.hs=r2(t.hs+hs); t.pr=r2(t.pr+r.prime); t.pan=r2(t.pan+pan);
+      t.cs=r2(t.cs-r.totSal); t.cp=r2(t.cp-r.totPat); t.red=r2(t.red+red);
+      t.ni=r2(t.ni+r.netImp); t.pas=r2(t.pas-r.pas); t.np=r2(t.np+r.netPay); t.cout=r2(t.cout+r.cout);
+      return '<tr'+(cp.mois[i]&&cp.mois[i].bascule?' class="ps-juin"':'')+'><td class="ps-l">'+ML[i]+'</td><td class="ps-n">'+f2(r.hTrav)+'</td>'
+        +'<td class="ps-n">'+fr(r.brut)+'</td><td class="ps-n">'+fr(hs)+'</td><td class="ps-n">'+fr(r.prime)+'</td><td class="ps-n">'+fr(pan)+'</td>'
+        +'<td class="ps-n">'+fr(-r.totSal)+'</td><td class="ps-n">'+fr(-r.totPat)+'</td><td class="ps-n">'+fr(red)+'</td>'
         +'<td class="ps-n">'+fr(r.netImp)+'</td><td class="ps-n">'+fr(-r.pas)+'</td>'
-        +'<td class="ps-n ps-strong">'+fr(r.netPay)+'</td>'
+        +'<td class="ps-n ps-strong">'+fr(r.netPay)+'</td><td class="ps-n">'+fr(r.cout)+'</td>'
+        +'<td class="ps-n" title="N-1 : '+f2(cp.n1du-cp.n1pris)+' · N : '+f2(cp.ndu-cp.npris)+'">'+f2(cp.solde)+'</td>'
         +'<td><button class="ps-b ps-b-doc" onclick="psBulletin(\''+x.id+'\',\''+m+'\')">Bulletin</button></td></tr>';
     }).join('');
-    return pick+'<div class="ps-card"><h3>Suivi mensuel — '+E(x.sal.nom||'Salarié')+' · '+E(s.annee)+'</h3>'
-      +'<div class="ps-scroll"><table class="ps-t"><tr><th class="ps-l">Mois</th><th class="ps-n">Brut</th>'
-      +'<th class="ps-n">Cotisations salariales</th><th class="ps-n">Cotisations patronales</th>'
+    var fin=cpEtat(x,'12');
+    return '<div class="ps-card"><h3>Suivi mensuel — '+E(x.sal.nom||'Salarié')+' · '+E(s.annee)+'</h3>'
+      +'<div class="ps-scroll"><table class="ps-t"><tr><th class="ps-l">Mois</th><th class="ps-n">Heures</th><th class="ps-n">Brut</th>'
+      +'<th class="ps-n">Heures sup.</th><th class="ps-n">Primes</th><th class="ps-n">Paniers &amp; indemnités</th>'
+      +'<th class="ps-n">Part salariale</th><th class="ps-n">Part patronale</th><th class="ps-n">Réduction générale</th>'
       +'<th class="ps-n">Net imposable</th><th class="ps-n">Prélèvement à la source</th>'
-      +'<th class="ps-n">Net à payer</th><th></th></tr>'+rows
-      +'<tr class="ps-tot"><td class="ps-l">Cumul '+E(s.annee)+'</td><td class="ps-n">'+fr(t.brut)+'</td>'
-      +'<td class="ps-n">'+fr(t.cs)+'</td><td class="ps-n">'+fr(t.cp)+'</td><td class="ps-n">'+fr(t.ni)+'</td>'
-      +'<td class="ps-n">'+fr(t.pas)+'</td><td class="ps-n">'+fr(t.np)+'</td><td class="ps-n">'+f2(t.h)+' h</td></tr>'
-      +'</table></div></div>';
+      +'<th class="ps-n">Net à payer</th><th class="ps-n">Coût employeur</th><th class="ps-n">Congés restants</th><th></th></tr>'+rows
+      +'<tr class="ps-tot"><td class="ps-l">Cumul '+E(s.annee)+'</td><td class="ps-n">'+f2(t.h)+'</td><td class="ps-n">'+fr(t.brut)+'</td>'
+      +'<td class="ps-n">'+fr(t.hs)+'</td><td class="ps-n">'+fr(t.pr)+'</td><td class="ps-n">'+fr(t.pan)+'</td>'
+      +'<td class="ps-n">'+fr(t.cs)+'</td><td class="ps-n">'+fr(t.cp)+'</td><td class="ps-n">'+fr(t.red)+'</td><td class="ps-n">'+fr(t.ni)+'</td>'
+      +'<td class="ps-n">'+fr(t.pas)+'</td><td class="ps-n">'+fr(t.np)+'</td><td class="ps-n">'+fr(t.cout)+'</td><td class="ps-n">'+f2(fin.solde)+'</td><td></td></tr>'
+      +'</table></div><div class="ps-note">Part patronale nette de réduction générale · coût employeur = brut + charges patronales nettes + paniers et indemnités · la ligne de juin marque la remise à zéro des congés.</div></div>'
+      +cpCard(x);
+  }
+  function cpCard(x){
+    var st=cpEtat(x,'12'), o=x.cp||{};
+    var rows=st.mois.map(function(k,i){ return '<tr'+(k.bascule?' class="ps-juin"':'')+'><td class="ps-l">'+ML[i]+(k.bascule?' <small>· 1er juin : N → N-1</small>':'')+'</td>'
+      +'<td class="ps-n">'+(k.acq?f2(k.acq):'—')+'</td><td class="ps-n">'+(k.pris?f2(k.pris):'—')+'</td>'
+      +'<td class="ps-n">'+f2(k.n1)+'</td><td class="ps-n">'+f2(k.nn)+'</td><td class="ps-n ps-strong">'+f2(k.n1+k.nn)+'</td></tr>'; }).join('');
+    return '<div class="ps-card"><h3>Congés payés — '+E(x.sal.nom||'Salarié')+'</h3>'
+      +'<div class="ps-note">Report au 1er janvier : N-1 '+f2(n(o.n1du))+' dû / '+f2(n(o.n1pris))+' pris · N '+f2(n(o.ndu))+' dû / '+f2(n(o.npris))+' pris'
+      +(st.perdus?' · <b>'+f2(st.perdus)+' j de N-1 non pris au 31 mai</b>':'')+'</div>'
+      +'<div class="ps-scroll"><table class="ps-t"><tr><th class="ps-l">Mois</th><th class="ps-n">Acquis</th><th class="ps-n">Pris</th>'
+      +'<th class="ps-n">Reste N-1</th><th class="ps-n">Reste N</th><th class="ps-n">Solde</th></tr>'+rows+'</table></div></div>';
   }
 
   function tabAnnuel(){
     var s=PS();
     if(!s.salaries.length) return '<div class="ps-empty">Aucun salarié.</div>';
-    var g={brut:0,cs:0,cp:0,ni:0,pas:0,np:0,h:0,cout:0};
-    var rows=s.salaries.map(function(x){ var c=cumulSal(x);
-      g.brut=r2(g.brut+c.brut); g.cs=r2(g.cs+c.cotSal); g.cp=r2(g.cp+c.cotPat); g.ni=r2(g.ni+c.netImp);
-      g.pas=r2(g.pas+c.pas); g.np=r2(g.np+c.netPay); g.h=r2(g.h+c.heures); g.cout=r2(g.cout+c.cout);
+    var g={h:0,brut:0,cs:0,cp:0,red:0,ni:0,pas:0,np:0,pan:0,cout:0};
+    var cs=s.salaries.map(function(x){ var c=cumulSal(x);
+      g.h=r2(g.h+c.heures); g.brut=r2(g.brut+c.brut); g.cs=r2(g.cs+c.cotSal); g.cp=r2(g.cp+c.cotPat); g.red=r2(g.red+c.red);
+      g.ni=r2(g.ni+c.netImp); g.pas=r2(g.pas+c.pas); g.np=r2(g.np+c.netPay); g.pan=r2(g.pan+c.panier+c.indemn); g.cout=r2(g.cout+c.cout);
+      return c; });
+    var rows=s.salaries.map(function(x,i){ var c=cs[i];
       return '<tr'+(x.id===window.__psSel?' class="ps-cur"':'')+'><td class="ps-l">'
         +'<button class="ps-lk" onclick="psSel(\''+x.id+'\')">'+E(x.sal.nom||'Salarié')+'</button></td><td class="ps-n">'+c.mois+'</td>'
+        +'<td class="ps-n">'+f2(c.heures)+'</td><td class="ps-n">'+pct(c.heures,g.h)+'</td>'
         +'<td class="ps-n">'+fr(c.brut)+'</td><td class="ps-n">'+fr(c.cotSal)+'</td>'
-        +'<td class="ps-n">'+fr(c.cotPat)+'</td><td class="ps-n">'+fr(c.netImp)+'</td>'
+        +'<td class="ps-n">'+fr(c.cotPat)+'</td><td class="ps-n">'+fr(c.red)+'</td><td class="ps-n">'+fr(c.netImp)+'</td>'
         +'<td class="ps-n">'+fr(c.pas)+'</td><td class="ps-n ps-strong">'+fr(c.netPay)+'</td>'
-        +'<td class="ps-n">'+f2(c.heures)+'</td><td class="ps-n">'+fr(c.cout)+'</td></tr>';
+        +'<td class="ps-n">'+fr(r2(c.panier+c.indemn))+'</td><td class="ps-n">'+fr(c.cout)+'</td><td class="ps-n">'+pct(c.cout,g.cout)+'</td>'
+        +'<td class="ps-n">'+f2(c.cpSolde)+'</td></tr>';
     }).join('');
-    return '<div class="ps-card"><h3>Suivi annuel '+E(s.annee)+' — '+s.salaries.length+' salarié(s)</h3>'
+    return '<div class="ps-kpis">'+kpi('Masse salariale brute',fr(g.brut),'€')+kpi('Charges patronales nettes',fr(g.cp),'€')
+      +kpi('Coût total employeur',fr(g.cout),'€')+kpi('Taux de charges',pct(g.cp,g.brut))+kpi('Heures travaillées',f2(g.h),'h')+'</div>'
+      +'<div class="ps-card"><h3>Suivi annuel '+E(s.annee)+' — '+s.salaries.length+' salarié(s)</h3>'
       +'<div class="ps-scroll"><table class="ps-t"><tr><th class="ps-l">Salarié</th><th class="ps-n">Mois</th>'
-      +'<th class="ps-n">Brut</th><th class="ps-n">Cotisations salariales</th><th class="ps-n">Cotisations patronales</th>'
+      +'<th class="ps-n">Heures</th><th class="ps-n">% du temps</th>'
+      +'<th class="ps-n">Brut</th><th class="ps-n">Part salariale</th><th class="ps-n">Part patronale</th><th class="ps-n">Réduction générale</th>'
       +'<th class="ps-n">Net imposable</th><th class="ps-n">Prélèvement à la source</th><th class="ps-n">Net à payer</th>'
-      +'<th class="ps-n">Heures</th><th class="ps-n">Coût employeur</th></tr>'+rows
-      +'<tr class="ps-tot"><td class="ps-l">Masse salariale</td><td class="ps-n"></td>'
-      +'<td class="ps-n">'+fr(g.brut)+'</td><td class="ps-n">'+fr(g.cs)+'</td><td class="ps-n">'+fr(g.cp)+'</td>'
+      +'<th class="ps-n">Paniers &amp; indemnités</th><th class="ps-n">Coût employeur</th><th class="ps-n">% du coût</th><th class="ps-n">Congés restants</th></tr>'+rows
+      +'<tr class="ps-tot"><td class="ps-l">Masse salariale</td><td class="ps-n"></td><td class="ps-n">'+f2(g.h)+'</td><td class="ps-n">100 %</td>'
+      +'<td class="ps-n">'+fr(g.brut)+'</td><td class="ps-n">'+fr(g.cs)+'</td><td class="ps-n">'+fr(g.cp)+'</td><td class="ps-n">'+fr(g.red)+'</td>'
       +'<td class="ps-n">'+fr(g.ni)+'</td><td class="ps-n">'+fr(g.pas)+'</td><td class="ps-n">'+fr(g.np)+'</td>'
-      +'<td class="ps-n">'+f2(g.h)+'</td><td class="ps-n">'+fr(g.cout)+'</td></tr></table></div></div>';
+      +'<td class="ps-n">'+fr(g.pan)+'</td><td class="ps-n">'+fr(g.cout)+'</td><td class="ps-n">100 %</td><td class="ps-n"></td></tr></table></div></div>';
   }
+
+  /* ── Dépenses de la société : ce que coûte chaque salarié, par mois ou sur l'année ── */
+  function depRow(x){ /* agrège les mois retenus */
+    var mode=window.__psDep||'mois', m=window.__psMois||M[new Date().getMonth()];
+    var t={h:0,brut:0,base:0,hs:0,pr:0,pan:0,ind:0,cs:0,cp:0,red:0,pas:0,np:0,cout:0,mois:0,fam:{}};
+    FAM.forEach(function(f){ t.fam[f]=0; });
+    (mode==='an'?M:[m]).forEach(function(k){ var r=calcMois(x,k); if(!r) return; t.mois++;
+      t.h=r2(t.h+r.hTrav); t.brut=r2(t.brut+r.brut); t.base=r2(t.base+r.salBase+r.absMt); t.hs=r2(t.hs+r.mt25+r.mt50); t.pr=r2(t.pr+r.prime);
+      t.pan=r2(t.pan+r.panier); t.ind=r2(t.ind+r.indemn); t.cs=r2(t.cs-r.totSal); t.cp=r2(t.cp-r.totPat);
+      t.red=r2(t.red+(r.byc.red?r.byc.red.mp:0)); t.pas=r2(t.pas-r.pas); t.np=r2(t.np+r.netPay); t.cout=r2(t.cout+r.cout);
+      FAM.forEach(function(f){ t.fam[f]=r2(t.fam[f]-(r.fam[f]||0)); }); });
+    return t;
+  }
+  function tabDepenses(){
+    var s=PS(), mode=window.__psDep||'mois', m=window.__psMois||M[new Date().getMonth()];
+    var bar='<div class="ps-mbar"><button class="ps-m'+(mode==='an'?' on':'')+'" onclick="psDep(\'an\')">Année '+E(s.annee)+'</button>'
+      +'<span class="ps-sep"></span>'+M.map(function(k,i){
+        return '<button class="ps-m'+(mode!=='an'&&k===m?' on':'')+'" onclick="psDep(\'mois\',\''+k+'\')">'+ML[i].slice(0,4)+'</button>'; }).join('')+'</div>';
+    if(!s.salaries.length) return bar+'<div class="ps-empty">Aucun salarié.</div>';
+    var L=s.salaries.map(depRow), g={h:0,brut:0,base:0,hs:0,pr:0,pan:0,ind:0,cs:0,cp:0,red:0,pas:0,np:0,cout:0,fam:{}};
+    FAM.forEach(function(f){ g.fam[f]=0; });
+    L.forEach(function(t){ Object.keys(g).forEach(function(k){ if(k==='fam'){ FAM.forEach(function(f){ g.fam[f]=r2(g.fam[f]+t.fam[f]); }); } else g[k]=r2(g[k]+t[k]); }); });
+    var rows=s.salaries.map(function(x,i){ var t=L[i];
+      if(!t.mois) return '<tr class="ps-vide"><td class="ps-l">'+E(x.sal.nom||'Salarié')+'</td><td colspan="18" class="ps-n">non saisi</td></tr>';
+      return '<tr'+(x.id===window.__psSel?' class="ps-cur"':'')+'><td class="ps-l"><button class="ps-lk" onclick="psSel(\''+x.id+'\')">'+E(x.sal.nom||'Salarié')+'</button></td>'
+        +'<td class="ps-n">'+f2(t.h)+'</td><td class="ps-n">'+pct(t.h,g.h)+'</td>'
+        +'<td class="ps-n">'+fr(t.base)+'</td><td class="ps-n">'+fr(t.hs)+'</td><td class="ps-n">'+fr(t.pr)+'</td><td class="ps-n ps-strong">'+fr(t.brut)+'</td>'
+        +'<td class="ps-n">'+fr(t.pan)+'</td><td class="ps-n">'+fr(t.ind)+'</td>'
+        +FAM.map(function(f){ return '<td class="ps-n">'+fr(t.fam[f])+'</td>'; }).join('')
+        +'<td class="ps-n">'+fr(t.red)+'</td><td class="ps-n ps-strong">'+fr(t.cp)+'</td>'
+        +'<td class="ps-n">'+fr(t.cs)+'</td><td class="ps-n">'+fr(t.pas)+'</td><td class="ps-n">'+fr(t.np)+'</td>'
+        +'<td class="ps-n ps-strong">'+fr(t.cout)+'</td><td class="ps-n">'+pct(t.cout,g.cout)+'</td></tr>';
+    }).join('');
+    var tit=(mode==='an')?('Année '+E(s.annee)):(ML[M.indexOf(m)]+' '+E(s.annee));
+    return bar+'<div class="ps-kpis">'+kpi('Coût total employeur',fr(g.cout),'€')+kpi('Salaires bruts',fr(g.brut),'€')
+      +kpi('Charges patronales nettes',fr(g.cp),'€')+kpi('Taux de charges patronales',pct(g.cp,g.brut))
+      +kpi('Paniers & indemnités',fr(r2(g.pan+g.ind)),'€')+kpi('Prélèvement à la source reversé',fr(g.pas),'€')+kpi('Heures travaillées',f2(g.h),'h')+'</div>'
+      +'<div class="ps-card"><h3>Dépenses de la société — '+tit+'</h3>'
+      +'<div class="ps-scroll"><table class="ps-t ps-dep"><tr><th class="ps-l" rowspan="2">Salarié</th><th colspan="2">Temps de travail</th>'
+      +'<th colspan="4">Rémunération brute</th><th colspan="2">Non soumis</th><th colspan="7">Charges patronales 2026</th><th colspan="3">Salarié</th><th colspan="2">Coût</th></tr>'
+      +'<tr><th class="ps-n">Heures</th><th class="ps-n">% du temps</th>'
+      +'<th class="ps-n">Salaire de base</th><th class="ps-n">Heures sup.</th><th class="ps-n">Primes</th><th class="ps-n">Brut</th>'
+      +'<th class="ps-n">Paniers</th><th class="ps-n">Indemnités</th>'
+      +FAM.map(function(f){ return '<th class="ps-n">'+f+'</th>'; }).join('')+'<th class="ps-n">Réduction générale</th><th class="ps-n">Total patronal</th>'
+      +'<th class="ps-n">Part salariale</th><th class="ps-n">Prélèvement à la source</th><th class="ps-n">Net versé</th>'
+      +'<th class="ps-n">Coût total</th><th class="ps-n">% du coût</th></tr>'+rows
+      +'<tr class="ps-tot"><td class="ps-l">Total</td><td class="ps-n">'+f2(g.h)+'</td><td class="ps-n">100 %</td>'
+      +'<td class="ps-n">'+fr(g.base)+'</td><td class="ps-n">'+fr(g.hs)+'</td><td class="ps-n">'+fr(g.pr)+'</td><td class="ps-n">'+fr(g.brut)+'</td>'
+      +'<td class="ps-n">'+fr(g.pan)+'</td><td class="ps-n">'+fr(g.ind)+'</td>'
+      +FAM.map(function(f){ return '<td class="ps-n">'+fr(g.fam[f])+'</td>'; }).join('')
+      +'<td class="ps-n">'+fr(g.red)+'</td><td class="ps-n">'+fr(g.cp)+'</td><td class="ps-n">'+fr(g.cs)+'</td><td class="ps-n">'+fr(g.pas)+'</td><td class="ps-n">'+fr(g.np)+'</td>'
+      +'<td class="ps-n">'+fr(g.cout)+'</td><td class="ps-n">100 %</td></tr></table></div>'
+      +'<div class="ps-note">Coût total = brut + charges patronales nettes de la réduction générale + paniers et indemnités. Le prélèvement à la source est retenu sur le net du salarié et reversé à la DGFiP ; il ne s’ajoute pas au coût.</div></div>';
+  }
+  window.psDep=function(mode,m){ window.__psDep=mode; if(m) window.__psMois=m; psPaint(); };
 
   function rail(s){
     var sel=window.__psSel;
@@ -35356,15 +35633,15 @@ function testLienRdv()  {
       +'<button class="ps-ri ps-ri-add" onclick="psAddSal()">+ Ajouter un salarié</button>'
       +'<div class="ps-rh">Dossier</div>'
       +'<button class="ps-ri'+(sel==='@par'?' on':'')+'" onclick="psSel(\'@par\')">'
-      +'<span class="ps-ri-n">Employeur &amp; paramètres</span>'
+      +'<span class="ps-ri-n">Employeur &amp; barème 2026</span>'
       +'<span class="ps-ri-m">'+E(s.emp.nom||'à renseigner')+'</span></button>'
       +'</aside>';
   }
   function psPaint(){
     var ov=document.getElementById('pf-ov'); if(!ov||window.__pfTpl!=='__psuivi') return;
     var t=window.__psTab||'sal', s=PS();
-    var TB=[['sal','Salariés'],['sai','Saisie mensuelle'],['men','Suivi mensuel'],['an','Suivi annuel']];
-    var body=(t==='sal')?tabSalaries():(t==='sai')?tabSaisie():(t==='men')?tabMensuel():tabAnnuel();
+    var TB=[['sal','Salariés'],['sai','Saisie mensuelle'],['men','Suivi mensuel'],['an','Suivi annuel'],['dep','Dépenses']];
+    var body=(t==='sal')?tabSalaries():(t==='sai')?tabSaisie():(t==='men')?tabMensuel():(t==='dep')?tabDepenses():tabAnnuel();
     ov.innerHTML='<div class="pf-top"><div class="pf-title"><b>Paie — plan de travail '+E(s.annee)+'</b>'
       +'<span>'+s.salaries.length+' salarié(s) · calculs et suivi issus du même moteur</span></div>'
       +'<div class="pf-act"><button class="pf-b" onclick="psEnregistrer()">Enregistrer</button>'
@@ -35397,8 +35674,10 @@ function testLienRdv()  {
   try{ var _s=window.paie26Set; if(typeof _s==='function'&&!_s.__ps){
     window.paie26Set=function(k,v){ var o=_s.apply(this,arguments);
       try{ var d=window.__pfDoc;
-        if(d && d.__ps && k.indexOf('par.')===0){ var x=salById(d.__ps.sal);
-          if(x){ x.par=x.par||{}; x.par[k.slice(4)]=v; try{save();}catch(e){} } }
+        if(d && d.__ps && k.indexOf('par.')===0){ var kk=k.slice(4);
+          if(kk==='pas'){ var x=salById(d.__ps.sal); if(x){ x.par=x.par||{}; x.par.pas=v; } }
+          else PS().par[kk]=v;
+          try{save();}catch(e){} }
       }catch(e){}
       return o; }; window.paie26Set.__ps=1; } }catch(e){}
 
@@ -35527,6 +35806,17 @@ function testLienRdv()  {
     +'.ps-sal-h h3{margin:0;flex:1}'
     +'.ps-badge{font-size:11px;opacity:.7;font-variant-numeric:tabular-nums}'
     +'.ps-empty{padding:24px 4px;opacity:.6;font-size:13px}'
+    +'.ps-note{font-size:11.5px;opacity:.62;line-height:1.45;margin:8px 0 6px}'
+    +'.ps-h4{margin:12px 0 6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.6}'
+    +'.ps-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px;margin-bottom:14px}'
+    +'.ps-kpi{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:10px 12px;background:rgba(120,170,255,.06)}'
+    +'.ps-kpi span{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.6;margin-bottom:4px}'
+    +'.ps-kpi b{font-size:17px;font-variant-numeric:tabular-nums}.ps-kpi i{font-style:normal;font-size:11px;opacity:.6}'
+    +'.ps-juin td{border-top:2px solid rgba(120,170,255,.45)}'
+    +'.ps-juin small{opacity:.6;font-weight:400}'
+    +'.ps-sep{width:1px;background:rgba(255,255,255,.18);margin:0 4px}'
+    +'.ps-dep th{white-space:normal;min-width:74px;vertical-align:bottom}'
+    +'.ps-dep tr:first-child th{text-align:center;border-bottom:0;opacity:.85;font-size:10px}'
     +'.psnav{display:flex;align-items:center;gap:7px;margin-left:18px;flex-wrap:wrap}'
     +'.psnav-b{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:inherit;'
     +'font:inherit;font-size:12px;padding:6px 11px;border-radius:8px;cursor:pointer}'
