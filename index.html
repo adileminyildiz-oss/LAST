@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=623;
+var LAST_VER=624;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -37696,9 +37696,11 @@ function testLienSignature() {
     ['avoir','Avoir','Annule ou corrige une facture émise (montants à déduire)']
   ];
   var TITRES={facture:'FACTURE',devis:'DEVIS',acompte:'FACTURE D\'ACOMPTE',situation:'SITUATION DE TRAVAUX',solde:'DÉCOMPTE GÉNÉRAL DÉFINITIF',avoir:'AVOIR'};
-  var UNITES=['u','forfait','h','j','m','m²','m³','ml','kg','t','lot','%','débours'];
+  var UNITES=['u','forfait','h','j','m','m²','m³','ml','kg','t','lot','%','débours','option'];
   function isDeb(l){ return !!(l&&(l.debours||l.u==='débours')); }
-  var NEWMOD={btp:'BTP — situation détaillée',chantier:'Chantier (bandeau)',sobre:'Sobre (noir & blanc)'};
+  function isOpt(l){ return !!(l&&(l.option||l.u==='option')); }
+  function optionsDe(d){ return (d.lignes||[]).filter(function(l){ return !l.lot&&isOpt(l); }); }
+  var NEWMOD={btp:'BTP — situation détaillée',chantier:'Chantier (bandeau)',sobre:'Sobre (noir & blanc)',lettre:'Lettre d\'honoraires',compact:'Compact (nombreuses lignes)',elegant:'Élégant (serif)'};
   function isBTPType(t){ return t==='acompte'||t==='situation'||t==='solde'; }
   function typeOf(d){ return d.type||'facture'; }
   function isBTPDoc(d){ return isBTPType(typeOf(d))||n(d.rg)>0||n(d.prorata)>0||n(d.acomptesTTC)>0||!!(d.chRef||d.chNom)||lignesReelles(d).some(isDeb); }
@@ -37712,7 +37714,7 @@ function testLienSignature() {
   window.invNumPourType=nextNumFor;
 
   /* ---------- Calcul ---------- */
-  function lignesReelles(d){ return (d.lignes||[]).filter(function(l){ return !l.lot; }); }
+  function lignesReelles(d){ return (d.lignes||[]).filter(function(l){ return !l.lot&&!isOpt(l); }); }
   function calc(d){
     d=d||{}; var type=typeOf(d), dev=d.devise||'EUR';
     var marche=0, cumul=0, deb=0;
@@ -37776,9 +37778,9 @@ function testLienSignature() {
     return dl+(d.lignes||[]).map(function(l,i){
       if(l.lot){ return '<div class="fb-lrow fb-lot'+(situ?' situ':'')+'"><input id="inv-l-des-'+i+'" class="inv-lin des" placeholder="Intitulé du lot (ex : Lot 2 — Gros œuvre)" value="'+E(l.des)+'" oninput="invRefresh()"><span class="fb-lot-tag">LOT</span><span></span><span></span>'+(situ?'<span></span>':'')+'<span></span>'
           +'<span class="fb-lact"><button class="inv-lx" title="Monter" onclick="invMoveLine('+i+',-1)">↑</button><button class="inv-lx" title="Descendre" onclick="invMoveLine('+i+',1)">↓</button><button class="inv-lx" title="Supprimer" onclick="invDelLine('+i+')">×</button></span></div>'; }
-      var q=n(l.qte), pu=n(l.pu), m=r2(q*pu), av=situ?(type==='solde'?100:n(l.av)):100;
+      var q=n(l.qte), pu=n(l.pu), m=r2(q*pu), av=situ?(type==='solde'?100:n(l.av)):100; var opt=isOpt(l);
       var us=UNITES.slice(); if(l.u&&us.indexOf(l.u)<0) us.unshift(l.u);
-      return '<div class="fb-lrow'+(situ?' situ':'')+'">'
+      return '<div class="fb-lrow'+(situ?' situ':'')+(opt?' fb-optrow':'')+'">'
         +'<input id="inv-l-des-'+i+'" class="inv-lin des" list="inv-catalog" placeholder="Prestation / ouvrage" value="'+E(l.des)+'" oninput="invRefresh()" onchange="invCatalogueChoix('+i+',this.value)">'
         +'<select id="inv-l-u-'+i+'" class="inv-lin u" onchange="invRefresh()">'+us.map(function(u){ return '<option value="'+E(u)+'"'+((l.u||'u')===u?' selected':'')+'>'+E(u)+'</option>'; }).join('')+'</select>'
         +'<input id="inv-l-qte-'+i+'" class="inv-lin qte" type="number" min="0" step="0.01" value="'+(l.qte==null?1:l.qte)+'" oninput="invRefresh()">'
@@ -37857,6 +37859,7 @@ function testLienSignature() {
     if(n(d.prorata)>0) out.push('Compte prorata : '+pct(n(d.prorata))+' du montant HT, conformément à la convention de chantier.');
     if(lignesReelles(d).some(isDeb)) out.push('Débours engagés au nom et pour le compte du client, refacturés à l\'euro l\'euro, hors champ de la TVA (art. 267, II-2° du CGI).');
     if(type==='avoir'&&d.refFacture) out.push('Avoir établi en annulation / correction de la facture n° '+E(d.refFacture)+'.');
+    if(optionsDe(d).some(function(l){ return l.des||n(l.pu); })) out.push('Les options sont chiffrées à titre indicatif et ne sont pas comprises dans le total ; elles font l\'objet d\'un accord séparé.');
     if(type==='devis') out.push('Devis valable 30 jours à compter de sa date d\'émission. Bon pour accord : date et signature du client précédées de la mention « Bon pour accord ».');
     if(type!=='devis') out.push('En cas de retard de paiement : pénalité de '+(E(d.penalites)||'3 fois le taux d’intérêt légal')+' et indemnité forfaitaire de 40 € pour frais de recouvrement (art. L441-10 et D441-5 du Code de commerce).');
     if(type!=='devis') out.push(d.escompte?'Escompte pour paiement anticipé : selon conditions convenues.':'Pas d’escompte pour paiement anticipé.');
@@ -37885,12 +37888,13 @@ function testLienSignature() {
 
   function tableHTML(d,c,cls){ var dev=d.devise||'EUR', type=typeOf(d), situ=(type==='situation'||type==='solde'), det=(d.modele==='btp'&&situ);
     var head='<tr><th class="'+cls+'-desc">Désignation</th><th>U</th><th class="r">Qté</th><th class="r">P.U. HT</th><th class="r">Montant HT</th>'+(det?'<th class="r">Avanc.</th><th class="r">Cumul HT</th>':(situ?'<th class="r">Avanc.</th>':''))+'</tr>';
-    var rows=(d.lignes||[]).filter(function(l){ return l.lot||l.des||n(l.qte)||n(l.pu); }).map(function(l){
+    var rows=(d.lignes||[]).filter(function(l){ return !isOpt(l)&&(l.lot||l.des||n(l.qte)||n(l.pu)); }).map(function(l){
       if(l.lot) return '<tr class="'+cls+'-lot"><td colspan="'+(det?7:(situ?6:5))+'">'+(E(l.des)||'Lot')+'</td></tr>';
       var q=n(l.qte),pu=n(l.pu),m=r2(q*pu),av=situ?(type==='solde'?100:n(l.av)):100;
       return '<tr><td class="'+cls+'-desc">'+(E(l.des)||'<span class="inv-mute">Prestation</span>')+'</td><td>'+E(l.u||'u')+'</td><td class="r">'+q.toLocaleString('fr-FR')+'</td><td class="r">'+money(pu,dev)+'</td><td class="r">'+money(m,dev)+'</td>'+(det?('<td class="r">'+pct(av)+'</td><td class="r">'+money(r2(m*av/100),dev)+'</td>'):(situ?('<td class="r">'+pct(av)+'</td>'):''))+'</tr>'; }).join('');
     if(!rows) rows='<tr><td colspan="'+(det?7:(situ?6:5))+'" class="inv-mute" style="text-align:center;padding:16px 0">Ajoutez une prestation…</td></tr>';
-    return '<table class="'+cls+'-tbl"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table>'; }
+    return '<table class="'+cls+'-tbl"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table>'+optionsHTML(d,cls); }
+  function optionsHTML(d,cls){ var O=optionsDe(d).filter(function(l){ return l.des||n(l.pu); }); if(!O.length) return ''; var dev=d.devise||'EUR'; var tot=O.reduce(function(a,l){ return a+r2(n(l.qte)*n(l.pu)); },0); return '<div class="'+cls+'-opt"><div class="'+cls+'-lbl">Options — non comprises dans le total, sur acceptation</div><table class="'+cls+'-tbl '+cls+'-opttbl"><tbody>'+O.map(function(l){ return '<tr><td class="'+cls+'-desc">'+E(l.des)+'</td><td class="r">'+n(l.qte).toLocaleString('fr-FR')+' × '+money(n(l.pu),dev)+'</td><td class="r">'+money(r2(n(l.qte)*n(l.pu)),dev)+' HT</td></tr>'; }).join('')+'<tr class="'+cls+'-optt"><td colspan="2">Total des options HT</td><td class="r">'+money(tot,dev)+'</td></tr></tbody></table></div>'; }
 
   function chantierBloc(d,cls){ if(!(d.chNom||d.chRef||d.chAdr||d.chMoa||d.chMoe)) return ''; return '<div class="'+cls+'-ch"><div class="'+cls+'-lbl">Chantier</div>'+(d.chNom?('<div class="'+cls+'-ch-nom">'+E(d.chNom)+'</div>'):'')+(d.chAdr?('<div>'+E(d.chAdr).replace(/\n/g,'<br>')+'</div>'):'')+(d.chRef?('<div>Réf. marché : '+E(d.chRef)+'</div>'):'')+(d.chMoa?('<div>Maître d\'ouvrage : '+E(d.chMoa)+'</div>'):'')+(d.chMoe?('<div>Maître d\'œuvre : '+E(d.chMoe)+'</div>'):'')+'</div>'; }
   function sousTitre(d){ var t=typeOf(d); var s=[]; if(t==='situation') s.push('Situation n° '+(d.situNum||1)); if(d.situPeriode) s.push(E(d.situPeriode)); if(t==='avoir'&&d.refFacture) s.push('sur facture '+E(d.refFacture)); if(d.refDevis) s.push('suivant devis '+E(d.refDevis)); if(t==='acompte') s.push('Acompte de '+pct(n(d.acPct)||30)); return s.join(' · '); }
@@ -37913,7 +37917,25 @@ function testLienSignature() {
       +'<div class="fs-cols"><div><div class="fb-lbl">De</div><div class="fb-nom">'+E(d.emNom)+'</div><div class="fb-sm">'+[E(d.emAdr).replace(/\n/g,'<br>'),E(d.emMail)].filter(Boolean).join('<br>')+'</div></div><div><div class="fb-lbl">À</div><div class="fb-nom">'+E(d.clNom)+'</div><div class="fb-sm">'+[E(d.clAdr).replace(/\n/g,'<br>'),d.clSiret?('SIRET '+E(d.clSiret)):''].filter(Boolean).join('<br>')+'</div></div><div><div class="fb-lbl">Dates</div><div class="fb-sm">Émise le <b>'+frDate(d.dateEmise)+'</b>'+(type!=='devis'?('<br>Échéance <b>'+frDate(d.dateEch)+'</b>'):'')+'</div></div></div>'+chantierBloc(d,'fb')
       +tableHTML(d,c,'fb')+'<div class="fb-totw">'+totauxHTML(d,c,'fb')+'</div><div class="fb-spacer"></div>'+payBloc(d,'fb')+(d.note?('<div class="fb-note">'+E(d.note)+'</div>'):'')+'<div class="fb-legal">'+mentions(d).join('<br>')+'</div></div>'; }
 
-  function paper(d){ if(d.modele==='chantier') return paperChantier(d); if(d.modele==='sobre') return paperSobre(d); return paperBTP(d); }
+  function paperLettre(d){ var c=calc(d); var type=typeOf(d); var dev=d.devise||'EUR'; var L=lignesReelles(d).filter(function(l){ return l.des||n(l.pu); });
+    var intro=(type==='devis')?'Nous avons le plaisir de vous adresser notre proposition d\'honoraires pour la mission décrite ci-dessous.':(type==='avoir')?'Nous vous adressons le présent avoir en régularisation de la facture visée ci-dessous.':'Nous vous prions de trouver ci-dessous le détail de nos honoraires et frais pour la mission réalisée.';
+    return '<div class="inv-paper fb-mode fb-lettre"><div class="fl-head"><div class="fl-em"><div class="fb-em-nom">'+E(d.emNom)+'</div><div class="fb-em-lines">'+[E(d.emAdr).replace(/\n/g,'<br>'),E(d.emTel),E(d.emMail)].filter(Boolean).join('<br>')+'</div></div><div class="fl-to"><div class="fb-lbl">Destinataire</div><div class="fb-nom">'+E(d.clNom)+'</div><div class="fb-sm">'+[E(d.clAdr).replace(/\n/g,'<br>'),d.clSiret?('SIRET '+E(d.clSiret)):''].filter(Boolean).join('<br>')+'</div></div></div>'
+      +'<div class="fl-date">'+E((d.emAdr||'').split(/\n|,/)[ (d.emAdr||'').split(/\n|,/).length-1 ]||'')+(d.dateEmise?(' le '+frDate(d.dateEmise)):'')+'</div>'
+      +'<div class="fl-obj"><b>Objet :</b> '+E(TITRES[type].charAt(0)+TITRES[type].slice(1).toLowerCase())+' n° '+E(d.numero)+(sousTitre(d)?(' — '+sousTitre(d)):'')+(d.chNom?(' — '+E(d.chNom)):'')+'</div>'
+      +'<p class="fl-p">Madame, Monsieur,</p><p class="fl-p">'+intro+'</p>'
+      +'<table class="fb-tbl fl-tbl"><thead><tr><th class="fb-desc">Détail</th><th class="r">Montant HT</th></tr></thead><tbody>'+(d.lignes||[]).filter(function(l){ return !isOpt(l)&&(l.lot||l.des||n(l.pu)); }).map(function(l){ if(l.lot) return '<tr class="fb-lot"><td colspan="2">'+E(l.des)+'</td></tr>'; return '<tr><td class="fb-desc">'+E(l.des)+(n(l.qte)!==1?(' <span class="fl-q">('+n(l.qte).toLocaleString('fr-FR')+' '+E(l.u||'u')+' × '+money(n(l.pu),dev)+')</span>'):'')+(isDeb(l)?' <span class="fl-q">débours</span>':'')+'</td><td class="r">'+money(r2(n(l.qte)*n(l.pu)),dev)+'</td></tr>'; }).join('')+'</tbody></table>'+optionsHTML(d,'fb')
+      +'<div class="fb-totw">'+totauxHTML(d,c,'fb')+'</div>'
+      +'<p class="fl-p">'+(type==='devis'?'Ce devis est valable 30 jours. Pour accord, merci de nous le retourner daté et signé, précédé de la mention « Bon pour accord ».':('Règlement : '+E(d.condReg||'à réception')+', au plus tard le '+frDate(d.dateEch)+(d.emIban?(', par virement sur le compte IBAN '+E(d.emIban)+(d.emBic?(' (BIC '+E(d.emBic)+')'):'')):'')+'.'))+'</p>'
+      +'<p class="fl-p">Nous vous prions d\'agréer, Madame, Monsieur, l\'expression de nos salutations distinguées.</p><div class="fl-sign"><div class="fb-lbl">'+E(d.emNom)+'</div><div class="fl-sigbox">'+(type==='devis'?'Bon pour accord — date, cachet et signature du client':'Signature')+'</div></div><div class="fb-spacer"></div>'+(d.note?('<div class="fb-note">'+E(d.note)+'</div>'):'')+'<div class="fb-legal">'+mentions(d).join('<br>')+'</div></div>'; }
+  function paperCompact(d){ var c=calc(d); var type=typeOf(d);
+    return '<div class="inv-paper fb-mode fb-compact"><div class="fk-head"><div><div class="fb-em-nom">'+E(d.emNom)+'</div><div class="fb-em-lines">'+[E(d.emAdr).replace(/\n/g,' · '),E(d.emTel),E(d.emMail),d.emSiret?('SIRET '+E(d.emSiret)):'',d.emTva?('TVA '+E(d.emTva)):''].filter(Boolean).join(' · ')+'</div></div><div class="fk-doc"><b>'+TITRES[type]+' '+E(d.numero)+'</b><span>'+[sousTitre(d),'Émise le '+frDate(d.dateEmise),type!=='devis'?('Échéance '+frDate(d.dateEch)):'Validité 30 jours'].filter(Boolean).join(' · ')+'</span></div></div>'
+      +'<div class="fk-grid"><div class="fb-box"><div class="fb-lbl">Client</div><div class="fb-nom">'+E(d.clNom)+'</div><div class="fb-sm">'+[E(d.clAdr).replace(/\n/g,'<br>'),d.clSiret?('SIRET '+E(d.clSiret)):'',d.clTva?('TVA '+E(d.clTva)):''].filter(Boolean).join('<br>')+'</div></div>'+(chantierBloc(d,'fb')||'')+'</div>'
+      +tableHTML(d,c,'fb')+'<div class="fk-bottom"><div class="fk-pay">'+payBloc(d,'fb')+(d.note?('<div class="fb-note">'+E(d.note)+'</div>'):'')+'</div><div class="fb-totw">'+totauxHTML(d,c,'fb')+'</div></div><div class="fb-spacer"></div><div class="fb-legal">'+mentions(d).join(' · ')+'</div></div>'; }
+  function paperElegant(d){ var c=calc(d); var type=typeOf(d);
+    return '<div class="inv-paper fb-mode fb-elegant"><div class="fe-top"><div class="fe-em">'+E(d.emNom)+'</div><div class="fe-title">'+TITRES[type]+'</div><div class="fe-num">N° '+E(d.numero)+(sousTitre(d)?(' · '+sousTitre(d)):'')+'</div></div>'
+      +'<div class="fe-cols"><div><div class="fb-lbl">Émetteur</div><div class="fb-sm">'+[E(d.emAdr).replace(/\n/g,'<br>'),E(d.emMail),E(d.emTel),d.emSiret?('SIRET '+E(d.emSiret)):'',d.emTva?('TVA '+E(d.emTva)):''].filter(Boolean).join('<br>')+'</div></div><div><div class="fb-lbl">Client</div><div class="fb-nom">'+E(d.clNom)+'</div><div class="fb-sm">'+[E(d.clAdr).replace(/\n/g,'<br>'),d.clSiret?('SIRET '+E(d.clSiret)):''].filter(Boolean).join('<br>')+'</div></div><div><div class="fb-lbl">Dates</div><div class="fb-sm">Émise le <b>'+frDate(d.dateEmise)+'</b>'+(type!=='devis'?('<br>Échéance le <b>'+frDate(d.dateEch)+'</b>'):'<br>Validité <b>30 jours</b>')+(d.datePresta?('<br>Prestation le '+frDate(d.datePresta)):'')+'</div></div></div>'+chantierBloc(d,'fb')
+      +tableHTML(d,c,'fb')+'<div class="fb-totw">'+totauxHTML(d,c,'fb')+'</div><div class="fb-spacer"></div>'+payBloc(d,'fb')+(d.note?('<div class="fb-note">'+E(d.note)+'</div>'):'')+'<div class="fb-legal">'+mentions(d).join('<br>')+'</div></div>'; }
+  function paper(d){ if(d.modele==='chantier') return paperChantier(d); if(d.modele==='sobre') return paperSobre(d); if(d.modele==='lettre') return paperLettre(d); if(d.modele==='compact') return paperCompact(d); if(d.modele==='elegant') return paperElegant(d); return paperBTP(d); }
   window.invPaperBTP=paper;
 
   var PAPER_CSS=[
@@ -37928,6 +37950,10 @@ function testLienSignature() {
     '.fb-note{margin-top:12px;font-size:11.5px;color:#5c6470;font-style:italic}.fb-legal{margin-top:12px;font-size:9px;color:#9aa1ad;line-height:1.6}',
     '.fb-chantier{padding:0 0 26px}.fc-band{display:flex;justify-content:space-between;gap:20px;background:#1f2a3a;color:#fff;padding:22px 28px;border-radius:12px 12px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.fc-band:before{content:"";display:block}.fc-title{font-size:24px;font-weight:800;letter-spacing:.05em}.fc-sub{font-size:11.5px;opacity:.85;margin-top:4px}.fc-band-r{text-align:right}.fc-em-nom{font-size:15px;font-weight:700}.fc-em-sm{font-size:10.5px;opacity:.85;margin-top:3px;line-height:1.5}',
     '.fb-chantier .fc-band{border-left:8px solid #e8a33d}.fc-body{padding:0 28px;display:flex;flex-direction:column;flex:1}.fc-info{display:grid;grid-template-columns:1.1fr 1.1fr .8fr;gap:14px;margin:20px 0 14px}.fc-dates>div{display:flex;flex-direction:column;margin-bottom:6px}.fc-dates span{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:#8b93a1;font-weight:700}.fb-chantier .fb-tbl th{border-bottom-color:#e8a33d}.fb-chantier .fb-trow.fb-grand{border-top-color:#e8a33d}',
+    '.fb-opt{margin-top:12px}.fb-opttbl td{color:#5c6470!important}.fb-optt td{font-weight:700;border-bottom:none}.fb-lrow.fb-optrow .inv-lin{opacity:.75;border-style:dashed}',
+    '.fb-lettre{font-family:Georgia,"Times New Roman",serif;font-size:12.5px}.fl-head{display:flex;justify-content:space-between;gap:30px}.fl-em{max-width:52%}.fl-to{min-width:240px;border:1px solid #e3e6ec;border-radius:6px;padding:10px 12px}.fl-date{text-align:right;margin:18px 0 10px;font-size:12.5px}.fl-obj{margin:8px 0 14px;font-size:12.5px}.fl-p{margin:0 0 10px;line-height:1.6;text-align:justify}.fl-tbl{margin:8px 0 4px}.fl-q{color:#8b93a1;font-size:11px}.fl-sign{margin-top:16px;display:flex;flex-direction:column;align-items:flex-end;gap:6px}.fl-sigbox{border:1px dashed #c9ced8;border-radius:6px;width:260px;min-height:64px;padding:8px;font-size:10.5px;color:#8b93a1}.fb-lettre .fb-tbl th{border-bottom:1px solid #1a1f28;font-family:Georgia,serif;text-transform:none;letter-spacing:0;font-size:11.5px}.fb-lettre .fb-totw{width:300px}',
+    '.fb-compact{font-size:10.5px;line-height:1.35}.fk-head{display:flex;justify-content:space-between;gap:18px;border-bottom:1.5px solid #1a1f28;padding-bottom:8px}.fk-head .fb-em-nom{font-size:15px}.fk-head .fb-em-lines{font-size:10px;margin-top:2px}.fk-doc{text-align:right;display:flex;flex-direction:column;gap:2px}.fk-doc b{font-size:14px}.fk-doc span{font-size:10px;color:#5c6470}.fk-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 6px}.fk-grid .fb-box{padding:7px 9px}.fb-compact .fb-tbl{font-size:10px}.fb-compact .fb-tbl th{padding:5px 4px;font-size:8.5px}.fb-compact .fb-tbl td{padding:4px 4px}.fk-bottom{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-top:8px}.fk-pay{flex:1}.fk-pay .fb-pay{margin-top:0;padding-top:0;border-top:none;font-size:10px}.fb-compact .fb-totw{margin:0;width:260px}.fb-compact .fb-trow{padding:3px 5px;font-size:10.5px}.fb-compact .fb-trow.fb-grand{font-size:13px}.fb-compact .fb-legal{font-size:8px}',
+    '.fb-elegant{font-family:Georgia,"Times New Roman",serif;color:#1c1c1c}.fe-top{text-align:center;border-bottom:1px solid #1c1c1c;padding-bottom:14px}.fe-em{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:#5c6470}.fe-title{font-size:26px;letter-spacing:.12em;margin-top:8px;font-weight:400}.fe-num{font-size:12px;color:#5c6470;margin-top:4px;font-style:italic}.fe-cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin:18px 0 12px}.fb-elegant .fb-lbl{font-family:Georgia,serif;font-style:italic;text-transform:none;letter-spacing:0;font-size:11px}.fb-elegant .fb-tbl th{font-family:Georgia,serif;text-transform:none;letter-spacing:0;font-size:11.5px;font-style:italic;border-bottom:1px solid #1c1c1c;color:#1c1c1c}.fb-elegant .fb-tbl td{border-bottom:1px solid #e6e6e6}.fb-elegant .fb-tbl tr.fb-lot td{background:none;border-bottom:1px solid #1c1c1c;font-family:Georgia,serif;text-transform:none;letter-spacing:.06em}.fb-elegant .fb-trow.fb-grand{border-top:1px solid #1c1c1c}.fb-elegant .fb-ch{background:none;border:none;border-left:2px solid #1c1c1c;border-radius:0;margin-bottom:10px}',
     '.fb-sobre{font-family:"Helvetica Neue",Arial,sans-serif}.fs-top{border-bottom:1px solid #1a1f28;padding-bottom:12px}.fs-title{font-size:20px;font-weight:700;letter-spacing:.06em}.fs-title span{font-weight:400;color:#5c6470;margin-left:10px;font-size:15px}.fs-sub{font-size:11.5px;color:#5c6470;margin-top:3px}.fs-cols{display:grid;grid-template-columns:1.2fr 1.2fr .8fr;gap:18px;margin:18px 0 14px}.fb-sobre .fb-ch{background:none;border-color:#1a1f28;margin-bottom:12px}.fb-sobre .fb-tbl th{border-bottom:1px solid #1a1f28}.fb-sobre .fb-tbl td{border-bottom:1px solid #dfe3ea}.fb-sobre .fb-tbl tr.fb-lot td{background:none;border-bottom:1px solid #1a1f28}.fb-sobre .fb-trow.fb-grand{border-top:1px solid #1a1f28}'
   ].join('\n');
 
@@ -37974,7 +38000,7 @@ function testLienSignature() {
 
     var inp=function(id,lbl,val,ph,typ,full,extra){ if(typ==='area') return '<label class="'+(full?'full':'')+'">'+E(lbl)+'<textarea id="inv-'+id+'" rows="2" class="fb-ta"'+(ph?(' placeholder="'+E(ph)+'"'):'')+' oninput="invRefresh()">'+E(val==null?'':val)+'</textarea></label>'; return '<label class="'+(full?'full':'')+'">'+E(lbl)+'<input id="inv-'+id+'"'+(typ?(' type="'+typ+'"'):'')+' value="'+E(val==null?'':val)+'"'+(ph?(' placeholder="'+E(ph)+'"'):'')+(extra||'')+' oninput="invRefresh()"></label>'; };
     var chk=function(id,lbl){ return '<label class="inv-chk"><input type="checkbox" id="inv-'+id+'"'+(d[id]?' checked':'')+' onchange="invRefresh()"><span>'+E(lbl)+'</span></label>'; };
-    var mods=[['qonto','Qonto (épuré)'],['standard','Standard'],['moderne','Moderne (bandeau)'],['classique','Classique (encadré)'],['btp','BTP — situation détaillée'],['chantier','Chantier (bandeau)'],['sobre','Sobre (noir & blanc)']];
+    var mods=[['qonto','Qonto (épuré)'],['standard','Standard'],['moderne','Moderne (bandeau)'],['classique','Classique (encadré)'],['btp','BTP — situation détaillée'],['chantier','Chantier (bandeau)'],['sobre','Sobre (noir & blanc)'],['lettre','Lettre d\'honoraires'],['compact','Compact (nombreuses lignes)'],['elegant','Élégant (serif)']];
     var modSel='<label>Modèle de mise en page<select id="inv-modele" onchange="invRefresh()">'+mods.map(function(m){ return '<option value="'+m[0]+'"'+((d.modele||'qonto')===m[0]?' selected':'')+'>'+m[1]+'</option>'; }).join('')+'</select></label>';
     var devSel='<label>Devise<select id="inv-devise" onchange="invRefresh()">'+Object.keys(DEVS).map(function(k){ return '<option value="'+k+'"'+((d.devise||'EUR')===k?' selected':'')+'>'+k+' ('+DEVS[k]+')</option>'; }).join('')+'</select></label>';
 
@@ -38421,6 +38447,54 @@ function testLienSignature() {
     '.df-dosbtn{font-size:12px;padding:8px 10px;text-align:left;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
   ].join('\n'); document.head.appendChild(css);
   window.__dosDebug={bareme:bareme,lignesHono:lignesHono,docsDe:docsDe,formalite:formalite,nomClient:nomClient,carte:carte};
+})();
+</script>
+
+<script>
+/* ============================================================================
+   Mar'q — Éditions : propositions en liste fixe (v624)
+   Dans le volet de saisie de chaque document : bouton « Propositions ▾ » (menu fixe) —
+   reprendre une édition précédente du même modèle, reprendre un dossier (société, siège,
+   dirigeant, capital, dates), informations du cabinet (dénomination, adresse, SIRET,
+   représentant), valeurs usuelles (date et ville de signature, année, durée 99 ans).
+   Seuls les champs présents dans le document sont remplis ; les valeurs existantes ne sont
+   jamais écrasées, sauf par « Reprendre » choisi explicitement.
+   100 % additif.
+   ========================================================================= */
+(function(){
+  if(window.__aemEdProp) return; window.__aemEdProp=true;
+  function DBX(){ try{ return (typeof DB!=='undefined'&&DB)?DB:null; }catch(e){ return null; } }
+  function E(s){ return (typeof esc==='function')?esc(s):(''+(s==null?'':s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function T(m){ try{ if(typeof toast==='function') toast(m); }catch(e){} }
+  function cur(){ var db=DBX(); if(!db||typeof state==='undefined'||!state.edLibId) return null; return (db.editionsLibres||[]).filter(function(x){ return x.id===state.edLibId; })[0]||null; }
+  function keys(){ var out={}; document.querySelectorAll('.ed2-form [oninput*="edLibField("]').forEach(function(el){ var m=(el.getAttribute('oninput')||'').match(/edLibField\('[^']*','([^']+)'/); if(m) out[m[1]]=el; }); return out; }
+  function iso(){ try{ if(typeof today==='function') return today(); }catch(e){} return new Date().toISOString().slice(0,10); }
+  function frd(s){ var p=(''+s).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):s; }
+  function put(doc,k,v,force){ if(v==null||(''+v).trim()==='') return 0; doc.data=doc.data||{}; if(!force&&doc.data[k]!=null&&(''+doc.data[k]).trim()!=='') return 0; doc.data[k]=''+v; var K=keys()[k]; if(K){ K.value=''+v; K.classList.add('ep-auto'); } return 1; }
+  function done(doc,k,msg){ doc.updated=Date.now(); try{ save(); }catch(e){} try{ if(typeof edRepaint==='function') edRepaint(doc.id); }catch(e){} T(msg+' — '+k+' champ(s) complété(s).'); }
+  function emetteur(){ var db=DBX(); var p=(db&&db.parametres)||{}; var em=p.facturierEmetteur||{}; var soc=(p.societe||p.cabinet||{}); return {nom:em.nom||soc.nom||'AEM CONSEIL',adr:em.adr||soc.adresse||'',siret:em.siret||soc.siret||'',siren:em.siren||soc.siren||'',rep:em.representant||soc.dirigeant||'',ville:((em.adr||'').split(/\n|,/).pop()||'').replace(/^\s*\d{5}\s*/,'').trim(),tel:em.tel||'',mail:em.mail||''}; }
+  window.edPropCabinet=function(){ var doc=cur(); if(!doc) return; var em=emetteur(); var k=0; var K=keys();
+    [['cabinet',em.nom],['cabinetadr',em.adr],['cabrep',em.rep],['siret',em.siret],['signataire',em.rep],['mandataire',em.nom],['mandataireadr',em.adr],['emetteur',em.nom]].forEach(function(x){ if(K[x[0]]) k+=put(doc,x[0],x[1]); });
+    done(doc,k,'Informations du cabinet'); };
+  window.edPropUsuelles=function(){ var doc=cur(); if(!doc) return; var em=emetteur(); var k=0; var K=keys(); var y=new Date().getFullYear();
+    [['datesig',frd(iso())],['date',frd(iso())],['dateacte',frd(iso())],['villesig',em.ville],['ville',K.villesig?undefined:em.ville],['annee',''+y],['duree','99'],['nationalite','Française'],['devise','euros'],['periodicite','mensuel'],['delai','30 jours'],['tva','20']].forEach(function(x){ if(x[1]!==undefined&&K[x[0]]) k+=put(doc,x[0],x[1]); });
+    done(doc,k,'Valeurs usuelles'); };
+  window.edPropDossier=function(id){ var doc=cur(); if(!doc) return; var db=DBX(); var d=((db&&db.dossiers)||[]).filter(function(x){ return x.id===id; })[0]; if(!d) return; var it=d.intake||{}; var c=(typeof clientById==='function'&&clientById((d.clientIds||[])[0]))||{}; var so=it.societe||{}, sg=it.siege||{}, di=it.direction||{}, ti=it.titres||{}, da=it.dates||{}, ms=(it.modif&&it.modif.societe)||{}, sig=(it.modif&&it.modif.signataire)||{};
+    var denom=so.denomination||ms.denomination||c.denom||''; var forme=(it.type||ms.forme||c.forme||'').toString().toUpperCase(); var adr=[sg.rue||ms.siege||c.adresse||'',[sg.cp||ms.cp||c.cp||'',sg.ville||ms.ville||c.ville||''].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    var dirig=[di.civilite||sig.civilite||'',di.prenom||sig.prenom||c.prenom||'',di.nom||sig.nom||c.nom||''].filter(Boolean).join(' ').trim(); var k=0; var K=keys();
+    [['denomination',denom],['societe',denom],['forme',forme],['siege',adr],['siegesocial',adr],['adresse',sg.rue||ms.siege||c.adresse||''],['cp',sg.cp||ms.cp||c.cp||''],['ville',sg.ville||ms.ville||c.ville||''],['siren',c.siren||ms.siren||''],['siret',c.siret||''],['capital',so.capital||ms.capital||c.capital||''],['rcs',da.rcsVille||ms.rcsVille||''],['rcsville',da.rcsVille||ms.rcsVille||''],['greffe',da.rcsVille||ms.rcsVille||''],['president',dirig],['gerant',dirig],['dirigeant',dirig],['representant',dirig],['clientrep',dirig],['mandant',dirig],['signataire',dirig],['qualite',(forme==='SAS'||forme==='SASU')?'Président':'Gérant'],['objet',so.objet||''],['duree',da.duree||''],['clientadr',adr],['email',(it.contact||{}).email||c.email||''],['tel',(it.contact||{}).tel||c.tel||''],['nominal',ti.nominal||''],['nbtitres',ti.nbTitres||''],['villesig',da.villeSignature||sg.ville||''],['naissance',di.naissance||''],['lieunaissance',di.lieuNaissance||''],['nationalite',di.nationalite||'']].forEach(function(x){ if(K[x[0]]) k+=put(doc,x[0],x[1],true); });
+    done(doc,k,'Dossier '+(d.numeroDossier||d.ref||'')+' repris'); };
+  window.edPropPrecedente=function(id){ var doc=cur(); var db=DBX(); if(!doc||!db) return; var src=(db.editionsLibres||[]).filter(function(x){ return x.id===id; })[0]; if(!src) return; var k=0; var K=keys(); Object.keys(src.data||{}).forEach(function(key){ if(K[key]) k+=put(doc,key,src.data[key],true); }); done(doc,k,'Édition « '+(src.titre||'')+' » reprise'); };
+  window.edPropositions=function(btn){ var doc=cur(); if(!doc) return; var db=DBX(); var I=[];
+    var prev=(db.editionsLibres||[]).filter(function(x){ return x.id!==doc.id&&x.k===doc.k&&x.data&&Object.keys(x.data).some(function(k){ return (''+x.data[k]).trim(); }); }).sort(function(a,b){ return (b.updated||0)-(a.updated||0); }).slice(0,5);
+    if(prev.length){ I.push({sep:'Reprendre une édition précédente (même modèle)'}); prev.forEach(function(x){ I.push({ico:'⎘',l:x.titre||'Document',sub:new Date(x.updated||x.ts||0).toLocaleDateString('fr-FR')+' · '+Object.keys(x.data).length+' champ(s)',fn:function(){ edPropPrecedente(x.id); }}); }); }
+    var D=(db.dossiers||[]).filter(function(d){ return !d.archived; }).slice(-8).reverse(); if(D.length){ I.push({sep:'Reprendre un dossier'}); D.forEach(function(d){ var it=d.intake||{}; var nom=(it.societe&&it.societe.denomination)||(it.modif&&it.modif.societe&&it.modif.societe.denomination)||d.ref||d.numeroDossier||'Dossier'; I.push({ico:'▣',l:nom,sub:(d.numeroDossier||d.ref||''),fn:function(){ edPropDossier(d.id); }}); }); }
+    I.push({sep:'Compléter'}); I.push({ico:'🏢',l:'Informations du cabinet',sub:'dénomination, adresse, SIRET, représentant',fn:function(){ edPropCabinet(); }}); I.push({ico:'✦',l:'Valeurs usuelles',sub:'date et ville de signature, année, durée, nationalité…',fn:function(){ edPropUsuelles(); }});
+    if(typeof fbMenu==='function') fbMenu(btn,I,{wide:true}); };
+  function inject(){ try{ if(typeof state==='undefined'||state.page!=='editions'||!state.edLibId) return; var form=document.querySelector('.ed2-form'); if(!form||form.querySelector('.ep-bar')) return; var bar=document.createElement('div'); bar.className='ep-bar'; bar.innerHTML='<button class="btn btn-sm btn-pri" onclick="edPropositions(this)">💡 Propositions ▾</button><button class="btn btn-sm" onclick="edPropUsuelles()">✦ Valeurs usuelles</button><button class="btn btn-sm" onclick="edPropCabinet()">🏢 Cabinet</button>'; var anchor=form.querySelector('.cli-fill')||form.querySelector('.ed2-form-t'); if(anchor) anchor.insertAdjacentElement('afterend',bar); else form.insertAdjacentElement('afterbegin',bar); }catch(e){} }
+  var _render=window.render; window.render=function(){ var r=_render.apply(this,arguments); try{ inject(); }catch(e){} return r; };
+  var css=document.createElement('style'); css.id='ep-mod'; css.textContent='.ep-bar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px;padding-bottom:12px;border-bottom:1px solid #23262d}.ed2-form .ep-auto{border-color:rgba(91,191,138,.7)!important;box-shadow:inset 0 0 0 1px rgba(91,191,138,.35)!important}'; document.head.appendChild(css);
+  window.__epDebug={keys:keys,emetteur:emetteur};
 })();
 </script>
 
