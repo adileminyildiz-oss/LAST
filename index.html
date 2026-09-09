@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=615;
+var LAST_VER=616;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -36902,7 +36902,7 @@ function testLienRdv()  {
     var keep={id:ancien.id,ref:ancien.ref,numeroDossier:ancien.numeroDossier,numeroService:ancien.numeroService,createdAt:ancien.createdAt,clientIds:ancien.clientIds,serviceIds:ancien.serviceIds,
       statut:ancien.statut,historique:ancien.historique||[],wf:ancien.wf,pieces:ancien.pieces,analyse:ancien.analyse,crea:ancien.crea,annonceLegale:ancien.annonceLegale,notesInternes:ancien.notesInternes,demandeId:ancien.demandeId,
       enregistreLe:ancien.enregistreLe,origine:'formulaire',etapesFait:ancien.etapesFait,conformiteFait:ancien.conformiteFait,clotureDate:ancien.clotureDate,archived:ancien.archived,docCustom:ancien.docCustom};
-    Object.keys(ancien).forEach(function(k){ if(!(k in keep)) delete ancien[k]; });
+    /* on remplace ce que la nouvelle saisie apporte ; tout le reste du dossier (avancement, pièces, états des actes…) est conservé */
     Object.keys(neuf).forEach(function(k){ if(!(k in keep)) ancien[k]=neuf[k]; });
     Object.keys(keep).forEach(function(k){ if(keep[k]!==undefined) ancien[k]=keep[k]; });
     if(neuf.docCustom){ ancien.docCustom=Object.assign({},ancien.docCustom||{},neuf.docCustom); }
@@ -37013,6 +37013,51 @@ function testLienRdv()  {
    +'.fi-attendues .fi-att-row{display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer}.fi-att-row.ok .fi-att-l{opacity:.75;text-decoration:line-through}.fi-att-row.later{opacity:.8}.fi-att-l{flex:1;min-width:0;font-size:12.5px}.fi-att-l small{display:block;font-size:11px;color:#8d95a5!important;margin-top:2px}'
    +'.fi-att-tag{font:600 10px ui-monospace,Menlo,monospace;letter-spacing:.02em;padding:2px 8px;border-radius:999px;border:1px solid;white-space:nowrap}.fi-att-tag.cli{color:#e0a100!important;border-color:rgba(224,161,0,.5)}.fi-att-tag.marq{color:#4f9dff!important;border-color:rgba(79,157,255,.5)}.fi-att-tag.form{color:#3fbf7f!important;border-color:rgba(63,191,127,.5)}'
    +'.fi-att-up{cursor:pointer}.fi-edit-band{border-color:rgba(79,157,255,.55)!important}.fi-edit-band .card-b{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12.5px}.fi-edit-band .btn{margin-left:auto}';
+  document.head.appendChild(st);
+})();
+</script>
+
+<script>
+/* ===== regen.js — Actes à régénérer après une modification de l'enregistrement (v616) =====
+   Quand l'enregistrement (Formulaire) est modifié, les actes déjà générés sont marqués
+   « à régénérer ». Ils se régénèrent AUTOMATIQUEMENT à l'ouverture de l'étape Actes,
+   et un rappel reste visible sur toutes les étapes tant que ce n'est pas fait
+   (bouton « Régénérer maintenant »). Une version modifiée à la main est mise de côté
+   (docCustomAvant), jamais perdue. */
+(function(){
+  if(window.__aemRegen) return; window.__aemRegen=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function DBX(){ try{ return (typeof DB!=='undefined'&&DB)?DB:null; }catch(e){ return null; } }
+  function doss(id){ var B=DBX(); return ((B&&B.dossiers)||[]).filter(function(x){return x.id===id;})[0]; }
+  function T(){ return (typeof today==='function')?today():new Date().toISOString().slice(0,10); }
+  function lib(k){ try{ var L=(typeof ESP_DOCS!=='undefined'?ESP_DOCS:[]).concat((doss(state.espaceDossier)||{}).modifDocs||[]); var x=L.filter(function(d){return d.k===k;})[0]; return x?x.l:k; }catch(e){ return k; } }
+  window.actesARegenerer=function(d){ var out=[]; if(!d||!d.docs)return out; Object.keys(d.docs).forEach(function(k){ var x=d.docs[k]; if(x&&x.genere&&x.aRegenerer) out.push(k); }); return out; };
+  window.enregRegenerer=function(id,silencieux){ var d=doss(id); if(!d)return 0; var L=actesARegenerer(d); if(!L.length)return 0; var mis=0;
+    L.forEach(function(k){ var x=d.docs[k]; d.docs[k]={genere:true,date:T(),regenere:Date.now(),avant:x.date||''};
+      try{ if(d.docState&&d.docState[k]&&d.docState[k].modifie&&d.docCustom&&d.docCustom[k]!=null){ d.docCustomAvant=d.docCustomAvant||{}; d.docCustomAvant[k]={html:d.docCustom[k],ts:Date.now()}; delete d.docCustom[k]; d.docState[k].modifie=false; mis++; } }catch(e){}
+      try{ if(d.docState&&d.docState[k]){ d.docState[k].done=false; } }catch(e){}
+      try{ if(d.docFolder&&d.docFolder.approved) d.docFolder.approved[k]=false; }catch(e){} });
+    try{ if(typeof window.docTestsDossier==='function'){ var R=window.docTestsDossier(d); R.docs.forEach(function(x){ if(d.docs[x.k]){ d.docs[x.k].valide=x.valide; d.docs[x.k].coherent=x.coherent; d.docs[x.k].teste=T(); } }); d.pretInpi=R.tous&&R.coherenceOk; d.docsTest={nb:R.nbValide,total:R.total,coherenceOk:R.coherenceOk,ts:Date.now()}; } }catch(e){}
+    (d.historique=d.historique||[]).unshift({d:T(),t:L.length+' acte'+(L.length>1?'s':'')+' régénéré'+(L.length>1?'s':'')+' après modification de l\'enregistrement ('+L.map(lib).join(', ')+')'+(mis?(' — '+mis+' version modifiée à la main mise de côté'):'')});
+    try{save();}catch(e){}
+    if(!silencieux&&typeof toast==='function') toast(L.length+' acte'+(L.length>1?'s':'')+' régénéré'+(L.length>1?'s':'')+' avec les informations à jour'+(mis?(' · '+mis+' version manuelle mise de côté'):'')+'.');
+    return L.length; };
+  window.enregRegenererClic=function(id){ var n=enregRegenerer(id,false); if(n&&typeof render==='function')render(); };
+  window.enregRestaurerCustom=function(id,k){ var d=doss(id); if(!d||!d.docCustomAvant||!d.docCustomAvant[k])return; d.docCustom=d.docCustom||{}; d.docCustom[k]=d.docCustomAvant[k].html; delete d.docCustomAvant[k]; d.docState=d.docState||{}; d.docState[k]=d.docState[k]||{}; d.docState[k].modifie=true; try{save();}catch(e){} if(typeof toast==='function')toast('Version modifiée à la main restaurée pour « '+lib(k)+' » — vérifiez qu\'elle porte les informations à jour.'); if(typeof render==='function')render(); };
+
+  function banniere(d,L){ var quand=d.modifieLe?new Date(d.modifieLe).toLocaleString('fr-FR'):''; var av=Object.keys(d.docCustomAvant||{});
+    var rest=av.length?('<div class="rg-avant">Versions modifiées à la main mises de côté : '+av.map(function(k){ return E(lib(k))+' <button type="button" class="btn btn-sm btn-ghost" onclick="enregRestaurerCustom(\''+d.id+'\',\''+k+'\')">restaurer</button>'; }).join(' · ')+'</div>'):'';
+    if(!L.length) return rest?('<div class="card rg-band ok"><div class="card-b">'+rest+'</div></div>'):'';
+    return '<div class="card rg-band"><div class="card-b"><span class="rg-ic">⟳</span><div class="rg-t"><b>'+L.length+' acte'+(L.length>1?'s':'')+' à régénérer</b> — l\'enregistrement a été modifié'+(quand?(' le '+E(quand)):'')+' : '+L.map(lib).map(E).join(', ')+'. Ils se régénèrent automatiquement à l\'ouverture de l\'étape Actes.</div><span class="rg-btns"><button type="button" class="btn btn-sm btn-pri" onclick="enregRegenererClic(\''+d.id+'\')">Régénérer maintenant</button>'+(typeof state!=='undefined'&&state.espTab!=='actes'?'<button type="button" class="btn btn-sm btn-ghost" onclick="trwGo(\'actes\')">Ouvrir l\'étape Actes</button>':'')+'</span>'+rest+'</div></div>'; }
+  var enCours=false;
+  function peindre(){ try{ if(typeof state==='undefined'||state.page!=='espace')return; var d=doss(state.espaceDossier); if(!d)return; var host=document.querySelector('.trw-content')||document.querySelector('.esp-main'); if(!host)return;
+    var L=actesARegenerer(d);
+    if(L.length&&state.espTab==='actes'&&!enCours){ enCours=true; try{ enregRegenerer(d.id,false); }finally{ enCours=false; } if(typeof render==='function'){ render(); return; } L=[]; }
+    var old=host.querySelector('.rg-band'); var html=banniere(d,L); if(old){ if(!html){old.remove();return;} var t=document.createElement('div'); t.innerHTML=html; old.replaceWith(t.firstChild); return; }
+    if(html){ var t2=document.createElement('div'); t2.innerHTML=html; host.insertBefore(t2.firstChild,host.firstChild); } }catch(e){} }
+  try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var out=_r.apply(this,arguments); try{ peindre(); }catch(e){} return out; }; } }catch(e){}
+  var st=document.createElement('style'); st.id='rg-mod'; st.textContent=
+    '.rg-band{border-color:rgba(224,161,0,.55)!important;margin-bottom:12px}.rg-band.ok{border-color:rgba(63,191,127,.45)!important}.rg-band .card-b{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12.5px}.rg-ic{font-size:20px;color:#e0a100!important;line-height:1}.rg-t{flex:1;min-width:240px}.rg-btns{display:flex;gap:6px;flex-wrap:wrap}.rg-avant{flex-basis:100%;font-size:11.5px;color:#8d95a5!important}';
   document.head.appendChild(st);
 })();
 </script>
