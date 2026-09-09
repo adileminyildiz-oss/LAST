@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=618;
+var LAST_VER=619;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -30101,7 +30101,7 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
 <script type="text/plain" id="marq-gs">
 /**
  * MAR'Q — Passerelle AEM CONSEIL  ·  aemconseil.sas@gmail.com
- * Mail · Factures prestataires · Agenda · Prise de rendez-vous
+ * Mail · Factures prestataires · Agenda · Prise de rendez-vous · Signature électronique
  *
  * INSTALLATION — remplacez TOUT le contenu de votre fichier par celui-ci :
  *   1. Dans l'éditeur Apps Script, cliquez dans le code, faites Ctrl+A puis collez.
@@ -30112,6 +30112,9 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
  *
  * La clé ci-dessous doit rester identique à celle enregistrée dans Mar'q
  * (Paramètres ▸ Communication ▸ Boîte mail).
+ *
+ * SMS (facultatif) : Paramètres du projet ▸ Propriétés du script ▸ ajoutez BREVO_KEY
+ * (clé API Brevo, SMS transactionnels). Sans clé, les liens et codes partent par e-mail.
  */
 
 var TOKEN = '__TOKEN__';
@@ -30136,6 +30139,7 @@ function doGet(e) {
 
   /* Page publique de prise de rendez-vous : pas de clé, le jeton du lien fait foi */
   if (p.page === 'rdv') return rdvPage(p);
+  if (p.page === 'signer') return sigPage(p);
 
   var payload;
 
@@ -30161,6 +30165,10 @@ function doGet(e) {
   } else if (p.action === 'rdv_accepter')  { payload = rdvAccepter(e);
   } else if (p.action === 'rdv_refuser')   { payload = rdvRefuser(e);
   } else if (p.action === 'rdv_purge')     { payload = rdvPurge(e);
+
+  } else if (p.action === 'sign_liste')    { payload = sigListe(e);
+  } else if (p.action === 'sign_relancer') { payload = sigRelancer(e);
+  } else if (p.action === 'sign_annuler')  { payload = sigAnnuler(e);
 
   } else {
     /* Lecture des mails reçus → deviennent des demandes dans Mar'q */
@@ -30195,6 +30203,17 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
   return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+}
+
+/* Requêtes POST (corps JSON) : création d'une enveloppe de signature */
+function doPost(e) {
+  var b = {};
+  try { b = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (err) {}
+  var payload;
+  if (b.key !== TOKEN) payload = { error: 'unauthorized' };
+  else if (b.action === 'sign_creer') payload = sigCreer(b);
+  else payload = { error: 'action_inconnue' };
+  return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(ContentService.MimeType.JSON);
 }
 
 function auth(e) {
@@ -30633,6 +30652,248 @@ function testLienRdv()  {
     key: TOKEN, nom: 'Client test', email: '', dossier: 'DOS-2026-001' } }), null, 2));
 }
 
+/* ==========================================================================
+   SIGNATURE ÉLECTRONIQUE — enveloppe de signature sur téléphone
+   Mar'q envoie les actes (doPost · sign_creer) ; le client reçoit un lien
+   (e-mail, + SMS si la propriété de script BREVO_KEY est renseignée), ouvre
+   la page ?page=signer&t=…, confirme son identité par un code à 6 chiffres,
+   lit chaque acte jusqu'au bout et signe au doigt. Preuves conservées :
+   horodatage, empreinte SHA-256 de l'acte, appareil, mode de vérification.
+   Mar'q relève l'état (sign_liste) et récupère les signatures.
+   ========================================================================== */
+var SIG_JOURS    = 7;              // validité du lien, en jours
+var SIG_CODE_MIN = 10;             // validité du code de vérification, en minutes
+var SIG_ESSAIS   = 3;              // essais autorisés par code
+var SIG_DRIVE    = 'AEM CONSEIL - Signatures';
+var SMS_FROM     = 'AEMCONSEIL';   // expéditeur affiché sur les SMS (11 caractères max)
+
+function sigKey(t) { return 'SIG_' + t; }
+function sigGet(t) { try { return JSON.parse(P().getProperty(sigKey(String(t || ''))) || 'null'); } catch (err) { return null; } }
+function sigPut(o) { P().setProperty(sigKey(o.token), JSON.stringify(o)); return o; }
+function sigNow() { return new Date().toISOString(); }
+function sigUrl(t) { return ScriptApp.getService().getUrl() + '?page=signer&t=' + t; }
+function sigExpire(o) { return !!(o && o.expire && new Date(o.expire) < new Date()); }
+function sigDossierDrive() {
+  var it = DriveApp.getFoldersByName(SIG_DRIVE);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(SIG_DRIVE);
+}
+function sigEcrire(nom, contenu, mime) { return sigDossierDrive().createFile(nom, contenu, mime || 'text/html').getId(); }
+function sigEcrireBlob(nom, blob) { return sigDossierDrive().createFile(blob.setName(nom)).getId(); }
+function sigLire(id) { try { return DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8'); } catch (err) { return ''; } }
+function sigLireB64(id) { try { return Utilities.base64Encode(DriveApp.getFileById(id).getBlob().getBytes()); } catch (err) { return ''; } }
+function sigEvt(o, t, extra) { o.evenements = o.evenements || []; o.evenements.push({ t: t, d: sigNow(), x: extra || '' }); if (o.evenements.length > 60) o.evenements.shift(); }
+function sigTel(tel) { var n = String(tel || '').replace(/[^\d+]/g, ''); if (/^0\d{9}$/.test(n)) n = '+33' + n.slice(1); return /^\+\d{8,15}$/.test(n) ? n : ''; }
+function sigSms(tel, texte) {
+  var key = P().getProperty('BREVO_KEY'), num = sigTel(tel);
+  if (!key || !num) return false;
+  try {
+    var r = UrlFetchApp.fetch('https://api.brevo.com/v3/transactionalSMS/sms', {
+      method: 'post', contentType: 'application/json', headers: { 'api-key': key },
+      payload: JSON.stringify({ type: 'transactional', sender: SMS_FROM, recipient: num, content: texte }),
+      muteHttpExceptions: true });
+    return r.getResponseCode() < 300;
+  } catch (err) { return false; }
+}
+function sigLibActes(o) { return (o.actes || []).map(function (a) { return a.lib; }); }
+function sigMailLien(o, relance) {
+  var lien = sigUrl(o.token), libs = sigLibActes(o), res = { email: false, sms: false };
+  var sujet = (relance ? 'Rappel — ' : '') + 'Documents à signer — ' + (o.societe || o.ref || CABINET);
+  var corps = 'Bonjour ' + (o.nom || '') + ',\n\n'
+    + (relance ? 'Sauf erreur de notre part, les documents ci-dessous attendent encore votre signature' : 'Les documents ci-dessous sont prêts et attendent votre signature') + ' :\n'
+    + libs.map(function (l) { return ' • ' + l; }).join('\n')
+    + '\n\nOuvrez ce lien depuis votre téléphone ou votre ordinateur :\n' + lien
+    + '\n\nUn code à 6 chiffres vous sera envoyé pour confirmer votre identité. Le lien est valable jusqu\'au ' + fmtFR(new Date(o.expire)) + '.\n\n' + CABINET;
+  var html = '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.55;color:#111;max-width:560px">'
+    + '<p>Bonjour ' + o.nom + ',</p><p>' + (relance ? 'Sauf erreur de notre part, les documents ci-dessous attendent encore votre signature' : 'Les documents ci-dessous sont prêts et attendent votre signature') + ' :</p>'
+    + '<ul>' + libs.map(function (l) { return '<li>' + l + '</li>'; }).join('') + '</ul>'
+    + '<p style="margin:22px 0"><a href="' + lien + '" style="background:#1e63d6;color:#fff;text-decoration:none;padding:12px 20px;border-radius:9px;font-weight:600;display:inline-block">Signer mes documents</a></p>'
+    + '<p style="color:#555;font-size:13px">Un code à 6 chiffres vous sera envoyé pour confirmer votre identité. Lien valable jusqu\'au ' + fmtFR(new Date(o.expire)) + '.<br>Si le bouton ne fonctionne pas : ' + lien + '</p><p>' + CABINET + '</p></div>';
+  if (o.email) { try { GmailApp.sendEmail(o.email, sujet, corps, { name: CABINET, htmlBody: html }); res.email = true; } catch (err) { res.emailErr = String(err); } }
+  res.sms = sigSms(o.tel, CABINET + ' : ' + (libs.length > 1 ? (libs.length + ' documents sont prêts à signer') : ('votre document « ' + libs[0] + ' » est prêt à signer')) + '. Ouvrez ce lien sur votre téléphone : ' + lien);
+  sigEvt(o, relance ? 'relance' : 'envoi', (res.email ? 'e-mail ' : '') + (res.sms ? 'sms' : ''));
+  return res;
+}
+
+/* Mar'q → passerelle (doPost) : création de l'enveloppe */
+function sigCreer(b) {
+  try {
+    var t = Utilities.getUuid().replace(/-/g, '').slice(0, 24);
+    var actes = (b.actes || []).map(function (a) {
+      var id = sigEcrire(t + '-' + a.k + '.html', a.html || '', 'text/html');
+      return { k: a.k, lib: a.lib || a.k, hash: a.hash || '', fichier: id, statut: 'a_signer', signe: '', image: '', nom: '' };
+    });
+    if (!actes.length) return { error: 'aucun_acte' };
+    var exp = new Date(); exp.setDate(exp.getDate() + SIG_JOURS);
+    var o = { token: t, dossier: b.dossier || '', ref: b.ref || '', societe: b.societe || '', nom: b.nom || '', email: b.email || '', tel: b.tel || '',
+      actes: actes, statut: 'envoye', cree: sigNow(), expire: exp.toISOString(), ouvert: '', verifie: false, verifieVia: '', verifieLe: '',
+      code: '', codeExp: '', essais: 0, relances: 0, ua: '', evenements: [] };
+    var env = sigMailLien(o, false);
+    sigPut(o);
+    return { ok: true, token: t, lien: sigUrl(t), email: env.email, sms: env.sms, expire: o.expire };
+  } catch (err) { return { error: String(err) }; }
+}
+/* Mar'q : état des enveloppes (tokens séparés par des virgules) ; image=1 → signatures en base64 */
+function sigListe(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  var p = e.parameter, toks = String(p.tokens || '').split(',').filter(Boolean), out = [];
+  toks.forEach(function (t) {
+    var o = sigGet(t); if (!o) { out.push({ token: t, error: 'inconnu' }); return; }
+    out.push({ token: t, statut: sigExpire(o) && o.statut !== 'signe' ? 'expire' : o.statut, ouvert: o.ouvert, verifie: o.verifie, verifieVia: o.verifieVia, verifieLe: o.verifieLe, ua: o.ua, relances: o.relances, expire: o.expire, lien: sigUrl(t),
+      actes: o.actes.map(function (a) { var x = { k: a.k, lib: a.lib, statut: a.statut, signe: a.signe, hash: a.hash, nom: a.nom }; if (p.image === '1' && a.statut === 'signe' && a.image) x.image = sigLireB64(a.image); return x; }) });
+  });
+  return { ok: true, enveloppes: out };
+}
+function sigRelancer(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  var o = sigGet(e.parameter.token); if (!o) return { error: 'inconnu' };
+  if (o.statut === 'signe') return { error: 'deja_signe' };
+  if (sigExpire(o)) { var exp = new Date(); exp.setDate(exp.getDate() + SIG_JOURS); o.expire = exp.toISOString(); }
+  var r = sigMailLien(o, true); o.relances = (o.relances || 0) + 1; sigPut(o);
+  return { ok: true, relances: o.relances, email: r.email, sms: r.sms };
+}
+function sigAnnuler(e) {
+  if (!auth(e)) return { error: 'unauthorized' };
+  var o = sigGet(e.parameter.token); if (!o) return { error: 'inconnu' };
+  o.statut = 'annule'; sigEvt(o, 'annulation'); sigPut(o); return { ok: true };
+}
+
+/* Page publique → serveur (google.script.run.sigOp) */
+function sigOp(t, op, data) {
+  data = data || {};
+  var o = sigGet(t); if (!o) return { error: 'lien_inconnu' };
+  if (o.statut === 'annule') return { error: 'lien_annule' };
+  if (sigExpire(o) && o.statut !== 'signe') return { error: 'lien_expire' };
+  var pub = function () { return { ok: true, statut: o.statut, nom: o.nom, societe: o.societe, ref: o.ref, verifie: !!o.verifie, tel: o.tel ? ('•• •• •• ' + String(o.tel).replace(/\D/g, '').slice(-2)) : '', email: o.email ? (o.email.replace(/^(.{2}).*(@.*)$/, '$1…$2')) : '', sms: !!(P().getProperty('BREVO_KEY') && sigTel(o.tel)),
+      actes: o.actes.map(function (a) { return { k: a.k, lib: a.lib, statut: a.statut, signe: a.signe }; }) }; };
+  if (op === 'etat') {
+    if (!o.ouvert) { o.ouvert = sigNow(); if (o.statut === 'envoye') o.statut = 'ouvert'; sigEvt(o, 'ouverture', String(data.ua || '').slice(0, 160)); }
+    if (data.ua) o.ua = String(data.ua).slice(0, 200);
+    sigPut(o); return pub();
+  }
+  if (op === 'code') {
+    var code = String(Math.floor(100000 + Math.random() * 900000));
+    o.code = code; o.codeExp = new Date(Date.now() + SIG_CODE_MIN * 60000).toISOString(); o.essais = 0;
+    var via = [];
+    if (o.email) { try { GmailApp.sendEmail(o.email, 'Votre code de signature : ' + code, 'Bonjour ' + o.nom + ',\n\nVotre code de vérification est : ' + code + '\n\nIl est valable ' + SIG_CODE_MIN + ' minutes. Si vous n\'êtes pas à l\'origine de cette demande, ignorez ce message.\n\n' + CABINET, { name: CABINET }); via.push('e-mail'); } catch (err) {} }
+    if (sigSms(o.tel, CABINET + ' — votre code de signature : ' + code + ' (valable ' + SIG_CODE_MIN + ' min)')) via.push('SMS');
+    sigEvt(o, 'code', via.join('+')); sigPut(o);
+    return { ok: true, via: via, minutes: SIG_CODE_MIN };
+  }
+  if (op === 'verifier') {
+    if (!o.code || !o.codeExp || new Date(o.codeExp) < new Date()) return { error: 'code_expire' };
+    if (o.essais >= SIG_ESSAIS) return { error: 'essais_epuises' };
+    if (String(data.code || '').replace(/\D/g, '') !== o.code) { o.essais++; sigPut(o); return { error: 'code_faux', reste: SIG_ESSAIS - o.essais }; }
+    o.verifie = true; o.verifieLe = sigNow(); o.verifieVia = (P().getProperty('BREVO_KEY') && sigTel(o.tel)) ? 'SMS + e-mail' : 'e-mail'; o.code = ''; sigEvt(o, 'identite', o.verifieVia); sigPut(o);
+    return pub();
+  }
+  if (!o.verifie) return { error: 'identite_requise' };
+  if (op === 'acte') {
+    var a = o.actes.filter(function (x) { return x.k === data.k; })[0]; if (!a) return { error: 'acte_inconnu' };
+    sigEvt(o, 'lecture', a.k); sigPut(o);
+    return { ok: true, k: a.k, lib: a.lib, html: sigLire(a.fichier), statut: a.statut };
+  }
+  if (op === 'signer') {
+    var ac = o.actes.filter(function (x) { return x.k === data.k; })[0]; if (!ac) return { error: 'acte_inconnu' };
+    if (ac.statut === 'signe') return { error: 'deja_signe' };
+    var img = String(data.image || ''); var m = img.match(/^data:image\/png;base64,(.+)$/); if (!m) return { error: 'signature_manquante' };
+    var blob = Utilities.newBlob(Utilities.base64Decode(m[1]), 'image/png', o.token + '-' + ac.k + '.png');
+    ac.image = sigEcrireBlob(o.token + '-' + ac.k + '.png', blob); ac.statut = 'signe'; ac.signe = sigNow(); ac.nom = String(data.nom || o.nom).slice(0, 120); ac.ua = String(data.ua || o.ua || '').slice(0, 200);
+    sigEvt(o, 'signature', ac.k);
+    var reste = o.actes.filter(function (x) { return x.statut !== 'signe'; }).length;
+    if (!reste) {
+      o.statut = 'signe'; o.signe = sigNow();
+      var libs = sigLibActes(o).join(', ');
+      try { if (o.email) GmailApp.sendEmail(o.email, 'Vos documents sont signés — ' + (o.societe || o.ref), 'Bonjour ' + o.nom + ',\n\nNous confirmons la signature électronique de : ' + libs + '.\nHorodatage : ' + fmtFR(new Date()) + '.\n\nLe cabinet vous transmettra les exemplaires signés.\n\n' + CABINET, { name: CABINET }); } catch (err) {}
+      try { GmailApp.sendEmail(Session.getEffectiveUser().getEmail(), '✍ Signature reçue — ' + (o.societe || o.ref) + ' (' + o.nom + ')', 'Tous les actes de l\'enveloppe ' + o.token + ' sont signés : ' + libs + '.\nMar\'q les relève automatiquement (Traitement ▸ Actes).', { name: CABINET }); } catch (err) {}
+    }
+    sigPut(o);
+    return { ok: true, reste: reste, statut: o.statut, actes: o.actes.map(function (x) { return { k: x.k, lib: x.lib, statut: x.statut, signe: x.signe }; }) };
+  }
+  return { error: 'op_inconnue' };
+}
+
+/* Page mobile de signature */
+function sigPage(p) {
+  var o = sigGet(p.t);
+  if (!o) return sigHtml('Lien invalide', '<h1>Lien invalide</h1><p>Ce lien de signature n\'existe pas ou a été remplacé. Contactez ' + CABINET + '.</p>');
+  if (o.statut === 'annule') return sigHtml('Lien annulé', '<h1>Lien annulé</h1><p>Cette demande de signature a été annulée par le cabinet.</p>');
+  if (sigExpire(o) && o.statut !== 'signe') return sigHtml('Lien expiré', '<h1>Lien expiré</h1><p>Ce lien n\'est plus valable. Demandez un nouveau lien à ' + CABINET + '.</p>');
+  return HtmlService.createHtmlOutput(SIG_PAGE_HTML.replace('__T__', o.token).replace('__CAB__', CABINET)).setTitle('Signature — ' + CABINET);
+}
+function sigHtml(titre, corps) {
+  return HtmlService.createHtmlOutput('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + titre + '</title>'
+    + '<style>body{margin:0;background:#0b0d11;color:#e9ecf2;font:16px/1.55 -apple-system,Segoe UI,Roboto,sans-serif}.w{max-width:560px;margin:0 auto;padding:40px 22px}h1{font-size:24px;margin:0 0 10px}p{color:#9aa3b2}</style><div class="w">' + corps + '</div>').setTitle(titre);
+}
+/*SIGPAGE-START*/
+var SIG_PAGE_HTML = [
+'<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Signature</title>',
+'<style>',
+'*{box-sizing:border-box}body{margin:0;background:#0b0d11;color:#e9ecf2;font:16px/1.5 -apple-system,Segoe UI,Roboto,sans-serif}',
+'.w{max-width:600px;margin:0 auto;padding:22px 18px 60px}.b{font:600 11px/1 ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;color:#7b8496}',
+'h1{font-size:23px;line-height:1.25;letter-spacing:-.01em;margin:8px 0 8px}p{color:#9aa3b2;margin:0 0 16px}.v{display:none}.v.on{display:block}',
+'.btn{display:block;width:100%;border:0;border-radius:11px;padding:15px 16px;font:600 16px inherit;background:#1e63d6;color:#fff;cursor:pointer;margin-top:10px}.btn.g{background:transparent;border:1px solid #2b3549;color:#c9d2e2}.btn:disabled{opacity:.4;cursor:default}',
+'.otp{display:flex;gap:8px;justify-content:center;margin:18px 0}.otp input{width:100%;max-width:260px;text-align:center;font:600 30px/1 ui-monospace,monospace;letter-spacing:.35em;padding:12px 8px;border:1px solid #2b3549;border-radius:12px;background:#12161d;color:#fff}',
+'.msg{font-size:14px;color:#ff8f8f;min-height:20px;margin-top:6px}.ok{color:#5ad48f}',
+'.lst{display:flex;flex-direction:column;gap:8px;margin:14px 0}.li{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid #2b3549;border-radius:12px;background:#12161d}.li i{width:10px;height:10px;border-radius:50%;background:#2f3541;flex:none}.li.s i{background:#3fbf7f}.li.c i{background:#4f9dff}.li b{flex:1;font-size:15px}.li small{color:#8d95a5;font-size:12.5px}',
+'.prog{height:5px;border-radius:3px;background:#232830;overflow:hidden;margin:10px 0}.prog b{display:block;height:100%;background:#4f9dff;transition:width .3s}',
+'.doc{background:#fff;color:#111;border-radius:12px;padding:16px 16px 24px;height:52vh;overflow:auto;font:14px/1.5 Georgia,serif;-webkit-overflow-scrolling:touch}.doc h1,.doc h2,.doc h3{color:#111;font-size:16px}.doc table{max-width:100%}.doc img{max-width:100%}',
+'.hint{font-size:13px;color:#8d95a5;text-align:center;margin:8px 0}',
+'.chk{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;color:#c9d2e2;margin:14px 0}.chk input{width:22px;height:22px;flex:none;margin:0}',
+'canvas{width:100%;height:200px;background:#fff;border:1px dashed #6b7280;border-radius:12px;touch-action:none;display:block}.padbar{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#8d95a5;margin:6px 0}.padbar a{color:#9ec4ff;cursor:pointer}',
+'.done{width:64px;height:64px;border-radius:50%;background:rgba(63,191,127,.15);border:1px solid rgba(63,191,127,.5);display:grid;place-items:center;color:#3fbf7f;font-size:30px;margin:18px auto}',
+'.spin{opacity:.6;pointer-events:none}.foot{font-size:12px;color:#5d6575;margin-top:26px;text-align:center}',
+'</style></head><body><div class="w" id="app">',
+'<div class="b">__CAB__ · signature électronique</div>',
+'<div id="v-load" class="v on"><h1>Chargement…</h1></div>',
+'<div id="v-id" class="v"><h1 id="id-titre">Bonjour, confirmez votre identité</h1><p id="id-p">Un code à 6 chiffres va vous être envoyé pour vérifier qu\'il s\'agit bien de vous.</p>',
+'<button class="btn" id="b-code" type="button">Recevoir mon code</button>',
+'<div id="id-code" class="v"><div class="otp"><input id="otp" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" autocomplete="one-time-code"></div><div class="hint" id="id-hint"></div><button class="btn" id="b-verif" type="button">Confirmer</button><button class="btn g" id="b-recode" type="button">Renvoyer un code</button></div><div class="msg" id="id-msg"></div></div>',
+'<div id="v-env" class="v"><h1 id="env-titre">Documents à signer</h1><p id="env-p"></p><div class="prog"><b id="env-prog" style="width:0"></b></div><div class="lst" id="env-lst"></div><button class="btn" id="b-next" type="button">Ouvrir le document suivant</button><div class="hint">Vous pouvez fermer cette page et reprendre plus tard avec le même lien.</div></div>',
+'<div id="v-acte" class="v"><div class="b" id="acte-b"></div><h1 id="acte-titre"></h1><div class="doc" id="acte-doc"></div><div class="hint" id="acte-hint">▼ faites défiler jusqu\'à la fin du document</div>',
+'<label class="chk"><input type="checkbox" id="acte-lu" disabled><span>J\'ai lu l\'intégralité de ce document et je consens à le signer électroniquement.</span></label>',
+'<div id="acte-pad" class="v"><div class="padbar"><span id="pad-nom"></span><a id="pad-clear">Effacer</a></div><canvas id="pad" width="900" height="300"></canvas><div class="padbar"><span>Signez au doigt dans le cadre</span><a id="pad-reuse" style="display:none">Réutiliser ma signature</a></div></div>',
+'<div class="msg" id="acte-msg"></div><button class="btn" id="b-sign" type="button" disabled>Signer ce document</button><button class="btn g" id="b-back" type="button">Retour à la liste</button></div>',
+'<div id="v-fin" class="v"><div class="done">✓</div><h1>Merci, tout est signé</h1><p>Chaque document est horodaté et scellé par une empreinte. Une confirmation vous est envoyée par e-mail ; le cabinet vous transmettra les exemplaires signés.</p></div>',
+'<div id="v-err" class="v"><h1>Un problème est survenu</h1><p id="err-p"></p><button class="btn g" onclick="location.reload()" type="button">Recharger</button></div>',
+'<div class="foot">Signature électronique simple (eIDAS) · horodatage, empreinte SHA-256, appareil et mode de vérification sont enregistrés.</div>',
+'</div><script>',
+'(function(){var T="__T__",S=null,cur=null,sigImg="",drawn=false,pad,ctx;',
+'function $(i){return document.getElementById(i);}function show(v){["v-load","v-id","v-env","v-acte","v-fin","v-err"].forEach(function(x){$(x).classList.toggle("on",x===v);});window.scrollTo(0,0);}',
+'function run(op,data,ok,ko){var r=google.script.run.withSuccessHandler(function(j){if(j&&j.error){(ko||err)(j);}else ok(j);}).withFailureHandler(function(e){(ko||err)({error:String(e)});});r.sigOp(T,op,data||{});}',
+'var ERR={lien_inconnu:"Ce lien n\'existe pas.",lien_annule:"Cette demande a été annulée par le cabinet.",lien_expire:"Ce lien a expiré — demandez un nouveau lien.",code_expire:"Le code a expiré, demandez-en un nouveau.",essais_epuises:"Trop d\'essais — demandez un nouveau code.",code_faux:"Code incorrect.",identite_requise:"Confirmez d\'abord votre identité.",signature_manquante:"Tracez votre signature.",deja_signe:"Déjà signé."};',
+'function err(j){var m=ERR[j&&j.error]||("Erreur : "+(j&&j.error));if($("v-acte").classList.contains("on")){$("acte-msg").textContent=m;return;}if($("v-id").classList.contains("on")){$("id-msg").textContent=m+(j&&j.reste!=null?(" Il reste "+j.reste+" essai(s).") :"");return;}$("err-p").textContent=m;show("v-err");}',
+'function paintEnv(){var a=S.actes,n=a.filter(function(x){return x.statut==="signe";}).length;$("env-titre").textContent=(a.length>1?(a.length+" documents à signer"):"Un document à signer")+(S.societe?(" — "+S.societe):"");$("env-p").textContent="Identité confirmée ✓ · "+S.nom;$("env-prog").style.width=Math.round(n/a.length*100)+"%";',
+'$("env-lst").innerHTML=a.map(function(x,i){var c=x.statut==="signe"?"s":(x===next()?"c":"");return "<div class=\\"li "+c+"\\" data-k=\\""+x.k+"\\"><i></i><b>"+esc(x.lib)+"</b><small>"+(x.statut==="signe"?("signé "+heure(x.signe)):(x===next()?"à lire":"ensuite"))+"</small></div>";}).join("");',
+'Array.prototype.forEach.call($("env-lst").querySelectorAll(".li"),function(el){el.addEventListener("click",function(){ouvrir(el.getAttribute("data-k"));});});',
+'if(n===a.length){show("v-fin");return;}$("b-next").textContent=n?"Ouvrir le document suivant":"Ouvrir le premier document";show("v-env");}',
+'function next(){return S.actes.filter(function(x){return x.statut!=="signe";})[0];}function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c];});}function heure(iso){try{var d=new Date(iso);return d.toLocaleDateString("fr-FR")+" "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});}catch(e){return "";}}',
+'function ouvrir(k){var a=S.actes.filter(function(x){return x.k===k;})[0];if(!a)return;$("b-next").classList.add("spin");run("acte",{k:k},function(j){$("b-next").classList.remove("spin");cur=j;$("acte-b").textContent="Document "+(S.actes.indexOf(a)+1)+" / "+S.actes.length;$("acte-titre").textContent=j.lib;$("acte-doc").innerHTML=j.html||"<p>(document vide)</p>";$("acte-lu").checked=false;$("acte-lu").disabled=true;$("acte-pad").classList.remove("on");$("b-sign").disabled=true;$("acte-msg").textContent="";$("acte-hint").textContent="▼ faites défiler jusqu\'à la fin du document";',
+'if(j.statut==="signe"){$("acte-hint").textContent="Document déjà signé.";$("b-sign").style.display="none";}else{$("b-sign").style.display="";}show("v-acte");var d=$("acte-doc");d.scrollTop=0;setTimeout(function(){if(d.scrollHeight<=d.clientHeight+4)finLecture();},80);});}',
+'function finLecture(){if(!cur||cur.statut==="signe")return;$("acte-lu").disabled=false;$("acte-hint").textContent="Fin du document — cochez la case pour signer.";}',
+'$("acte-doc").addEventListener("scroll",function(){var d=$("acte-doc");if(d.scrollTop+d.clientHeight>=d.scrollHeight-6)finLecture();});',
+'$("acte-lu").addEventListener("change",function(){var on=$("acte-lu").checked;$("acte-pad").classList.toggle("on",on);if(on){initPad();$("pad-nom").textContent=S.nom;$("pad-reuse").style.display=sigImg?"":"none";}$("b-sign").disabled=!(on&&drawn);});',
+'function initPad(){pad=$("pad");ctx=pad.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,pad.width,pad.height);ctx.strokeStyle="#0a2a4a";ctx.lineWidth=3.5;ctx.lineJoin="round";ctx.lineCap="round";drawn=false;if(pad.__ok)return;pad.__ok=1;var dr=false,px=0,py=0;',
+'function pos(e){var r=pad.getBoundingClientRect();var t=e.touches?e.touches[0]:e;return [(t.clientX-r.left)*(pad.width/r.width),(t.clientY-r.top)*(pad.height/r.height)];}',
+'function down(e){dr=true;var p=pos(e);px=p[0];py=p[1];if(e.cancelable)e.preventDefault();}function move(e){if(!dr)return;var p=pos(e);ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(p[0],p[1]);ctx.stroke();px=p[0];py=p[1];drawn=true;$("b-sign").disabled=!($("acte-lu").checked&&drawn);if(e.cancelable)e.preventDefault();}function up(){dr=false;}',
+'pad.addEventListener("mousedown",down);pad.addEventListener("mousemove",move);window.addEventListener("mouseup",up);pad.addEventListener("touchstart",down,{passive:false});pad.addEventListener("touchmove",move,{passive:false});window.addEventListener("touchend",up);}',
+'$("pad-clear").addEventListener("click",function(){initPad();$("b-sign").disabled=true;});',
+'$("pad-reuse").addEventListener("click",function(){if(!sigImg)return;var im=new Image();im.onload=function(){initPad();ctx.drawImage(im,0,0,pad.width,pad.height);drawn=true;$("b-sign").disabled=!$("acte-lu").checked;};im.src=sigImg;});',
+'$("b-sign").addEventListener("click",function(){if(!cur||!drawn)return;var img=pad.toDataURL("image/png");$("b-sign").disabled=true;$("acte-msg").textContent="Signature en cours…";run("signer",{k:cur.k,image:img,nom:S.nom,ua:navigator.userAgent},function(j){sigImg=img;S.actes=j.actes;S.statut=j.statut;$("acte-msg").textContent="";paintEnv();},function(j){$("b-sign").disabled=false;err(j);});});',
+'$("b-back").addEventListener("click",function(){paintEnv();});$("b-next").addEventListener("click",function(){var n=next();if(n)ouvrir(n.k);});',
+'function demanderCode(){$("b-code").classList.add("spin");$("id-msg").textContent="";run("code",{},function(j){$("b-code").classList.remove("spin");$("b-code").style.display="none";$("id-code").classList.add("on");$("id-hint").textContent="Code envoyé par "+(j.via&&j.via.length?j.via.join(" et "):"e-mail")+" · valable "+j.minutes+" minutes";setTimeout(function(){try{$("otp").focus();}catch(e){}},50);},function(j){$("b-code").classList.remove("spin");err(j);});}',
+'$("b-code").addEventListener("click",demanderCode);$("b-recode").addEventListener("click",demanderCode);',
+'$("b-verif").addEventListener("click",function(){var c=$("otp").value.replace(/\\D/g,"");if(c.length!==6){$("id-msg").textContent="Saisissez les 6 chiffres.";return;}$("b-verif").classList.add("spin");run("verifier",{code:c},function(j){$("b-verif").classList.remove("spin");S=j;paintEnv();},function(j){$("b-verif").classList.remove("spin");err(j);});});',
+'$("otp").addEventListener("input",function(){if($("otp").value.replace(/\\D/g,"").length===6)$("b-verif").click();});',
+'run("etat",{ua:navigator.userAgent},function(j){S=j;if(S.statut==="signe"){show("v-fin");return;}if(S.verifie){paintEnv();return;}$("id-titre").textContent="Bonjour "+(S.nom||"")+", confirmez votre identité";$("id-p").textContent="Un code à 6 chiffres va être envoyé"+(S.sms&&S.tel?(" au "+S.tel):"")+(S.email?((S.sms&&S.tel?" et":"")+" à "+S.email):"")+" pour vérifier qu\'il s\'agit bien de vous.";show("v-id");});',
+'})();',
+'<\/script></body></html>'
+].join('\n');
+/*SIGPAGE-END*/
+
+function testLienSignature() {
+  Logger.log(JSON.stringify(sigCreer({ dossier: 'test', ref: 'DOS-TEST', societe: 'SOCIETE TEST', nom: 'Client test', email: '', tel: '',
+    actes: [{ k: 'statuts', lib: 'Statuts', html: '<h1>Statuts</h1><p>Texte de test.</p>', hash: 'test' }] }), null, 2));
+}
 </script>
 <script>
 /* ============================================================================
@@ -37248,7 +37509,7 @@ function testLienRdv()  {
   window.actAttestationHTML=function(id,k){ var d=doss(id); if(!d)return ''; var s=S(d)[k]||{}; var c=cli(d);
     return '<h1>Attestation de signature électronique</h1><div class="sub">'+E(cabinet())+'</div>'
       +'<div class="row"><span class="lbl">Document</span><b>'+E(docLib(d,k))+'</b></div><div class="row"><span class="lbl">Société</span>'+E(c.denomination||c.denom||'')+' · dossier '+E(d.ref||'')+'</div>'
-      +'<div class="row"><span class="lbl">Signataire</span>'+E(s.signataire||'')+(s.qualite?(' — '+E(s.qualite)):'')+'</div><div class="row"><span class="lbl">Mode</span>'+E({ecran:'Signature manuscrite à l\'écran',depot:'Document signé déposé',cabinet:'Signature constatée au cabinet'}[s.voie]||s.voie||'')+'</div>'
+      +'<div class="row"><span class="lbl">Signataire</span>'+E(s.signataire||'')+(s.qualite?(' — '+E(s.qualite)):'')+'</div><div class="row"><span class="lbl">Mode</span>'+E({ecran:'Signature manuscrite à l\'écran',depot:'Document signé déposé',client:'Signature électronique à distance (lien sur téléphone)',cabinet:'Signature constatée au cabinet'}[s.voie]||s.voie||'')+'</div>'+(s.preuve?('<div class="row"><span class="lbl">Vérification d\'identité</span>code à 6 chiffres'+(s.preuve.via?(' envoyé par '+E(s.preuve.via)):'')+(s.preuve.verifie?(' — confirmé le '+E(frDT(s.preuve.verifie))):'')+'</div><div class="row"><span class="lbl">Lien ouvert le</span>'+E(frDT(s.preuve.ouvert))+'</div><div class="row"><span class="lbl">Appareil</span>'+E(String(s.preuve.appareil||'').slice(0,120))+'</div>'):'')
       +'<div class="row"><span class="lbl">Horodatage</span><b>'+E(frDT(s.ts))+'</b></div>'+(s.empreinte?('<div class="row"><span class="lbl">Empreinte SHA-256 de l\'acte</span><code>'+E(s.empreinte)+'</code></div>'):'')
       +(s.image?('<div class="sig"><div style="font-size:11px;color:#555;margin-bottom:6px">Signature</div><img src="'+s.image+'" style="max-width:280px;border-bottom:1px solid #999"></div>'):'')
       +'<p class="foot">Cette attestation est établie par '+E(cabinet())+' à partir des données enregistrées lors de la signature. L\'empreinte permet de vérifier que l\'acte n\'a pas été modifié depuis.</p>'; };
@@ -37256,7 +37517,7 @@ function testLienRdv()  {
     w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Attestation de signature</title><style>@page{size:A4;margin:22mm}body{font-family:Georgia,serif;color:#111;line-height:1.6;max-width:720px;margin:0 auto}h1{font-size:20px;text-align:center;margin-bottom:4px}.sub{text-align:center;color:#555;margin-bottom:26px}.row{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid #ddd}.lbl{flex:0 0 220px;color:#555}.sig{margin-top:26px}code{font-size:11px;word-break:break-all}.foot{margin-top:30px;font-size:11px;color:#555}</style></head><body>'+html+'<script>setTimeout(function(){window.print();},300);<\/script></body></html>'); w.document.close(); };
 
   /* ---------- Bloc de signature sur l'acte (vue, impression, PDF) ---------- */
-  try{ var _rd=window.espDocRender; if(typeof _rd==='function'&&!_rd.__signact){ window.espDocRender=function(d,k){ var h=_rd.apply(this,arguments); try{ var s=d&&d.sign&&d.sign[k]; if(s&&s.ok&&s.voie==='ecran'&&s.image&&typeof h==='string'){ h+='<div class="sig-bloc" style="margin-top:28px;padding-top:10px;border-top:1px solid #999;font-size:11px;color:#333;page-break-inside:avoid"><div><b>Signé électroniquement</b> par '+E(s.signataire||'')+(s.qualite?(', '+E(s.qualite)):'')+' le '+E(frDT(s.ts))+'</div><img src="'+s.image+'" alt="signature" style="height:70px;margin:6px 0;display:block">'+(s.empreinte?('<div style="font-family:monospace;font-size:9px;color:#666">Empreinte SHA-256 : '+E(s.empreinte)+'</div>'):'')+'</div>'; } }catch(e){} return h; }; window.espDocRender.__signact=1; } }catch(e){}
+  try{ var _rd=window.espDocRender; if(typeof _rd==='function'&&!_rd.__signact){ window.espDocRender=function(d,k){ var h=_rd.apply(this,arguments); try{ var s=d&&d.sign&&d.sign[k]; if(s&&s.ok&&(s.voie==='ecran'||s.voie==='client')&&s.image&&typeof h==='string'){ h+='<div class="sig-bloc" style="margin-top:28px;padding-top:10px;border-top:1px solid #999;font-size:11px;color:#333;page-break-inside:avoid"><div><b>Signé électroniquement'+(s.voie==='client'?' à distance':'')+'</b> par '+E(s.signataire||'')+(s.qualite?(', '+E(s.qualite)):'')+' le '+E(frDT(s.ts))+(s.preuve&&s.preuve.via?(' — identité vérifiée par code ('+E(s.preuve.via)+')'):'')+'</div><img src="'+s.image+'" alt="signature" style="height:70px;margin:6px 0;display:block">'+(s.empreinte?('<div style="font-family:monospace;font-size:9px;color:#666">Empreinte SHA-256 : '+E(s.empreinte)+'</div>'):'')+'</div>'; } }catch(e){} return h; }; window.espDocRender.__signact=1; } }catch(e){}
 
   /* ---------- Carte « Signature des actes » (étape Actes) ---------- */
   function carte(d){ var L=actes(d); if(!L.length)return ''; var sg=signataire(d); var sigs=S(d); var ok=L.filter(function(a){return sigs[a.k]&&sigs[a.k].ok;}).length;
@@ -37281,6 +37542,88 @@ function testLienRdv()  {
    +'.act-btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.act-btns .btn{width:auto}.act-up{cursor:pointer}.act-hint{margin-top:10px;font-size:12px;color:#8d95a5!important}.act-hint.ok{color:#3fbf7f!important}'
    +'.act-pad-ov{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:100050;display:flex;align-items:center;justify-content:center;padding:20px}.act-pad-box{background:#12161d;border:1px solid #323848;border-radius:14px;padding:16px 18px;width:min(680px,100%);box-shadow:0 30px 60px -20px rgba(0,0,0,.9)}.act-pad-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.act-pad-sub{font-size:12px;color:#aeb6c2!important;margin:4px 0 8px;line-height:1.5}.act-pad-sub input{background:#0f1218;border:1px solid #323848;border-radius:6px;padding:3px 8px;color:#fff;font-size:12px;width:200px}'
    +'#act-pad-c{width:100%;height:220px;background:#fff;border:1px dashed #6b7280;border-radius:8px;touch-action:none;cursor:crosshair;display:block}.act-pad-ok{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#aeb6c2!important;margin:10px 0}.act-pad-act{display:flex;gap:8px;justify-content:flex-end}';
+  document.head.appendChild(st);
+})();
+</script>
+
+<script>
+/* ===== signlink.js — Lien de signature sur téléphone (enveloppe) via la passerelle (v619) =====
+   Étape Actes : « Envoyer le lien de signature » crée une enveloppe sur la passerelle Apps
+   Script (actes + empreintes), qui envoie au client un e-mail (et un SMS si Brevo est
+   configuré) avec le lien ?page=signer&t=… Le client confirme son identité par un code,
+   lit et signe au doigt. Mar'q relève l'état toutes les 3 minutes (Envoyé → Ouvert →
+   Signé), récupère les signatures et les preuves, et les appose sur les actes. */
+(function(){
+  if(window.__aemSignLink) return; window.__aemSignLink=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function DBX(){ try{ return (typeof DB!=='undefined'&&DB)?DB:null; }catch(e){ return null; } }
+  function doss(id){ var B=DBX(); return ((B&&B.dossiers)||[]).filter(function(x){return x.id===id;})[0]; }
+  function cli(d){ try{ return clientById((d.clientIds||[])[0])||{}; }catch(e){ return {}; } }
+  function T(){ return (typeof today==='function')?today():new Date().toISOString().slice(0,10); }
+  function frDT(ts){ if(!ts)return ''; var d=new Date(ts); if(isNaN(d))return ''; return d.toLocaleDateString('fr-FR')+' à '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+  function gw(){ try{ var c=(typeof demSyncCfg==='function')?demSyncCfg():((DBX()||{}).parametres||{}).mailSync; return (c&&c.url)?c:null; }catch(e){ return null; } }
+  function actes(d){ try{ return (typeof window.a3ASigner==='function')?(window.a3ASigner(d)||[]):[]; }catch(e){ return []; } }
+  function nonSignes(d){ return actes(d).filter(function(a){ return !(d.sign&&d.sign[a.k]&&d.sign[a.k].ok); }); }
+  function signataire(d){ try{ if(typeof window.sigSigner==='function')return window.sigSigner(d); }catch(e){} var c=cli(d); return {nom:(c.president||((c.prenom||'')+' '+(c.nom||''))).trim()||'Signataire',email:c.email||''}; }
+  function suivi(d,k){ try{ if(typeof window.sigState==='function')return window.sigState(d,k); }catch(e){} d.signDossier=d.signDossier||{}; return d.signDossier[k]=d.signDossier[k]||{statut:'a_envoyer',relances:0}; }
+  function docHTML(d,k){ try{ return String((typeof window.espDocRender==='function')?window.espDocRender(d,k):'').replace(/<div class="sig-bloc[\s\S]*$/,''); }catch(e){ return ''; } }
+  function texte(h){ var t=document.createElement('div'); t.innerHTML=h; return (t.textContent||'').replace(/\s+/g,' ').trim(); }
+  function hashHex(str){ try{ if(window.crypto&&crypto.subtle&&window.TextEncoder) return crypto.subtle.digest('SHA-256',new TextEncoder().encode(str)).then(function(b){ return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0');}).join(''); }); }catch(e){} return Promise.resolve(''); }
+  function apiGet(action,extra,cb){ var c=gw(); if(!c){ cb({error:'no_endpoint'}); return; } var base=c.url+(c.url.indexOf('?')>=0?'&':'?')+'action='+encodeURIComponent(action)+'&key='+encodeURIComponent(c.key||'')+(extra||''); var done=false, fin=function(j){ if(done)return; done=true; cb(j||{error:'no_response'}); };
+    try{ fetch(base,{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){ var j=null; try{ j=JSON.parse(t); }catch(e){} if(j)fin(j); else if(typeof demJsonp==='function')demJsonp(base,fin); else fin(null); }).catch(function(){ if(typeof demJsonp==='function')demJsonp(base,fin); else fin(null); }); }catch(e){ fin(null); } }
+  function apiPost(body,cb){ var c=gw(); if(!c){ cb({error:'no_endpoint'}); return; } body.key=c.key||''; try{ fetch(c.url,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'text/plain;charset=utf-8'},redirect:'follow'}).then(function(r){return r.text();}).then(function(t){ var j=null; try{ j=JSON.parse(t); }catch(e){} cb(j||{error:'reponse_illisible'}); }).catch(function(e){ cb({error:String(e&&e.message||e)}); }); }catch(e){ cb({error:String(e)}); } }
+  function histo(d,t){ (d.historique=d.historique||[]).unshift({d:T(),t:t}); }
+  function docLib(d,k){ var a=actes(d).filter(function(x){return x.k===k;})[0]; return a?a.l:k; }
+
+  /* ---------- Envoi du lien (enveloppe) ---------- */
+  window.signLienEnvoyer=function(id){ var d=doss(id); if(!d)return; if(!gw()){ if(typeof toast==='function')toast('Passerelle non configurée — Paramètres ▸ Communication ▸ Boîte mail (URL du script + clé).'); return; }
+    var L=nonSignes(d); if(!L.length){ if(typeof toast==='function')toast('Tous les actes sont déjà signés.'); return; }
+    var sg=signataire(d), c=cli(d); if(!sg.email&&!c.tel){ if(typeof toast==='function')toast('Renseignez l\'e-mail ou le téléphone du signataire dans la fiche Client.'); return; }
+    if(typeof toast==='function')toast('Préparation de l\'enveloppe ('+L.length+' acte'+(L.length>1?'s':'')+')…');
+    Promise.all(L.map(function(a){ var h=docHTML(d,a.k); return hashHex(texte(h)).then(function(x){ return {k:a.k,lib:a.l,html:h,hash:x}; }); })).then(function(A){
+      apiPost({action:'sign_creer',dossier:d.id,ref:d.ref||'',societe:c.denomination||c.denom||'',nom:sg.nom,email:sg.email||'',tel:c.tel||c.telephone||'',actes:A},function(j){
+        if(!j||j.error||!j.token){ if(typeof toast==='function')toast('Envoi impossible : '+((j&&j.error)||'passerelle injoignable')+'. Vérifiez le déploiement du script (nouvelle version).'); return; }
+        d.signEnv={token:j.token,lien:j.lien||'',envoye:Date.now(),actes:A.map(function(a){return a.k;}),statut:'envoye',ouvert:'',relances:0,email:!!j.email,sms:!!j.sms,expire:j.expire||''};
+        A.forEach(function(a){ var st=suivi(d,a.k); st.statut='envoye'; st.sentAt=Date.now(); st.relances=0; st.signer=sg.nom; st.email=sg.email; st.canal='lien'; });
+        histo(d,'Lien de signature envoyé à '+(sg.email||c.tel)+(j.sms?' (e-mail + SMS)':' (e-mail)')+' : '+A.map(function(a){return a.lib;}).join(', '));
+        try{save();}catch(e){} if(typeof toast==='function')toast('Lien de signature envoyé'+(j.sms?' par e-mail et SMS':' par e-mail')+' à '+sg.nom+' — '+A.length+' acte'+(A.length>1?'s':'')+'. Relevé automatique toutes les 3 minutes.'); if(typeof render==='function')render(); armer(); }); }); };
+  window.signLienRelancer=function(id){ var d=doss(id); var env=d&&d.signEnv; if(!env||!env.token)return; apiGet('sign_relancer','&token='+encodeURIComponent(env.token),function(j){ if(!j||j.error){ if(typeof toast==='function')toast('Relance impossible : '+((j&&j.error)||'passerelle injoignable')); return; } env.relances=(j.relances!=null?j.relances:(env.relances||0)+1); env.derniereRelance=Date.now(); env.actes.forEach(function(k){ var st=suivi(d,k); if(st.statut!=='signe'){ st.relances=(st.relances||0)+1; st.lastRelance=Date.now(); } }); histo(d,'Relance du lien de signature ('+env.relances+')'); try{save();}catch(e){} if(typeof toast==='function')toast('Relance envoyée'+(j.sms?' (e-mail + SMS)':' (e-mail)')+'.'); if(typeof render==='function')render(); }); };
+  window.signLienAnnuler=function(id){ var d=doss(id); var env=d&&d.signEnv; if(!env||!env.token)return; var go=function(){ apiGet('sign_annuler','&token='+encodeURIComponent(env.token),function(j){ env.statut='annule'; env.annule=Date.now(); env.actes.forEach(function(k){ var st=suivi(d,k); if(st.statut!=='signe'){ st.statut='a_envoyer'; } }); histo(d,'Lien de signature annulé'); try{save();}catch(e){} if(typeof toast==='function')toast('Lien annulé — le client ne peut plus l\'utiliser.'); if(typeof render==='function')render(); }); }; if(typeof uiConfirm==='function')uiConfirm('Annuler ce lien de signature ? Le client ne pourra plus l\'ouvrir.',go,{okLabel:'Annuler le lien',danger:true}); else go(); };
+  window.signLienCopier=function(id){ var d=doss(id); var env=d&&d.signEnv; if(!env||!env.lien)return; try{ navigator.clipboard.writeText(env.lien).then(function(){ if(typeof toast==='function')toast('Lien copié — vous pouvez le coller dans un SMS ou un message.'); }); }catch(e){ window.prompt('Lien de signature :',env.lien); } };
+
+  /* ---------- Relevé de l'état ---------- */
+  function enAttente(){ var B=DBX(); return ((B&&B.dossiers)||[]).filter(function(d){ return d.signEnv&&d.signEnv.token&&d.signEnv.statut!=='signe'&&d.signEnv.statut!=='annule'; }); }
+  function appliquer(d,env,e){ var chg=false, nouv=[]; if(e.error){ if(e.error==='inconnu'){ env.statut='inconnu'; chg=true; } return {chg:chg,nouv:nouv}; }
+    if(e.ouvert&&!env.ouvert){ env.ouvert=e.ouvert; histo(d,'Lien de signature ouvert par le client'+(e.ua?(' — '+String(e.ua).slice(0,60)):'')); chg=true; }
+    if(e.verifieLe&&!env.verifieLe){ env.verifieLe=e.verifieLe; env.verifieVia=e.verifieVia||''; histo(d,'Identité du signataire confirmée par code ('+(e.verifieVia||'e-mail')+')'); chg=true; }
+    if(e.ua)env.ua=e.ua; if(e.relances!=null)env.relances=e.relances;
+    (e.actes||[]).forEach(function(a){ if(a.statut==='signe'&&!(d.sign&&d.sign[a.k]&&d.sign[a.k].ok)){ d.sign=d.sign||{}; var ts=a.signe?new Date(a.signe).getTime():Date.now();
+        d.sign[a.k]={ok:true,ts:ts,voie:'client',signataire:a.nom||signataire(d).nom,image:a.image?('data:image/png;base64,'+a.image):'',empreinte:a.hash||'',preuve:{via:e.verifieVia||'',appareil:e.ua||'',ouvert:e.ouvert||'',verifie:e.verifieLe||'',lien:env.token}};
+        var st=suivi(d,a.k); st.statut='signe'; st.signedAt=ts; histo(d,'« '+docLib(d,a.k)+' » signé par le client sur son téléphone — '+frDT(ts)); nouv.push(docLib(d,a.k)); chg=true; }
+      else if(a.statut==='signe'&&a.image&&d.sign&&d.sign[a.k]&&!d.sign[a.k].image){ d.sign[a.k].image='data:image/png;base64,'+a.image; chg=true; } });
+    var st2=(e.statut==='signe')?'signe':(e.statut==='expire'?'expire':(env.ouvert?'ouvert':env.statut)); if(st2!==env.statut){ env.statut=st2; chg=true; }
+    return {chg:chg,nouv:nouv}; }
+  window.signLienReleve=function(silencieux,cb){ var L=enAttente(); if(!L.length||!gw()){ if(cb)cb(0); return; } var toks=L.map(function(d){return d.signEnv.token;}).join(',');
+    apiGet('sign_liste','&tokens='+encodeURIComponent(toks)+'&image=1',function(j){ if(!j||j.error||!j.enveloppes){ if(!silencieux&&typeof toast==='function')toast('Relevé impossible : '+((j&&j.error)||'passerelle injoignable')); if(cb)cb(0); return; }
+      var total=0, chg=false; j.enveloppes.forEach(function(e){ var d=L.filter(function(x){return x.signEnv.token===e.token;})[0]; if(!d)return; var r=appliquer(d,d.signEnv,e); if(r.chg)chg=true; total+=r.nouv.length; if(r.nouv.length&&typeof toast==='function')toast('✍ Signé par le client : '+r.nouv.join(', ')+' — '+(cli(d).denomination||cli(d).denom||d.ref||'')); });
+      window.__signReleveTs=Date.now(); if(chg){ try{save();}catch(e){} try{ if(typeof state!=='undefined'&&state.page==='espace'&&typeof render==='function')render(); }catch(e){} } if(!silencieux&&!total&&typeof toast==='function')toast('Relevé effectué — aucune nouvelle signature.'); if(cb)cb(total); }); };
+  function armer(){ if(window.__signTimer)return; window.__signTimer=setInterval(function(){ try{ if(enAttente().length)signLienReleve(true); }catch(e){} },180000); }
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden){ try{ if(enAttente().length&&(Date.now()-(window.__signReleveTs||0))>60000)signLienReleve(true); }catch(e){} } });
+  setTimeout(function(){ try{ if(enAttente().length){ armer(); signLienReleve(true); } }catch(e){} },4000);
+
+  /* ---------- Affichage dans la carte « Signature des actes » ---------- */
+  function bloc(d){ var env=d.signEnv; var L=nonSignes(d); var ok=!!gw(); var sg=signataire(d), c=cli(d);
+    if(!env||env.statut==='annule'||env.statut==='inconnu'||(env.statut==='signe'&&!L.length)){ if(!L.length)return ''; return '<div class="sl-box"><div class="sl-t"><b>📱 Signature sur téléphone</b><span>Le client reçoit un lien par e-mail'+(ok?'':' — passerelle à configurer')+', confirme son identité par un code à 6 chiffres, lit et signe au doigt.</span></div><div class="sl-btns">'+(ok?('<button type="button" class="btn btn-sm btn-pri" onclick="signLienEnvoyer(\''+d.id+'\')">Envoyer le lien de signature ('+L.length+')</button>'):('<button type="button" class="btn btn-sm btn-ghost" onclick="demSyncConfig&&demSyncConfig()">Configurer la passerelle</button>'))+(env&&env.statut==='annule'?'<span class="sl-note">Lien précédent annulé le '+E(frDT(env.annule))+'</span>':'')+'</div></div>'; }
+    var et=env.statut==='signe'?'Tous les actes de l\'enveloppe sont signés':(env.statut==='expire'?'Lien expiré — relancez pour prolonger':(env.ouvert?('Ouvert par le client le '+frDT(env.ouvert)+(env.verifieLe?(' · identité confirmée ('+E(env.verifieVia||'code')+') le '+frDT(env.verifieLe)):' · code non encore saisi')):('Envoyé le '+frDT(env.envoye)+(env.sms?' (e-mail + SMS)':' (e-mail)')+' · pas encore ouvert')));
+    var n=env.actes.length, s=env.actes.filter(function(k){return d.sign&&d.sign[k]&&d.sign[k].ok;}).length;
+    return '<div class="sl-box '+(env.statut==='signe'?'ok':(env.ouvert?'open':''))+'"><div class="sl-t"><b>📱 Lien de signature — '+s+' / '+n+' signé'+(s>1?'s':'')+'</b><span>'+et+(env.relances?(' · '+env.relances+' relance'+(env.relances>1?'s':'')):'')+(env.expire?(' · valable jusqu\'au '+E(new Date(env.expire).toLocaleDateString('fr-FR'))):'')+'<br>Destinataire : '+E(sg.nom)+(sg.email?(' · '+E(sg.email)):'')+(c.tel?(' · '+E(c.tel)):'')+'</span></div>'
+      +'<div class="sl-btns">'+(env.statut!=='signe'?('<button type="button" class="btn btn-sm btn-pri" onclick="signLienReleve(false)">Relever maintenant</button><button type="button" class="btn btn-sm btn-ghost" onclick="signLienRelancer(\''+d.id+'\')">Relancer</button><button type="button" class="btn btn-sm btn-ghost" onclick="signLienCopier(\''+d.id+'\')">Copier le lien</button><button type="button" class="btn btn-sm btn-ghost" onclick="signLienAnnuler(\''+d.id+'\')">Annuler le lien</button>'):('<button type="button" class="btn btn-sm btn-ghost" onclick="signLienCopier(\''+d.id+'\')">Copier le lien</button>'))+'</div></div>'; }
+  function peindre(){ try{ if(typeof state==='undefined'||state.page!=='espace')return; var d=doss(state.espaceDossier); if(!d)return; var card=document.querySelector('.esp-tabpanel[data-tab="actes"] .act-card'); if(!card)return; var old=card.querySelector('.sl-box'); var html=bloc(d);
+    if(old){ if(!html){old.remove();return;} var t=document.createElement('div'); t.innerHTML=html; old.replaceWith(t.firstChild); return; } if(!html)return; var t2=document.createElement('div'); t2.innerHTML=html; var sg=card.querySelector('.act-sg'); if(sg)sg.insertAdjacentElement('afterend',t2.firstChild); else card.querySelector('.card-b').insertBefore(t2.firstChild,card.querySelector('.card-b').firstChild); }catch(e){} }
+  try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var out=_r.apply(this,arguments); try{ peindre(); }catch(e){} return out; }; } }catch(e){}
+
+  var st=document.createElement('style'); st.id='sl-mod'; st.textContent=
+    '.sl-box{margin:8px 0 12px;padding:10px 12px;border:1px solid rgba(79,157,255,.45);border-radius:10px;background:rgba(79,157,255,.06)}.sl-box.open{border-color:rgba(224,161,0,.5)}.sl-box.ok{border-color:rgba(63,191,127,.5)}.sl-t b{display:block;font-size:13px;margin-bottom:3px}.sl-t span{font-size:12px;color:#aeb6c2!important;line-height:1.45}.sl-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}.sl-btns .btn{width:auto}.sl-note{font-size:11.5px;color:#8d95a5!important}';
   document.head.appendChild(st);
 })();
 </script>
