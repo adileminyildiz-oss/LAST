@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=603;
+var LAST_VER=604;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -23229,7 +23229,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     if(d.mutS==null)d.mutS='1.00';
     if(d.mutP==null)d.mutP='1.50';
     if(d.pas==null)d.pas='0.00';
-    if(d.reduc==null)d.reduc='0';
+    if(d.reduc==null)d.reduc='';
     if(d.navBase==null)d.navBase='';
     if(d.navPct==null)d.navPct='50';
     if(d.eff==null)d.eff='<11';
@@ -23291,11 +23291,21 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
        frais professionnels en sont exclus. */
     var netSocial=r2(brut+mutPatMt-totSal);
     var netAPayer=r2(netAvantImpot-pas);
-    var reduc=num(d.reduc);
+    /* Réduction générale des cotisations patronales : même formule que le modèle 2026 —
+       coefficient T selon l'effectif, dégressif jusqu'au plafond d'application (en SMIC),
+       proratisé par les heures travaillées. Vide ou 0 = calcul ; un montant = valeur
+       forcée ; « non » = aucune réduction. */
+    var rv=String(d.reduc==null?'':d.reduc).trim().toLowerCase(), reduc=0, reducAuto=false, reducCoef=0;
+    if(/^(non|aucune?)$/.test(rv)) reduc=0;
+    else if(rv!=='' && num(rv)!==0) reduc=num(rv);
+    else { reducAuto=true;
+      var T=e50?(+B26.rgT50||0.3233):(+B26.rgT||0.3193), seuilRg=+B26.rgSeuil||1.6, hTrav=r2(heures-(d.abs||[]).reduce(function(a,x){return a+num(x.h);},0));
+      if(brut>0 && brut<smicM*seuilRg && T>0){ var coef=Math.min(T,(T/0.6)*(seuilRg*hTrav*PARAM.smic/brut-1));
+        if(coef>0){ reducCoef=coef; reduc=r2(brut*coef); } } }
     var coutEmp=r2(brut+totPat+navMt-reduc);
     return {salBase:salBase,absLines:absLines,absMt:absMt,brut:brut,csgBase:csgBase,plaf:plaf,navMt:navMt,mutPatMt:mutPatMt,aut:aut,autMt:autMt,
       lignes:lignes,totSal:totSal,totSalDed:totSalDed,totPat:totPat,netImp:netImp,
-      netAvantImpot:netAvantImpot,pasTaux:pasTaux,pas:pas,netSocial:netSocial,netAPayer:netAPayer,reduc:reduc,coutEmp:coutEmp,byCode:byCode};
+      netAvantImpot:netAvantImpot,pasTaux:pasTaux,pas:pas,netSocial:netSocial,netAPayer:netAPayer,reduc:reduc,reducAuto:reducAuto,reducCoef:reducCoef,coutEmp:coutEmp,byCode:byCode};
   }
   window.paieExactCompute=compute;
 
@@ -23363,6 +23373,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +K.map(function(k){ var x=a[k]; return '<div class="pe-taux-r"><span>'+E(x.lib)+'</span><span>'+ft(x.tx).replace('.',',')+'</span><span>'+fr(x.mt)+'</span></div>'; }).join('')
       +'<div class="pe-taux-r"><span><b>Total</b></span><span>'+ft(r.brut?r.autMt/r.brut*100:0).replace('.',',')+'</span><span><b>'+fr(r.autMt)+'</b></span></div></div>'
       +'<div class="pe-taux-n">Le bulletin n\u2019offre qu\u2019un rang : ces contributions y figurent agrégées, au taux équivalent sur le brut.</div></div></div>'; }
+  function reducNote(d){ var r=compute(d); if(!r.reducAuto) return '<div class="pe-taux-n">Réduction générale '+(r.reduc?'forcée à '+fr(r.reduc)+' €':'désactivée')+' — videz le champ pour revenir au calcul.</div>';
+    return '<div class="pe-taux-n">Calculée comme sur le modèle 2026 : '+(r.reduc?('coefficient '+(Math.round(r.reducCoef*10000)/10000).toFixed(4).replace('.',',')+' × brut = <b>'+fr(r.reduc)+' €</b>'):'brut au-delà de '+(+(window.BAR26||{}).rgSeuil||1.6).toFixed(1).replace('.',',')+' SMIC : aucune réduction')+'.</div>'; }
   function tauxAuto(d){ var r=compute(d), L=r.byCode;
     var li=[['Sécurité sociale plafonnée','6,9000','8,5500'],
             ['Sécurité sociale déplafonnée','0,4000','2,0200'],
@@ -23397,7 +23409,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +grp('Congés payés', row('CP N-1 (acquis / pris / solde)',fld('cp.n1a',d.cp.n1a,'acq','style="width:31%;display:inline-block"')+' '+fld('cp.n1p',d.cp.n1p,'pris','style="width:31%;display:inline-block"')+' '+fld('cp.n1s',d.cp.n1s,'solde','style="width:31%;display:inline-block"'))+row('CP N (acquis / pris / solde)',fld('cp.na',d.cp.na,'acq','style="width:31%;display:inline-block"')+' '+fld('cp.np',d.cp.np,'pris','style="width:31%;display:inline-block"')+' '+fld('cp.ns',d.cp.ns,'solde','style="width:31%;display:inline-block"')))
       +grp('Montants à payer', row('Taux horaire (€)',fld('tauxH',d.tauxH,f2(PARAM.smic)))+row('Heures du mois',fld('heures',d.heures,'151.67'))+row('Transport — base remboursée (€)',fld('navBase',d.navBase,'0')))
       +absEditor(d)
-      +grp('Taux (pré-remplis — modifiables)', row('Accident du travail — AT/MP (%)',fld('at',d.at,'0.70'))+row('Mutuelle — part salariale (%)',fld('mutS',d.mutS,'1.00'))+row('Mutuelle — part patronale (%)',fld('mutP',d.mutP,'1.50'))+row('Transport — prise en charge (%)',fld('navPct',d.navPct,'50'))+row('Prélèvement à la source (%)',fld('pas',d.pas,'0.00'))+row('Réduction générale employeur (€)',fld('reduc',d.reduc,'0'))
+      +grp('Taux (pré-remplis — modifiables)', row('Accident du travail — AT/MP (%)',fld('at',d.at,'0.70'))+row('Mutuelle — part salariale (%)',fld('mutS',d.mutS,'1.00'))+row('Mutuelle — part patronale (%)',fld('mutP',d.mutP,'1.50'))+row('Transport — prise en charge (%)',fld('navPct',d.navPct,'50'))+row('Prélèvement à la source (%)',fld('pas',d.pas,'0.00'))+row('Réduction générale employeur (€) — vide : calculée · « non » : aucune',fld('reduc',d.reduc,'auto'))+reducNote(d)
         +row('Effectif de l\u2019entreprise',selfld('eff',d.eff,[['<11','Moins de 11 salariés'],['11-49','De 11 à 49 salariés'],['>=50','50 salariés ou plus']]))
         +row('Versement mobilité (%)',fld('vm',d.vm,'0'))
         +row('Formation professionnelle (%)',fld('forma',d.forma,'auto'))
