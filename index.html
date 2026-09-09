@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=610;
+var LAST_VER=611;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -36402,6 +36402,70 @@ function testLienRdv()  {
           try{ if(n && typeof edRepaint==='function') edRepaint(id); document.querySelectorAll('input,textarea,select').forEach(function(inp){ var mm=(inp.getAttribute('oninput')||inp.getAttribute('onchange')||'').match(/edLibField\('([^']*)','([^']+)'/); if(mm&&mm[1]===id&&m[mm[2]]&&keys[mm[2]]&&inp!==document.activeElement) inp.value=m[mm[2]]; }); }catch(e){}
           if(n) ok(o); }); }
       return r; }; window.edLibField.__aem=1; } }catch(e){}
+})();
+</script>
+
+<script>
+/* ── Modules en pause ────────────────────────────────────────────────────────
+   Un module mis en pause reste visible mais grisé et inutilisable : entrée de
+   menu estompée, page recouverte d'un voile qui bloque toute action, bandeau
+   « en pause », automatisations arrêtées (relève des mails, notifications).
+   La pause se lève dans Paramètres → Modules en pause. */
+(function(){
+  if(window.__modPause) return; window.__modPause=1;
+  var LBL={demandes:'Demandes',agenda:'Agenda',conformite:'Fiscal',espace:'Traitement',formulaire:'Formulaire',editions:'Éditions',clients:'Clients',facturier:'Factures prestataires',services:'Services'};
+  function cfg(){ DB.parametres=DB.parametres||{}; var p=DB.parametres;
+    if(!p.modulesPause){ p.modulesPause={demandes:1,agenda:1,conformite:1}; try{save();}catch(e){} }
+    return p.modulesPause; }
+  function paused(id){ try{ return !!cfg()[id]; }catch(e){ return false; } }
+  window.modEnPause=paused;
+  window.modPauseSet=function(id,on){ var c=cfg(); if(on) c[id]=1; else delete c[id]; try{save();}catch(e){} render();
+    if(typeof toast==='function') toast((LBL[id]||id)+(on?' mis en pause — grisé et inutilisable.':' réactivé.')); };
+  /* menu : entrées grisées, étiquette « en pause » */
+  function paintNav(){ try{ var nav=document.getElementById('nav'); if(!nav) return;
+    nav.querySelectorAll('button.nav-btn').forEach(function(b){ var m=(b.getAttribute('onclick')||'').match(/go\('([^']+)'\)/); if(!m) return;
+      var on=paused(m[1]); b.classList.toggle('nav-pause',on);
+      var tag=b.querySelector('.nav-pause-tag');
+      if(on&&!tag){ tag=document.createElement('span'); tag.className='nav-soon nav-pause-tag'; tag.textContent='en pause'; b.appendChild(tag); }
+      if(!on&&tag) tag.remove();
+      if(on) b.title='Module en pause — grisé, aucune action possible'; }); }catch(e){} }
+  try{ var _bn=window.buildNav; if(typeof _bn==='function'&&!_bn.__pause){ window.buildNav=function(){ var r=_bn.apply(this,arguments); paintNav(); return r; }; window.buildNav.__pause=1; } }catch(e){}
+  /* page : contenu grisé sous un voile, bandeau, aucune action */
+  function paintView(){ try{ var V=document.getElementById('view'); if(!V) return; var id=state.page, on=paused(id);
+    var old=V.querySelector(':scope > .mod-pause-bar'); if(old) old.remove();
+    V.classList.toggle('mod-paused',on); document.body.classList.toggle('page-paused',on);
+    if(!on) return;
+    var bar=document.createElement('div'); bar.className='mod-pause-bar';
+    bar.innerHTML='<b>Module « '+(LBL[id]||id)+' » en pause</b> — tout est grisé et inutilisable : aucune saisie, aucun envoi, aucune relève automatique. '
+      +'<button class="btn btn-sm btn-ghost" onclick="modPauseSet(\''+id+'\',false)">Réactiver ce module</button>'
+      +'<button class="btn btn-sm btn-ghost" onclick="go(\'params\')">Paramètres</button>';
+    V.insertBefore(bar,V.firstChild); }catch(e){} }
+  try{ var _r=window.render; if(typeof _r==='function'&&!_r.__pause){ window.render=function(){ var x=_r.apply(this,arguments); paintNav(); paintView(); return x; }; window.render.__pause=1; } }catch(e){}
+  /* automatisations arrêtées tant que le module est en pause */
+  try{ var _ds=window.demSyncAuto; if(typeof _ds==='function'&&!_ds.__pause){ window.demSyncAuto=function(){ if(paused('demandes')) return; return _ds.apply(this,arguments); }; window.demSyncAuto.__pause=1; } }catch(e){}
+  try{ var _dm=window.demSyncMails; if(typeof _dm==='function'&&!_dm.__pause){ window.demSyncMails=function(silent){ if(paused('demandes')){ if(!silent&&typeof toast==='function') toast('Le module Demandes est en pause : aucune relève de la boîte.'); return; } return _dm.apply(this,arguments); }; window.demSyncMails.__pause=1; } }catch(e){}
+  try{ var _ag=window.agSyncNow; if(typeof _ag==='function'&&!_ag.__pause){ window.agSyncNow=function(){ if(paused('agenda')){ if(typeof toast==='function') toast('Le module Agenda est en pause.'); return; } return _ag.apply(this,arguments); }; window.agSyncNow.__pause=1; } }catch(e){}
+  /* Paramètres : carte des modules en pause */
+  function card(){ var ids=['demandes','espace','conformite','formulaire','editions','agenda','clients','facturier','services'];
+    var known=[]; try{ (window.PAGES||[]).forEach(function(p){ if(p&&p.id&&!p.hidden&&p.id!=='params'&&ids.indexOf(p.id)<0) ids.push(p.id); if(p&&p.id&&p.lbl) LBL[p.id]=LBL[p.id]||p.lbl; }); }catch(e){}
+    return '<div class="card mod-pause-card"><div class="card-h"><h3>Modules en pause</h3></div><div class="card-b">'
+      +'<div class="hint" style="margin:0 0 10px">Un module en pause reste visible mais grisé et inutilisable ; ses automatisations sont arrêtées. Décochez pour le réactiver.</div>'
+      +'<div class="mod-pause-grid">'+ids.map(function(id){ return '<label class="mod-pause-it'+(paused(id)?' on':'')+'"><input type="checkbox"'+(paused(id)?' checked':'')+' onchange="modPauseSet(\''+id+'\',this.checked)"><span>'+(LBL[id]||id)+'</span><em>'+(paused(id)?'en pause':'actif')+'</em></label>'; }).join('')+'</div></div></div>'; }
+  try{ var _pp=window.pageParams; if(typeof _pp==='function'&&!_pp.__pause){ window.pageParams=function(){ var h=_pp.apply(this,arguments); try{ if(typeof h==='string') h=card()+h; }catch(e){} return h; }; window.pageParams.__pause=1; } }catch(e){}
+  var CSS='.nav-btn.nav-pause{opacity:.42;filter:grayscale(1)}.nav-btn.nav-pause .nav-badge{display:none}'
+    +'.nav-pause-tag{margin-left:auto}'
+    +'#view.mod-paused{position:relative}'
+    +'#view.mod-paused>*:not(.mod-pause-bar){opacity:.38;filter:grayscale(1);pointer-events:none;user-select:none}'
+    +'.mod-pause-bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:12px 16px;border-radius:12px;'
+    +'background:rgba(214,158,62,.14);border:1px solid rgba(214,158,62,.45);color:#f0d9a8;font-size:13px}'
+    +'.mod-pause-bar b{color:#ffe1a6}.mod-pause-bar .btn{margin-left:auto}.mod-pause-bar .btn+.btn{margin-left:0}'
+    +'.mod-pause-card .card-h h3{margin:0;font-size:14px}'
+    +'.mod-pause-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}'
+    +'.mod-pause-it{display:flex;align-items:center;gap:8px;padding:9px 11px;border:1px solid rgba(255,255,255,.12);border-radius:10px;cursor:pointer;font-size:13px}'
+    +'.mod-pause-it.on{border-color:rgba(214,158,62,.5);background:rgba(214,158,62,.1)}'
+    +'.mod-pause-it em{margin-left:auto;font-style:normal;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.6}.mod-pause-it.on em{color:#e8c37a;opacity:1}';
+  try{ var st=document.createElement('style'); st.id='mod-pause-css'; st.textContent=CSS; document.head.appendChild(st); }catch(e){}
+  try{ paintNav(); paintView(); }catch(e){}
 })();
 </script>
 
