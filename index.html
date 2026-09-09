@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=616;
+var LAST_VER=617;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -37058,6 +37058,120 @@ function testLienRdv()  {
   try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var out=_r.apply(this,arguments); try{ peindre(); }catch(e){} return out; }; } }catch(e){}
   var st=document.createElement('style'); st.id='rg-mod'; st.textContent=
     '.rg-band{border-color:rgba(224,161,0,.55)!important;margin-bottom:12px}.rg-band.ok{border-color:rgba(63,191,127,.45)!important}.rg-band .card-b{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12.5px}.rg-ic{font-size:20px;color:#e0a100!important;line-height:1}.rg-t{flex:1;min-width:240px}.rg-btns{display:flex;gap:6px;flex-wrap:wrap}.rg-avant{flex-basis:100%;font-size:11.5px;color:#8d95a5!important}';
+  document.head.appendChild(st);
+})();
+</script>
+
+<script>
+/* ===== yada.js — Pont Mar'q → YADA : ventes, factures prestataires et paie en écritures (v617) =====
+   Page « Export YADA » (Système). Mar'q produit un FEC standard (tabulations, dates AAAAMMJJ,
+   décimales à virgule) que YADA importe via Import / Export FEC → « Intégrer dans le dossier
+   courant ». Trois flux : factures émises (journal VT : 411 / 706 / 44571), factures prestataires
+   (module existant, journal ACHATS) et OD de paie 2026 par mois (journal OD « PAIE » : 641 / 645 /
+   421 / 431 / 437 / 4421). Chaque export est journalisé et marque les éléments transmis. */
+(function(){
+  if(window.__aemYada) return; window.__aemYada=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function DBX(){ try{ return (typeof DB!=='undefined'&&DB)?DB:null; }catch(e){ return null; } }
+  function P(){ var B=DBX(); if(!B)return {}; B.parametres=B.parametres||{}; return B.parametres; }
+  function r2(x){ return Math.round((+x||0)*100)/100; }
+  function n(v){ var x=parseFloat(String(v==null?'':v).replace(/\s/g,'').replace(',','.')); return isNaN(x)?0:x; }
+  function eur(x){ return r2(x).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }
+  function fm(x){ x=r2(x); return (x?x.toFixed(2):'0.00').replace('.',','); }
+  function iso(d){ d=String(d||'').trim(); var m=d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); if(m)return m[3]+'-'+m[2]+'-'+m[1]; return d.slice(0,10); }
+  function fecD(d){ return iso(d).replace(/-/g,'').slice(0,8); }
+  function frD(d){ d=iso(d); return d?(d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4)):''; }
+  function todayISO(){ try{ if(typeof today==='function')return today(); }catch(e){} return new Date().toISOString().slice(0,10); }
+  function aux(pref,nom){ var s=String(nom||'').toUpperCase().normalize('NFD').replace(/[^A-Z0-9]/g,''); return (pref+(s.slice(0,4)||'DIV')).padEnd(9,'0').slice(0,9); }
+  var COLS=['JournalCode','JournalLib','EcritureNum','EcritureDate','CompteNum','CompteLib','CompAuxNum','CompAuxLib','PieceRef','PieceDate','EcritureLib','Debit','Credit','EcritureLet','DateLet','ValidDate','Montantdevise','Idevise'];
+  function row(j,jl,num,date,cpt,clib,ax,axl,piece,pdate,lib,d,c){ return [j,jl,num,fecD(date),cpt,clib,ax||'',axl||'',piece||'',fecD(pdate||date),lib,fm(d),fm(c),'','',fecD(date),'',''].join('\t'); }
+  function dl(name,content){ try{ window.yadaDernierFEC={nom:name,texte:content}; var b=new Blob([content],{type:'text/plain;charset=utf-8'}); var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name; document.body.appendChild(a); a.click(); setTimeout(function(){ try{URL.revokeObjectURL(a.href);}catch(e){} a.remove(); },600); }catch(e){ if(typeof toast==='function')toast('Téléchargement impossible.'); } }
+  function journal(type,n,fichier,lignes,detail){ var p=P(); p.yadaExports=p.yadaExports||[]; p.yadaExports.unshift({ts:Date.now(),type:type,n:n,fichier:fichier,lignes:lignes,detail:detail||''}); if(p.yadaExports.length>60)p.yadaExports.length=60; }
+
+  /* ---------- 1. Ventes (factures émises par le facturier) ---------- */
+  function factures(){ var p=P(); return Array.isArray(p.facturier)?p.facturier:[]; }
+  window.yadaVentesEnAttente=function(){ return factures().filter(function(f){ return f.statut==='emise'&&!f.yadaTransmis; }); };
+  window.yadaVentesTransmises=function(){ return factures().filter(function(f){ return f.statut==='emise'&&f.yadaTransmis; }); };
+  function calcF(f){ try{ if(typeof invCalc==='function')return invCalc(f); }catch(e){} var st=0; (f.lignes||[]).forEach(function(l){ st+=n(l.qte)*n(l.pu); }); st=r2(st); var rate=(f.franchiseTVA||f.autoliq)?0:n(f.tva); var tva=r2(st*rate/100); var rem=n(f.remise); return {sousTotal:st,tva:tva,tvaRate:rate,remise:rem,total:r2(st+tva-rem)}; }
+  window.yadaLignesVente=function(f){ var c=calcF(f); var ht=r2(c.sousTotal-c.remise); var L=[];
+    L.push({cpt:aux('411',f.clNom),clib:'Clients',ax:aux('411',f.clNom),axl:f.clNom||'Client',d:c.total,c:0});
+    L.push({cpt:'706000000',clib:'Prestations de services',d:0,c:ht});
+    if(c.tva>0) L.push({cpt:'445710000',clib:'TVA collectée',d:0,c:c.tva});
+    var sd=r2(L.reduce(function(a,l){return a+l.d;},0)), sc=r2(L.reduce(function(a,l){return a+l.c;},0)); if(Math.abs(sd-sc)>=0.005){ L[1].c=r2(L[1].c+(sd-sc)); }
+    return L; };
+  window.yadaExportVentes=function(){ var arr=yadaVentesEnAttente(); if(!arr.length){ if(typeof toast==='function')toast('Aucune facture émise en attente de transmission.'); return; }
+    var out=[COLS.join('\t')], k=0; arr.forEach(function(f){ k++; var num='V'+String(k).padStart(5,'0'); var lib='Facture '+(f.numero||'')+' · '+(f.clNom||''); yadaLignesVente(f).forEach(function(l){ out.push(row('VT','VENTES',num,iso(f.dateEmise),l.cpt,l.clib,l.ax,l.axl,f.numero,iso(f.dateEmise),lib,l.d,l.c)); }); f.yadaTransmis=new Date().toISOString(); });
+    var nom='YADA-ventes-'+todayISO()+'.txt'; dl(nom,out.join('\r\n')); journal('ventes',arr.length,nom,out.length-1,arr.map(function(f){return f.numero;}).join(', ')); try{save();}catch(e){} if(typeof render==='function')render();
+    if(typeof toast==='function')toast(arr.length+' facture(s) de vente exportée(s) en FEC — à importer dans YADA (Import / Export FEC).'); };
+  window.yadaVenteAnnuler=function(id){ var f=factures().filter(function(x){return x.id===id;})[0]; if(!f)return; delete f.yadaTransmis; try{save();}catch(e){} if(typeof render==='function')render(); };
+
+  /* ---------- 2. Paie 2026 : OD de paie par mois ---------- */
+  var URSSAF={mal:1,at:1,vp:1,vd:1,fam:1,chom:1,ags:1,fnal:1,csa:1,dial:1,forma:1,appr:1,vm:1,csgd:1,csgn:1,red:1}, RETR={t1:1,t2:1,cet:1,apec:1}, PREV={prev:1,prevc:1,mut:1};
+  var ML=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  function paieRoot(){ var B=DBX(); return (B&&B.paie26&&B.paie26.annees)?B.paie26.annees:{}; }
+  function rempli(x,m){ var e=(x.mois||{})[m]||{}; return n(e.heures)>0&&n(e.taux)>0; }
+  function calcSal(A,x,m){ var par={}; Object.keys(A.par||{}).forEach(function(k){ par[k]=A.par[k]; }); Object.keys(x.par||{}).forEach(function(k){ if(x.par[k]!==''&&x.par[k]!=null)par[k]=x.par[k]; });
+    try{ return window.paie26CalcData({emp:A.emp||{},sal:x.sal||{},par:par,el:x.mois[m],modele:A.modele||'2026'}); }catch(e){ return null; } }
+  window.yadaPaieMois=function(){ var out=[]; var R=paieRoot(); Object.keys(R).sort().forEach(function(an){ var A=R[an]; var tr=A.transmisYada||{};
+    for(var i=0;i<12;i++){ var m=String(i+1).padStart(2,'0'); var sals=(A.salaries||[]).filter(function(x){return rempli(x,m);}); if(!sals.length)continue;
+      var agg={an:an,m:m,lib:ML[i]+' '+an,nb:sals.length,brut:0,indem:0,pat:0,net:0,pas:0,urssaf:0,retr:0,prev:0,transmis:tr[m]||null,noms:[]};
+      sals.forEach(function(x){ var r=calcSal(A,x,m); if(!r)return; agg.noms.push((x.sal&&x.sal.nom)||'salarié'); agg.brut=r2(agg.brut+r.brut); agg.indem=r2(agg.indem+r.panier+r.indemn); agg.pat=r2(agg.pat-r.totPat); agg.net=r2(agg.net+r.netPay); agg.pas=r2(agg.pas-r.pas);
+        (r.lignes||[]).forEach(function(l){ var v=r2(-(l.ms||0)-(l.mp||0)); if(URSSAF[l.code])agg.urssaf=r2(agg.urssaf+v); else if(RETR[l.code])agg.retr=r2(agg.retr+v); else if(PREV[l.code])agg.prev=r2(agg.prev+v); else agg.urssaf=r2(agg.urssaf+v); }); });
+      out.push(agg); } }); return out; };
+  window.yadaLignesPaie=function(a){ var L=[]; var lib='OD PAIE '+a.m+'/'+a.an;
+    L.push({cpt:'641100000',clib:'Salaires, appointements',d:a.brut,c:0}); if(a.indem>0)L.push({cpt:'641400000',clib:'Indemnités et avantages divers',d:a.indem,c:0}); L.push({cpt:'645000000',clib:'Charges de sécurité sociale et de prévoyance (part patronale)',d:a.pat,c:0});
+    L.push({cpt:'421000000',clib:'Personnel — rémunérations dues',d:0,c:a.net}); L.push({cpt:'431000000',clib:'URSSAF',d:0,c:a.urssaf}); if(a.retr)L.push({cpt:'437300000',clib:'Caisses de retraite (Agirc-Arrco)',d:0,c:a.retr}); if(a.prev)L.push({cpt:'437200000',clib:'Prévoyance et complémentaire santé',d:0,c:a.prev}); if(a.pas)L.push({cpt:'442100000',clib:'Prélèvement à la source',d:0,c:a.pas});
+    var sd=r2(L.reduce(function(s,l){return s+l.d;},0)), sc=r2(L.reduce(function(s,l){return s+l.c;},0)); if(Math.abs(sd-sc)>=0.005){ var u=L.filter(function(l){return l.cpt==='431000000';})[0]; u.c=r2(u.c+(sd-sc)); }
+    L.forEach(function(l){ l.lib=lib; }); return L; };
+  window.yadaExportPaie=function(cle){ var arr=yadaPaieMois().filter(function(a){ return cle?((a.an+'-'+a.m)===cle):!a.transmis; }); if(!arr.length){ if(typeof toast==='function')toast('Aucun mois de paie en attente de transmission.'); return; }
+    var out=[COLS.join('\t')], k=0; arr.forEach(function(a){ k++; var num='P'+a.an+a.m; var fin=new Date(+a.an,+a.m,0).getDate(); var date=a.an+'-'+a.m+'-'+String(fin).padStart(2,'0'); yadaLignesPaie(a).forEach(function(l){ out.push(row('OD','OD PAIE',num,date,l.cpt,l.clib,'','','PAIE'+a.m+a.an,date,l.lib,l.d,l.c)); });
+      var A=paieRoot()[a.an]; A.transmisYada=A.transmisYada||{}; A.transmisYada[a.m]={ts:Date.now(),nb:a.nb,brut:a.brut,net:a.net}; });
+    var nom='YADA-paie-'+(arr.length===1?(arr[0].an+'-'+arr[0].m):todayISO())+'.txt'; dl(nom,out.join('\r\n')); journal('paie',arr.length,nom,out.length-1,arr.map(function(a){return a.lib;}).join(', ')); try{save();}catch(e){} if(typeof render==='function')render();
+    if(typeof toast==='function')toast(arr.length+' mois de paie exporté(s) en FEC (OD de paie) — à importer dans YADA.'); };
+  window.yadaPaieAnnuler=function(an,m){ var A=paieRoot()[an]; if(A&&A.transmisYada)delete A.transmisYada[m]; try{save();}catch(e){} if(typeof render==='function')render(); };
+
+  /* ---------- 3. Factures prestataires (module existant) ---------- */
+  function fpList(){ var p=P(); return (p.factPresta&&Array.isArray(p.factPresta.list))?p.factPresta.list:[]; }
+  window.yadaPrestaEnAttente=function(){ return fpList().filter(function(f){return f.statut==='ecriture';}); };
+  window.yadaExportPresta=function(){ if(typeof window.fpExportFEC==='function'){ var n0=yadaPrestaEnAttente().length; window.fpExportFEC(); if(n0)journal('prestataires',n0,'YADA-factures-prestataires-'+todayISO()+'.txt',0,''); try{save();}catch(e){} if(typeof render==='function')render(); } else if(typeof toast==='function')toast('Module Factures prestataires indisponible.'); };
+
+  /* ---------- Tout exporter ---------- */
+  window.yadaExportTout=function(){ var nV=yadaVentesEnAttente().length, nP=yadaPaieMois().filter(function(a){return !a.transmis;}).length, nF=yadaPrestaEnAttente().length; if(!nV&&!nP&&!nF){ if(typeof toast==='function')toast('Rien en attente : tout est déjà transmis à YADA.'); return; }
+    if(nV)yadaExportVentes(); if(nP)setTimeout(yadaExportPaie,300); if(nF)setTimeout(yadaExportPresta,600); };
+
+  /* ---------- Page ---------- */
+  function card(t,sub,body,act){ return '<div class="card yd-card"><div class="card-h"><h2>'+t+'</h2><span class="sub" style="margin-left:auto">'+sub+'</span>'+(act||'')+'</div><div class="card-b">'+body+'</div></div>'; }
+  function tbl(head,rows){ return rows.length?('<table class="yd-t"><thead><tr>'+head.map(function(h){return '<th>'+h+'</th>';}).join('')+'</tr></thead><tbody>'+rows.join('')+'</tbody></table>'):'<div class="yd-empty">Rien en attente.</div>'; }
+  window.pageYada=function(){ var V=yadaVentesEnAttente(), VT=yadaVentesTransmises(), PM=yadaPaieMois(), PA=PM.filter(function(a){return !a.transmis;}), FP=yadaPrestaEnAttente(), FT=fpList().filter(function(f){return f.statut==='transmise';});
+    var tot=V.length+PA.length+FP.length;
+    var head='<div class="card yd-head"><div class="card-b"><div class="yd-kpis"><div class="yd-k"><b>'+V.length+'</b><span>factures de vente</span></div><div class="yd-k"><b>'+FP.length+'</b><span>factures prestataires</span></div><div class="yd-k"><b>'+PA.length+'</b><span>mois de paie</span></div><div class="yd-k tot"><b>'+tot+'</b><span>en attente</span></div></div>'
+      +'<div class="yd-how"><b>Comment ça marche.</b> Chaque bouton télécharge un fichier FEC (format officiel). Dans YADA : <b>Import / Export FEC → déposer le fichier → Intégrer dans le dossier courant</b>. YADA crée les tiers manquants, affecte les comptes auxiliaires et classe les journaux (VT → Ventes, ACHATS → Achats, « OD PAIE » → OD de paie).</div>'
+      +'<div class="yd-act"><button type="button" class="btn btn-pri" onclick="yadaExportTout()"'+(tot?'':' disabled')+'>Tout exporter ('+tot+')</button></div></div></div>';
+    var rv=V.map(function(f){ var c=calcF(f); return '<tr><td>'+E(f.numero||'')+'</td><td>'+E(f.clNom||'')+'</td><td>'+E(frD(f.dateEmise))+'</td><td class="r">'+E(eur(c.sousTotal-c.remise))+'</td><td class="r">'+E(eur(c.tva))+'</td><td class="r"><b>'+E(eur(c.total))+'</b></td></tr>'; });
+    var rvt=VT.slice(0,8).map(function(f){ var c=calcF(f); return '<tr class="done"><td>'+E(f.numero||'')+'</td><td>'+E(f.clNom||'')+'</td><td>'+E(frD(f.dateEmise))+'</td><td class="r" colspan="2">transmise le '+E(frD(f.yadaTransmis))+'</td><td class="r"><button type="button" class="btn btn-sm btn-ghost" onclick="yadaVenteAnnuler(\''+E(f.id)+'\')">à retransmettre</button></td></tr>'; });
+    var cV=card('Ventes — factures émises',V.length+' en attente · '+VT.length+' transmise(s)','<p class="hint">Journal VT : 411 client (TTC) / 706 prestations (HT) / 44571 TVA collectée. Les brouillons ne sont pas exportés.</p>'+tbl(['N°','Client','Date','HT','TVA','TTC'],rv.concat(rvt)),'<button type="button" class="btn btn-sm btn-pri" style="margin-left:8px" onclick="yadaExportVentes()"'+(V.length?'':' disabled')+'>Exporter le FEC des ventes</button>');
+    var rp=PM.map(function(a){ return '<tr'+(a.transmis?' class="done"':'')+'><td>'+E(a.lib)+'</td><td>'+a.nb+' — '+E(a.noms.join(', '))+'</td><td class="r">'+E(eur(a.brut))+'</td><td class="r">'+E(eur(a.pat))+'</td><td class="r"><b>'+E(eur(a.net))+'</b></td><td class="r">'+(a.transmis?('transmis le '+E(frD(new Date(a.transmis.ts).toISOString()))+' <button type="button" class="btn btn-sm btn-ghost" onclick="yadaPaieAnnuler(\''+a.an+'\',\''+a.m+'\')">à retransmettre</button>'):('<button type="button" class="btn btn-sm btn-pri" onclick="yadaExportPaie(\''+a.an+'-'+a.m+'\')">Exporter ce mois</button>'))+'</td></tr>'; });
+    var cP=card('Paie 2026 — OD de paie par mois',PA.length+' mois en attente','<p class="hint">Une OD par mois, tous salariés confondus : 641 brut / 6414 indemnités / 645 charges patronales = 421 net à payer / 431 URSSAF / 4373 Agirc-Arrco / 4372 prévoyance-mutuelle / 4421 PAS. Un mois est pris en compte dès qu\'un salarié a des heures et un taux.</p>'+tbl(['Mois','Salariés','Brut','Charges patronales','Net à payer',''],rp),'<button type="button" class="btn btn-sm btn-pri" style="margin-left:8px" onclick="yadaExportPaie()"'+(PA.length?'':' disabled')+'>Exporter les mois en attente</button>');
+    var rf=FP.map(function(f){ return '<tr><td>'+E(f.numero||'')+'</td><td>'+E(f.fournisseur||'')+'</td><td>'+E(frD(f.dateFact))+'</td><td class="r"><b>'+E(eur(n(f.ttc)))+'</b></td></tr>'; }).concat(FT.slice(0,6).map(function(f){ return '<tr class="done"><td>'+E(f.numero||'')+'</td><td>'+E(f.fournisseur||'')+'</td><td>'+E(frD(f.dateFact))+'</td><td class="r">transmise le '+E(frD((f.transmisLe||'').slice(0,10)))+'</td></tr>'; }));
+    var cF=card('Factures prestataires — achats',FP.length+' en attente · '+FT.length+' transmise(s)','<p class="hint">Écritures d\'achat générées dans le module Factures prestataires (journal ACHATS : 401 fournisseur / 6xx charge / 44566 TVA déductible).</p>'+tbl(['N°','Fournisseur','Date','TTC'],rf),'<button type="button" class="btn btn-sm btn-ghost" style="margin-left:8px" onclick="go(\'factpresta\')">Ouvrir le module</button><button type="button" class="btn btn-sm btn-pri" style="margin-left:6px" onclick="yadaExportPresta()"'+(FP.length?'':' disabled')+'>Exporter le FEC des achats</button>');
+    var H=(P().yadaExports||[]); var rh=H.slice(0,12).map(function(h){ var t={ventes:'Ventes',paie:'Paie',prestataires:'Prestataires'}[h.type]||h.type; return '<tr><td>'+E(new Date(h.ts).toLocaleString('fr-FR'))+'</td><td>'+E(t)+'</td><td>'+h.n+'</td><td>'+E(h.fichier||'')+'</td><td class="yd-det">'+E(h.detail||'')+'</td></tr>'; });
+    var cH=card('Historique des exports',H.length+' export(s)',tbl(['Date','Flux','Éléments','Fichier','Détail'],rh));
+    return '<div class="yd-wrap">'+head+cV+cP+cF+cH+'</div>'; };
+
+  /* ---------- Enregistrement de la page (Système, après Factures prestataires) ---------- */
+  try{ if(typeof PAGES!=='undefined'&&!PAGES.some(function(p){return p.id==='yada';})){ var i=PAGES.findIndex(function(p){return p.id==='factpresta';}); var entry={id:'yada',lbl:'Export YADA',ic:'card',sub:'Ventes, factures prestataires et paie → écritures YADA'}; if(i>=0)PAGES.splice(i+1,0,entry); else PAGES.push(entry); } }catch(e){}
+  function btn(){ try{ var nav=document.getElementById('nav'); if(!nav||nav.querySelector('[data-yadabtn]'))return; var after=nav.querySelector('[data-fpbtn]')||nav.querySelector('button.nav-btn[onclick*="clients"]'); var on=(typeof state!=='undefined'&&state.page==='yada')?' on':''; var ico=''; try{ if(typeof svg==='function'&&typeof IC!=='undefined'&&IC.card)ico=svg(IC.card); }catch(e){}
+    var b=document.createElement('button'); b.className='nav-btn'+on; b.setAttribute('data-yadabtn','1'); b.setAttribute('onclick',"go('yada')"); var nb=yadaVentesEnAttente().length+yadaPaieMois().filter(function(a){return !a.transmis;}).length+yadaPrestaEnAttente().length;
+    b.innerHTML=ico+'<span class="nav-btn-lbl">Export YADA</span>'+(nb?('<span class="yd-badge">'+nb+'</span>'):''); if(after&&after.parentNode)after.parentNode.insertBefore(b,after.nextSibling); else nav.appendChild(b); }catch(e){} }
+  try{ var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){ var r=_bn.apply(this,arguments); try{btn();}catch(e){} return r; }; } }catch(e){}
+  try{ var _rd=window.render; if(typeof _rd==='function'){ window.render=function(){ if(typeof state!=='undefined'&&state.page==='yada'){ try{buildNav();}catch(e){} try{document.body.dataset.page='yada';}catch(e){} var p=(typeof PAGES!=='undefined')?PAGES.filter(function(x){return x.id==='yada';})[0]:null; try{document.getElementById('ptitle').firstChild.textContent=(p&&p.lbl)||'Export YADA';}catch(e){} try{document.getElementById('psub').textContent=(p&&p.sub)||'';}catch(e){} var V=document.getElementById('view'); if(V)V.innerHTML=pageYada(); try{btn();}catch(e){} return; } return _rd.apply(this,arguments); }; } }catch(e){}
+
+  var st=document.createElement('style'); st.id='yd-mod'; st.textContent=
+    '.yd-wrap{display:flex;flex-direction:column;gap:14px;max-width:1180px}.yd-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}.yd-k{border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 12px}.yd-k b{display:block;font-size:22px;font-family:ui-monospace,Menlo,monospace}.yd-k span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8d95a5!important}.yd-k.tot{border-color:rgba(79,157,255,.5)}.yd-k.tot b{color:#5ab0ff!important}'
+   +'.yd-how{font-size:12.5px;line-height:1.5;color:#aeb6c2!important}.yd-how b{color:#fff!important}.yd-act{margin-top:12px}.yd-card .hint{font-size:12px;margin:0 0 10px;color:#8d95a5!important}'
+   +'.yd-t{width:100%;border-collapse:collapse;font-size:12.5px}.yd-t th{text-align:left;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#8d95a5!important;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.1)}.yd-t td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top}.yd-t td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.yd-t tr.done td{opacity:.6}.yd-t .yd-det{font-size:11px;color:#8d95a5!important;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+   +'.yd-empty{font-size:12.5px;color:#8d95a5!important;padding:6px 0}.yd-badge{margin-left:auto;font:600 10px ui-monospace,Menlo,monospace;background:#1e90ff;color:#fff!important;border-radius:999px;padding:1px 7px}'
+   +'@media(max-width:860px){.yd-kpis{grid-template-columns:1fr 1fr}}';
   document.head.appendChild(st);
 })();
 </script>
