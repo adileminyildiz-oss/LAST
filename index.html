@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=609;
+var LAST_VER=610;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -36311,6 +36311,97 @@ function testLienRdv()  {
           var first=host.querySelector('.hint'); if(first&&first.parentNode) first.parentNode.insertBefore(d,first); else host.insertBefore(d,host.firstChild); } }catch(e){}
       return r; }; window.demSyncConfig.__aem=1; } }catch(e){}
   try{ var st=document.createElement('style'); st.textContent='.aem-compte{border:1px solid rgba(120,170,255,.4);background:rgba(120,170,255,.08);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.5;margin-bottom:12px}.aem-compte-b{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}'; document.head.appendChild(st); }catch(e){}
+})();
+</script>
+
+<script>
+/* ── SIRET → toutes les informations de la société ───────────────────────────
+   Dès qu'un SIRET complet est saisi dans un document (facture, devis, facture
+   de situation, attestations, contrats…), Mar'q interroge le registre public
+   (recherche-entreprises.api.gouv.fr — INSEE + INPI, sans clé) et remplit
+   les cases : dénomination, forme, adresse de l'établissement, code postal,
+   ville, SIREN, n° de TVA intracommunautaire, code APE, ville du RCS. */
+(function(){
+  if(window.__aemSiret) return; window.__aemSiret=1;
+  var NJ={'1000':'Entreprise individuelle','5710':'SAS','5720':'SASU','5499':'SARL','5485':'SARL','5498':'EURL','6540':'SCI','6541':'SCI','5599':'SA','5505':'SA','9220':'Association','6220':'GIE','5306':'SNC','5202':'SNC','5410':'SARL','5460':'SARL','6598':'SEL','5385':'SELARL','5370':'SELAS'};
+  function tvaFr(siren){ var n=parseInt(siren,10); if(isNaN(n)) return ''; var k=(12+3*(n%97))%97; return 'FR'+(k<10?'0':'')+k+siren; }
+  var cache={};
+  window.aemSiretInfo=function(siret){
+    siret=String(siret||'').replace(/\D/g,'');
+    if(siret.length!==14) return Promise.reject(new Error('SIRET incomplet'));
+    if(cache[siret]) return Promise.resolve(cache[siret]);
+    var url='https://recherche-entreprises.api.gouv.fr/search?q='+siret+'&page=1&per_page=1';
+    return fetch(url,{cache:'no-store'}).then(function(r){ return r.json(); }).then(function(j){
+      var res=j&&j.results&&j.results[0]; if(!res) throw new Error('Aucune entreprise trouvée pour ce SIRET.');
+      var et=null; (res.matching_etablissements||[]).forEach(function(x){ if(String(x.siret)===siret) et=x; });
+      var sg=et||res.siege||{};
+      var rue=[sg.numero_voie,sg.indice_repetition,sg.type_voie,sg.libelle_voie].filter(Boolean).join(' ').trim();
+      if(!rue&&sg.adresse){ rue=(''+sg.adresse).replace(new RegExp('\\s*'+(sg.code_postal||'')+'.*$'),'').trim(); }
+      var o={siret:siret,siren:siret.slice(0,9),denom:res.nom_raison_sociale||res.nom_complet||'',
+        forme:NJ[res.nature_juridique]||'',nature:res.nature_juridique||'',ape:res.activite_principale||'',
+        adresse:rue,cp:sg.code_postal||'',ville:sg.libelle_commune||'',tva:tvaFr(siret.slice(0,9)),
+        siege:!!(res.siege&&String(res.siege.siret)===siret),creation:res.date_creation||'',
+        dirigeants:(res.dirigeants||[]).map(function(x){ return ((x.prenoms||'')+' '+(x.nom||'')).trim()||x.denomination||''; }).filter(Boolean)};
+      o.rcsVille=(res.siege&&res.siege.libelle_commune)||o.ville;
+      cache[siret]=o; return o; });
+  };
+  function ok(o){ if(typeof toast==='function') toast('Société renseignée depuis le SIRET — '+(o.denom||o.siret)+(o.forme?(' ('+o.forme+')'):'')+'.'); }
+  function ko(e){ if(typeof toast==='function') toast((e&&e.message)||'Recherche SIRET indisponible (connexion requise).'); }
+  var timers={};
+  function lorsque14(key,val,fn){ var d=String(val||'').replace(/\D/g,''); clearTimeout(timers[key]);
+    if(d.length!==14||(typeof validSiret==='function'&&!validSiret(d))) return;
+    timers[key]=setTimeout(function(){ window.aemSiretInfo(d).then(fn).then(null,ko); },350); }
+
+  /* 1. Application Factures (FactureVente) : coordonnées du client */
+  try{ var FV=window.FactureVente; if(FV && typeof FV._siret==='function' && !FV._siret.__aem){
+    var _s=FV._siret; FV._siret=function(val){ var r=_s.apply(this,arguments);
+      lorsque14('fv',val,function(o){
+        var map={clientNom:o.denom,clientAdresse:o.adresse,clientCP:o.cp,clientVille:o.ville};
+        Object.keys(map).forEach(function(k){ if(map[k]) FV._setS(k,map[k]); });
+        Object.keys(map).forEach(function(k){ var inp=document.querySelector('#fv-form input[oninput*="\''+k+'\'"]'); if(inp&&map[k]) inp.value=map[k]; });
+        ok(o); });
+      return r; }; FV._siret.__aem=1; } }catch(e){}
+
+  /* 1 bis. Application Factures (module facturier) : émetteur (emSiret) et client (clSiret) */
+  document.addEventListener('input',function(ev){ try{ var t=ev.target; if(!t||!t.id) return;
+    if(t.id!=='inv-emSiret'&&t.id!=='inv-clSiret') return; var em=(t.id==='inv-emSiret');
+    lorsque14(t.id,t.value,function(o){
+      var adr=[o.adresse,(o.cp+' '+o.ville).trim()].filter(Boolean).join(', ');
+      var m=em?{emNom:o.denom,emForme:o.forme,emAdr:adr,emSiren:o.siren,emRcs:o.rcsVille,emApe:o.ape,emTva:o.tva}
+              :{clNom:o.denom,clAdr:adr,clTva:o.tva};
+      Object.keys(m).forEach(function(k){ var e=document.getElementById('inv-'+k); if(e&&m[k]) e.value=m[k]; });
+      try{ if(typeof invRefresh==='function') invRefresh(); }catch(e){}
+      ok(o); }); }catch(e){} },true);
+
+  /* 2. Éditions — facture, facture de situation, facture d'acompte, devis : émetteur ET client */
+  try{ var _pf=window.pfFactSet; if(typeof _pf==='function' && !_pf.__aem){
+    window.pfFactSet=function(k,v){ var r=_pf.apply(this,arguments);
+      if(k==='cli.siret'||k==='emet.siret'){ var pre=k.split('.')[0];
+        lorsque14('pf-'+pre,v,function(o){
+          var m=(pre==='cli')?{'cli.nom':o.denom,'cli.adresse':o.adresse,'cli.cp':o.cp,'cli.ville':o.ville,'cli.tva':o.tva}
+                             :{'emet.denom':o.denom,'emet.forme':o.forme,'emet.adresse':o.adresse,'emet.cp':o.cp,'emet.ville':o.ville,'emet.tva':o.tva,'emet.ape':o.ape};
+          Object.keys(m).forEach(function(kk){ if(m[kk]) _pf(kk,m[kk]); });
+          try{ if(typeof window.pfFactRender==='function') window.pfFactRender(); }catch(e){}
+          ok(o); }); }
+      return r; }; window.pfFactSet.__aem=1; } }catch(e){}
+
+  /* 3. Autres modèles d'Éditions ayant un champ SIRET (attestations, certificat,
+        solde de tout compte, contrats, registre…) : les cases voisines se remplissent */
+  try{ var _ef=window.edLibField; if(typeof _ef==='function' && !_ef.__aem){
+    window.edLibField=function(id,key,val){ var r=_ef.apply(this,arguments);
+      if(key==='siret'||key==='stSiret'||key==='ep_siret'){
+        lorsque14('ed-'+id+'-'+key,val,function(o){
+          var pre=(key==='stSiret')?'st':(key==='ep_siret')?'ep_':'';
+          var m=pre==='st'?{stNom:o.denom,stForme:o.forme,stAdresse:[o.adresse,o.cp,o.ville].filter(Boolean).join(', ')}
+               :pre==='ep_'?{ep_denom:o.denom,ep_forme:o.forme,ep_adresse:o.adresse,ep_cp:o.cp,ep_ville:o.ville,ep_siren:o.siren}
+               :{denomination:o.denom,soc:o.denom,cabinet:o.denom,forme:o.forme,adresse:o.adresse,adr:o.adresse,cabinetadr:[o.adresse,o.cp,o.ville].filter(Boolean).join(', '),siege:[o.adresse,o.cp,o.ville].filter(Boolean).join(', '),cp:o.cp,ville:o.ville,siren:o.siren,ape:o.ape,naf:o.ape,rcsVille:o.rcsVille,tva:o.tva,tvaIntra:o.tva};
+          /* seules les cases prévues par le modèle sont remplies */
+          var keys={}; document.querySelectorAll('input,textarea,select').forEach(function(inp){ var mm=(inp.getAttribute('oninput')||inp.getAttribute('onchange')||'').match(/edLibField\('[^']*','([^']+)'/); if(mm) keys[mm[1]]=1; });
+          if(!Object.keys(keys).length) ['denomination','forme','adresse','cp','ville','siren','ape','rcsVille'].forEach(function(k){ keys[k]=1; });
+          var n=0; Object.keys(m).forEach(function(kk){ if(m[kk]&&keys[kk]){ _ef(id,kk,m[kk]); n++; } });
+          try{ if(n && typeof edRepaint==='function') edRepaint(id); document.querySelectorAll('input,textarea,select').forEach(function(inp){ var mm=(inp.getAttribute('oninput')||inp.getAttribute('onchange')||'').match(/edLibField\('([^']*)','([^']+)'/); if(mm&&mm[1]===id&&m[mm[2]]&&keys[mm[2]]&&inp!==document.activeElement) inp.value=m[mm[2]]; }); }catch(e){}
+          if(n) ok(o); }); }
+      return r; }; window.edLibField.__aem=1; } }catch(e){}
 })();
 </script>
 
