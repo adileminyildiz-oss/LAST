@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=614;
+var LAST_VER=615;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -36853,6 +36853,166 @@ function testLienRdv()  {
    +'.ff-tag{font:600 10px ui-monospace,Menlo,monospace;border-radius:999px;padding:1px 7px;border:1px solid}.ff-tag.ok{color:#3fbf7f!important;border-color:rgba(63,191,127,.45)}.ff-tag.warn{color:#e0a100!important;border-color:rgba(224,161,0,.45)}'
    +'html body .ff-fiche input.ff-auto,html body .ff-fiche select.ff-auto,html body .ff-fiche textarea.ff-auto{border-color:rgba(79,157,255,.6)!important;box-shadow:inset 0 0 0 1px rgba(79,157,255,.18)!important}'
    +'@media(max-width:1100px){.ff-grid{grid-template-columns:1fr}.ff-rail,.ff-side{position:static;max-height:none}.ff-rail{display:flex;flex-wrap:wrap;gap:2px}.ff-rail .h,.ff-prog{width:100%}}';
+  document.head.appendChild(st);
+})();
+</script>
+
+<script>
+/* ===== enreg.js — Le Formulaire est le module d'ENREGISTREMENT du dossier (v615) =====
+   1. Enregistrer depuis le Formulaire ouvre directement le Traitement à l'étape Pièces :
+      l'étape Demande est acquise (la demande, c'est l'enregistrement), la carte
+      « Enregistrement » rappelle ce qui a été saisi, sans ressaisie.
+   2. Pièces attendues préparées d'après la formalité et le Formulaire (à recevoir du
+      client / produites par Mar'q à une étape ultérieure / couvertes par le Formulaire).
+   3. « Modifier dans le Formulaire » : le dossier est repris dans le Formulaire et mis à
+      jour SUR PLACE (même dossier, même client, même numéro) ; les actes sont marqués
+      à régénérer.
+   4. Garde de cohérence bloquante à la génération : incohérences capital/parts/apports
+      et écart entre l'enregistrement et la fiche Client → documents non générés. */
+(function(){
+  if(window.__aemEnreg) return; window.__aemEnreg=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function has(f){ return typeof window[f]==='function'; }
+  function DBX(){ try{ return (typeof DB!=='undefined'&&DB)?DB:null; }catch(e){ return null; } }
+  function doss(id){ var B=DBX(); return ((B&&B.dossiers)||[]).filter(function(x){return x.id===id;})[0]; }
+  function cli(d){ try{ return clientById((d.clientIds||[])[0])||{}; }catch(e){ return {}; } }
+  function T(){ return has('today')?today():new Date().toISOString().slice(0,10); }
+  function num(v){ var n=parseFloat(String(v==null?'':v).replace(/\s/g,'').replace(',','.')); return isNaN(n)?null:n; }
+  function eur(n){ n=num(n); return n==null?'':n.toLocaleString('fr-FR',{maximumFractionDigits:2})+' €'; }
+  function nz(v){ return String(v==null?'':v).trim(); }
+  var FT={sas:'creation_sas',sasu:'creation_sas',sarl:'creation_sarl',eurl:'creation_sarl',sci:'creation_sci',
+          siege:'transfert_siege',dirigeant:'changement_dirigeant',cession:'cession',capital:'capital',denomination:'denomination',objet:'objet',dissolution:'dissolution',radiation:'dissolution'};
+  var MK={siege:'Transfert de siège social',dirigeant:'Changement de dirigeant',denomination:'Changement de dénomination',objet:'Changement d\'objet social',capital:'Modification de capital',transformation:'Transformation de la forme sociale',cession:'Cession de parts / d\'actions',dissolution:'Dissolution & mise en liquidation',radiation:'Clôture de liquidation & radiation',cloture:'Changement de date de clôture'};
+
+  /* ---------- 1. Atterrissage après enregistrement (création ET modification) ---------- */
+  function apresEnregistrement(dos,nature){
+    if(!dos)return;
+    dos.origine='formulaire'; dos.enregistreLe=dos.enregistreLe||Date.now();
+    var k=(nature==='modification')?(dos.modifKind||''):((dos.intake&&dos.intake.type)||dos.formalite||'');
+    if(FT[k]&&!dos.formaliteType) dos.formaliteType=FT[k];
+    dos.wf=(dos.wf&&typeof dos.wf==='object')?dos.wf:{}; dos.wf.__v6=1;
+    if(!dos.wf.demande){ dos.wf.demande=Date.now(); (dos.historique=dos.historique||[]).unshift({d:T(),t:'Étape « Demande » acquise : dossier enregistré par le Formulaire'}); }
+    try{ if(typeof state!=='undefined'){ state.page='espace'; state.espaceDossier=dos.id; state.espTab='pieces'; state.cliSel=''; } }catch(e){}
+  }
+  function idsDossiers(){ var B=DBX(); return ((B&&B.dossiers)||[]).map(function(x){return x.id;}); }
+  function idsClients(){ var B=DBX(); return ((B&&B.clients)||[]).map(function(x){return x.id;}); }
+
+  /* Mise à jour SUR PLACE quand le Formulaire reprend un dossier existant */
+  function fusionner(neuf,ancien,nouveauClientId){
+    var keep={id:ancien.id,ref:ancien.ref,numeroDossier:ancien.numeroDossier,numeroService:ancien.numeroService,createdAt:ancien.createdAt,clientIds:ancien.clientIds,serviceIds:ancien.serviceIds,
+      statut:ancien.statut,historique:ancien.historique||[],wf:ancien.wf,pieces:ancien.pieces,analyse:ancien.analyse,crea:ancien.crea,annonceLegale:ancien.annonceLegale,notesInternes:ancien.notesInternes,demandeId:ancien.demandeId,
+      enregistreLe:ancien.enregistreLe,origine:'formulaire',etapesFait:ancien.etapesFait,conformiteFait:ancien.conformiteFait,clotureDate:ancien.clotureDate,archived:ancien.archived,docCustom:ancien.docCustom};
+    Object.keys(ancien).forEach(function(k){ if(!(k in keep)) delete ancien[k]; });
+    Object.keys(neuf).forEach(function(k){ if(!(k in keep)) ancien[k]=neuf[k]; });
+    Object.keys(keep).forEach(function(k){ if(keep[k]!==undefined) ancien[k]=keep[k]; });
+    if(neuf.docCustom){ ancien.docCustom=Object.assign({},ancien.docCustom||{},neuf.docCustom); }
+    /* les actes déjà générés portent l'ancienne saisie : à régénérer */
+    var n=0; Object.keys(ancien.docs||{}).forEach(function(k){ if(ancien.docs[k]&&ancien.docs[k].genere){ ancien.docs[k].maj=Date.now(); ancien.docs[k].aRegenerer=true; n++; } });
+    ancien.modifieLe=Date.now();
+    ancien.historique.unshift({d:T(),t:'Enregistrement modifié depuis le Formulaire'+(n?(' — '+n+' document(s) à régénérer'):'')});
+    /* client : on garde la fiche existante, mise à jour avec la nouvelle saisie */
+    var c0=cli(ancien), c1=(DB.clients||[]).filter(function(x){return x.id===nouveauClientId;})[0];
+    if(c0&&c0.id&&c1){ Object.keys(c1).forEach(function(k){ if(k!=='id'&&k!=='createdAt') c0[k]=c1[k]; }); DB.clients=DB.clients.filter(function(x){return x.id!==c1.id;}); }
+    else if(c1){ ancien.clientIds=[c1.id]; }
+    return ancien;
+  }
+  function wrapCreate(name,nature){ var orig=window[name]; if(typeof orig!=='function'||orig.__enreg)return;
+    window[name]=function(ouvrirDocs){
+      var editId=window.__formEditId||''; var avantD=idsDossiers(), avantC=idsClients(); var ancien=editId?doss(editId):null;
+      var tn=window.formTakeDossierNum, ts=window.formTakeServiceNum;
+      if(ancien){ window.formTakeDossierNum=function(){ return ancien.ref||ancien.numeroDossier||(tn?tn():''); }; window.formTakeServiceNum=function(){ return ancien.numeroService||(ts?ts.apply(this,arguments):''); }; }
+      var out; try{ out=orig.apply(this,arguments); } finally{ if(ancien){ window.formTakeDossierNum=tn; window.formTakeServiceNum=ts; } }
+      try{
+        var neufs=(DB.dossiers||[]).filter(function(x){return avantD.indexOf(x.id)<0;}); var neuf=neufs[0]; if(!neuf)return out;
+        var nc=(DB.clients||[]).filter(function(x){return avantC.indexOf(x.id)<0;})[0];
+        var dos=neuf;
+        if(ancien){ dos=fusionner(neuf,ancien,nc&&nc.id); DB.dossiers=DB.dossiers.filter(function(x){return x.id!==neuf.id;}); window.__formEditId=''; if(typeof toast==='function')toast('Dossier '+(dos.ref||'')+' mis à jour depuis le Formulaire — même dossier, même client.'); }
+        apresEnregistrement(dos,nature);
+        try{save();}catch(e){} try{ if(typeof render==='function')render(); }catch(e){} try{ window.scrollTo(0,0); }catch(e){}
+      }catch(e){}
+      return out; };
+    window[name].__enreg=1; }
+  wrapCreate('formDoCreate','creation'); wrapCreate('formDoCreateModif','modification');
+
+  /* ---------- 3. Reprendre un dossier dans le Formulaire ---------- */
+  window.formReprendreDossier=function(id){ var d=doss(id); if(!d){ if(typeof toast==='function')toast('Dossier introuvable.'); return; }
+    var o;
+    if(d.formaliteNature==='modification'||(d.modif&&d.modif.kind)){ o={nature:'modification',type:'sas',modif:JSON.parse(JSON.stringify(d.modif||{})),societe:{},siege:{},direction:{},dirx:{},titres:{},dates:{},associes:[],contact:{email:(cli(d).email||''),tel:(cli(d).tel||'')},depot:{},apports:{},conjoint:{},cac:{},extra:{notes:d.notes||''},beneficiaires:[],profil:{}}; }
+    else { var i=d.intake||{}; o={nature:'creation',type:i.type||'sas',numeroDossier:d.ref||'',societe:Object.assign({},i.societe||{}),titres:Object.assign({},i.titres||{}),depot:Object.assign({},i.depot||{}),apports:Object.assign({},i.apports||{}),conjoint:Object.assign({},i.conjoint||{}),cac:Object.assign({},i.cac||{}),
+        beneficiaires:(i.beneficiaires||[]).map(function(b){return Object.assign({},b);}),siege:Object.assign({},i.siege||{}),direction:Object.assign({},i.direction||{}),associes:(i.associes||[]).map(function(a){return Object.assign({},a);}),contact:Object.assign({},i.contact||{}),
+        dirx:{},dates:{},extra:{notes:i.notes||d.notes||''},profil:{},modif:{kind:'siege',societe:{},dates:{},signataire:{},ancien:{},nouveau:{}}};
+      try{ var ex=(d.verif&&d.verif.extract)||{}; o.dirx={cp:ex.cpPerso||'',ville:ex.villePerso||'',typePiece:ex.typePiece||'',numPiece:ex.numPiece||''}; var dv=cli(d).docVars||{}; o.dirx.pereNom=dv.pereNom||''; o.dirx.mereNom=dv.mereNom||'';
+        o.dates={dateActe:dv.dateActe||'',villeSignature:dv.villeSignature||'',anneeExo:dv.anneeExo||'',finExo:dv.finExo||'',duree:dv.duree||'',clotureAnnuelle:dv.clotureAnnuelle||'',rcsVille:dv.rcsVille||''}; }catch(e){}
+      try{ if(d.etude) o.etude=JSON.parse(JSON.stringify(d.etude)); }catch(e){}
+      try{ if(d.registre) { o.extra.registre=d.registre; } }catch(e){}
+    }
+    window.__formData=o; window.__formEditId=d.id; window.__formFromDemande=null;
+    if(has('go'))go('formulaire'); else { state.page='formulaire'; render(); }
+    if(typeof toast==='function')toast('Dossier '+(d.ref||'')+' repris dans le Formulaire — l\'enregistrement sera mis à jour, sans nouveau dossier.'); };
+  window.formReprendreAnnuler=function(){ var id=window.__formEditId; window.__formEditId=''; window.__formData=null; if(id){ state.page='espace'; state.espaceDossier=id; state.espTab='demande'; } render(); };
+  function bandeauFormulaire(){ try{ if(typeof state==='undefined'||state.page!=='formulaire')return; var old=document.querySelector('#view .fi-edit-band'); var id=window.__formEditId; var d=id?doss(id):null;
+    if(!d){ if(old)old.remove(); return; }
+    var html='<div class="card fi-card fi-edit-band"><div class="card-b"><b>Modification de l\'enregistrement</b> — dossier <b>'+E(d.ref||'')+'</b> · '+E(has('dossierClients')?dossierClients(d):'')+'. À l\'enregistrement, ce dossier et sa fiche Client sont mis à jour (aucun nouveau dossier) ; les actes déjà générés seront à régénérer.<button type="button" class="btn btn-sm btn-ghost" onclick="formReprendreAnnuler()">Annuler et revenir au dossier</button></div></div>';
+    if(old){ old.outerHTML=html; } else { var host=document.querySelector('#view .ff-fiche')||document.querySelector('#view .fi-wrap'); if(host){ var tmp=document.createElement('div'); tmp.innerHTML=html; host.insertBefore(tmp.firstChild,host.firstChild); } }
+    var b1=document.getElementById('fi-save'), b2=document.getElementById('fi-save-doc'); if(b1)b1.textContent='Mettre à jour le dossier'; if(b2)b2.innerHTML='Mettre à jour &amp; ouvrir les documents'; }catch(e){} }
+
+  /* ---------- Écart enregistrement ↔ fiche Client, incohérences ---------- */
+  window.enregEcarts=function(d){ var out=[]; if(!d||!d.intake||d.formaliteNature==='modification'||(d.modif&&d.modif.kind))return out; var i=d.intake, c=cli(d); var s=i.societe||{}, si=i.siege||{}, dir=i.direction||{};
+    function cmp(l,a,b){ a=nz(a); b=nz(b); if(a&&b&&a.toLowerCase()!==b.toLowerCase()) out.push({l:l,form:a,client:b}); }
+    cmp('Dénomination',s.denomination,c.denomination||c.denom); var ca=num(s.capital), cb=num(c.capital); if(ca!=null&&cb!=null&&ca!==cb) out.push({l:'Capital social',form:eur(ca),client:eur(cb)});
+    cmp('Adresse du siège',si.rue,c.siege); cmp('Ville du siège',si.ville,c.ville); cmp('Dirigeant',((dir.prenom||'')+' '+(dir.nom||'')).trim(),c.president); return out; };
+  window.enregAligner=function(id){ var d=doss(id); if(!d)return; var c=cli(d); try{ if(has('lastIntakeToClient'))lastIntakeToClient(d.intake,c); var dir=(d.intake&&d.intake.direction)||{}; var p=((dir.prenom||'')+' '+(dir.nom||'')).trim(); if(p)c.president=p; }catch(e){} (d.historique=d.historique||[]).unshift({d:T(),t:'Fiche Client alignée sur l\'enregistrement du Formulaire'}); try{save();}catch(e){} try{closeModal();}catch(e){} render(); if(typeof toast==='function')toast('Fiche Client alignée sur l\'enregistrement.'); };
+  window.enregControle=function(d){ var pb=[]; try{ (window.dossierCoherence?dossierCoherence(d):[]).filter(function(x){return !x.ok;}).forEach(function(x){ pb.push({k:'coh',l:x.label||'Cohérence',d:(x.got!=null?(eur(x.got)+' ≠ '+eur(x.exp)):'')}); }); }catch(e){}
+    enregEcarts(d).forEach(function(x){ pb.push({k:'ecart',l:x.l,d:'Formulaire : '+x.form+' · Fiche Client : '+x.client}); }); return pb; };
+  function modalBlocage(d,pb){ var rows=pb.map(function(x){ return '<div class="fi-coh-row ko"><span class="fi-coh-ic">!</span><span class="fi-coh-l">'+E(x.l)+'</span><span class="fi-coh-v">'+E(x.d||'')+'</span></div>'; }).join('');
+    var ec=pb.some(function(x){return x.k==='ecart';});
+    var body='<div class="hint" style="margin:0 0 10px"><b>Génération bloquée.</b> '+pb.length+' point'+(pb.length>1?'s':'')+' à régler avant de produire les documents : ils doivent tous porter les mêmes informations que l\'enregistrement.</div><div class="fi-coh" style="margin-top:0">'+rows+'</div>';
+    var foot='<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'+(ec?'<button class="btn btn-ghost" onclick="enregAligner(\''+d.id+'\')">Aligner la fiche Client sur l\'enregistrement</button>':'')+'<button class="btn btn-pri" onclick="closeModal();formReprendreDossier(\''+d.id+'\')">Corriger dans le Formulaire</button>';
+    if(has('openModal'))openModal('Contrôle de cohérence — documents non générés',body,foot); else if(typeof toast==='function')toast('Génération bloquée : '+pb.map(function(x){return x.l;}).join(', ')); }
+  function garde(name,getId){ var orig=window[name]; if(typeof orig!=='function'||orig.__enreg)return; window[name]=function(){ try{ var id=getId.apply(null,arguments); var d=doss(id); if(d&&d.intake){ var pb=enregControle(d); if(pb.length){ modalBlocage(d,pb); return; } } }catch(e){ window.__enregErr='garde: '+(e&&e.message); } return orig.apply(this,arguments); }; window[name].__enreg=1; }
+  garde('creaGenTous',function(id){return id;}); garde('espDocsTousGenerer',function(id){return id;}); garde('espDocGen',function(id){return id;});
+
+  /* ---------- 2. Pièces attendues d'après le Formulaire ---------- */
+  var MARQ={statutsSig:'Actes',dnc:'Actes',be:'Actes',pv:'Actes',pvd:'Actes',pvl:'Actes',statuts:'Actes',m2:'Immatriculation',m3:'Immatriculation',radiation:'Immatriculation',annonce:'Attestations',capital:'Attestations'};
+  window.enregPieces=function(d){ var list=[]; try{ list=(d.piecesModif&&d.piecesModif.length)?d.piecesModif:(has('piecesRequises')?piecesRequises(d):[]); }catch(e){} if(!list||!list.length){ list=(typeof ESP_PIECES!=='undefined')?ESP_PIECES.map(function(p){return {k:p.k,label:p.l};}):[]; }
+    var i=d.intake||{}, si=i.siege||{}, ap=i.apports||{}; var out=[]; var seen={};
+    list.forEach(function(p){ var k=p.k; if(seen[k])return; seen[k]=1; var o={k:k,l:p.label||p.l||k,origine:'client',note:''};
+      if(MARQ[k]){ o.origine='marq'; o.etape=MARQ[k]; }
+      if(k==='siege'&&/domicile du dirigeant/i.test(si.type||'')){ o.note='Siège au domicile du dirigeant (Formulaire) : le justificatif de domicile du dirigeant suffit.'; }
+      if(k==='siege'&&/domiciliation/i.test(si.type||'')){ o.note='Contrat de domiciliation'+(si.domiciliataire?(' — '+si.domiciliataire):'')+' (Formulaire).'; }
+      if(k==='capital'&&i.depot&&i.depot.banque){ o.note='Dépôt prévu : '+i.depot.banque+(i.depot.montant?(' · '+eur(i.depot.montant)):'')+(i.depot.date?(' · '+i.depot.date):'')+' (Formulaire).'; }
+      if(k==='capital'&&/nature/i.test(ap.nature||'')&&!num(ap.numeraire)){ o.note='Apports en nature uniquement (Formulaire) : pas d\'attestation de dépôt en numéraire.'; o.origine='formulaire'; }
+      if(k==='assoc'&&!(i.associes||[]).length){ o.note='Aucun associé autre que le dirigeant dans le Formulaire.'; o.origine='formulaire'; }
+      out.push(o); }); return out; };
+  window.enregPieceToggle=function(id,k,on){ var d=doss(id); if(!d)return; d.pieces=d.pieces||{}; d.pieces[k]=Object.assign((has('espPieceState')?espPieceState(d,k):(d.pieces[k]||{})),{recu:!!on,date:T()}); try{save();}catch(e){} peindreAttendues(); };
+  function carteAttendues(d){ var L=enregPieces(d); if(!L.length)return ''; var st=function(k){ return has('espPieceState')?espPieceState(d,k):((d.pieces||{})[k]||{}); };
+    var cl=L.filter(function(p){return p.origine==='client';}); var recus=cl.filter(function(p){return st(p.k).recu;}).length;
+    var rows=L.map(function(p){ var s=st(p.k); var tag=p.origine==='client'?'<span class="fi-att-tag cli">à recevoir du client</span>':(p.origine==='marq'?('<span class="fi-att-tag marq">produite par Mar\'q · '+E(p.etape)+'</span>'):'<span class="fi-att-tag form">couverte par le Formulaire</span>');
+      return '<label class="fi-att-row'+(s.recu?' ok':'')+(p.origine!=='client'?' later':'')+'"><input type="checkbox" '+(s.recu?'checked':'')+' onchange="enregPieceToggle(\''+d.id+'\',\''+p.k+'\',this.checked)"><span class="fi-att-l">'+E(p.l)+(s.nom?('<small>📎 '+E(s.nom)+'</small>'):'')+(p.note?('<small>'+E(p.note)+'</small>'):'')+'</span>'+tag+(s.data?('<button type="button" class="btn btn-sm btn-ghost" onclick="espPieceDl(\''+d.id+'\',\''+p.k+'\')">⤓</button>'):'')+'<span class="btn btn-sm btn-ghost fi-att-up">＋<input type="file" style="display:none" onchange="espPieceUpload(\''+d.id+'\',\''+p.k+'\',this)"></span></label>'; }).join('');
+    var tpl=''; try{ tpl=(has('templateOf')&&templateOf(d).label)||''; }catch(e){}
+    var ban=(recus>=cl.length&&cl.length)?'<div class="esp-banner ok">✓ Toutes les pièces du client sont reçues — vous pouvez valider l\'étape.</div>':'<div class="esp-banner wait">⏳ '+recus+'/'+cl.length+' pièce'+(cl.length>1?'s':'')+' du client reçue'+(recus>1?'s':'')+' — les autres sont produites par Mar\'q aux étapes suivantes.</div>';
+    return '<div class="card fi-attendues"><div class="card-h"><h2>Pièces attendues</h2><span class="sub" style="margin-left:auto">'+E(tpl)+' · d\'après le Formulaire</span></div><div class="card-b">'+rows+ban+'</div></div>'; }
+  function peindreAttendues(){ try{ if(typeof state==='undefined'||state.page!=='espace')return; var d=doss(state.espaceDossier); if(!d||!d.intake)return; var panel=document.querySelector('.esp-tabpanel[data-tab="pieces"]'); if(!panel)return; var html=carteAttendues(d); var old=panel.querySelector('.fi-attendues'); if(old){ if(html){ var t=document.createElement('div'); t.innerHTML=html; old.replaceWith(t.firstChild); } else old.remove(); return; } if(html){ var t2=document.createElement('div'); t2.innerHTML=html; panel.insertBefore(t2.firstChild,panel.firstChild); } }catch(e){ window.__enregErr='attendues: '+(e&&e.message); } }
+
+  /* ---------- Carte « Enregistrement (Formulaire) » dans l'étape Demande ---------- */
+  function kv(l,v){ return '<div class="fi-en-kv"><span>'+E(l)+'</span><b>'+(v?E(v):'—')+'</b></div>'; }
+  function carteEnreg(d){ var i=d.intake||{}; var modif=(d.formaliteNature==='modification'||(d.modif&&d.modif.kind)); var c=cli(d); var g='';
+    if(modif){ var M=d.modif||{}, S=M.societe||{}, Dt=M.dates||{}, G=M.signataire||{}; g=kv('Société',S.denomination)+kv('Forme',(S.forme||'').toUpperCase())+kv('SIREN',S.siren)+kv('Modification',MK[M.kind]||M.kind)+kv('Siège actuel',[S.siege,S.cp,S.ville].filter(Boolean).join(', '))+kv('Date de décision',Dt.acte)+kv('Date d\'effet',Dt.effet)+kv('Signataire',((G.civilite||'')+' '+(G.prenom||'')+' '+(G.nom||'')).trim()+(G.qualite?(' · '+G.qualite):'')); }
+    else { var s=i.societe||{}, si=i.siege||{}, dir=i.direction||{}, tt=i.titres||{}, co=i.contact||{}, dep=i.depot||{}; g=kv('Société',s.denomination)+kv('Forme',(i.type||'').toUpperCase())+kv('Capital',s.capital?eur(s.capital):'')+kv('Titres',tt.nbTitres?(tt.nbTitres+' × '+(tt.nominal?eur(tt.nominal):'—')):'')+kv('Objet',s.objet)+kv('Siège',[si.rue,si.cp,si.ville].filter(Boolean).join(', ')+(si.type?(' ('+si.type+')'):''))+kv('Dirigeant',((dir.civilite||'')+' '+(dir.prenom||'')+' '+(dir.nom||'')).trim()+(dir.fonction?(' · '+dir.fonction):''))+kv('Associés',(i.associes||[]).length?(i.associes.map(function(a){return ((a.prenom||'')+' '+(a.nom||'')).trim()+(a.parts?(' ('+a.parts+' parts)'):'');}).join(', ')):'')+kv('Dépôt du capital',dep.banque?(dep.banque+(dep.montant?(' · '+eur(dep.montant)):'')):'')+kv('Contact',[co.email,co.tel].filter(Boolean).join(' · ')); }
+    var ec=enregEcarts(d); var ecH=ec.length?('<div class="fi-en-ecart"><b>'+ec.length+' écart'+(ec.length>1?'s':'')+' avec la fiche Client</b> : '+ec.map(function(x){return E(x.l)+' (Formulaire : '+E(x.form)+' / Client : '+E(x.client)+')';}).join(' · ')+' <button type="button" class="btn btn-sm btn-ghost" onclick="enregAligner(\''+d.id+'\')">Aligner la fiche Client</button></div>'):'';
+    var when=d.enregistreLe?new Date(d.enregistreLe).toLocaleString('fr-FR'):''; var maj=d.modifieLe?(' · modifié le '+new Date(d.modifieLe).toLocaleString('fr-FR')):'';
+    return '<div class="card esp-mailcard fi-enreg"><div class="card-h"><h2>Enregistrement (Formulaire)</h2><span class="sub" style="margin-left:auto">'+E(d.ref||'')+(when?(' · enregistré le '+E(when)):'')+E(maj)+'</span></div><div class="card-b"><div class="fi-en-grid">'+g+'</div>'+ecH+'<div class="fi-en-act"><button type="button" class="btn btn-sm btn-pri" onclick="formReprendreDossier(\''+d.id+'\')">✎ Modifier dans le Formulaire</button><button type="button" class="btn btn-sm btn-ghost" onclick="state.cliSel=\''+E(c.id||'')+'\';go(\'clients\')">Fiche Client</button></div><div class="tsub" style="margin-top:8px">Le Formulaire est le module d\'enregistrement : toute correction s\'y fait et se répercute sur le Traitement et les Éditions.</div></div></div>'; }
+  function peindreEnreg(){ try{ if(typeof state==='undefined'||state.page!=='espace')return; var d=doss(state.espaceDossier); if(!d||!d.intake)return; var panel=document.querySelector('.esp-tabpanel[data-tab="demande"]'); if(!panel)return; if(panel.querySelector('.fi-enreg'))return; var t=document.createElement('div'); t.innerHTML=carteEnreg(d); panel.insertBefore(t.firstChild,panel.firstChild); }catch(e){ window.__enregErr='enreg: '+(e&&e.message); } }
+  window.__enregDebug={peindreEnreg:peindreEnreg,peindreAttendues:peindreAttendues,carteAttendues:carteAttendues,carteEnreg:carteEnreg,modalBlocage:modalBlocage};
+
+  try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var out=_r.apply(this,arguments); try{ peindreEnreg(); peindreAttendues(); bandeauFormulaire(); }catch(e){} return out; }; } }catch(e){}
+
+  var st=document.createElement('style'); st.id='fi-enreg-mod'; st.textContent=
+    '.fi-en-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:2px 18px}.fi-en-kv{display:flex;gap:10px;font-size:12px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)}.fi-en-kv span{flex:0 0 120px;color:#8d95a5!important}.fi-en-kv b{font-weight:500;min-width:0;word-break:break-word}'
+   +'.fi-en-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.fi-en-ecart{margin-top:10px;padding:8px 10px;border:1px solid rgba(224,161,0,.45);border-radius:8px;font-size:12px;color:#f0c85a!important;display:flex;gap:8px;flex-wrap:wrap;align-items:center}'
+   +'.fi-attendues .fi-att-row{display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer}.fi-att-row.ok .fi-att-l{opacity:.75;text-decoration:line-through}.fi-att-row.later{opacity:.8}.fi-att-l{flex:1;min-width:0;font-size:12.5px}.fi-att-l small{display:block;font-size:11px;color:#8d95a5!important;margin-top:2px}'
+   +'.fi-att-tag{font:600 10px ui-monospace,Menlo,monospace;letter-spacing:.02em;padding:2px 8px;border-radius:999px;border:1px solid;white-space:nowrap}.fi-att-tag.cli{color:#e0a100!important;border-color:rgba(224,161,0,.5)}.fi-att-tag.marq{color:#4f9dff!important;border-color:rgba(79,157,255,.5)}.fi-att-tag.form{color:#3fbf7f!important;border-color:rgba(63,191,127,.5)}'
+   +'.fi-att-up{cursor:pointer}.fi-edit-band{border-color:rgba(79,157,255,.55)!important}.fi-edit-band .card-b{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12.5px}.fi-edit-band .btn{margin-left:auto}';
   document.head.appendChild(st);
 })();
 </script>
