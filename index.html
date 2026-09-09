@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=611;
+var LAST_VER=612;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -36466,6 +36466,117 @@ function testLienRdv()  {
     +'.mod-pause-it em{margin-left:auto;font-style:normal;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.6}.mod-pause-it.on em{color:#e8c37a;opacity:1}';
   try{ var st=document.createElement('style'); st.id='mod-pause-css'; st.textContent=CSS; document.head.appendChild(st); }catch(e){}
   try{ paintNav(); paintView(); }catch(e){}
+})();
+</script>
+
+<script>
+/* ===== flush.js — Enregistrer AVANT toute mise à jour (v612) =====
+   Règle : dès qu'une mise à jour du logiciel survient (nouvelle version détectée,
+   service worker, rechargement), tout ce qui est en cours de saisie est d'abord
+   enregistré — document Éditions, facture, formulaire, fiche de paie — puis la mise
+   à jour s'applique. Après le rechargement, l'écran et le document sont repris. */
+(function(){
+  if(window.__aemFlush) return; window.__aemFlush=1;
+  var KR='marq-reprise';
+  function P(){ try{ if(typeof DB==='undefined'||!DB) return null; DB.parametres=DB.parametres||{}; return DB.parametres; }catch(e){ return null; } }
+  function clone(o){ try{ return JSON.parse(JSON.stringify(o)); }catch(e){ return null; } }
+
+  /* 1. Valider le champ en cours (oninput/onchange non encore déclenchés) */
+  function validerChampActif(){
+    var a=document.activeElement; if(!a||a===document.body) return;
+    var tag=(a.tagName||'').toLowerCase();
+    if(tag==='input'||tag==='textarea'||tag==='select'||a.isContentEditable){
+      try{ a.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){}
+      try{ a.dispatchEvent(new Event('change',{bubbles:true})); }catch(e){}
+      try{ a.blur(); }catch(e){}
+    }
+  }
+  /* 2. Facture en cours (facturier) → brouillon mémorisé dans DB */
+  function flushFacture(p){
+    try{
+      if(document.getElementById('inv-emNom') && typeof window.invRead==='function') window.invRead();
+      var d=window.__invDraft;
+      if(d && ((d.clNom||'').trim() || (d.lignes||[]).some(function(l){return (l.des||'').trim();}))) p.repriseFacture={draft:clone(d),ts:Date.now()};
+    }catch(e){}
+  }
+  /* 3. Formulaire (dossier client) en cours → mémorisé dans DB */
+  function flushFormulaire(p){
+    try{
+      var o=window.__formData; if(!o||typeof o!=='object') return;
+      var vide=!((o.societe&&o.societe.denomination)||(o.direction&&(o.direction.nom||o.direction.prenom))||(o.associes&&o.associes.length)||(o.contact&&(o.contact.nom||o.contact.email)));
+      if(!vide) p.repriseForm={data:clone(o),ts:Date.now()};
+    }catch(e){}
+  }
+  /* 4. Écran courant + document ouvert → reprise après rechargement */
+  function flushEcran(p){
+    try{
+      var r={page:(typeof state!=='undefined'&&state&&state.page)||'',ts:Date.now()};
+      if(typeof state!=='undefined'&&state){ if(state.edLibId) r.edLibId=state.edLibId; if(state.edCat) r.edCat=state.edCat; if(state.demView) r.demView=state.demView; }
+      if(window.__pfDoc&&window.__pfDoc.id&&document.getElementById('pf-ov')) r.pfDoc=window.__pfDoc.id;
+      try{ if(document.getElementById('ps-ov')||document.querySelector('.ps-wrap')){ r.ps={tab:window.__psTab||'',sel:window.__psSel||'',mois:window.__psMois||''}; } }catch(e){}
+      p.reprise=r; try{ localStorage.setItem(KR,JSON.stringify(r)); }catch(e){}
+    }catch(e){}
+  }
+  window.aemFlushSaisie=function(motif){
+    if(window.__aemFlushing) return true; window.__aemFlushing=true;
+    var ok=false;
+    try{
+      validerChampActif();
+      var p=P();
+      if(p){ flushFacture(p); flushFormulaire(p); flushEcran(p); if(motif&&(motif==='maj'||!p.repriseMotif)) p.repriseMotif=motif; }
+      /* Éditions : le débounce d'edLibField (500 ms) écrit déjà dans d.data — save() immédiat l'emporte.
+         Fiche de paie / paie 2026 : données déjà dans DB (editionsLibres / paie26) → save(). */
+      try{ if(typeof save==='function'){ save(); ok=true; } }catch(e){}
+    }finally{ window.__aemFlushing=false; }
+    return ok;
+  };
+
+  /* --- Points de mise à jour : enregistrer D'ABORD, mettre à jour ENSUITE --- */
+  function avant(motif){ var ok=window.aemFlushSaisie(motif); try{ if(ok&&typeof toast==='function'&&motif==='maj') toast('Saisie enregistrée ✓ — mise à jour en cours…'); }catch(e){} return ok; }
+  if(typeof _lastHardReload==='function' && !_lastHardReload.__flush){
+    var _hr=_lastHardReload;
+    _lastHardReload=function(){ avant('maj'); var a=arguments,t=this; setTimeout(function(){ _hr.apply(t,a); },250); };
+    _lastHardReload.__flush=1;
+  }
+  if('serviceWorker' in navigator){
+    try{ navigator.serviceWorker.addEventListener('controllerchange',function(){ avant('maj'); }); }catch(e){}
+    try{ navigator.serviceWorker.addEventListener('message',function(e){ if(e&&e.data==='reload') avant('maj'); }); }catch(e){}
+  }
+  /* Filet universel : toute fermeture / rechargement / mise en arrière-plan enregistre */
+  window.addEventListener('beforeunload',function(){ try{ window.aemFlushSaisie('fermeture'); }catch(e){} });
+  window.addEventListener('pagehide',function(){ try{ window.aemFlushSaisie('fermeture'); }catch(e){} });
+  document.addEventListener('visibilitychange',function(){ if(document.hidden){ try{ window.aemFlushSaisie('arriere-plan'); }catch(e){} } });
+
+  /* --- Reprise après rechargement --- */
+  function reprendre(){
+    var p=P(); if(!p) return;
+    var r=p.reprise||null; if(!r){ try{ r=JSON.parse(localStorage.getItem(KR)||'null'); }catch(e){} }
+    var recent=r&&r.ts&&(Date.now()-r.ts<1000*60*60*12);
+    var motif=p.repriseMotif||''; var repris=[];
+    /* facture */
+    if(p.repriseFacture&&p.repriseFacture.draft&&!window.__invDraft){ window.__invDraft=p.repriseFacture.draft; repris.push('facture'); }
+    /* formulaire */
+    if(p.repriseForm&&p.repriseForm.data&&!window.__formData){ window.__formData=p.repriseForm.data; repris.push('formulaire'); }
+    delete p.repriseFacture; delete p.repriseForm; delete p.repriseMotif;
+    if(recent&&motif==='maj'){
+      try{
+        if(typeof state!=='undefined'&&state&&r.page){ state.page=r.page; if(r.edCat) state.edCat=r.edCat; if(r.edLibId) state.edLibId=r.edLibId; if(r.demView) state.demView=r.demView; }
+        if(typeof render==='function') render();
+        if(r.pfDoc&&typeof window.edLibOpen==='function') setTimeout(function(){ try{ window.edLibOpen(r.pfDoc); }catch(e){} },120);
+        else if(r.ps&&typeof window.psOuvrir==='function') setTimeout(function(){ try{ window.psOuvrir(r.ps.tab,r.ps.sel,r.ps.mois); }catch(e){} },120);
+        repris.push('écran');
+      }catch(e){}
+    }
+    delete p.reprise; try{ localStorage.removeItem(KR); }catch(e){}
+    try{ if(typeof save==='function') save(); }catch(e){}
+    if(repris.length&&typeof toast==='function') setTimeout(function(){ toast('Mise à jour appliquée — votre saisie a été conservée ('+repris.join(', ')+').'); },400);
+  }
+  /* Reprise déclenchée au premier rendu suivant le chargement des données (déterministe) */
+  var done=false;
+  try{ var _rn=window.render; if(typeof _rn==='function'){ window.render=function(){
+    if(!done){ try{ if(typeof DB!=='undefined'&&DB&&DB.parametres&&(DB.parametres.reprise||DB.parametres.repriseFacture||DB.parametres.repriseForm)){ done=true; reprendre(); return; } }catch(e){} }
+    return _rn.apply(this,arguments); }; } }catch(e){}
+  var n=0; (function tick(){ if(done) return; try{ if(typeof DB!=='undefined'&&DB&&document.getElementById('view')&&document.getElementById('view').childElementCount){ done=true; reprendre(); return; } }catch(e){} if(++n<300) setTimeout(tick,100); })();
 })();
 </script>
 
