@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=607;
+var LAST_VER=608;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -36184,6 +36184,95 @@ function testLienRdv()  {
     +'.ed2-pc-v:hover{border-color:rgba(120,170,255,.5);background:rgba(120,170,255,.12)}'
     +'.ed2-pc-open{cursor:pointer;font:inherit;font-size:10px}';
   try{ var st=document.createElement('style'); st.id='ed-parcours-css'; st.textContent=CSS; document.head.appendChild(st); }catch(e){}
+})();
+</script>
+
+<script>
+/* ── Demandes — « Boîte reçue » ───────────────────────────────────────────────
+   Jusqu'ici, seuls les mails du formulaire du site (FormSubmit) devenaient des
+   demandes ; les autres étaient marqués « déjà traités » sans jamais apparaître.
+   Cet onglet conserve tout ce que le script Gmail lit, dit pourquoi un mail n'a
+   pas donné de demande, et permet d'en créer une à la main. */
+(function(){
+  if(window.__demBoite) return; window.__demBoite=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s); }
+  function store(){ DB.parametres=DB.parametres||{}; DB.parametres.mailsRecus=DB.parametres.mailsRecus||[]; return DB.parametres.mailsRecus; }
+  function keyOf(m){ var fr=(typeof mailParseFrom==='function')?mailParseFrom(m.from):{email:''};
+    return ((''+(m.id||'')).trim())||(fr.email+'|'+(m.subject||'')+'|'+(m.date||'')); }
+  function motif(m){ var fr=(typeof mailParseFrom==='function')?mailParseFrom(m.from):{};
+    if(typeof demEstSysteme==='function' && demEstSysteme(m.subject,m.body,(fr&&fr.nom)||m.from)) return 'systeme';
+    if(typeof demIsFormSubmit==='function' && demIsFormSubmit(m)) return 'formulaire';
+    return 'autre'; }
+  /* 1. chaque relève alimente la boîte, avant le tri en demandes */
+  try{ var _di=window.demIngest; if(typeof _di==='function' && !_di.__boite){
+    window.demIngest=function(mails){
+      try{ var L=store(), idx={}; L.forEach(function(x,i){ idx[x.key]=i; });
+        (mails||[]).forEach(function(m){ var k=keyOf(m); var fr=(typeof mailParseFrom==='function')?mailParseFrom(m.from):{nom:'',email:''};
+          var rec={key:k,id:m.id||'',from:m.from||'',nom:fr.nom||'',email:fr.email||'',subject:m.subject||'',date:m.date||'',
+            body:(''+(m.body||'')).slice(0,6000),att:(m.att||m.attachments||[]).length,motif:motif(m),recu:Date.now()};
+          if(idx[k]!=null){ var o=L[idx[k]]; rec.demande=o.demande; rec.recu=o.recu; L[idx[k]]=rec; } else L.unshift(rec); });
+        L.sort(function(a,b){ return (Date.parse(b.date)||0)-(Date.parse(a.date)||0); }); if(L.length>300) L.length=300;
+      }catch(e){}
+      var r=_di.apply(this,arguments);
+      try{ var L2=store(); L2.forEach(function(x){ if(x.motif==='formulaire') x.demande=x.demande||true; }); }catch(e){}
+      return r; }; window.demIngest.__boite=1; } }catch(e){}
+  /* 2. actions */
+  window.demBoiteVoir=function(k){ var m=store().filter(function(x){return x.key===k;})[0]; if(!m) return;
+    var body=(typeof mailCleanBody==='function')?mailCleanBody(m.body):m.body;
+    openModal('Mail reçu — '+E(m.subject||'(sans objet)'),
+      '<div class="grid g2" style="gap:10px;margin-bottom:10px"><div><label>De</label><div class="hint">'+E(m.from)+'</div></div><div><label>Reçu le</label><div class="hint">'+E(frDateHeure(m.date))+'</div></div></div>'
+      +'<div class="hint" style="margin-bottom:8px">'+etatTxt(m)+'</div>'
+      +'<pre style="white-space:pre-wrap;font:12.5px/1.5 inherit;max-height:50vh;overflow:auto;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px">'+E(body||'(corps vide)')+'</pre>',
+      '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'+(m.demande?'':'<button class="btn btn-pri" onclick="demBoiteCreer(\''+E(k)+'\')">➕ Créer une demande</button>')); };
+  window.demBoiteCreer=function(k){ var m=store().filter(function(x){return x.key===k;})[0]; if(!m||m.demande) return;
+    var fr=(typeof mailParseFrom==='function')?mailParseFrom(m.from):{nom:'',email:''};
+    var dateISO=(typeof today==='function')?today():new Date().toISOString().slice(0,10), dateTime='';
+    try{ var d=new Date(m.date); if(!isNaN(d.getTime())){ dateISO=d.toISOString().slice(0,10); dateTime=d.toISOString(); } }catch(e){}
+    var body=((typeof mailCleanBody==='function')?mailCleanBody(m.body):m.body)||m.subject||'';
+    var dem={id:uid('d'),code:(typeof demCodeGen==='function')?demCodeGen():'',clientNom:fr.nom||fr.email||'Client',clientEmail:fr.email||'',clientTel:'',
+      canal:'Mail',serviceSouhaite:((m.subject||'').slice(0,80))||'À qualifier',subject:m.subject||'',message:body,rawBody:body,rawHtml:(''+(m.body||'')).slice(0,20000),
+      date:dateISO,dateTime:dateTime,statut:'Nouveau',mailId:m.id||''};
+    DB.demandes.unshift(dem); m.demande=dem.id;
+    try{ closeModal(); }catch(e){} try{save();}catch(e){}
+    state.demTab='nouveau'; state.demMode='reception'; state.demCanal='tous'; if(typeof toast==='function') toast('Demande créée depuis le mail de '+(fr.nom||fr.email||'l’expéditeur')+'.');
+    render(); try{ if(typeof demAnalyseAuto==='function') demAnalyseAuto(); }catch(e){} };
+  window.demBoiteVider=function(){ var go=function(){ DB.parametres.mailsRecus=[]; try{save();}catch(e){} render(); };
+    if(typeof uiConfirm==='function') uiConfirm('Effacer la liste des mails reçus ? Les demandes déjà créées sont conservées.',go); else go(); };
+  function frDateHeure(d){ try{ var x=new Date(d); if(isNaN(x.getTime())) return d||'—'; return x.toLocaleDateString('fr-FR')+' '+x.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return d||'—'; } }
+  function etatTxt(m){
+    if(m.demande) return '<span class="tag ok">Demande créée</span>';
+    if(m.motif==='systeme') return '<span class="tag mut">Message automatique (accusé, rebond) — ignoré</span>';
+    if(m.motif==='formulaire') return '<span class="tag blue">Formulaire du site</span>';
+    return '<span class="tag warm">Pas un envoi du formulaire — à créer à la main si utile</span>'; }
+  function tableHTML(){
+    var L=store(), c=(typeof demSyncCfg==='function')?demSyncCfg():{}, q=(state.q||'').toLowerCase();
+    if(!c.url) return '<div class="empty">La boîte n’est pas encore reliée : cliquez <b>⚙ Configurer la boîte</b>, collez l’URL du script Google (…/exec) et la clé secrète, puis <b>🔄 Synchroniser</b>.</div>';
+    if(!L.length) return '<div class="empty">Aucun mail lu pour l’instant. Cliquez <b>🔄 Synchroniser la boîte</b> : le script lit les 50 derniers mails de la boîte de réception (30 jours). Les mails en Spam, Promotions ou archivés ne sont pas lus.</div>';
+    var rows=L.filter(function(m){ return !q||((m.from+' '+m.subject+' '+m.body).toLowerCase().indexOf(q)>=0); });
+    var n={formulaire:0,autre:0,systeme:0}; L.forEach(function(m){ n[m.motif]=(n[m.motif]||0)+1; });
+    return '<div class="hint" style="margin:0 0 8px">'+L.length+' mail(s) lus dans la boîte · '+n.formulaire+' du formulaire du site · '+n.autre+' autre(s) · '+n.systeme+' automatique(s). Seuls les envois du formulaire deviennent des demandes d’eux-mêmes ; les autres se créent d’un clic.</div>'
+      +'<table class="dem-tbl"><thead><tr><th>Expéditeur</th><th>Objet</th><th class="hide-sm">Reçu le</th><th>État</th><th></th></tr></thead><tbody>'
+      +rows.map(function(m){ return '<tr><td><div class="tname">'+E(m.nom||m.email||m.from)+'</div><div class="tsub">'+E(m.email||'')+(m.att?(' · '+m.att+' pièce(s)'):'')+'</div></td>'
+        +'<td>'+E(m.subject||'(sans objet)')+'</td><td class="hide-sm">'+E(frDateHeure(m.date))+'</td><td>'+etatTxt(m)+'</td>'
+        +'<td style="white-space:nowrap"><button class="btn btn-sm btn-ghost" onclick="demBoiteVoir(\''+E(m.key)+'\')">Voir</button> '
+        +(m.demande?'':'<button class="btn btn-sm" onclick="demBoiteCreer(\''+E(m.key)+'\')">➕ Demande</button>')+'</td></tr>'; }).join('')
+      +'</tbody></table><div style="margin-top:10px"><button class="btn btn-sm btn-ghost" onclick="demBoiteVider()">Vider la liste</button></div>'; }
+  /* 3. la vue Réception : un filtre « Boîte reçue » à côté de Tous / Site / Autres */
+  try{ var _mv=window.demMessagerieView; if(typeof _mv==='function' && !_mv.__boite){
+    window.demMessagerieView=function(){ var on=(state.demCanal==='boite'); var h=_mv.apply(this,arguments);
+      try{ var L=store(), nb=L.filter(function(m){ return !m.demande; }).length;
+        h=h.replace(/(✉ Autres<span class="dem-nat-n">\d+<\/span><\/button>)/,'$1<button class="dem-nat-b'+(on?' on':'')+'" onclick="state.demCanal=\'boite\';render()" title="Tout ce que le script Gmail a lu, y compris les mails qui ne sont pas devenus des demandes">📥 Boîte reçue<span class="dem-nat-n">'+L.length+(nb?(' · '+nb+' à trier'):'')+'</span></button>');
+        if(on){ var i=h.indexOf('<div class="gm-wrap">'); if(i>=0) h=h.slice(0,i)+'<div class="gm-wrap"><div class="card"><div class="card-b">'+tableHTML()+'</div></div></div>'; }
+      }catch(e){}
+      return h; }; window.demMessagerieView.__boite=1; } }catch(e){}
+  /* 3 bis. l'ancien rendu par onglets, s'il est encore utilisé quelque part */
+  try{ var _pd=window.pageDemandes; if(typeof _pd==='function' && !_pd.__boite){
+    window.pageDemandes=function(){ var h=_pd.apply(this,arguments); var on=(state.demTab==='boite');
+      try{ var L=store();
+        h=h.replace('</div><div class="dem-toolbar">','<button class="dem-tab '+(on?'on':'')+'" onclick="state.demTab=\'boite\';render()">Boîte reçue <span class="dem-c">'+L.length+'</span></button></div><div class="dem-toolbar">');
+        if(on) h=h.replace('<div class="empty">Aucune demande dans cet onglet.</div>',tableHTML());
+      }catch(e){}
+      return h; }; window.pageDemandes.__boite=1; } }catch(e){}
 })();
 </script>
 
