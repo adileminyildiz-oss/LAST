@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=598;
+var LAST_VER=599;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -34745,6 +34745,8 @@ function testLienRdv()  {
     ['pss','smicH','smicM','heuresMois','at','mutCout','mutSal','mutPat','pas'].forEach(function(k){
       if(p[k]==null)p[k]=String(PAR26[k]); });
     if(p.mutuelle==null)p.mutuelle='OUI';
+    if(p.eff==null)p.eff='<11'; if(p.vm==null)p.vm='0';
+    if(p.forma==null)p.forma=''; if(p.appr==null)p.appr='';
     if(c.n1du==null)c.n1du=''; if(c.n1pris==null)c.n1pris='';
     if(c.ndu==null)c.ndu=''; if(c.npris==null)c.npris='';
     return d; }
@@ -34803,8 +34805,21 @@ function testLienRdv()  {
     var txFam=(brut<SMICM*3.5)?3.45:5.25;                    /* I38 */
     add('fam','Famille','Autres',null,null,brut,txFam);
     add('cho','Assurance Chômage','Autres',null,null,Math.min(brut,PSS*4),4.20); /* H39 */
-    add('aut1',"Autres Contributions Dues Par L'Employeur",'Autres',null,null,brut,1.546);
-    add('aut2',"Autres Contributions Dues Par L'Employeur",'Autres',null,null,plafSal,0.10);
+    /* Le classeur portait 1,546 % sur le brut (I40) et 0,10 % sur la tranche plafonnée
+       (I41). Le premier taux est la somme de quatre contributions distinctes — solidarité
+       autonomie 0,30, dialogue social 0,016, formation 0,55, apprentissage 0,68 — et le
+       second est le FNAL. Chacune a désormais sa ligne, sa base et son seuil ; à effectif
+       inférieur à onze et sans versement mobilité, le total est inchangé. */
+    var eff=String(p.eff||'<11'), e11=(eff!=='<11'), e50=(eff==='>=50');
+    var txForma=(p.forma!==''&&p.forma!=null)?n(p.forma):(e11?1.00:0.55);
+    var txAppr =(p.appr!==''&&p.appr!=null)?n(p.appr):0.68;
+    var txVm   = e11?n(p.vm):0;
+    add('fnal',"Fonds national d'aide au logement",'Autres',null,null,e50?brut:plafSal,e50?0.50:0.10);
+    add('csa','Contribution solidarité autonomie','Autres',null,null,brut,0.30);
+    add('dial','Contribution au dialogue social','Autres',null,null,brut,0.016);
+    add('forma','Formation professionnelle','Autres',null,null,brut,txForma);
+    add('appr','Taxe d\u2019apprentissage','Autres',null,null,brut,txAppr);
+    if(txVm>0) add('vm','Versement mobilité','Autres',null,null,brut,txVm);
 
     /* CSG — E42 =(F21*0,9825)-G28-G29 : les parts salariales de prévoyance
        et de mutuelle, négatives, se réintègrent à l'assiette. */
@@ -34946,6 +34961,10 @@ function testLienRdv()  {
         + row('Mutuelle — part salariale (%)',fld('par.mutSal',p.mutSal))
         + row('Mutuelle — part patronale (%)',fld('par.mutPat',p.mutPat))
         + row('Taux de prélèvement à la source (%)',fld('par.pas',p.pas))
+        + row('Effectif de l\u2019entreprise',sel('par.eff',p.eff,['<11','11-49','>=50']))
+        + row('Versement mobilité (%)',fld('par.vm',p.vm,'0'))
+        + row('Formation professionnelle (%)',fld('par.forma',p.forma,'auto'))
+        + row('Taxe d\u2019apprentissage (%)',fld('par.appr',p.appr,'0.68'))
         + tauxAuto26(d))
       +'</div>';
   }
@@ -35068,16 +35087,36 @@ function testLienRdv()  {
   var ML=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
   /* ── Données ─────────────────────────────────────────────────────────── */
-  function PS(){
+  function empVide(){ return {nom:'',adr:'',cpv:'',ape:'',siret:'',urssaf:''}; }
+  function parDefaut(){ return {pss:'4005',smicH:'12.02',smicM:'1823.03',heuresMois:'151.67',at:'2.80',
+    mutuelle:'OUI',mutCout:'72.09',mutSal:'50',mutPat:'50',pas:'0',
+    eff:'<11',vm:'0',forma:'',appr:''}; }
+  function exVide(){ return {emp:empVide(),par:parDefaut(),salaries:[]}; }
+  /* Le magasin tient un exercice par année. L'ancien format, à plat, est repris. */
+  function PSroot(){
     if(!DB.paie26) DB.paie26={};
-    var s=DB.paie26;
-    if(!s.annee) s.annee=String(new Date().getFullYear());
-    if(!s.emp) s.emp={nom:'',adr:'',cpv:'',ape:'',siret:'',urssaf:''};
-    if(!s.par) s.par={pss:'4005',smicH:'12.02',smicM:'1823.03',heuresMois:'151.67',at:'2.80',
-                      mutuelle:'OUI',mutCout:'72.09',mutSal:'50',mutPat:'50',pas:'0'};
-    if(!s.salaries) s.salaries=[];
-    s.salaries.forEach(fixSal);
-    return s;
+    var R=DB.paie26;
+    if(R.salaries && !R.annees){
+      var an0=R.annee||String(new Date().getFullYear());
+      R.annees={}; R.annees[an0]={emp:R.emp||empVide(),par:R.par||parDefaut(),salaries:R.salaries};
+      R.courante=an0; delete R.emp; delete R.par; delete R.salaries; delete R.annee;
+    }
+    if(!R.annees) R.annees={};
+    if(!R.courante || !R.annees[R.courante]){
+      var ks=Object.keys(R.annees).sort();
+      R.courante=ks.length?ks[ks.length-1]:String(new Date().getFullYear());
+    }
+    if(!R.annees[R.courante]) R.annees[R.courante]=exVide();
+    return R;
+  }
+  function annees(){ return Object.keys(PSroot().annees).sort(); }
+  function PS(){
+    var R=PSroot(), A=R.annees[R.courante];
+    A.emp=A.emp||empVide(); A.par=A.par||parDefaut(); A.salaries=A.salaries||[];
+    Object.keys(parDefaut()).forEach(function(k){ if(A.par[k]==null) A.par[k]=parDefaut()[k]; });
+    A.salaries.forEach(fixSal);
+    A.annee=R.courante;   /* miroir en lecture, pour l'affichage */
+    return A;
   }
   function fixSal(x){
     x.id=x.id||('s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
@@ -35118,7 +35157,31 @@ function testLienRdv()  {
   function salById(id){ return PS().salaries.filter(function(x){return x.id===id;})[0]; }
   window.psSetEmp=function(k,v){ PS().emp[k]=v; try{save();}catch(e){} psPaint(); };
   window.psSetPar=function(k,v){ PS().par[k]=v; try{save();}catch(e){} psPaint(); };
-  window.psSetAnnee=function(v){ PS().annee=v; try{save();}catch(e){} psPaint(); };
+  window.psAnnee=function(an){ var R=PSroot(); if(!R.annees[an])return; R.courante=an;
+    window.__psSel=null; try{save();}catch(e){} psPaint(); };
+  window.psAjouterAnnee=function(){ var R=PSroot(), ks=annees();
+    var prop=String((+ks[ks.length-1]||new Date().getFullYear())+1);
+    var faire=function(v){ v=String(v||'').trim(); if(!/^\d{4}$/.test(v)){
+        if(typeof toast==='function')toast('Indiquez une année à quatre chiffres.'); return; }
+      if(R.annees[v]){ R.courante=v; try{save();}catch(e){} psPaint(); return; }
+      var src=R.annees[R.courante], neuf=exVide();
+      if(src){ /* on reprend l'employeur, les paramètres et les salariés, sans les mois */
+        Object.keys(src.emp||{}).forEach(function(k){ neuf.emp[k]=src.emp[k]; });
+        Object.keys(src.par||{}).forEach(function(k){ neuf.par[k]=src.par[k]; });
+        neuf.salaries=(src.salaries||[]).map(function(x){
+          var y=fixSal({tauxDefaut:x.tauxDefaut, par:JSON.parse(JSON.stringify(x.par||{})),
+                        sal:JSON.parse(JSON.stringify(x.sal||{}))});
+          y.cp={n1du:x.cp&&x.cp.ndu||'',n1pris:'',ndu:'',npris:''};  /* les congés N deviennent N-1 */
+          return y; });
+      }
+      R.annees[v]=neuf; R.courante=v; window.__psSel=null; try{save();}catch(e){} psPaint(); };
+    if(typeof uiPrompt==='function') uiPrompt('Nouvel exercice',prop,faire);
+    else { var v=window.prompt('Nouvel exercice (année)',prop); if(v!=null) faire(v); } };
+  window.psSupprimerAnnee=function(an){ var R=PSroot();
+    if(annees().length<2){ if(typeof toast==='function')toast('Le dernier exercice ne peut pas être supprimé.'); return; }
+    var go=function(){ delete R.annees[an]; if(R.courante===an){ var ks=annees(); R.courante=ks[ks.length-1]; }
+      window.__psSel=null; try{save();}catch(e){} psPaint(); };
+    if(typeof uiConfirm==='function') uiConfirm('Supprimer l\u2019exercice '+an+' et tous ses bulletins ?',go); else go(); };
   window.psSetSal=function(id,k,v){ var x=salById(id); if(!x)return;
     if(k.indexOf('.')>0){ var p=k.split('.'); x[p[0]]=x[p[0]]||{}; x[p[0]][p[1]]=v; } else x[k]=v;
     try{save();}catch(e){} psPaint(); };
@@ -35155,7 +35218,6 @@ function testLienRdv()  {
       +lab('Numéro SIRET',fldE('siret',s.emp.siret))+lab('URSSAF',fldE('urssaf',s.emp.urssaf))
       +'</div></div>';
     var par='<div class="ps-card"><h3>Paramètres de l’année '+E(s.annee)+'</h3><div class="ps-grid">'
-      +lab('Année',inp(s.annee,"psSetAnnee(this.value)"))
       +lab('Plafond mensuel Sécurité sociale (€)',fldP('pss',s.par.pss))
       +lab('SMIC horaire (€)',fldP('smicH',s.par.smicH))
       +lab('SMIC mensuel (€)',fldP('smicM',s.par.smicM))
@@ -35165,6 +35227,13 @@ function testLienRdv()  {
       +lab('Coût de la mutuelle (€)',fldP('mutCout',s.par.mutCout))
       +lab('Mutuelle — part salariale (%)',fldP('mutSal',s.par.mutSal))
       +lab('Mutuelle — part patronale (%)',fldP('mutPat',s.par.mutPat))
+      +lab('Effectif de l\u2019entreprise',
+        '<select class="ps-i" onchange="psSetPar(\'eff\',this.value)">'
+        +['<11','11-49','>=50'].map(function(o){return '<option'+(String(s.par.eff)===o?' selected':'')+'>'+o+'</option>';}).join('')
+        +'</select>')
+      +lab('Versement mobilité (%)',fldP('vm',s.par.vm))
+      +lab('Formation professionnelle (%)',fldP('forma',s.par.forma))
+      +lab('Taxe d\u2019apprentissage (%)',fldP('appr',s.par.appr))
       +'</div></div>';
     var list=s.salaries.map(function(x){
       var c=cumulSal(x);
@@ -35279,7 +35348,11 @@ function testLienRdv()  {
       +'<button class="pf-x" onclick="psFermer()" title="Fermer">✕</button></div></div>'
       +'<div class="ps-body"><div class="ps-tabs">'
       +TB.map(function(x){ return '<button class="ps-tab'+(t===x[0]?' on':'')+'" onclick="psTab(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('')
-      +'</div><div class="ps-content">'+body+'</div></div>';
+      +'<div class="ps-ex"><span class="ps-ex-l">Exercice</span>'
+      +annees().map(function(a){ return '<button class="ps-exb'+(a===PSroot().courante?' on':'')+'" onclick="psAnnee(\''+a+'\')">'+a+'</button>'; }).join('')
+      +'<button class="ps-exb ps-exb-add" onclick="psAjouterAnnee()" title="Ouvrir un nouvel exercice">+</button>'
+      +(annees().length>1?('<button class="ps-exb ps-exb-x" onclick="psSupprimerAnnee(\''+PSroot().courante+'\')" title="Supprimer cet exercice">×</button>'):'')
+      +'</div></div><div class="ps-content">'+body+'</div></div>';
     css();
   }
   window.psPaint=psPaint;
@@ -35319,6 +35392,13 @@ function testLienRdv()  {
     +'.ps-tab{border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:inherit;font:inherit;'
     +'font-size:13px;padding:8px 14px;border-radius:10px 10px 0 0;cursor:pointer}'
     +'.ps-tab.on{background:rgba(120,170,255,.18);border-bottom-color:transparent;font-weight:600}'
+    +'.ps-ex{margin-left:auto;display:flex;align-items:center;gap:4px;padding-bottom:6px}'
+    +'.ps-ex-l{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;opacity:.55;margin-right:4px}'
+    +'.ps-exb{border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:inherit;'
+    +'font:inherit;font-size:12px;padding:5px 10px;border-radius:7px;cursor:pointer;font-variant-numeric:tabular-nums}'
+    +'.ps-exb.on{background:rgba(120,170,255,.2);border-color:rgba(120,170,255,.42);font-weight:600}'
+    +'.ps-exb-add{font-size:14px;line-height:1;padding:4px 10px}'
+    +'.ps-exb-x{color:#ff8a8a;border-color:rgba(255,120,120,.28);font-size:14px;line-height:1;padding:4px 9px}'
     +'.ps-content{flex:1;overflow:auto;padding:14px 16px 28px}'
     +'.ps-card{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px 16px;margin-bottom:14px;'
     +'background:rgba(255,255,255,.025)}'
