@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=620;
+var LAST_VER=621;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -14318,7 +14318,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   /* Sauvegarde/restauration de la sélection du document (pour que le focus sur la recherche ne la perde pas) */
   function saveRange(){ try{ var s=window.getSelection&&window.getSelection(); window.__wordRange=(s&&s.rangeCount)?s.getRangeAt(0).cloneRange():null; }catch(e){ window.__wordRange=null; } }
   function restoreRange(){ try{ var el=docEl(); var r=window.__wordRange; if(r&&r.startContainer&&el&&el.contains(r.startContainer)){ el.focus(); var s=window.getSelection(); s.removeAllRanges(); s.addRange(r); } else if(el){ el.focus(); } }catch(e){} }
-  function placeMenu(m,btn){ document.body.appendChild(m); var r=btn.getBoundingClientRect(); var w=m.offsetWidth,h=m.offsetHeight; var left=Math.min(r.left,window.innerWidth-w-8); var top=r.bottom+5; if(top+h>window.innerHeight-6)top=Math.max(6,r.top-h-5); m.style.left=Math.max(6,left)+'px'; m.style.top=top+'px'; m.addEventListener('mousedown',function(e){ if(e.target&&e.target.tagName==='INPUT')return; e.preventDefault(); }); setTimeout(function(){document.addEventListener('mousedown',wordMenuOutside,true);},0); }
+  function placeMenu(m,btn){ document.body.appendChild(m); var r=(window.uiRect?uiRect(btn):btn.getBoundingClientRect()); var VW=(window.uiVW?uiVW():window.innerWidth), VH=(window.uiVH?uiVH():window.innerHeight); var w=m.offsetWidth,h=m.offsetHeight; var left=Math.min(r.left,VW-w-8); var top=r.bottom+5; if(top+h>VH-6)top=Math.max(6,r.top-h-5); m.style.left=Math.max(6,left)+'px'; m.style.top=top+'px'; m.addEventListener('mousedown',function(e){ if(e.target&&e.target.tagName==='INPUT')return; e.preventDefault(); }); setTimeout(function(){document.addEventListener('mousedown',wordMenuOutside,true);},0); }
   function norm(s){ return (''+(s||'')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
   function fontItemsHTML(q){ var cur=norm((qcv('fontName').split(',')[0])); q=norm(q);
     var list=FONTS.filter(function(f){ return !q||norm(f).indexOf(q)>=0; });
@@ -18592,7 +18592,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   var FE_BAN='https://api-adresse.data.gouv.fr/search/';
   var feBox=null,feActive=null;
   function feBoxEl(){if(!feBox){feBox=document.createElement('div');feBox.id='fe-combo';feBox.style.cssText='position:fixed;z-index:99999;display:none;max-height:240px;overflow-y:auto;background:#101014;border:1px solid #2a2a33;border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.6);font-size:12.5px';document.body.appendChild(feBox);}return feBox;}
-  function feBoxPos(el){var b=feBoxEl(),r=el.getBoundingClientRect();b.style.left=r.left+'px';b.style.top=(r.bottom+4)+'px';b.style.width=Math.max(180,r.width)+'px';}
+  function feBoxPos(el){var b=feBoxEl(),r=(window.uiRect?uiRect(el):el.getBoundingClientRect());b.style.left=r.left+'px';b.style.top=(r.bottom+4)+'px';b.style.width=Math.max(180,r.width)+'px';}
   function feBoxClose(){if(feBox){feBox.style.display='none';feBox.innerHTML='';}feActive=null;}
   function feBoxShow(el,items,onPick){var b=feBoxEl();if(!items||!items.length){feBoxClose();return;}feBoxPos(el);b.innerHTML='';items.forEach(function(it){var d=document.createElement('div');d.className='fe-ci';d.style.cssText='padding:8px 11px;cursor:pointer;color:#e2e2e8;border-bottom:1px solid #1e1e24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';if(it.html){d.style.display='flex';d.style.alignItems='center';d.innerHTML=it.html;}else{d.textContent=it.label;}d.onmouseenter=function(){d.style.background='#1c1c24';};d.onmouseleave=function(){d.style.background='';};d.onmousedown=function(ev){ev.preventDefault();onPick(it);feBoxClose();};b.appendChild(d);});b.style.display='block';feActive=el;}
   function feFetch(kind,q,cb){var url=FE_BAN+'?autocomplete=1&limit=8&q='+encodeURIComponent(q)+(kind!=='addr'?'&type=municipality':'');try{fetch(url).then(function(r){return r.json();}).then(function(j){var items=((j&&j.features)||[]).map(function(f){var pr=f.properties||{};if(kind==='cp')return {label:((pr.postcode||'')+' '+(pr.city||pr.name||'')).trim(),value:pr.postcode||''};if(kind==='ville')return {label:(pr.city||pr.name||''),value:(pr.city||pr.name||'')};return {label:pr.label||'',value:pr.label||''};}).filter(function(x){return x.label.trim();});cb(items);}).catch(function(){cb([]);});}catch(e){cb([]);}}
@@ -37912,7 +37912,7 @@ function testLienSignature() {
   window.invPaperBTP=paper;
 
   var PAPER_CSS=[
-    '.inv-paper.fb-mode{font-family:"Inter","Helvetica Neue",Arial,sans-serif;color:#1a1f28;font-size:12px;line-height:1.45}.inv-paper.fb-mode .fb-tbl,.inv-paper.fb-mode .fb-tbl th,.inv-paper.fb-mode .fb-tbl td,.inv-paper.fb-mode .fb-tbl tr{color:#1a1f28!important;background:transparent!important;border-color:#eceef2}.inv-paper.fb-mode .fb-tbl th{color:#8b93a1!important}.inv-paper.fb-mode .fb-tbl tr.fb-lot td{background:#f2f4f7!important;color:#3d4550!important}.inv-paper.fb-mode b,.inv-paper.fb-mode span,.inv-paper.fb-mode div{color:inherit}',
+    'html body:not(#mq):not(#mq):not(#mq) .inv-paper.fb-mode,html body:not(#mq):not(#mq):not(#mq) .inv-paper.fb-mode *{-webkit-text-fill-color:currentColor!important}.inv-paper.fb-mode{font-family:"Inter","Helvetica Neue",Arial,sans-serif;color:#1a1f28;font-size:12px;line-height:1.45}.inv-paper.fb-mode .fb-tbl,.inv-paper.fb-mode .fb-tbl th,.inv-paper.fb-mode .fb-tbl td,.inv-paper.fb-mode .fb-tbl tr{color:#1a1f28!important;background:transparent!important;border-color:#eceef2}.inv-paper.fb-mode .fb-tbl th{color:#8b93a1!important}.inv-paper.fb-mode .fb-tbl tr.fb-lot td{background:#f2f4f7!important;color:#3d4550!important}.inv-paper.fb-mode b,.inv-paper.fb-mode span,.inv-paper.fb-mode div{color:inherit}',
     '.fb-lbl{font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;color:#8b93a1;font-weight:700;margin-bottom:4px}.fb-nom{font-size:14px;font-weight:700}.fb-sm{font-size:11.5px;color:#5c6470;line-height:1.55}',
     '.fb-head{display:flex;justify-content:space-between;gap:28px;align-items:flex-start;border-bottom:2px solid #1a1f28;padding-bottom:14px}.fb-em-nom{font-size:18px;font-weight:800;letter-spacing:-.01em}.fb-em-lines{font-size:11.5px;color:#5c6470;line-height:1.6;margin-top:5px}',
     '.fb-docbox{text-align:right;min-width:230px}.fb-title{font-size:22px;font-weight:800;letter-spacing:.03em}.fb-sub{font-size:11.5px;color:#5c6470;margin-top:3px}.fb-meta{display:inline-block;text-align:left;margin-top:10px;min-width:210px}.fb-meta>div{display:flex;justify-content:space-between;gap:20px;font-size:12px;padding:3px 0}.fb-meta span{color:#8b93a1}',
@@ -38129,6 +38129,45 @@ function testLienSignature() {
 
   /* ---------- Exposition pour les tests ---------- */
   window.__fbDebug={calc:calc,chantiers:chantiers,situationsPrec:situationsPrec,cumulPrecAuto:cumulPrecAuto,mentions:mentions,paper:paper,etat:etat,nextNumFor:nextNumFor,TYPES:TYPES};
+})();
+</script>
+
+<script>
+/* ============================================================================
+   Mar'q — Format des boutons & listes flottantes (v621)
+   - Boutons « Dicter » (.ia-mic) : icône micro restaurée (CSS), taille minimale 28 px
+   - Liens-boutons du cockpit : zone cliquable élargie
+   - Menus flottants (éditeur de texte, listes de saisie) : position corrigée du zoom de page
+   - Facturier : aperçu sous le formulaire sous 1320 px (fin du défilement horizontal)
+   - Fiche client / Paramètres / cartes : retour à la ligne des barres d'actions, aucun débordement
+   - Boutons : hauteur minimale homogène, libellés sur une ligne
+   100 % additif.
+   ========================================================================= */
+(function(){
+  if(window.__aemUIFix) return; window.__aemUIFix=true;
+  window.uiZoom=function(){ try{ var v=parseFloat(getComputedStyle(document.documentElement).zoom); if(isNaN(v)||!v) v=1; var b=parseFloat(getComputedStyle(document.body).zoom); if(!isNaN(b)&&b) v*=b; return v; }catch(e){ return 1; } };
+  /* rect en pixels CSS (zoomés) — à utiliser pour position:fixed (left/top) */
+  window.uiRect=function(el){ var z=uiZoom(); var r=el.getBoundingClientRect(); return {left:r.left/z,top:r.top/z,right:r.right/z,bottom:r.bottom/z,width:r.width/z,height:r.height/z}; };
+  window.uiVW=function(){ return window.innerWidth/uiZoom(); }; window.uiVH=function(){ return window.innerHeight/uiZoom(); };
+  var MIC='url("data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>')+'")';
+  var css=document.createElement('style'); css.id='ui-fix-mod'; css.textContent=[
+    /* micro */
+    '.ia-mic{min-width:28px!important;min-height:28px!important;display:inline-flex!important;align-items:center;justify-content:center;gap:5px;padding:0 8px!important;font-size:11px!important}.ia-mic::before{content:"";display:inline-block;width:13px;height:13px;background:currentColor;-webkit-mask:'+MIC+' center/contain no-repeat;mask:'+MIC+' center/contain no-repeat}.ia-mic::after{content:"Dicter"}',
+    /* cockpit : liens-boutons */
+    '.ckp-lk{padding:3px 8px!important;min-height:22px;border-radius:6px;line-height:1.2}.ckp-lk:hover{background:rgba(255,255,255,.08)}',
+    /* boutons : hauteur minimale homogène, libellé sur une ligne */
+    'main .btn:not(.mq-ib):not(.ckp-lk){min-height:30px;line-height:1.2;box-sizing:border-box;vertical-align:middle;white-space:nowrap}main .btn.btn-sm:not(.mq-ib){min-height:26px}main .inv-tb,main .fb-tv,main .inv-sb{white-space:nowrap}',
+    /* barres d\'actions : retour à la ligne plutôt que débordement */
+    '.card-h{flex-wrap:wrap;row-gap:6px}.cli-fiche-act{flex-wrap:wrap;flex:0 1 auto;min-width:0}.inv-toolbar{flex-wrap:wrap}.fi-actions,.esp-actions,.trw-actions{flex-wrap:wrap}',
+    /* facturier : aperçu sous le formulaire quand la largeur manque */
+    '.inv-2col>*{min-width:0}.inv-col-prev{min-width:0}.inv-paper{max-width:100%}@media(max-width:1320px){.inv-2col{grid-template-columns:1fr}}',
+    /* paramètres / fiches : colonnes latérales compressibles */
+    '.sp-side{min-width:0;max-width:100%}main>*{max-width:100%}main .card{min-width:0}',
+    /* conteneurs génériques : jamais de défilement horizontal de la page */
+    'main{overflow-x:hidden}',
+    /* paramètres : menu latéral au-dessus du contenu dès 1200 px ; attestations : grille compressible */
+    '@media(max-width:1200px){.sp-wrap{grid-template-columns:1fr}.sp-side{position:static;max-height:none}}.at4-etl{min-width:0}.at4-etl>*{min-width:0}@media(max-width:1100px){.at4-etl{grid-template-columns:1fr!important;row-gap:6px}}'
+  ].join('\n'); document.head.appendChild(css);
 })();
 </script>
 
