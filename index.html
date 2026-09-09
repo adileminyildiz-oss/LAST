@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=612;
+var LAST_VER=613;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -36577,6 +36577,174 @@ function testLienRdv()  {
     if(!done){ try{ if(typeof DB!=='undefined'&&DB&&DB.parametres&&(DB.parametres.reprise||DB.parametres.repriseFacture||DB.parametres.repriseForm)){ done=true; reprendre(); return; } }catch(e){} }
     return _rn.apply(this,arguments); }; } }catch(e){}
   var n=0; (function tick(){ if(done) return; try{ if(typeof DB!=='undefined'&&DB&&document.getElementById('view')&&document.getElementById('view').childElementCount){ done=true; reprendre(); return; } }catch(e){} if(++n<300) setTimeout(tick,100); })();
+})();
+</script>
+
+<script>
+/* ===== prefill.js — Formulaire : pré-remplissage depuis TOUTES les sources en ligne (v613) =====
+   Sources gratuites, sans clé : INSEE + INPI/RNE (recherche-entreprises.api.gouv.fr),
+   BODACC (annonces légales : capital, objet, administration, clôture), convention
+   collective (siret2idcc). Le SIREN/SIRET saisi déclenche la recherche ; les champs
+   du Formulaire sont remplis et un panneau « Informations trouvées en ligne » présente
+   tout ce qui a été récupéré (avec application au choix). */
+(function(){
+  if(window.__aemPrefill) return; window.__aemPrefill=1;
+  var NJ={'5710':'sas','5720':'sasu','5499':'sarl','5485':'sarl','5498':'eurl','6540':'sci','6541':'sci','6533':'sci','6521':'sci'};
+  var NJL={'5710':'SAS','5720':'SASU','5499':'SARL','5498':'EURL','5485':'SARL (coopérative)','6540':'SCI','6541':'SCI (construction-vente)','6533':'SCI (GFA)','6521':'SCPI','5202':'SNC','5505':'SA','5510':'SA','5599':'SA à conseil d\'administration','5699':'SA à directoire','1000':'Entrepreneur individuel','9220':'Association','6220':'GIE'};
+  var EFF={'NN':'Unité non employeuse','00':'0 salarié','01':'1 à 2 salariés','02':'3 à 5 salariés','03':'6 à 9 salariés','11':'10 à 19 salariés','12':'20 à 49 salariés','21':'50 à 99 salariés','22':'100 à 199 salariés','31':'200 à 249 salariés','32':'250 à 499 salariés','41':'500 à 999 salariés','42':'1 000 à 1 999 salariés','51':'2 000 à 4 999 salariés','52':'5 000 à 9 999 salariés','53':'10 000 salariés et plus'};
+  var EFFN={'NN':'0','00':'0','01':'1','02':'3','03':'6','11':'10','12':'20','21':'50','22':'100','31':'200','32':'250','41':'500','42':'1000','51':'2000','52':'5000','53':'10000'};
+  var MOIS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function tvaFr(siren){ var n=parseInt(siren,10); if(isNaN(n))return ''; var k=(12+3*(n%97))%97; return 'FR'+(k<10?'0':'')+k+siren; }
+  function frD(iso){ if(!iso)return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):String(iso); }
+  function titre(s){ return String(s||'').toLowerCase().replace(/(^|[\s\-'])([a-zà-ÿ])/g,function(m,a,b){return a+b.toUpperCase();}); }
+  function num(v){ var n=parseFloat(String(v==null?'':v).replace(/\s/g,'').replace(',','.')); return isNaN(n)?null:n; }
+  function eur(n){ n=num(n); if(n==null)return ''; return n.toLocaleString('fr-FR',{maximumFractionDigits:0})+' €'; }
+  function FDx(){ if(!window.__formData||typeof window.__formData!=='object'){ try{ window.formSet('extra.__t',''); delete window.__formData.extra.__t; }catch(e){} } return window.__formData||{}; }
+  function jget(url,ms){ return new Promise(function(res,rej){ var c=(typeof AbortController!=='undefined')?new AbortController():null;
+    var t=setTimeout(function(){ try{c&&c.abort();}catch(e){} rej(new Error('délai dépassé')); },ms||9000);
+    fetch(url,{cache:'no-store',signal:c?c.signal:undefined}).then(function(r){ if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); }).then(function(j){ clearTimeout(t); res(j); },function(e){ clearTimeout(t); rej(e); }); }); }
+  function settle(p){ return p.then(function(v){return {ok:true,v:v};},function(e){return {ok:false,e:(e&&e.message)||'indisponible'};}); }
+  function J(v){ if(v==null)return null; if(typeof v==='object')return v; try{ return JSON.parse(v); }catch(e){ return null; } }
+
+  /* ---------- Source 1 : INSEE + INPI/RNE (recherche-entreprises) ---------- */
+  function srcRE(q){ return jget('https://recherche-entreprises.api.gouv.fr/search?q='+encodeURIComponent(q)+'&page=1&per_page=1').then(function(j){ var r=j&&j.results&&j.results[0]; if(!r)throw new Error('Aucune entreprise trouvée'); return r; }); }
+  /* ---------- Source 2 : BODACC (annonces légales) ---------- */
+  function srcBodacc(siren){ var base='https://bodacc-datadila.opendatasoft.com/api/explore/v2.1/catalog/datasets/annonces-commerciales/records?order_by=dateparution%20desc&limit=25&where=';
+    var variants=['registre%20like%20%22'+siren+'%22','registre%3A%22'+siren+'%22','%22'+siren+'%22%20in%20registre'];
+    var i=0; function next(){ if(i>=variants.length) throw new Error('Aucune annonce'); var u=base+variants[i++];
+      return jget(u,9000).then(function(j){ var rs=(j&&(j.results||j.records))||[]; if(!rs.length) return next(); return rs.map(function(x){return x.record?(x.record.fields||x.record):x;}); },function(e){ if(i>=variants.length) throw e; return next(); }); }
+    return next(); }
+  /* ---------- Source 3 : convention collective (siret2idcc) ---------- */
+  function srcIdcc(siret){ return jget('https://siret2idcc.fabrique.social.gouv.fr/api/v2/'+siret,8000).then(function(j){ var a=Array.isArray(j)?j[0]:j; var cs=(a&&a.conventions)||[]; if(!cs.length)throw new Error('Aucune convention'); return cs.map(function(c){ return {num:c.num||c.idcc||'',titre:c.shortTitle||c.title||c.titre||'',etat:c.etat||''}; }); }); }
+
+  function parseBodacc(rs){ var B={annonces:[]};
+    rs.forEach(function(r){ var lp=J(r.listepersonnes); var p=lp&&lp.personne; if(Array.isArray(p))p=p[0]; p=p||{};
+      var dep=J(r.depot)||{}; var mg=J(r.modificationsgenerales)||{}; var jg=J(r.jugement)||{};
+      if(!B.capital&&p.capital&&(p.capital.montantCapital||p.capital.montant)){ B.capital=String(p.capital.montantCapital||p.capital.montant).replace(/[^\d.,]/g,''); B.devise=p.capital.devise||'EUR'; }
+      if(!B.forme&&p.formeJuridique)B.forme=p.formeJuridique;
+      if(!B.objet&&p.activite)B.objet=p.activite;
+      if(!B.administration&&p.administration)B.administration=p.administration;
+      if(!B.sigle&&p.sigle)B.sigle=p.sigle; if(!B.nomCommercial&&p.nomCommercial)B.nomCommercial=p.nomCommercial;
+      if(!B.cloture&&dep.dateCloture)B.cloture=dep.dateCloture;
+      if(!B.tribunal&&r.tribunal)B.tribunal=r.tribunal;
+      if(!B.adresse&&p.adresseSiegeSocial){ var a=p.adresseSiegeSocial; B.adresse={rue:[a.numeroVoie,a.typeVoie,a.voie].filter(Boolean).join(' '),cp:a.codePostal||'',ville:a.ville||''}; }
+      if(B.annonces.length<6) B.annonces.push({date:frD(r.dateparution),famille:r.familleavis_lib||'',type:r.typeavis_lib||'',detail:(mg.descriptif||jg.nature||dep.typeDepot||'').slice(0,160)});
+    }); return B; }
+
+  /* ---------- Fusion ---------- */
+  window.aemRegistre=function(q){ q=String(q||'').replace(/\D/g,''); if(q.length!==9&&q.length!==14) return Promise.reject(new Error('SIREN (9 chiffres) ou SIRET (14 chiffres) attendu'));
+    return settle(srcRE(q)).then(function(re){ var R={q:q,siren:q.slice(0,9),ts:Date.now(),sources:[],dirigeants:[],finances:[],labels:[],idcc:[],annonces:[]};
+      R.sources.push({lib:'INSEE + INPI/RNE',ok:re.ok,err:re.e});
+      var r=re.ok?re.v:null;
+      if(r){ var et=null; (r.matching_etablissements||[]).forEach(function(x){ if(q.length===14&&String(x.siret)===q)et=x; }); var sg=et||r.siege||{};
+        R.siret=(q.length===14?q:'')||sg.siret||''; R.siegeSiret=(r.siege&&r.siege.siret)||'';
+        R.denom=r.nom_raison_sociale||r.nom_complet||''; R.sigle=r.sigle||''; R.natureCode=r.nature_juridique||''; R.formeLib=NJL[R.natureCode]||''; R.type=NJ[R.natureCode]||'';
+        R.ape=r.activite_principale||''; R.section=r.section_activite_principale||''; R.creation=r.date_creation||''; R.maj=r.date_mise_a_jour||'';
+        R.etat=r.etat_administratif||''; R.fermeture=r.date_fermeture||''; R.effectif=r.tranche_effectif_salarie||''; R.effectifAnnee=r.annee_tranche_effectif_salarie||'';
+        R.categorie=r.categorie_entreprise||''; R.nbEtab=r.nombre_etablissements||''; R.nbEtabOuverts=r.nombre_etablissements_ouverts||'';
+        var rue=[sg.numero_voie,sg.indice_repetition,sg.type_voie,sg.libelle_voie].filter(Boolean).join(' ').trim();
+        if(!rue&&sg.adresse){ rue=String(sg.adresse).replace(new RegExp('\\s*'+(sg.code_postal||'')+'.*$'),'').trim(); }
+        R.adresse={rue:rue,cp:sg.code_postal||'',ville:sg.libelle_commune||'',complement:sg.complement_adresse||''};
+        R.rcsVille=(r.siege&&r.siege.libelle_commune)||R.adresse.ville||''; R.tva=tvaFr(R.siren);
+        R.dirigeants=(r.dirigeants||[]).map(function(x){ var pm=(x.type_dirigeant||'').toLowerCase().indexOf('morale')>=0||!!x.denomination;
+          return pm?{pm:true,nom:x.denomination||'',siren:x.siren||'',qualite:x.qualite||''}:{pm:false,nom:titre(x.nom||''),prenom:titre((x.prenoms||'').split(/[,\s]+/)[0]||''),prenoms:titre(x.prenoms||''),qualite:x.qualite||'',naissance:x.date_de_naissance||x.annee_de_naissance||'',nationalite:titre(x.nationalite||'')}; });
+        var fin=r.finances||{}; Object.keys(fin).sort().reverse().slice(0,3).forEach(function(an){ var f=fin[an]||{}; R.finances.push({annee:an,ca:f.ca!=null?f.ca:f.chiffre_affaires,rn:f.resultat_net}); });
+        var c=r.complements||{}; var L={est_ess:'Économie sociale et solidaire',est_rge:'RGE',est_qualiopi:'Qualiopi',est_organisme_formation:'Organisme de formation',est_bio:'Bio',est_societe_mission:'Société à mission',est_entrepreneur_individuel:'Entrepreneur individuel',est_association:'Association',est_service_public:'Service public',est_entrepreneur_spectacle:'Entrepreneur de spectacle'};
+        Object.keys(L).forEach(function(k){ if(c[k])R.labels.push(L[k]); }); R.idccListe=c.liste_idcc||[];
+      }
+      var tasks=[settle(srcBodacc(R.siren))]; var st=R.siret||R.siegeSiret; tasks.push(st?settle(srcIdcc(st)):Promise.resolve({ok:false,e:'SIRET inconnu'}));
+      return Promise.all(tasks).then(function(rs){ var bo=rs[0],id=rs[1];
+        R.sources.push({lib:'BODACC (annonces légales)',ok:bo.ok,err:bo.e}); R.sources.push({lib:'Convention collective',ok:id.ok,err:id.e});
+        if(bo.ok){ var B=parseBodacc(bo.v); R.capital=B.capital||''; R.capitalDevise=B.devise||'EUR'; R.formeBodacc=B.forme||''; R.objet=B.objet||''; R.administration=B.administration||''; R.cloture=B.cloture||''; R.tribunal=B.tribunal||''; R.annonces=B.annonces; if(!R.sigle&&B.sigle)R.sigle=B.sigle; R.nomCommercial=B.nomCommercial||''; if(!R.denom&&B.denom)R.denom=B.denom; if((!R.adresse||!R.adresse.rue)&&B.adresse)R.adresse=B.adresse; if(!R.formeLib&&B.forme)R.formeLib=B.forme; }
+        if(id.ok)R.idcc=id.v; else if(R.idccListe&&R.idccListe.length)R.idcc=R.idccListe.map(function(n){return {num:n,titre:''};});
+        if(!r&&!bo.ok) throw new Error('Aucune information trouvée en ligne pour '+q+'.');
+        if(!R.denom&&!R.capital) throw new Error('Aucune entreprise trouvée pour '+q+'.');
+        R.nb=compte(R); return R; }); }); };
+  function compte(R){ var n=0; ['denom','sigle','formeLib','ape','creation','etat','effectif','categorie','capital','objet','administration','cloture','tribunal','tva','rcsVille'].forEach(function(k){ if(R[k])n++; }); if(R.adresse&&R.adresse.rue)n++; n+=(R.dirigeants||[]).length+(R.idcc||[]).length+(R.finances||[]).length+(R.labels||[]).length; return n; }
+
+  /* ---------- Application au Formulaire ---------- */
+  function dirPrincipal(R){ var ds=(R.dirigeants||[]).filter(function(d){return !d.pm;}); return ds.filter(function(d){return /pr[ée]sident|g[ée]rant/i.test(d.qualite);})[0]||ds[0]||null; }
+  function dirLib(R){ return (R.dirigeants||[]).map(function(d){ return (d.pm?d.nom:((d.prenom||'')+' '+(d.nom||'')).trim())+(d.qualite?(' ('+d.qualite+')'):''); }).join(' ; '); }
+  function clotLib(iso){ if(!iso)return ''; var p=String(iso).slice(0,10).split('-'); if(p.length<3)return ''; var m=parseInt(p[1],10); return (parseInt(p[2],10))+' '+(MOIS[m-1]||''); }
+  function ok(vFORMES,t){ try{ return !t||(typeof FORMES==='undefined')||!Array.isArray(FORMES)||FORMES.some(function(f){return (Array.isArray(f)?f[0]:f)===t;}); }catch(e){ return true; } }
+  window.formRegistreAppliquer=function(mode){ var o=FDx(); var R=o.extra&&o.extra.registre; if(!R){ if(typeof toast==='function')toast('Aucune information en ligne à appliquer.'); return; }
+    mode=mode||'auto'; var ident=(mode!=='vides'), force=(mode==='tout'); var n=0;
+    var set=function(obj,k,v,f){ if(v==null||v==='')return; if(f||obj[k]==null||obj[k]===''){ if(obj[k]!==v){obj[k]=v;n++;} } };
+    var adr=R.adresse||{}; var adrFull=[adr.rue,(adr.cp+' '+adr.ville).trim()].filter(Boolean).join(', ');
+    if((o.nature||'creation')==='modification'){ o.modif=o.modif||{}; var ms=(o.modif.societe=o.modif.societe||{}), an=(o.modif.ancien=o.modif.ancien||{});
+      set(ms,'siren',R.siren,ident); set(ms,'denomination',R.denom,ident); if(R.type&&ok(null,R.type))set(ms,'forme',R.type,ident);
+      set(ms,'siege',adr.rue,ident); set(ms,'cp',adr.cp,ident); set(ms,'ville',adr.ville,ident); set(ms,'rcsVille',R.rcsVille,ident); set(ms,'capital',R.capital,force);
+      set(an,'denomination',R.denom,force); set(an,'capital',R.capital,force); set(an,'siege',adrFull,force); set(an,'objet',R.objet,force); set(an,'dirigeant',dirLib(R),force);
+    } else { var s=(o.societe=o.societe||{}), si=(o.siege=o.siege||{}), d=(o.direction=o.direction||{}), dt=(o.dates=o.dates||{}), pr=(o.profil=o.profil||{});
+      set(s,'siren',R.siren,ident); set(s,'siret',R.siret,ident); set(s,'denomination',R.denom,ident); set(s,'tvaIntra',R.tva,ident); set(s,'codeApe',R.ape,ident);
+      if(R.type&&ok(null,R.type)&&(ident||!o.type)){ if(o.type!==R.type){o.type=R.type;n++;} }
+      set(s,'sigle',R.sigle,force); set(s,'capital',R.capital,force); set(s,'objet',R.objet,force); set(s,'debut',frD(R.creation),force);
+      set(si,'rue',adr.rue,ident); set(si,'cp',adr.cp,ident); set(si,'ville',adr.ville,ident);
+      var dp=dirPrincipal(R); if(dp){ set(d,'nom',dp.nom,force); set(d,'prenom',dp.prenom,force); set(d,'fonction',dp.qualite,force); set(d,'nationalite',dp.nationalite,force); }
+      set(dt,'rcsVille',R.rcsVille,ident); set(dt,'clotureAnnuelle',clotLib(R.cloture),force);
+      set(pr,'nbSalaries',EFFN[R.effectif],force);
+    }
+    if(mode!=='auto'){ if(typeof render==='function')render(); if(typeof toast==='function')toast(n?(n+' champ(s) mis à jour depuis les informations en ligne.'):'Rien à modifier : les champs sont déjà renseignés.'); }
+    return n; };
+
+  /* ---------- Recherche ---------- */
+  var lastQ='',busy=false,timer=null;
+  window.formRegistre=function(q){ q=String(q||'').replace(/\D/g,''); if(q.length!==9&&q.length!==14){ if(typeof toast==='function')toast('Renseignez un SIREN (9 chiffres) ou un SIRET (14 chiffres).'); return; }
+    if(busy)return; busy=true; window.__regBusy=q; var o=FDx(); o.extra=o.extra||{}; delete o.extra.registreMasque; paintPanel();
+    window.aemRegistre(q).then(function(R){ lastQ=q; var o2=FDx(); o2.extra=o2.extra||{}; o2.extra.registre=R; var n=window.formRegistreAppliquer('auto');
+      busy=false; window.__regBusy=null; if(typeof render==='function')render();
+      if(typeof toast==='function')toast('Société pré-remplie depuis les registres en ligne — '+(R.denom||q)+' · '+R.nb+' information(s) trouvée(s), '+(n||0)+' champ(s) renseigné(s).');
+    },function(e){ busy=false; window.__regBusy=null; var o3=FDx(); o3.extra=o3.extra||{}; o3.extra.registreErreur=(e&&e.message)||'Recherche indisponible (connexion requise).'; paintPanel(); if(typeof toast==='function')toast(o3.extra.registreErreur); }); };
+  window.formRegistreActualiser=function(){ var o=FDx(); var q=(o.nature==='modification')?(o.modif&&o.modif.societe&&o.modif.societe.siren):((o.societe&&(o.societe.siret||o.societe.siren))); lastQ=''; window.formRegistre(q); };
+  window.formRegistreMasquer=function(){ var o=FDx(); o.extra=o.extra||{}; o.extra.registreMasque=1; delete o.extra.registreErreur; paintPanel(); };
+  /* Les boutons « Rechercher » existants passent par la recherche complète */
+  window.formSirenLookup=function(){ var o=FDx(); window.formRegistre(o.societe&&o.societe.siren); };
+  window.formSiretLookup=function(){ var o=FDx(); window.formRegistre(o.societe&&o.societe.siret); };
+  /* Saisie d'un SIREN/SIRET complet → recherche automatique */
+  document.addEventListener('input',function(ev){ try{ var t=ev.target; if(!t||t.tagName!=='INPUT')return; var oi=t.getAttribute('oninput')||''; if(!/societe\.(siren|siret)/.test(oi))return;
+    var d=String(t.value||'').replace(/\D/g,''); var want=/siret/.test(oi)?14:9; if(d.length!==want||d===lastQ)return;
+    clearTimeout(timer); timer=setTimeout(function(){ if(d!==lastQ)window.formRegistre(d); },600); }catch(e){} },true);
+
+  /* ---------- Panneau « Informations trouvées en ligne » ---------- */
+  function row(l,v){ return v?('<div class="fi-reg-it"><span class="fi-reg-l">'+E(l)+'</span><span class="fi-reg-v">'+E(v)+'</span></div>'):''; }
+  function panelHTML(){ var o=FDx(); var ex=o.extra||{}; var R=ex.registre; var q=window.__regBusy;
+    if(q) return '<div class="card fi-card fi-reg"><div class="card-b"><div class="fi-reg-h"><h2>🌐 Informations trouvées en ligne</h2><span class="fi-reg-busy">Recherche en cours pour '+E(q)+' — INSEE / INPI, BODACC, convention collective…</span></div></div></div>';
+    if(ex.registreErreur&&!R) return '<div class="card fi-card fi-reg"><div class="card-b"><div class="fi-reg-h"><h2>🌐 Informations trouvées en ligne</h2><span class="fi-reg-err">'+E(ex.registreErreur)+'</span><button type="button" class="btn btn-sm btn-ghost" onclick="formRegistreMasquer()">Masquer</button></div></div></div>';
+    if(!R||ex.registreMasque) return '';
+    var adr=R.adresse||{}; var adrFull=[adr.rue,adr.complement,(adr.cp+' '+adr.ville).trim()].filter(Boolean).join(', ');
+    var src=R.sources.map(function(s){ return '<span class="fi-reg-src '+(s.ok?'ok':'ko')+'" title="'+E(s.err||'')+'">'+(s.ok?'✓':'✗')+' '+E(s.lib)+'</span>'; }).join('');
+    var g1=row('Dénomination',R.denom)+row('Sigle / nom commercial',[R.sigle,R.nomCommercial].filter(Boolean).join(' · '))+row('Forme juridique',R.formeLib||R.formeBodacc)+row('SIREN',R.siren)+row('SIRET (siège)',R.siegeSiret||R.siret)+row('N° TVA intracom.',R.tva)+row('Code APE',R.ape)+row('Capital social',R.capital?(eur(R.capital)):'')
+      +row('Siège social',adrFull)+row('Greffe / RCS',R.tribunal||R.rcsVille)+row('Date de création',frD(R.creation))+row('État',R.etat==='A'?'Active':(R.etat==='C'?('Cessée'+(R.fermeture?(' le '+frD(R.fermeture)):'')):R.etat))
+      +row('Effectif',R.effectif?((EFF[R.effectif]||R.effectif)+(R.effectifAnnee?(' ('+R.effectifAnnee+')'):'')):'')+row('Catégorie',R.categorie)+row('Établissements',R.nbEtab?(R.nbEtabOuverts+' ouvert(s) / '+R.nbEtab):'')
+      +row('Clôture d\'exercice',clotLib(R.cloture))+row('Objet social / activité',R.objet)+row('Administration (BODACC)',R.administration)+row('Labels',(R.labels||[]).join(', '))+row('Dernière mise à jour',frD(R.maj));
+    var dirs=(R.dirigeants||[]).length?('<div class="fi-reg-sub">Dirigeants</div>'+R.dirigeants.map(function(d){ return '<div class="fi-reg-it"><span class="fi-reg-l">'+E(d.qualite||'Dirigeant')+'</span><span class="fi-reg-v">'+E(d.pm?(d.nom+(d.siren?(' — SIREN '+d.siren):'')):((d.prenoms||d.prenom||'')+' '+(d.nom||'')+(d.naissance?(' · né(e) '+(String(d.naissance).length>4?frD(d.naissance):'en '+d.naissance)):'')+(d.nationalite?(' · '+d.nationalite):'')))+'</span></div>'; }).join('')):'';
+    var cc=(R.idcc||[]).length?('<div class="fi-reg-sub">Convention collective</div>'+R.idcc.map(function(c){ return '<div class="fi-reg-it"><span class="fi-reg-l">IDCC '+E(c.num)+'</span><span class="fi-reg-v">'+E(c.titre||'')+(c.etat?(' ('+E(c.etat)+')'):'')+'</span></div>'; }).join('')):'';
+    var fin=(R.finances||[]).length?('<div class="fi-reg-sub">Finances (comptes déposés)</div>'+R.finances.map(function(f){ return '<div class="fi-reg-it"><span class="fi-reg-l">'+E(f.annee)+'</span><span class="fi-reg-v">CA '+E(eur(f.ca)||'—')+' · Résultat net '+E(eur(f.rn)||'—')+'</span></div>'; }).join('')):'';
+    var ann=(R.annonces||[]).length?('<div class="fi-reg-sub">Dernières annonces BODACC</div>'+R.annonces.map(function(a){ return '<div class="fi-reg-it"><span class="fi-reg-l">'+E(a.date)+'</span><span class="fi-reg-v">'+E([a.famille,a.type].filter(Boolean).join(' · '))+(a.detail?(' — '+E(a.detail)):'')+'</span></div>'; }).join('')):'';
+    var s=R.siren; var links='<div class="fi-reg-links">Voir en ligne : <a href="https://annuaire-entreprises.data.gouv.fr/entreprise/'+s+'" target="_blank" rel="noopener">Annuaire des entreprises</a> · <a href="https://annuaire-entreprises.data.gouv.fr/dirigeants/'+s+'" target="_blank" rel="noopener">Dirigeants</a> · <a href="https://annuaire-entreprises.data.gouv.fr/documents/'+s+'" target="_blank" rel="noopener">Statuts &amp; actes (INPI)</a> · <a href="https://annuaire-entreprises.data.gouv.fr/annonces/'+s+'" target="_blank" rel="noopener">Annonces BODACC</a> · <a href="https://annuaire-entreprises.data.gouv.fr/justificatif/'+s+'" target="_blank" rel="noopener">Justificatif d\'immatriculation</a></div>';
+    return '<div class="card fi-card fi-reg"><div class="card-b"><div class="fi-reg-h"><h2>🌐 Informations trouvées en ligne — '+E(R.denom||R.siren)+'</h2><span class="fi-reg-n">'+E(R.nb)+' informations</span><span class="fi-reg-act"><button type="button" class="btn btn-sm btn-pri" onclick="formRegistreAppliquer(\'vides\')" title="Renseigne uniquement les champs encore vides">Compléter les champs vides</button><button type="button" class="btn btn-sm btn-ghost" onclick="formRegistreAppliquer(\'tout\')" title="Remplace les valeurs saisies par celles trouvées en ligne">Tout appliquer</button><button type="button" class="btn btn-sm btn-ghost" onclick="formRegistreActualiser()">Actualiser</button><button type="button" class="btn btn-sm btn-ghost" onclick="formRegistreMasquer()">Masquer</button></span></div>'
+      +'<div class="fi-reg-srcs">'+src+'</div><div class="fi-reg-grid">'+g1+'</div>'+dirs+cc+fin+ann+links+'</div></div>'; }
+  function anchorCard(){ var v=document.getElementById('view'); if(!v)return null;
+    var inp=v.querySelector('input[oninput*="modif.societe.siren"]')||v.querySelector('.fi-siret-btn')||v.querySelector('.fi-siren-btn'); if(!inp)return null;
+    var c=inp; while(c&&c!==v&&!(c.classList&&c.classList.contains('fi-card')))c=c.parentNode; return (c&&c!==v)?c:null; }
+  function paintPanel(){ try{ if(typeof state==='undefined'||state.page!=='formulaire')return; var v=document.getElementById('view'); if(!v)return;
+    var old=v.querySelector('.fi-reg'); var html=panelHTML(); if(old){ if(!html){old.remove();return;} var tmp=document.createElement('div'); tmp.innerHTML=html; old.replaceWith(tmp.firstChild); return; }
+    if(!html)return; var a=anchorCard(); var tmp2=document.createElement('div'); tmp2.innerHTML=html; var el=tmp2.firstChild; if(a)a.insertAdjacentElement('afterend',el); else v.insertBefore(el,v.firstChild); }catch(e){} }
+  function paintBtn(){ try{ var v=document.getElementById('view'); if(!v)return; var inp=v.querySelector('input[oninput*="modif.societe.siren"]'); if(!inp||inp.parentNode.querySelector('.fi-reg-btn'))return;
+    var b=document.createElement('button'); b.type='button'; b.className='btn btn-sm btn-ghost fi-reg-btn'; b.textContent='🌐 Pré-remplir en ligne'; b.title='Récupère toutes les informations de la société (INSEE / INPI, BODACC, convention collective)';
+    b.onclick=function(){ window.formRegistre(inp.value); }; inp.insertAdjacentElement('afterend',b); inp.addEventListener('keydown',function(ev){ if(ev.key==='Enter'){ ev.preventDefault(); window.formRegistre(inp.value); } }); }catch(e){} }
+  try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var out=_r.apply(this,arguments); try{ if(typeof state!=='undefined'&&state.page==='formulaire'){ paintBtn(); paintPanel(); } }catch(e){} return out; }; } }catch(e){}
+
+  var st=document.createElement('style'); st.id='fi-reg-mod'; st.textContent=
+    '.fi-reg .fi-reg-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}.fi-reg .fi-reg-h h2{margin:0;font-size:15px}'
+   +'.fi-reg-n{font-size:11.5px;opacity:.75;border:1px solid rgba(30,144,255,.4);border-radius:999px;padding:2px 9px}.fi-reg-act{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}'
+   +'.fi-reg-busy,.fi-reg-err{font-size:12.5px;opacity:.85}.fi-reg-err{color:#ff7b72}'
+   +'.fi-reg-srcs{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 10px}.fi-reg-src{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.15)}.fi-reg-src.ok{color:#3ddc97;border-color:rgba(61,220,151,.45)}.fi-reg-src.ko{color:#ff7b72;border-color:rgba(255,123,114,.45)}'
+   +'.fi-reg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:4px 18px}.fi-reg-it{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12.5px}.fi-reg-l{flex:0 0 150px;opacity:.65}.fi-reg-v{flex:1;word-break:break-word}'
+   +'.fi-reg-sub{margin:12px 0 4px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.7}.fi-reg-links{margin-top:12px;font-size:12px;opacity:.85}.fi-reg-links a{color:#5ab0ff}'
+   +'.fi-reg-btn{margin-left:6px;white-space:nowrap}';
+  document.head.appendChild(st);
 })();
 </script>
 
