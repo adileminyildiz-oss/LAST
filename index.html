@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=596;
+var LAST_VER=597;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -34792,8 +34792,10 @@ function testLienRdv()  {
     add('ssp','Sécurité Sociale Plafonnée','Retraite',plafSal,6.90,Math.min(brut,n(p.plafRetPat||PAR26.plafRetPat)),8.55); /* H32 =IF(F21>3170;3170;F21) */
     add('ssd','Sécurité Sociale Déplafonnée','Retraite',brut,0.40,brut,1.90);
     add('ct1','Complémentaire Tranche 1','Retraite',plafSal,4.01,plafSal,6.01);
-    if(brut>PSS){                                            /* E35 / F35 / I35 */
-      var b2=(brut>PSS*8)?PSS:r2(brut-PSS);
+    if(brut>PSS){
+      /* Tranche 2 : du plafond à huit plafonds, soit sept plafonds au plus.
+         Le classeur retombait à un seul plafond au-delà de huit (E35). */
+      var b2=r2(Math.min(brut-PSS, PSS*7));
       add('ct2','Complémentaire Tranche 2','Retraite',b2,9.72,b2,14.60);
       add('cet','Complémentaire CET','Retraite',brut,0.14,brut,0.21);
     }
