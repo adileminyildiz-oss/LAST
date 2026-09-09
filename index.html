@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=594;
+var LAST_VER=595;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -18316,7 +18316,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
     if(cur && cur.k==='duerp' && typeof window.duerpEditorHTML==='function'){ return window.duerpEditorHTML(cur); }
     if(!cur){
       var groups={};EDLIB_TYPES.forEach(function(t){if(EDHIDE[t.k])return;(groups[t.g]=groups[t.g]||[]).push(t);});
-      var create=Object.keys(groups).map(function(g){
+      var edCat=state.edCat||'*';
+      var CATORD=['Constitution','Modification','Cessions','Ressources humaines','Contrats',
+                  'Domiciliation','Fiscalité','Comptabilité','Facturation','Attestations','Cabinet','Courriers'];
+      var catKeys=CATORD.filter(function(g){return groups[g];})
+        .concat(Object.keys(groups).filter(function(g){return CATORD.indexOf(g)<0;}));
+      var nAll=catKeys.reduce(function(a,g){return a+groups[g].length;},0);
+      var create=Object.keys(groups).filter(function(g){return edCat==='*'||edCat===g;}).map(function(g){
         return '<div class="ed2-grp"><div class="ed2-grp-h">'+edE(g)+'</div><div class="ed2-grp-b">'
           +groups[g].map(function(t){
             if(EDFORMS[t.k]){
@@ -18334,10 +18340,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
           }).join('')
           +'</div></div>';
       }).join('');
-      var recents=docs.slice(0,4);
+      var recents=(edCat==='@open')?docs:docs.slice(0,4);
       var openl=docs.length?('<div class="ed2-openwrap"><div class="ed2-grp-h">Documents ouverts <span class="ed2-cnt">'+recents.length+(docs.length>4?(' / '+docs.length):'')+'</span></div><div class="ed2-openlist">'
         +recents.map(function(x){return '<div class="ed2-open"><button class="ed2-open-b" onclick="edLibOpen(\''+x.id+'\')"><b>'+edE(x.titre)+'</b><span>'+edE((EDLIB_TYPES.filter(function(t){return t.k===x.k;})[0]||{}).g||'')+'</span></button><button class="ed2-x ed2-x-trash" title="Supprimer" aria-label="Supprimer" onclick="edLibDel(\''+x.id+'\')">'+((window.mqIcon?window.mqIcon('trash'):'×'))+'</button></div>';}).join('')
-        +'</div>'+(docs.length>4?'<div class="ed2-open-more">Les 4 documents les plus récents sont affichés.</div>':'')+'</div>'):'';
+        +'</div>'+((docs.length>4&&edCat!=='@open')?'<div class="ed2-open-more">Les 4 plus récents. <button class="ed2-open-all" onclick="edSetCat(\'@open\')">Voir les '+docs.length+' documents</button></div>':'')+'</div>'):'';
       var apps='<div class="ed2-grp ed2-grp-apps"><div class="ed2-grp-h">Applications</div><div class="ed2-grp-b">'
         +'<button class="ed2-new ed2-new-app" onclick="go(\'facturier\')">Factures</button>'
         +'<button class="ed2-new ed2-new-app" onclick="go(\'tvarembours\')">Remboursement de TVA</button>'
@@ -18347,7 +18353,28 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
         +'<div class="ed2-hero-r"><div class="ed2-search"><svg class="ed2-search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
         +'<input id="ed2-search" value="'+edE(state.edHomeQ||'')+'" placeholder="Rechercher un modèle…" oninput="edHomeFilter(this.value)"></div></div>'
         +'</div>';
-      return '<div class="ed2-home">'+edHero+'<div class="ed2-create" id="ed2-create">'+apps+create+'</div>'+openl+'</div>';
+      function catBtn(k,lbl,n,ic){ return '<button class="ed2-cat'+(edCat===k?' on':'')+'" onclick="edSetCat(\''+k+'\')">'
+        +'<span class="ed2-cat-ic">'+ic+'</span><span class="ed2-cat-l">'+edE(lbl)+'</span>'
+        +(n!=null?('<span class="ed2-cnt">'+n+'</span>'):'')+'</button>'; }
+      var CATIC={'Constitution':'◱','Modification':'◈','Cessions':'⇄','Ressources humaines':'▥','Contrats':'▤',
+                 'Domiciliation':'⌂','Fiscalité':'%','Comptabilité':'∑','Facturation':'€','Attestations':'◧',
+                 'Cabinet':'▩','Courriers':'◨','Documents administratifs':'◫','Analyse de marché':'⊡'};
+      /* Deux catégories sont greffées par d'autres modules dans #ed2-create. */
+      var GREFFE=[['Documents administratifs',1],['Analyse de marché',1]];
+      var side='<aside class="ed2-side">'
+        +'<div class="ed2-side-h">Modèles</div>'
+        +catBtn('*','Tous les modèles',nAll,'▦')
+        +catKeys.map(function(g){ return catBtn(g,g,groups[g].length,CATIC[g]||'•'); }).join('')
+        +GREFFE.map(function(x){ return catBtn(x[0],x[0],x[1],CATIC[x[0]]||'•'); }).join('')
+        +'<div class="ed2-side-h">Centralisation</div>'
+        +catBtn('@apps','Applications',null,'⊞')
+        +catBtn('@open','Documents ouverts',docs.length,'▨')
+        +'</aside>';
+      var corps=(edCat==='@open')?'':(edCat==='@apps'?apps:(edCat==='*'?apps+create:create));
+      var vide=(edCat!=='@open'&&edCat!=='@apps'&&!create)?'<div class="ed2-empty">Aucun modèle dans cette catégorie.</div>':'';
+      return '<div class="ed2-home ed2-home-2c">'+edHero
+        +side+'<div class="ed2-main"><div class="ed2-create" id="ed2-create">'+corps+vide+'</div>'
+        +((edCat==='@apps')?'':openl)+'</div></div>';
     }
     /* --- éditeur : volet de saisie + aperçu en direct --- */
     var D=cur.data||{};
@@ -23186,7 +23213,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     {code:'famille',  grp:'FAMILLE',          lib:'Allocations familiales',               base:'brut', sal:0,    pat:'FAM'},
     {code:'chomage',  grp:'ASSURANCE CHÔMAGE',lib:'Chômage',                             base:'brut', sal:0,    pat:4.00},
     {code:'ags',      grp:'ASSURANCE CHÔMAGE',lib:'AGS',                                 base:'brut', sal:0,    pat:0.25},
-    {code:'autres',   grp:'AUTRES',           lib:"Autres contributions dues par l'employeur",base:'brut',sal:0,pat:0.9662},
+    {code:'autres',   grp:'AUTRES',           lib:"Autres contributions dues par l'employeur",base:'brut',sal:0,pat:'AUT'},
     {code:'mutuelle', grp:'MUTUELLE',         lib:'Complémentaire santé (mutuelle)',      base:'brut', sal:'MUTS',pat:'MUTP', opt:true},
     {code:'csgDed',   grp:'CSG',              lib:"CSG déductible de l'impôt",            base:'csg',  sal:6.80, pat:0},
     {code:'csgNd',    grp:'CSG',              lib:"CSG/CRDS non déductible de l'impôt",   base:'csg',  sal:2.90, pat:0, imp:false}
@@ -23205,6 +23232,9 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     if(d.reduc==null)d.reduc='0';
     if(d.navBase==null)d.navBase='';
     if(d.navPct==null)d.navPct='50';
+    if(d.eff==null)d.eff='<11';
+    if(d.vm==null)d.vm='0';
+    if(d.forma==null)d.forma='';
     return d; }
 
   /* ---------- MOTEUR ---------- */
@@ -23222,11 +23252,27 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     /* Taux patronaux à seuil : maladie 7 % jusqu'à 2,5 SMIC puis 13 % ; allocations familiales
        3,45 % jusqu'à 3,5 SMIC puis 5,25 %. */
     var smicM=num(PARAM.smicMensuel)||1801.80;
+    /* « Autres contributions dues par l'employeur » : le gabarit n'offre qu'un rang, mais
+       la ligne agrège plusieurs contributions distinctes, chacune avec sa base et son taux.
+       FNAL : 0,10 % sur la tranche plafonnée en deçà de 50 salariés, 0,50 % sur la totalité
+       au-delà. Solidarité autonomie 0,30 %, dialogue social 0,016 %, formation
+       professionnelle 0,55 % (< 11 salariés) ou 1,00 %, versement mobilité selon la commune
+       et dû à partir de 11 salariés. */
+    var eff=(''+(d.eff||'<11')), e11=(eff!=='<11'), e50=(eff==='>=50');
+    var aut={
+      fnal:{lib:'Fonds national d\u2019aide au logement', tx:e50?0.50:0.10, base:e50?brut:plaf},
+      csa :{lib:'Contribution solidarité autonomie',      tx:0.30,  base:brut},
+      dial:{lib:'Contribution au dialogue social',        tx:0.016, base:brut},
+      forma:{lib:'Formation professionnelle',             tx:(d.forma!==''&&d.forma!=null)?num(d.forma):(e11?1.00:0.55), base:brut},
+      vm  :{lib:'Versement mobilité',                     tx:e11?num(d.vm):0, base:brut}
+    };
+    var autMt=0; Object.keys(aut).forEach(function(x){ aut[x].mt=r2(aut[x].base*aut[x].tx/100); autMt=r2(autMt+aut[x].mt); });
+    var txAutres=brut?(autMt/brut*100):0;
     var txMal=(brut<=r2(2.5*smicM))?7.00:13.00, txFam=(brut<=r2(3.5*smicM))?3.45:5.25;
     var totSalDed=0, totSal=0, totPat=0, byCode={};
     var lignes=COTIS().map(function(c){
       var sal=c.sal==='MUTS'?mutS:(c.sal==='MUTP'?mutP:c.sal);
-      var pat=c.pat==='AT'?at:(c.pat==='MUTP'?mutP:(c.pat==='MAL'?txMal:(c.pat==='FAM'?txFam:c.pat)));
+      var pat=c.pat==='AT'?at:(c.pat==='MUTP'?mutP:(c.pat==='MAL'?txMal:(c.pat==='FAM'?txFam:(c.pat==='AUT'?txAutres:c.pat))));
       sal=num(sal); pat=num(pat);
       if(c.opt && sal===0 && pat===0) return null;
       var base=c.base==='csg'?csgBase:(c.base==='plaf'?plaf:brut);
@@ -23246,7 +23292,7 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     var netAPayer=r2(netAvantImpot-pas);
     var reduc=num(d.reduc);
     var coutEmp=r2(brut+totPat+navMt-reduc);
-    return {salBase:salBase,absLines:absLines,absMt:absMt,brut:brut,csgBase:csgBase,plaf:plaf,navMt:navMt,mutPatMt:mutPatMt,
+    return {salBase:salBase,absLines:absLines,absMt:absMt,brut:brut,csgBase:csgBase,plaf:plaf,navMt:navMt,mutPatMt:mutPatMt,aut:aut,autMt:autMt,
       lignes:lignes,totSal:totSal,totSalDed:totSalDed,totPat:totPat,netImp:netImp,
       netAvantImpot:netAvantImpot,pasTaux:pasTaux,pas:pas,netSocial:netSocial,netAPayer:netAPayer,reduc:reduc,coutEmp:coutEmp,byCode:byCode};
   }
@@ -23301,8 +23347,16 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
   /* ---------- BARRE LATÉRALE (inputs) ---------- */
   function fld(k,v,ph,extra){ return '<input class="pfs-i pfs-text" value="'+E(v==null?'':v)+'" placeholder="'+E(ph||'')+'" oninput="pfPaieXSet(\''+k+'\',this.value)" '+(extra||'')+' autocomplete="off" spellcheck="false">'; }
   function row(lbl,inp){ return '<div class="pfs-row pfs-row-text"><label>'+E(lbl)+'</label><div class="pfs-cols pfs-cols1">'+inp+'</div></div>'; }
+  function selfld(k,v,opts){ return '<select class="pfs-i pfs-text" onchange="pfPaieXSet(\''+k+'\',this.value)">'
+    +opts.map(function(o){return '<option value="'+E(o[0])+'"'+(String(v)===o[0]?' selected':'')+'>'+E(o[1])+'</option>';}).join('')+'</select>'; }
   function grp(t,rows){ return '<div class="pfs-grp"><div class="pfs-gh">'+E(t)+'</div>'+rows+'</div>'; }
   /* Rappel des taux appliqués sans saisie : ils dépendent du barème et du niveau de salaire. */
+  function autresDetail(d){ var r=compute(d), a=r.aut, K=['fnal','csa','dial','forma','vm'];
+    return '<div class="pfs-row pfs-row-text pfs-row-taux"><label>Dont « autres contributions »</label><div class="pfs-cols pfs-cols1">'
+      +'<div class="pe-taux"><div class="pe-taux-h"><span>Contribution</span><span>Taux</span><span>Montant</span></div>'
+      +K.map(function(k){ var x=a[k]; return '<div class="pe-taux-r"><span>'+E(x.lib)+'</span><span>'+ft(x.tx).replace('.',',')+'</span><span>'+fr(x.mt)+'</span></div>'; }).join('')
+      +'<div class="pe-taux-r"><span><b>Total</b></span><span>'+ft(r.brut?r.autMt/r.brut*100:0).replace('.',',')+'</span><span><b>'+fr(r.autMt)+'</b></span></div></div>'
+      +'<div class="pe-taux-n">Le bulletin n\u2019offre qu\u2019un rang : ces contributions y figurent agrégées, au taux équivalent sur le brut.</div></div></div>'; }
   function tauxAuto(d){ var r=compute(d), L=r.byCode;
     var li=[['Sécurité sociale plafonnée','6,9000','8,5500'],
             ['Sécurité sociale déplafonnée','0,4000','2,0200'],
@@ -23314,7 +23368,8 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
     return '<div class="pfs-row pfs-row-text pfs-row-taux"><label>Taux appliqués d\u2019office</label><div class="pfs-cols pfs-cols1">'
       +'<div class="pe-taux"><div class="pe-taux-h"><span>Cotisation</span><span>Salarial</span><span>Patronal</span></div>'
       +li.map(function(x){return '<div class="pe-taux-r"><span>'+E(x[0])+'</span><span>'+E(x[1])+'</span><span>'+E(x[2])+'</span></div>';}).join('')
-      +'</div><div class="pe-taux-n">Maladie 7 % jusqu\u2019à 2,5 SMIC puis 13 % · Allocations familiales 3,45 % jusqu\u2019à 3,5 SMIC puis 5,25 %.</div></div></div>'; }
+      +'</div><div class="pe-taux-n">Maladie 7 % jusqu\u2019à 2,5 SMIC puis 13 % · Allocations familiales 3,45 % jusqu\u2019à 3,5 SMIC puis 5,25 %.</div></div></div>'
+      +autresDetail(d); }
   function absEditor(d){
     var rows=(d.abs||[]).map(function(a,i){
       return '<div class="pff-line"><div class="pff-line-h">Absence '+(i+1)+'<button class="pff-del" onclick="pfPaieXAbsDel('+i+')">×</button></div>'
@@ -23335,7 +23390,11 @@ try{if(!document.getElementById('dem-bar-acts-css')){var st=document.createEleme
       +grp('Congés payés', row('CP N-1 (acquis / pris / solde)',fld('cp.n1a',d.cp.n1a,'acq','style="width:31%;display:inline-block"')+' '+fld('cp.n1p',d.cp.n1p,'pris','style="width:31%;display:inline-block"')+' '+fld('cp.n1s',d.cp.n1s,'solde','style="width:31%;display:inline-block"'))+row('CP N (acquis / pris / solde)',fld('cp.na',d.cp.na,'acq','style="width:31%;display:inline-block"')+' '+fld('cp.np',d.cp.np,'pris','style="width:31%;display:inline-block"')+' '+fld('cp.ns',d.cp.ns,'solde','style="width:31%;display:inline-block"')))
       +grp('Montants à payer', row('Taux horaire (€)',fld('tauxH',d.tauxH,f2(PARAM.smic)))+row('Heures du mois',fld('heures',d.heures,'151.67'))+row('Transport — base remboursée (€)',fld('navBase',d.navBase,'0')))
       +absEditor(d)
-      +grp('Taux (pré-remplis — modifiables)', row('Accident du travail — AT/MP (%)',fld('at',d.at,'0.70'))+row('Mutuelle — part salariale (%)',fld('mutS',d.mutS,'1.00'))+row('Mutuelle — part patronale (%)',fld('mutP',d.mutP,'1.50'))+row('Transport — prise en charge (%)',fld('navPct',d.navPct,'50'))+row('Prélèvement à la source (%)',fld('pas',d.pas,'0.00'))+row('Réduction générale employeur (€)',fld('reduc',d.reduc,'0'))+tauxAuto(d))
+      +grp('Taux (pré-remplis — modifiables)', row('Accident du travail — AT/MP (%)',fld('at',d.at,'0.70'))+row('Mutuelle — part salariale (%)',fld('mutS',d.mutS,'1.00'))+row('Mutuelle — part patronale (%)',fld('mutP',d.mutP,'1.50'))+row('Transport — prise en charge (%)',fld('navPct',d.navPct,'50'))+row('Prélèvement à la source (%)',fld('pas',d.pas,'0.00'))+row('Réduction générale employeur (€)',fld('reduc',d.reduc,'0'))
+        +row('Effectif de l\u2019entreprise',selfld('eff',d.eff,[['<11','Moins de 11 salariés'],['11-49','De 11 à 49 salariés'],['>=50','50 salariés ou plus']]))
+        +row('Versement mobilité (%)',fld('vm',d.vm,'0'))
+        +row('Formation professionnelle (%)',fld('forma',d.forma,'auto'))
+        +tauxAuto(d))
       +(function(){var ov=d.ov||{};return grp('Cumuls & report annuel (facultatif — auto si vide)', row('Cumul bases (€)',ovfld('cumBases',ov.cumBases))+row('Cumul bruts (€)',ovfld('cumBruts',ov.cumBruts))+row('Cumul heures',ovfld('cumHeures',ov.cumHeures))+row('Cumul heures maj.',ovfld('cumHrsMaj',ov.cumHrsMaj))+row('Cumul h. sup. contingent',ovfld('cumHsup',ov.cumHsup))+row('Cumul allègement (€)',ovfld('cumAlleg',ov.cumAlleg))+row('Cumul cotis. employeur (€)',ovfld('cumCotisEmp',ov.cumCotisEmp))+row('Cumul annuel net imposable (€)',ovfld('cumNetImpAnnuel',ov.cumNetImpAnnuel))+row('Cumul annuel net à payer (€)',ovfld('cumNetPayAnnuel',ov.cumNetPayAnnuel))+row("dont évolution rémunération (€)",ovfld('evolRemu',ov.evolRemu))+row('Net heures suppl. exo. (€)',ovfld('netHSExo',ov.netHSExo)));})()
       +'</div>';
   }
@@ -26947,6 +27006,8 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
 (function(){
   function norm(s){ return (''+(s||'')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
   /* Filtre en direct les modèles de la page « Créer un document » (accueil Éditions) */
+  /* `state` est un const de portée lexicale : il n'est pas porté par window. */
+  window.edSetCat=function(k){ try{ state.edCat=k; state.edHomeQ=''; }catch(e){} render(); };
   window.edHomeFilter=function(q){
     try{ if(window.state) state.edHomeQ=q||''; }catch(e){}
     var root=document.getElementById('ed2-create'); if(!root) return;
@@ -26968,6 +27029,27 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
   var st=document.createElement('style');
   st.textContent=''
     +'.ed2-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}'
+    +'.ed2-home-2c{max-width:1180px;display:grid;grid-template-columns:236px 1fr;gap:20px;align-items:start}'
+    +'.ed2-home-2c .ed2-hero{grid-column:1/-1}'
+    +'.ed2-side{position:sticky;top:8px;display:flex;flex-direction:column;gap:2px;padding:10px;border-radius:14px;'
+    +'border:1px solid var(--bd,rgba(255,255,255,.10));background:var(--card,rgba(255,255,255,.03))}'
+    +'.ed2-side-h{margin:8px 6px 4px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;opacity:.55}'
+    +'.ed2-side-h:first-child{margin-top:2px}'
+    +'.ed2-cat{display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:8px;width:100%;'
+    +'padding:7px 9px;border:0;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:12.5px;'
+    +'text-align:left;cursor:pointer;transition:background .12s}'
+    +'.ed2-cat:hover{background:rgba(255,255,255,.06)}'
+    +'.ed2-cat.on{background:rgba(120,170,255,.16);font-weight:600}'
+    +'.ed2-cat-ic{opacity:.7;text-align:center;font-size:12px}'
+    +'.ed2-cat-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    +'.ed2-cat .ed2-cnt{font-size:10.5px;opacity:.55;font-variant-numeric:tabular-nums}'
+    +'.ed2-main{min-width:0}'
+    +'.ed2-empty{padding:26px 4px;opacity:.6;font-size:13px}'
+    +'.ed2-open-all{border:0;background:none;color:inherit;font:inherit;text-decoration:underline;cursor:pointer;padding:0;opacity:.85}'
+    +'.ed2-open-all:hover{opacity:1}'
+    +'@media(max-width:900px){.ed2-home-2c{grid-template-columns:1fr}'
+    +'.ed2-side{position:static;flex-direction:row;flex-wrap:wrap;gap:4px}'
+    +'.ed2-side-h{width:100%}.ed2-cat{width:auto;grid-template-columns:auto auto auto}}'
     +'.ed2-hero-t{font-size:21px;font-weight:800;margin:0;letter-spacing:.2px}'
     +'.ed2-hero-s{font-size:12.5px;color:#8a90a0;margin-top:5px;max-width:600px;line-height:1.55}'
     +'.ed2-hero-r{display:flex;align-items:center;gap:9px;flex-shrink:0}'
@@ -28096,10 +28178,13 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
   try{ var _pe=window.pageEditions; if(typeof _pe==='function'){ window.pageEditions=function(){
     var h=_pe.apply(this,arguments);
     try{ if(typeof h==='string' && h.indexOf('id="ed2-create"')>=0){
-      var grp='<div class="ed2-grp"><div class="ed2-grp-h">Analyse de marché</div><div class="ed2-grp-b">'
-        +'<button class="ed2-new" onclick="emEditionsPick()">Étude de marché (PDF)</button>'
-        +'</div></div>';
-      h=h.replace('<div class="ed2-create" id="ed2-create">','<div class="ed2-create" id="ed2-create">'+grp);
+      var _c=(window.state&&state.edCat)||state.edCat||'*';
+      if(_c==='*'||_c==='Analyse de marché'){
+        var grp='<div class="ed2-grp"><div class="ed2-grp-h">Analyse de marché</div><div class="ed2-grp-b">'
+          +'<button class="ed2-new" onclick="emEditionsPick()">Étude de marché (PDF)</button>'
+          +'</div></div>';
+        h=h.replace('<div class="ed2-create" id="ed2-create">','<div class="ed2-create" id="ed2-create">'+grp);
+      }
     } }catch(e){}
     return h;
   }; } }catch(e){}
@@ -28609,10 +28694,13 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
   /* Bouton d'accueil dans Éditions ("Documents administratifs") */
   try{ if(typeof window.pageEditions==='function' && !window.pageEditions.__duerp){ var _pe=window.pageEditions; window.pageEditions=function(){ var h=_pe.apply(this,arguments);
     if(typeof h==='string' && h.indexOf('id="ed2-create"')>=0 && h.indexOf('duerpNew()')<0){
-      var grp='<div class="ed2-grp"><div class="ed2-grp-h">Documents administratifs</div><div class="ed2-grp-b">'
-        +'<button class="ed2-new" onclick="duerpNew()">DUERP — Document Unique d\'Évaluation des Risques</button>'
-        +'</div></div>';
-      h=h.replace('<div class="ed2-create" id="ed2-create">','<div class="ed2-create" id="ed2-create">'+grp);
+      var _c=state.edCat||'*';
+      if(_c==='*'||_c==='Documents administratifs'){
+        var grp='<div class="ed2-grp"><div class="ed2-grp-h">Documents administratifs</div><div class="ed2-grp-b">'
+          +'<button class="ed2-new" onclick="duerpNew()">DUERP — Document Unique d\'Évaluation des Risques</button>'
+          +'</div></div>';
+        h=h.replace('<div class="ed2-create" id="ed2-create">','<div class="ed2-create" id="ed2-create">'+grp);
+      }
     }
     return h; }; window.pageEditions.__duerp=1; } }catch(e){}
 
