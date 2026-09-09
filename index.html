@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=622;
+var LAST_VER=623;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -37696,11 +37696,12 @@ function testLienSignature() {
     ['avoir','Avoir','Annule ou corrige une facture émise (montants à déduire)']
   ];
   var TITRES={facture:'FACTURE',devis:'DEVIS',acompte:'FACTURE D\'ACOMPTE',situation:'SITUATION DE TRAVAUX',solde:'DÉCOMPTE GÉNÉRAL DÉFINITIF',avoir:'AVOIR'};
-  var UNITES=['u','forfait','h','j','m','m²','m³','ml','kg','t','lot','%'];
+  var UNITES=['u','forfait','h','j','m','m²','m³','ml','kg','t','lot','%','débours'];
+  function isDeb(l){ return !!(l&&(l.debours||l.u==='débours')); }
   var NEWMOD={btp:'BTP — situation détaillée',chantier:'Chantier (bandeau)',sobre:'Sobre (noir & blanc)'};
   function isBTPType(t){ return t==='acompte'||t==='situation'||t==='solde'; }
   function typeOf(d){ return d.type||'facture'; }
-  function isBTPDoc(d){ return isBTPType(typeOf(d))||n(d.rg)>0||n(d.prorata)>0||n(d.acomptesTTC)>0||!!(d.chRef||d.chNom); }
+  function isBTPDoc(d){ return isBTPType(typeOf(d))||n(d.rg)>0||n(d.prorata)>0||n(d.acomptesTTC)>0||!!(d.chRef||d.chNom)||lignesReelles(d).some(isDeb); }
 
   /* ---------- Numérotation par type (continue et chronologique par série) ---------- */
   function nextNumFor(type){
@@ -37714,13 +37715,13 @@ function testLienSignature() {
   function lignesReelles(d){ return (d.lignes||[]).filter(function(l){ return !l.lot; }); }
   function calc(d){
     d=d||{}; var type=typeOf(d), dev=d.devise||'EUR';
-    var marche=0, cumul=0;
-    lignesReelles(d).forEach(function(l){ var m=r2(n(l.qte)*n(l.pu)); marche+=m; var av=(type==='solde')?100:(type==='situation'?Math.min(100,Math.max(0,n(l.av))):100); cumul+=r2(m*av/100); });
-    marche=r2(marche); cumul=r2(cumul);
+    var marche=0, cumul=0, deb=0;
+    lignesReelles(d).forEach(function(l){ var m=r2(n(l.qte)*n(l.pu)); marche+=m; if(isDeb(l)) deb+=m; var av=(type==='solde')?100:(type==='situation'?Math.min(100,Math.max(0,n(l.av))):100); cumul+=r2(m*av/100); });
+    marche=r2(marche); cumul=r2(cumul); deb=r2(deb);
     var simple=!isBTPDoc(d)&&(type==='facture'||type==='devis'||type==='avoir');
     if(simple){ /* comportement historique du facturier (remise après TVA) */
       var rate0=(d.franchiseTVA||d.autoliq)?0:n(d.tva); var tva0=r2(marche*rate0/100); var rem0=n(d.remise);
-      return {simple:true,type:type,marche:marche,cumul:marche,prec:0,situHT:marche,remise:rem0,proHT:0,baseHT:r2(marche-rem0),sousTotal:marche,tvaRate:rate0,tva:tva0,ttc:r2(marche+tva0-rem0),rgTTC:0,acomptes:0,rgRestit:0,net:r2(marche+tva0-rem0),total:r2(marche+tva0-rem0)};
+      return {simple:true,type:type,marche:marche,cumul:marche,prec:0,situHT:marche,remise:rem0,proHT:0,deb:0,baseHT:r2(marche-rem0),sousTotal:marche,tvaRate:rate0,tva:tva0,ttc:r2(marche+tva0-rem0),rgTTC:0,acomptes:0,rgRestit:0,net:r2(marche+tva0-rem0),total:r2(marche+tva0-rem0)};
     }
     var prec=0, situHT=marche;
     if(type==='situation'){ prec=r2(n(d.cumulPrec)); situHT=r2(cumul-prec); }
@@ -37728,10 +37729,10 @@ function testLienSignature() {
     else if(type==='acompte'){ var pc=n(d.acPct)||30; situHT=r2(marche*pc/100); cumul=situHT; }
     var remise=n(d.remise); var apres=r2(situHT-remise);
     var proHT=r2(apres*n(d.prorata)/100); var baseHT=r2(apres-proHT);
-    var rate=(d.franchiseTVA||d.autoliq)?0:n(d.tva); var tva=r2(baseHT*rate/100); var ttc=r2(baseHT+tva);
+    var debApplique=(type==='situation'||type==='solde'||type==='acompte')?0:deb; var rate=(d.franchiseTVA||d.autoliq)?0:n(d.tva); var tva=r2(Math.max(0,baseHT-debApplique)*rate/100); var ttc=r2(baseHT+tva);
     var rgTTC=r2(ttc*n(d.rg)/100); var acomptes=r2(n(d.acomptesTTC)); var rgRestit=(d.rgLib?r2(n(d.rgPrecTTC)):0);
     var net=r2(ttc-rgTTC-acomptes+rgRestit);
-    return {simple:false,type:type,marche:marche,cumul:cumul,prec:prec,situHT:situHT,remise:remise,proHT:proHT,baseHT:baseHT,sousTotal:situHT,tvaRate:rate,tva:tva,ttc:ttc,rgTTC:rgTTC,acomptes:acomptes,rgRestit:rgRestit,net:net,total:net};
+    return {simple:false,type:type,marche:marche,cumul:cumul,prec:prec,situHT:situHT,remise:remise,proHT:proHT,deb:debApplique,baseHT:baseHT,sousTotal:situHT,tvaRate:rate,tva:tva,ttc:ttc,rgTTC:rgTTC,acomptes:acomptes,rgRestit:rgRestit,net:net,total:net};
   }
   window.invCalc=calc; window.invCalcBTP=calc;
 
@@ -37800,6 +37801,8 @@ function testLienSignature() {
     if(cat.length){ items.push({sep:'Prestations fréquentes'}); cat.forEach(function(c){ items.push({ico:'★',l:c.des,sub:(c.u||'u')+' · '+money(c.pu,d.devise),r:'+',fn:function(){ ajouterLignes([{des:c.des,qte:1,pu:c.pu,u:c.u||'u',av:0}]); }}); }); }
     var docs=store().filter(function(f){ return f.id!==d.id&&(f.clNom||'')===(d.clNom||'')&&(d.clNom||'')&&lignesReelles(f).some(function(l){ return l.des; }); }).sort(function(a,b){ return (b.dateEmise||'').localeCompare(a.dateEmise||''); }).slice(0,5);
     if(docs.length){ items.push({sep:'Reprendre les lignes d\'un document de '+d.clNom}); docs.forEach(function(f){ items.push({ico:'⎘',l:(TITRES[typeOf(f)]||'Document')+' '+f.numero,sub:frDate(f.dateEmise)+' · '+lignesReelles(f).length+' ligne(s) · '+money(calc(f).marche,f.devise),fn:function(){ ajouterLignes((f.lignes||[]).map(function(l){ var x=JSON.parse(JSON.stringify(l)); if(!x.lot) x.av=0; return x; })); }}); }); }
+    var SV=(function(){ try{ return (DB.services||[]).filter(function(s){ return s&&s.nom&&s.actif!==false; }); }catch(e){ return []; } })();
+    if(SV.length){ items.push({sep:'Prestations du cabinet (catalogue Services)'}); SV.slice(0,12).forEach(function(s){ items.push({ico:'◆',l:s.nom,sub:[s.famille,s.type,s.prix?money(n(s.prix),d.devise):''].filter(Boolean).join(' · '),r:'+',fn:function(){ var L=[{des:s.nom,qte:1,pu:n(s.prix),u:'forfait',av:0}]; if(n(s.debours)) L.push({des:'Débours — '+s.nom,qte:1,pu:n(s.debours),u:'débours',av:0}); ajouterLignes(L); }}); }); }
     items.push({sep:'Packs BTP (désignations et unités — prix à compléter)'});
     PACKS.forEach(function(pk){ items.push({ico:'▤',l:pk[0],sub:pk[1].map(function(x){ return x[0]; }).join(', ').slice(0,70)+'…',r:pk[1].length+' lignes',fn:function(){ var L=[{lot:true,des:pk[0]}]; pk[1].forEach(function(x){ var ex=catalogue().filter(function(c){ return c.des.toLowerCase()===x[0].toLowerCase(); })[0]; L.push({des:x[0],qte:1,pu:ex?ex.pu:0,u:x[1],av:0}); }); ajouterLignes(L); }}); });
     fbMenu(btn,items,{wide:true}); };
@@ -37814,7 +37817,7 @@ function testLienSignature() {
     return d; };
 
   /* ---------- Enregistrement : total & champs BTP conservés ---------- */
-  var EXTRA=['type','chNom','chAdr','chRef','chMoa','chMoe','situNum','situPeriode','refFacture','clientId','rg','prorata','acomptesTTC','acPct','cumulPrec','rgPrecTTC','rgLib','tvaAttest','paye'];
+  var EXTRA=['type','chNom','chAdr','chRef','chMoa','chMoe','situNum','situPeriode','refFacture','clientId','dossierId','rg','prorata','acomptesTTC','acPct','cumulPrec','rgPrecTTC','rgLib','tvaAttest','paye'];
   var _save=window.invSave;
   window.invSave=function(status){ var d=draft(); try{ invRead(); }catch(e){}
     if(status==='emise'&&typeOf(d)==='devis') status='emise';
@@ -37852,6 +37855,7 @@ function testLienSignature() {
     if(d.tvaAttest&&(n(d.tva)===10||n(d.tva)===5.5)&&!d.autoliq&&!d.franchiseTVA) out.push('Taux réduit de TVA ('+pct(n(d.tva))+') appliqué sur attestation du client (travaux d\'amélioration, de transformation, d\'aménagement ou d\'entretien de locaux d\'habitation achevés depuis plus de deux ans — art. 279-0 bis / 278-0 bis A du CGI).');
     if(n(d.rg)>0) out.push('Retenue de garantie de '+pct(n(d.rg))+' (loi n° 71-584 du 16 juillet 1971) — libérable un an après la réception des travaux, sauf réserves, ou remplaçable par une caution bancaire.');
     if(n(d.prorata)>0) out.push('Compte prorata : '+pct(n(d.prorata))+' du montant HT, conformément à la convention de chantier.');
+    if(lignesReelles(d).some(isDeb)) out.push('Débours engagés au nom et pour le compte du client, refacturés à l\'euro l\'euro, hors champ de la TVA (art. 267, II-2° du CGI).');
     if(type==='avoir'&&d.refFacture) out.push('Avoir établi en annulation / correction de la facture n° '+E(d.refFacture)+'.');
     if(type==='devis') out.push('Devis valable 30 jours à compter de sa date d\'émission. Bon pour accord : date et signature du client précédées de la mention « Bon pour accord ».');
     if(type!=='devis') out.push('En cas de retard de paiement : pénalité de '+(E(d.penalites)||'3 fois le taux d’intérêt légal')+' et indemnité forfaitaire de 40 € pour frais de recouvrement (art. L441-10 et D441-5 du Code de commerce).');
@@ -37872,7 +37876,8 @@ function testLienSignature() {
     if(c.remise) row('Remise HT','− '+money(c.remise,dev));
     if(c.proHT) row('Compte prorata '+pct(n(d.prorata)),'− '+money(c.proHT,dev));
     if(c.proHT||c.remise) row('Base HT',money(c.baseHT,dev));
-    row('TVA '+pct(c.tvaRate),money(c.tva,dev)); row('Total TTC',money(c.ttc,dev));
+    if(c.deb) row('Dont débours non soumis à TVA','− '+money(c.deb,dev)+' de base');
+    row('TVA '+pct(c.tvaRate)+(c.deb?(' sur '+money(r2(c.baseHT-c.deb),dev)):''),money(c.tva,dev)); row('Total TTC',money(c.ttc,dev));
     if(c.rgTTC) row('Retenue de garantie '+pct(n(d.rg)),'− '+money(c.rgTTC,dev));
     if(c.acomptes) row('Acomptes déjà réglés','− '+money(c.acomptes,dev));
     if(c.rgRestit) row('Restitution de la retenue de garantie','+ '+money(c.rgRestit,dev));
@@ -38090,7 +38095,8 @@ function testLienSignature() {
     if(c.rgTTC) P2('411700000','Clients – retenues de garantie',c.rgTTC,0,{ax:ax,axl:f.clNom||'Client'});
     if(c.acomptes) P2('419100000','Clients – avances et acomptes reçus',c.acomptes,0);
     if(c.rgRestit) P2('411700000','Clients – retenues de garantie restituées',0,c.rgRestit,{ax:ax,axl:f.clNom||'Client'});
-    P2('706000000',t==='acompte'?'Acompte sur travaux':'Travaux / prestations',0,c.baseHT);
+    P2('706000000',t==='acompte'?'Acompte sur travaux':'Travaux / prestations',0,r2(c.baseHT-(c.deb||0)));
+    if(c.deb) P2('467000000','Débours refacturés',0,c.deb);
     if(c.tva>0) P2('445710000','TVA collectée',0,c.tva);
     var sd=r2(L.reduce(function(a,l){ return a+l.d; },0)), sc=r2(L.reduce(function(a,l){ return a+l.c; },0)); if(Math.abs(sd-sc)>=0.005){ var i=L.findIndex(function(l){ return l.cpt==='706000000'; }); if(i>=0){ if(av) L[i].d=r2(L[i].d+(sc-sd)); else L[i].c=r2(L[i].c+(sd-sc)); } }
     return L; };
@@ -38319,6 +38325,102 @@ function testLienSignature() {
     '.fp-list{display:flex;flex-direction:column;gap:2px;max-height:360px;overflow:auto}.fp-row{display:flex;flex-direction:column;gap:1px;text-align:left;border:1px solid var(--line-2,#2c384b);background:var(--paper,#141b28);color:var(--ink,#f5f9fe);border-radius:8px;padding:8px 10px;cursor:pointer;font:inherit}.fp-row:hover{border-color:var(--accent,#4f9dff)}.fp-row span{font-size:11.5px;color:var(--ink-3,#8494aa)}'
   ].join('\n'); document.head.appendChild(css);
   window.__fpDebug={greffeDe:greffeDe,OBJETS:OBJETS,clients:clients};
+})();
+</script>
+
+
+<script>
+/* ============================================================================
+   Mar'q — Devis & factures d'honoraires par dossier (v623)
+   - Carte « Devis & factures » dans chaque dossier (onglet Demande) : devis d'honoraires
+     proposé d'après le barème et la formalité (honoraires, annonce légale, débours greffe/RBE),
+     facture, acompte 50 %, prestations du catalogue Services, liste des documents du dossier,
+     facturé / encaissé / reste dû, marquer payée, relance, PDF.
+   - Facturier : bouton « Dossier ▾ » (liste fixe) pour rattacher un document à un dossier
+     (client, référence, lignes proposées) ; le rattachement est conservé (dossierId).
+   - Automatisation : devis accepté → facture proposée ; facture payée → honoraires soldés
+     dans la clôture du dossier.
+   100 % additif.
+   ========================================================================= */
+(function(){
+  if(window.__aemDosFact) return; window.__aemDosFact=true;
+  function DBX(){ try{ return (typeof DB!=='undefined'&&DB)?DB:null; }catch(e){ return null; } }
+  function P(){ var db=DBX(); if(!db) return {}; db.parametres=db.parametres||{}; return db.parametres; }
+  function store(){ var p=P(); if(!Array.isArray(p.facturier)) p.facturier=[]; return p.facturier; }
+  function E(s){ return (typeof esc==='function')?esc(s):(''+(s==null?'':s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function T(m){ try{ if(typeof toast==='function') toast(m); }catch(e){} }
+  function r2(v){ return Math.round((+v||0)*100)/100; } function n(v){ v=parseFloat((''+(v==null?'':v)).replace(',','.')); return isNaN(v)?0:v; }
+  function money(v){ return r2(v).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }
+  function frDate(s){ if(!s) return '—'; var p=(''+s).split('T')[0].split('-'); return p.length<3?s:(p[2]+'/'+p[1]+'/'+p[0]); }
+  function iso(){ try{ if(typeof today==='function') return today(); }catch(e){} return new Date().toISOString().slice(0,10); }
+  function calc(f){ try{ return invCalc(f); }catch(e){ return {baseHT:0,tva:0,ttc:0,net:0,total:0}; } }
+  function typeOf(f){ return f.type||'facture'; }
+  function dossiers(){ var db=DBX(); return ((db&&db.dossiers)||[]).filter(function(d){ return !d.archived; }); }
+  function doss(id){ return dossiers().filter(function(d){ return d.id===id; })[0]; }
+  function cli(d){ try{ return clientById((d.clientIds||[])[0])||{}; }catch(e){ return {}; } }
+  function nomClient(d){ var c=cli(d); var it=d.intake||{}; return (c.denom||c.raison||'').trim()||(it.societe&&it.societe.denomination)||(it.modif&&it.modif.societe&&it.modif.societe.denomination)||((c.prenom||'')+' '+(c.nom||'')).trim()||d.ref||'Client'; }
+  function formeDe(d){ var c=cli(d); var it=d.intake||{}; return (c.forme||it.type||d.type||(it.modif&&it.modif.societe&&it.modif.societe.forme)||'').toString().toUpperCase(); }
+  function natureDe(d){ var it=d.intake||{}; return d.nature||it.nature||'creation'; }
+  var MODIF={siege:'Transfert de siège social',dirigeant:'Changement de dirigeant',denomination:'Changement de dénomination',objet:'Changement d\'objet social',capital:'Modification de capital',transformation:'Transformation',cession:'Cession de parts / actions',dissolution:'Dissolution',radiation:'Radiation',cloture:'Changement de date de clôture'};
+  function formalite(d){ var it=d.intake||{}; if(natureDe(d)==='modification'){ var k=(it.modif&&it.modif.kind)||'siege'; return MODIF[k]||'Modification statutaire'; } return 'Création '+(formeDe(d)||'de société'); }
+  function refDe(d){ return d.numeroDossier||d.ref||d.id; }
+  var BAREME={SARL:{hono:390,al:147},EURL:{hono:390,al:147},SAS:{hono:450,al:197},SASU:{hono:450,al:197},SCI:{hono:420,al:189},SNC:{hono:390,al:193},'':{hono:390,al:150}};
+  var BAREME_MODIF={siege:{hono:290,al:150},dirigeant:{hono:290,al:150},denomination:{hono:290,al:150},objet:{hono:290,al:150},capital:{hono:350,al:150},transformation:{hono:490,al:190},cession:{hono:390,al:0},dissolution:{hono:390,al:150},radiation:{hono:390,al:150},cloture:{hono:250,al:150}};
+  function bareme(d){ var h=(d.cloture&&d.cloture.hono)||null; if(h&&(n(h.honoraires)||n(h.annonce))) return {hono:n(h.honoraires),al:n(h.annonce),greffe:n(h.greffe)||37.45,dbe:n(h.dbe)||21.41,divers:n(h.divers),diversLbl:h.diversLbl||''}; if(natureDe(d)==='modification'){ var k=((d.intake||{}).modif||{}).kind||'siege'; var b=BAREME_MODIF[k]||BAREME_MODIF.siege; return {hono:b.hono,al:b.al,greffe:k==='cession'?0:192.01,dbe:0,divers:0}; } var b2=BAREME[formeDe(d)]||BAREME['']; return {hono:b2.hono,al:b2.al,greffe:37.45,dbe:21.41,divers:0}; }
+  function lignesHono(d){ var b=bareme(d); var L=[{des:'Honoraires — '+formalite(d)+' — '+nomClient(d),qte:1,pu:b.hono,u:'forfait',av:0}]; if(b.al>0) L.push({des:'Annonce légale (journal d\'annonces légales)',qte:1,pu:b.al,u:'forfait',av:0}); if(b.divers>0) L.push({des:b.diversLbl||'Prestation complémentaire',qte:1,pu:b.divers,u:'forfait',av:0}); if(b.greffe>0) L.push({des:'Frais de greffe / INPI (débours)',qte:1,pu:b.greffe,u:'débours',av:0}); if(b.dbe>0) L.push({des:'Déclaration des bénéficiaires effectifs (débours)',qte:1,pu:b.dbe,u:'débours',av:0}); return L; }
+  window.dosLignesHonoraires=lignesHono;
+  function docsDe(d){ var ref=refDe(d); return store().filter(function(f){ return f.dossierId===d.id||(ref&&f.chRef===ref); }).sort(function(a,b){ return (a.dateEmise||'').localeCompare(b.dateEmise||'')||((a.ts||0)-(b.ts||0)); }); }
+  window.dosDocs=docsDe;
+
+  /* ---------- Création d'un document rattaché au dossier ---------- */
+  function draftPour(d,type,opts){ opts=opts||{}; var c=cli(d); var it=d.intake||{}; var soc=it.societe||{}, sg=it.siege||{}, ms=(it.modif&&it.modif.societe)||{}; var dr=(typeof invNouveauBrouillon==='function')?invNouveauBrouillon():(window.__invDraft={}); window.__invDraft=dr;
+    dr.type=type; dr.numero=(typeof invNumPourType==='function')?invNumPourType(type):dr.numero; dr.dossierId=d.id; dr.clientId=c.id||''; dr.chRef=refDe(d); dr.chNom='Dossier '+refDe(d)+' — '+formalite(d); dr.chAdr=''; dr.chMoa=''; dr.chMoe='';
+    dr.clNom=nomClient(d); dr.clMail=c.email||(it.contact&&it.contact.email)||''; dr.clAdr=[c.adresse||c.siege||sg.rue||ms.siege||'',[c.cp||sg.cp||ms.cp||'',c.ville||sg.ville||ms.ville||''].filter(Boolean).join(' ')].filter(Boolean).join('\n'); dr.clSiret=c.siret||c.siren||ms.siren||''; dr.clTva=c.tvaIntra||'';
+    dr.modele=opts.modele||'sobre'; dr.rg=0; dr.prorata=0; dr.tva=20; dr.lignes=opts.lignes||lignesHono(d); if(type==='acompte'){ dr.acPct=opts.acPct||50; }
+    dr.note='Formalité : '+formalite(d)+' — dossier '+refDe(d)+'. '+(type==='devis'?'Devis valable 30 jours ; les débours (greffe, INPI, annonce) sont refacturés à l\'euro l\'euro.':'Merci de votre confiance.');
+    if(opts.refDevis) dr.refDevis=opts.refDevis; return dr; }
+  function ouvrirFacturier(){ try{ state.page='facturier'; window.__invUI=window.__invUI||{}; window.__invUI.tab='new'; render(); }catch(e){} }
+  window.dosDevis=function(id,svcNom){ var d=doss(id); if(!d) return; var L=lignesHono(d); if(svcNom){ var s=(DBX().services||[]).filter(function(x){ return x.nom===svcNom; })[0]; if(s){ L.push({des:s.nom,qte:1,pu:n(s.prix),u:'forfait',av:0}); if(n(s.debours)) L.push({des:'Débours — '+s.nom,qte:1,pu:n(s.debours),u:'débours',av:0}); } } draftPour(d,'devis',{lignes:L}); ouvrirFacturier(); T('Devis d\'honoraires préparé pour le dossier '+refDe(d)+' — vérifiez puis émettez.'); };
+  window.dosFacture=function(id,depuisDevisId){ var d=doss(id); if(!d) return; var src=depuisDevisId?store().filter(function(f){ return f.id===depuisDevisId; })[0]:null; var ac=docsDe(d).filter(function(f){ return typeOf(f)==='acompte'&&f.statut==='emise'; }); var L=src?JSON.parse(JSON.stringify(src.lignes||[])):lignesHono(d); var dr=draftPour(d,'facture',{lignes:L,refDevis:src?src.numero:undefined}); if(ac.length){ dr.acomptesTTC=r2(ac.reduce(function(a,f){ return a+calc(f).ttc; },0)); } ouvrirFacturier(); T('Facture d\'honoraires préparée'+(ac.length?(' — acompte(s) déduit(s) : '+money(dr.acomptesTTC)):'')+'.'); };
+  window.dosAcompte=function(id){ var d=doss(id); if(!d) return; var dv=docsDe(d).filter(function(f){ return typeOf(f)==='devis'&&f.statut==='emise'; }).pop(); var L=dv?JSON.parse(JSON.stringify(dv.lignes||[])).filter(function(l){ return !(l.u==='débours'||l.debours); }):lignesHono(d).filter(function(l){ return l.u!=='débours'; }); draftPour(d,'acompte',{lignes:L,acPct:50,refDevis:dv?dv.numero:undefined}); ouvrirFacturier(); T('Facture d\'acompte (50 % des honoraires) préparée.'); };
+  window.dosServices=function(btn,id){ var SV=(DBX().services||[]).filter(function(s){ return s&&s.nom&&s.actif!==false; }); if(!SV.length){ T('Aucune prestation dans le catalogue Services.'); return; } var fam={}; SV.forEach(function(s){ (fam[s.famille||'Autres']=fam[s.famille||'Autres']||[]).push(s); }); var I=[]; Object.keys(fam).sort().forEach(function(k){ I.push({sep:k}); fam[k].forEach(function(s){ I.push({ico:'◆',l:s.nom,sub:[s.type,s.prix?money(n(s.prix)):'',s.debours?('débours '+money(n(s.debours))):''].filter(Boolean).join(' · '),r:'devis',fn:function(){ dosDevis(id,s.nom); }}); }); }); if(typeof fbMenu==='function') fbMenu(btn,I,{wide:true}); };
+
+  /* ---------- Carte du dossier ---------- */
+  var ETAT={brouillon:['Brouillon','draft'],devis:['Devis envoyé','draft'],accepte:['Devis accepté','emise'],avoir:['Avoir','avoir'],payee:['Payée','payee'],retard:['En retard','retard'],emise:['Émise','emise']};
+  function etat(f){ if(f.statut!=='emise') return 'brouillon'; var t=typeOf(f); if(t==='devis') return f.accepte?'accepte':'devis'; if(t==='avoir') return 'avoir'; if(f.paye) return 'payee'; if((f.dateEch||'')<iso()) return 'retard'; return 'emise'; }
+  function carte(d){ var docs=docsDe(d); var b=bareme(d); var prop=lignesHono(d); var taxable=prop.filter(function(l){ return l.u!=='débours'; }).reduce(function(a,l){ return a+n(l.pu); },0), deb=prop.filter(function(l){ return l.u==='débours'; }).reduce(function(a,l){ return a+n(l.pu); },0); var propTTC=r2(taxable*1.2+deb);
+    var fact=0,enc=0,dev=0; docs.forEach(function(f){ if(f.statut!=='emise') return; var c=calc(f); var t=typeOf(f); if(t==='devis'){ dev+=c.net; return; } if(t==='avoir'){ fact-=c.net; return; } fact+=c.net; if(f.paye) enc+=n(f.paye.montant); });
+    var devisAcc=docs.filter(function(f){ return typeOf(f)==='devis'&&f.statut==='emise'&&f.accepte; }).pop(); var factures=docs.filter(function(f){ return f.statut==='emise'&&typeOf(f)!=='devis'&&typeOf(f)!=='avoir'; }); var enAttente=factures.filter(function(f){ return !f.paye; });
+    var rows=docs.map(function(f){ var c=calc(f); var e=etat(f); var lab=ETAT[e]; return '<tr><td><b>'+E(f.numero)+'</b><div class="df-mini">'+E({facture:'Facture',devis:'Devis',acompte:'Acompte',situation:'Situation',solde:'DGD',avoir:'Avoir'}[typeOf(f)]||'')+'</div></td><td>'+frDate(f.dateEmise)+'</td><td class="r">'+money(c.baseHT)+'</td><td class="r"><b>'+money(c.net)+'</b></td><td><span class="inv-badge '+lab[1]+'">'+lab[0]+'</span>'+(f.paye?('<div class="df-mini">'+frDate(f.paye.date)+'</div>'):'')+'</td><td class="r df-acts"><button class="inv-tb sm" onclick="invVoir(\''+f.id+'\');go(\'facturier\')">Ouvrir</button>'+((f.statut==='emise'&&typeOf(f)!=='devis'&&typeOf(f)!=='avoir'&&!f.paye)?('<button class="inv-tb sm pri" onclick="invPayer(\''+f.id+'\')">Payée</button>'):'')+'<button class="inv-tb sm" onclick="invActions(this,\''+f.id+'\')">Actions ▾</button></td></tr>'; }).join('');
+    var next=''; if(devisAcc&&!factures.length) next='<div class="df-next">✓ Devis '+E(devisAcc.numero)+' accepté — <button class="btn btn-sm btn-pri" onclick="dosFacture(\''+d.id+'\',\''+devisAcc.id+'\')">Établir la facture d\'honoraires</button></div>'; else if(enAttente.length) next='<div class="df-next warn">'+enAttente.length+' facture(s) en attente d\'encaissement — '+money(r2(enAttente.reduce(function(a,f){ return a+calc(f).net; },0)))+'</div>'; else if(factures.length&&!enAttente.length) next='<div class="df-next ok">✓ Honoraires du dossier encaissés.</div>';
+    return '<div class="card esp-mailcard df-card" data-dos="'+E(d.id)+'"><div class="card-h"><h2>Devis & factures d\'honoraires</h2><span class="sub" style="margin-left:auto">'+E(formalite(d))+' · barème '+money(b.hono)+' HT'+(b.al?(' + annonce '+money(b.al)):'')+(deb?(' + débours '+money(deb)):'')+' = <b>'+money(propTTC)+' TTC</b></span></div><div class="card-b">'
+      +'<div class="df-kpis"><div class="df-k"><span>Devisé TTC</span><b>'+money(dev)+'</b></div><div class="df-k"><span>Facturé TTC</span><b>'+money(fact)+'</b></div><div class="df-k ok"><span>Encaissé</span><b>'+money(enc)+'</b></div><div class="df-k'+(fact-enc>0.005?' warn':'')+'"><span>Reste dû</span><b>'+money(r2(fact-enc))+'</b></div></div>'
+      +'<div class="df-btns"><button class="btn btn-sm btn-pri" onclick="dosDevis(\''+d.id+'\')">Devis d\'honoraires</button><button class="btn btn-sm" onclick="dosFacture(\''+d.id+'\')">Facture</button><button class="btn btn-sm" onclick="dosAcompte(\''+d.id+'\')">Acompte 50 %</button><button class="btn btn-sm" onclick="dosServices(this,\''+d.id+'\')">Prestation du catalogue ▾</button></div>'
+      +next+(rows?('<div class="inv-tbwrap"><table class="inv-htbl df-t"><thead><tr><th>N°</th><th>Date</th><th class="r">HT</th><th class="r">Net</th><th>État</th><th class="r">Actions</th></tr></thead><tbody>'+rows+'</tbody></table></div>'):'<div class="df-empty">Aucun devis ni facture pour ce dossier. Le devis d\'honoraires est pré-rempli d\'après le barème : cliquez « Devis d\'honoraires ».</div>')
+      +'</div></div>'; }
+  window.dosCarteHTML=carte;
+  function peindre(){ try{ if(typeof state==='undefined'||state.page!=='espace') return; var d=doss(state.espaceDossier); if(!d) return; var panel=document.querySelector('.esp-tabpanel[data-tab="demande"]'); if(!panel) return; var old=panel.querySelector('.df-card'); var t=document.createElement('div'); t.innerHTML=carte(d); var node=t.firstChild; if(old){ old.replaceWith(node); return; } var after=panel.querySelector('.fi-enreg'); if(after) after.insertAdjacentElement('afterend',node); else panel.insertBefore(node,panel.firstChild); }catch(e){ window.__dosErr=e&&e.message; } }
+  window.__dosPeindre=peindre;
+
+  /* ---------- Facturier : bouton « Dossier ▾ » ---------- */
+  window.dosFacturierReprendre=function(id){ var d=doss(id); if(!d) return; try{ invRead(); }catch(e){} var dr=window.__invDraft; if(!dr) return; var c=cli(d); var it=d.intake||{}; var sg=it.siege||{}, ms=(it.modif&&it.modif.societe)||{}; dr.dossierId=d.id; dr.clientId=c.id||''; dr.chRef=refDe(d); dr.chNom='Dossier '+refDe(d)+' — '+formalite(d); dr.clNom=nomClient(d); dr.clMail=c.email||(it.contact&&it.contact.email)||dr.clMail||''; dr.clAdr=[c.adresse||c.siege||sg.rue||ms.siege||'',[c.cp||sg.cp||ms.cp||'',c.ville||sg.ville||ms.ville||''].filter(Boolean).join(' ')].filter(Boolean).join('\n')||dr.clAdr; dr.clSiret=c.siret||c.siren||ms.siren||dr.clSiret||''; var vide=!(dr.lignes||[]).some(function(l){ return l.des||n(l.pu); }); if(vide) dr.lignes=lignesHono(d); render(); T('Dossier '+refDe(d)+' rattaché'+(vide?' — lignes d\'honoraires proposées':'')+'.'); };
+  window.dosFacturierMenu=function(btn){ var L=dossiers().slice().sort(function(a,b){ return (b.createdAt||b.date||'').localeCompare(a.createdAt||a.date||''); }).slice(0,12); var I=[{sep:'Rattacher à un dossier'}]; if(!L.length) I.push({l:'Aucun dossier',disabled:true}); L.forEach(function(d){ I.push({ico:'▣',l:nomClient(d),sub:refDe(d)+' · '+formalite(d)+' · '+docsDe(d).length+' doc.',fn:function(){ dosFacturierReprendre(d.id); }}); }); if(typeof fbMenu==='function') fbMenu(btn,I,{wide:true}); };
+  function peindreFacturier(){ try{ if(typeof state==='undefined'||state.page!=='facturier') return; var pick=document.querySelector('.fb-pick'); if(!pick||pick.querySelector('.df-dosbtn')) return; var dr=window.__invDraft||{}; var d=dr.dossierId?doss(dr.dossierId):null; var w=document.createElement('label'); w.innerHTML='Dossier Mar\'q<button class="inv-tb df-dosbtn" onclick="dosFacturierMenu(this)">'+(d?('▣ '+E(refDe(d))+' — '+E(nomClient(d)).slice(0,22)):'▣ Rattacher à un dossier')+' ▾</button>'; pick.insertBefore(w,pick.querySelector('.fb-tvap')); }catch(e){} }
+
+  /* ---------- Enregistrement : dossierId conservé + automatisations ---------- */
+  var _save=window.invSave; window.invSave=function(status){ var d=window.__invDraft||{}; var r=_save.apply(this,arguments); try{ var d2=window.__invDraft||{}; if(d2.id&&d.dossierId){ var rec=store().filter(function(x){ return x.id===d2.id; })[0]; if(rec) rec.dossierId=d.dossierId; } }catch(e){} return r; };
+  var _payOK=window.invPayerOK; if(typeof _payOK==='function') window.invPayerOK=function(id){ var r=_payOK.apply(this,arguments); try{ var f=store().filter(function(x){ return x.id===id; })[0]; if(f&&f.dossierId){ var d=doss(f.dossierId); if(d){ d.cloture=d.cloture||{}; d.cloture.factureId=d.cloture.factureId||f.id; d.cloture.paye=f.paye.date; d.cloture.payeMontant=f.paye.montant; try{ save(); }catch(e){} } } }catch(e){} return r; };
+  var _acc=window.invDevisAccepte; if(typeof _acc==='function') window.invDevisAccepte=function(id){ var r=_acc.apply(this,arguments); try{ var f=store().filter(function(x){ return x.id===id; })[0]; if(f&&f.accepte&&f.dossierId&&!docsDe(doss(f.dossierId)||{}).some(function(x){ return typeOf(x)==='facture'&&x.statut==='emise'; })) T('Devis accepté — la facture d\'honoraires peut être établie depuis le dossier '+E(f.chRef||'')+'.'); }catch(e){} return r; };
+
+  var _render=window.render; window.render=function(){ var r=_render.apply(this,arguments); try{ peindre(); peindreFacturier(); }catch(e){} return r; };
+  var css=document.createElement('style'); css.id='df-mod'; css.textContent=[
+    '.df-card .card-h{flex-wrap:wrap;gap:6px}.df-card .sub b{color:var(--ink,#f5f9fe)}',
+    '.df-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px}.df-k{border:1px solid var(--line-2,#2c384b);border-radius:9px;padding:8px 11px;display:flex;flex-direction:column;gap:2px}.df-k span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3,#8494aa);font-weight:700}.df-k b{font-size:15px}.df-k.ok b{color:#5bbf8a}.df-k.warn b{color:#e0a100}',
+    '.df-btns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.df-next{border:1px solid rgba(79,157,255,.4);background:rgba(79,157,255,.1);border-radius:9px;padding:8px 12px;font-size:12.5px;margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.df-next.warn{border-color:rgba(224,161,0,.45);background:rgba(224,161,0,.1)}.df-next.ok{border-color:rgba(91,191,138,.45);background:rgba(91,191,138,.1)}',
+    '.df-mini{font-size:10.5px;color:var(--ink-3,#8494aa);margin-top:2px}.df-empty{font-size:12.5px;color:var(--ink-3,#8494aa)}.df-acts{white-space:nowrap}.df-t td,.df-t th{padding:7px 9px}',
+    '.df-dosbtn{font-size:12px;padding:8px 10px;text-align:left;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+  ].join('\n'); document.head.appendChild(css);
+  window.__dosDebug={bareme:bareme,lignesHono:lignesHono,docsDe:docsDe,formalite:formalite,nomClient:nomClient,carte:carte};
 })();
 </script>
 
