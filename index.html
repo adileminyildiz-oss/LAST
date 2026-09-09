@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=621;
+var LAST_VER=622;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -38168,6 +38168,157 @@ function testLienSignature() {
     /* paramètres : menu latéral au-dessus du contenu dès 1200 px ; attestations : grille compressible */
     '@media(max-width:1200px){.sp-wrap{grid-template-columns:1fr}.sp-side{position:static;max-height:none}}.at4-etl{min-width:0}.at4-etl>*{min-width:0}@media(max-width:1100px){.at4-etl{grid-template-columns:1fr!important;row-gap:6px}}'
   ].join('\n'); document.head.appendChild(css);
+})();
+</script>
+
+
+<script>
+/* ============================================================================
+   Mar'q — Formulaire : propositions en liste fixe + auto-remplissage dérivé (v622)
+   - Barre « Propositions » en tête du formulaire (menu fixe fbMenu) :
+       · reprendre un client Mar'q (société, siège, dirigeant, contact)
+       · reprendre un dossier précédent (mêmes informations, nouveaux numéros)
+       · valeurs usuelles (durée 99 ans, clôture 31/12, greffe d'après le code postal,
+         titres d'après le capital, dépôt, dates, régime fiscal)
+       · objet social type selon l'activité (12 modèles)
+   - Auto-remplissage dérivé pendant la saisie : code postal → ville du greffe,
+     capital → nominal / nombre de titres / apports / dépôt, ville du siège → ville de signature,
+     forme → fonction du dirigeant et régime fiscal. Les champs remplis automatiquement sont
+     marqués (liseré vert) et rendus libres dès que l'utilisateur les modifie.
+   100 % additif (greffe sur render, formSet, DOM du formulaire).
+   ========================================================================= */
+(function(){
+  if(window.__aemFormProp) return; window.__aemFormProp=true;
+  function DBX(){ try{ return (typeof DB!=='undefined'&&DB)?DB:null; }catch(e){ return null; } }
+  function E(s){ return (typeof esc==='function')?esc(s):(''+(s==null?'':s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function T(m){ try{ if(typeof toast==='function') toast(m); }catch(e){} }
+  function FD(){ if(!window.__formData||typeof window.__formData!=='object') window.__formData={}; return window.__formData; }
+  function get(path){ var o=FD(); var ks=path.split('.'); for(var i=0;i<ks.length;i++){ o=(o&&o[ks[i]]); if(o==null) return ''; } return o; }
+  function set(path,val){ if(typeof window.formSet==='function') window.formSet(path,val); }
+  function vide(path){ var v=get(path); return v==null||(''+v).trim()===''; }
+  function today(){ try{ if(typeof window.today==='function') return window.today(); }catch(e){} return new Date().toISOString().slice(0,10); }
+  function frd(iso){ var p=(''+iso).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso; }
+  function n(v){ v=parseFloat((''+(v==null?'':v)).replace(/\s/g,'').replace(',','.')); return isNaN(v)?0:v; }
+
+  /* ---------- Greffe (RCS) d'après le code postal ---------- */
+  var GREFFE={'01':'Bourg-en-Bresse','02':'Saint-Quentin','03':'Cusset','04':'Manosque','05':'Gap','06':'Nice','07':'Aubenas','08':'Sedan','09':'Foix','10':'Troyes','11':'Carcassonne','12':'Rodez','13':'Marseille','14':'Caen','15':'Aurillac','16':'Angoulême','17':'La Rochelle','18':'Bourges','19':'Brive-la-Gaillarde','21':'Dijon','22':'Saint-Brieuc','23':'Guéret','24':'Périgueux','25':'Besançon','26':'Romans-sur-Isère','27':'Évreux','28':'Chartres','29':'Brest','30':'Nîmes','31':'Toulouse','32':'Auch','33':'Bordeaux','34':'Montpellier','35':'Rennes','36':'Châteauroux','37':'Tours','38':'Grenoble','39':'Lons-le-Saunier','40':'Mont-de-Marsan','41':'Blois','42':'Saint-Étienne','43':'Le Puy-en-Velay','44':'Nantes','45':'Orléans','46':'Cahors','47':'Agen','48':'Mende','49':'Angers','50':'Coutances','51':'Reims','52':'Chaumont','53':'Laval','54':'Nancy','55':'Bar-le-Duc','56':'Vannes','57':'Metz','58':'Nevers','59':'Lille Métropole','60':'Compiègne','61':'Alençon','62':'Arras','63':'Clermont-Ferrand','64':'Pau','65':'Tarbes','66':'Perpignan','67':'Strasbourg','68':'Mulhouse','69':'Lyon','70':'Vesoul','71':'Chalon-sur-Saône','72':'Le Mans','73':'Chambéry','74':'Annecy','75':'Paris','76':'Rouen','77':'Meaux','78':'Versailles','79':'Niort','80':'Amiens','81':'Albi','82':'Montauban','83':'Toulon','84':'Avignon','85':'La Roche-sur-Yon','86':'Poitiers','87':'Limoges','88':'Épinal','89':'Auxerre','90':'Belfort','91':'Évry','92':'Nanterre','93':'Bobigny','94':'Créteil','95':'Pontoise'};
+  function greffeDe(cp){ cp=(''+(cp||'')).replace(/\D/g,''); if(cp.length<2) return ''; var d=cp.slice(0,2); if(d==='20') return cp.slice(0,3)<='201'?'Ajaccio':'Bastia'; if(d==='97'){ return {'971':'Pointe-à-Pitre','972':'Fort-de-France','973':'Cayenne','974':'Saint-Denis de La Réunion','976':'Mamoudzou'}[cp.slice(0,3)]||''; } return GREFFE[d]||''; }
+  window.formGreffeDe=greffeDe;
+
+  /* ---------- Objets sociaux types ---------- */
+  var OBJETS=[
+    ['BTP — tous corps d\'état','Tous travaux de bâtiment, gros œuvre et second œuvre, rénovation, maçonnerie, plâtrerie, peinture, carrelage, plomberie, électricité, menuiserie, isolation, couverture et charpente ; conseil, études et suivi de chantiers ; négoce de matériaux et fournitures liés à ces activités ; et généralement toutes opérations industrielles, commerciales, financières, mobilières ou immobilières se rapportant directement ou indirectement à l\'objet social ou susceptibles d\'en faciliter la réalisation.'],
+    ['Conseil aux entreprises','Le conseil en gestion, organisation, stratégie et développement des entreprises ; l\'assistance administrative, la formation et l\'accompagnement des dirigeants ; toutes prestations de services intellectuels s\'y rapportant ; et généralement toutes opérations de quelque nature qu\'elles soient se rattachant directement ou indirectement à cet objet ou susceptibles d\'en favoriser le développement.'],
+    ['Restauration','L\'exploitation de tous fonds de commerce de restauration sur place et à emporter, snack, brasserie, traiteur et livraison de repas ; la vente de boissons dans le cadre de la licence détenue ; l\'organisation d\'événements et réceptions ; et généralement toutes opérations se rattachant directement ou indirectement à cet objet.'],
+    ['Transport léger de marchandises','Le transport public routier de marchandises au moyen de véhicules n\'excédant pas 3,5 tonnes, la livraison, la messagerie, le déménagement et la location de véhicules avec conducteur ; toutes prestations logistiques annexes ; et généralement toutes opérations se rattachant directement ou indirectement à cet objet.'],
+    ['Commerce en ligne','L\'achat, la vente, l\'importation, l\'exportation et la distribution de tous produits non réglementés, notamment par voie de commerce électronique ; la création et l\'exploitation de sites marchands ; le marketing et la publicité en ligne ; et généralement toutes opérations se rattachant directement ou indirectement à cet objet.'],
+    ['SCI — gestion immobilière','L\'acquisition, la propriété, l\'administration et la gestion par bail, location ou autrement de tous immeubles et biens immobiliers ; la construction, la rénovation et l\'aménagement de ces biens ; l\'emprunt de toutes sommes nécessaires et la constitution de garanties ; exceptionnellement l\'aliénation des immeubles devenus inutiles à la société ; et généralement toutes opérations civiles se rattachant à cet objet, à l\'exclusion de toute activité commerciale.'],
+    ['Holding','La prise de participations dans toutes sociétés françaises ou étrangères, par acquisition, souscription, apport ou autrement ; la gestion et l\'animation de ces participations ; toutes prestations de services administratifs, financiers, comptables et de direction au profit des filiales ; et généralement toutes opérations se rattachant directement ou indirectement à cet objet.'],
+    ['Informatique & développement','Le développement de logiciels, sites internet et applications ; le conseil, l\'audit, l\'intégration et la maintenance de systèmes informatiques ; l\'hébergement et l\'infogérance ; la formation ; et généralement toutes opérations se rattachant directement ou indirectement à cet objet.'],
+    ['Nettoyage & entretien','Le nettoyage de locaux professionnels, industriels et d\'habitation, l\'entretien d\'espaces verts, la remise en état après travaux et la désinfection ; la fourniture de consommables liés ; et généralement toutes opérations se rattachant directement ou indirectement à cet objet.'],
+    ['Coiffure & esthétique','L\'exploitation de salons de coiffure et d\'instituts de beauté, les soins esthétiques, la vente de produits et accessoires liés, les prestations à domicile ; et généralement toutes opérations se rattachant directement ou indirectement à cet objet.'],
+    ['Négoce & import-export','L\'achat, la vente, l\'importation et l\'exportation de toutes marchandises non réglementées, en gros et au détail ; le courtage et la représentation commerciale ; et généralement toutes opérations se rattachant directement ou indirectement à cet objet.'],
+    ['Formation professionnelle','La formation professionnelle continue, le coaching, l\'organisation de séminaires et d\'ateliers, la conception de supports pédagogiques ; le conseil en développement des compétences ; et généralement toutes opérations se rattachant directement ou indirectement à cet objet.']
+  ];
+  window.FORM_OBJETS_TYPES=OBJETS;
+
+  /* ---------- Mise à jour du DOM sans re-rendu (garde le focus) ---------- */
+  function inputsFor(path){ var q='[oninput*="\''+path+'\'"],[onchange*="\''+path+'\'"]'; try{ return [].slice.call(document.querySelectorAll(q)); }catch(e){ return []; } }
+  function fill(path,val,auto){ if(val==null||val==='') return false; set(path,val); inputsFor(path).forEach(function(el){ if(el.tagName==='SELECT'){ el.value=val; } else el.value=val; if(auto) el.classList.add('fp-auto'); else el.classList.remove('fp-auto'); }); return true; }
+  function fillIfEmpty(path,val){ if(!vide(path)) return false; return fill(path,val,true); }
+  function refreshAll(){ try{ if(typeof render==='function') render(); }catch(e){} }
+
+  /* ---------- Valeurs usuelles ---------- */
+  window.formValeursUsuelles=function(silencieux){ var o=FD(); var t=o.type||'sas'; var nature=o.nature||'creation'; var k=0; var y=new Date().getFullYear(); var m=new Date().getMonth()+1;
+    if(nature==='creation'){
+      if(fillIfEmpty('dates.duree','99')) k++;
+      if(fillIfEmpty('dates.clotureAnnuelle','31 décembre')) k++;
+      if(fillIfEmpty('dates.finExo','31/12/'+(m>=10?y+1:y))) k++;
+      if(fillIfEmpty('dates.anneeExo',''+(m>=10?y+1:y))) k++;
+      if(fillIfEmpty('dates.dateActe',frd(today()))) k++;
+      if(vide('dates.villeSignature')&&!vide('siege.ville')) { fill('dates.villeSignature',get('siege.ville'),true); k++; }
+      if(vide('dates.rcsVille')){ var g=(o.extra&&o.extra.registre&&o.extra.registre.rcsVille)||greffeDe(get('siege.cp')); if(g&&fill('dates.rcsVille',g,true)) k++; }
+      if(fillIfEmpty('societe.regime',t==='sci'?'IR':'IS')) k++;
+      if(fillIfEmpty('societe.debut',frd(today()))) k++;
+      if(fillIfEmpty('direction.nationalite','Française')) k++;
+      if(fillIfEmpty('direction.fonction',(t==='sas'||t==='sasu')?'Président':'Gérant')) k++;
+      if(fillIfEmpty('direction.civilite','M.')) k++;
+      if(vide('societe.capital')){ if(fill('societe.capital',t==='sci'?'1000':'1000',true)) k++; }
+      var cap=n(get('societe.capital'));
+      if(cap>0){ if(vide('titres.nominal')&&vide('titres.nbTitres')){ fill('titres.nominal','1',true); fill('titres.nbTitres',String(Math.round(cap)),true); k+=2; } else if(vide('titres.nbTitres')&&n(get('titres.nominal'))>0){ fill('titres.nbTitres',String(Math.round(cap/n(get('titres.nominal')))),true); k++; } else if(vide('titres.nominal')&&n(get('titres.nbTitres'))>0){ fill('titres.nominal',String(Math.round(cap/n(get('titres.nbTitres'))*100)/100),true); k++; }
+        if(fillIfEmpty('apports.numeraire',String(cap))) k++; if(fillIfEmpty('depot.montant',String(cap))) k++; }
+      if(fillIfEmpty('apports.liberation','100')) k++;
+      if(fillIfEmpty('siege.type',get('siege.domiciliataire')?'Domiciliation':(get('siege.bailleur')?'Local commercial':'Domicile du dirigeant'))) k++;
+      if(vide('direction.adresse')&&get('siege.type')==='Domicile du dirigeant'&&!vide('siege.rue')){ fill('direction.adresse',[get('siege.rue'),get('siege.cp'),get('siege.ville')].filter(Boolean).join(' '),true); k++; }
+    } else {
+      if(fillIfEmpty('modif.dates.acte',frd(today()))) k++;
+      if(fillIfEmpty('modif.dates.effet',frd(today()))) k++;
+      if(vide('modif.dates.ville')&&!vide('modif.societe.ville')){ fill('modif.dates.ville',get('modif.societe.ville'),true); k++; }
+      if(vide('modif.societe.rcsVille')){ var g2=greffeDe(get('modif.societe.cp')); if(g2&&fill('modif.societe.rcsVille',g2,true)) k++; }
+      var f=get('modif.societe.forme')||'sas'; if(fillIfEmpty('modif.signataire.qualite',(f==='sas'||f==='sasu')?'Président':'Gérant')) k++;
+      if(fillIfEmpty('modif.nouveau.nationalite','Française')) k++;
+      var mk=(o.modif&&o.modif.kind)||'siege'; if(mk==='siege'&&vide('modif.ancien.siege')&&!vide('modif.societe.siege')){ fill('modif.ancien.siege',[get('modif.societe.siege'),get('modif.societe.cp'),get('modif.societe.ville')].filter(Boolean).join(' '),true); k++; }
+      if(mk==='siege'&&vide('modif.nouveau.ressort')&&!vide('modif.nouveau.cp')&&!vide('modif.societe.cp')){ fill('modif.nouveau.ressort',greffeDe(get('modif.nouveau.cp'))===greffeDe(get('modif.societe.cp'))?'meme':'autre',true); k++; }
+      if(mk==='capital'&&vide('modif.ancien.capital')&&!vide('modif.societe.capital')){ fill('modif.ancien.capital',get('modif.societe.capital'),true); k++; }
+      if(mk==='denomination'&&vide('modif.ancien.denomination')&&!vide('modif.societe.denomination')){ fill('modif.ancien.denomination',get('modif.societe.denomination'),true); k++; }
+    }
+    try{ if(typeof formUpdateGate==='function') formUpdateGate(); }catch(e){} try{ if(typeof window.__ffRepaint==='function') window.__ffRepaint(); }catch(e){}
+    if(!silencieux) T(k?(k+' champ(s) complété(s) avec les valeurs usuelles — modifiables à tout moment.'):'Tous les champs usuels sont déjà renseignés.'); return k; };
+
+  /* ---------- Reprendre un client / un dossier ---------- */
+  function clients(){ var db=DBX(); return ((db&&db.clients)||[]).map(function(c){ var nom=(c.denom||c.raison||'').trim()||((c.prenom||'')+' '+(c.nom||'')).trim(); return {c:c,nom:nom}; }).filter(function(x){ return x.nom; }).sort(function(a,b){ return (b.c.updatedAt||b.c.createdAt||'').localeCompare(a.c.updatedAt||a.c.createdAt||''); }); }
+  window.formReprendreClient=function(id){ var x=clients().filter(function(k){ return k.c.id===id; })[0]; if(!x) return; var c=x.c; var o=FD(); var nature=o.nature||'creation';
+    if(nature==='creation'){ fill('societe.denomination',c.denom||c.raison||'',false); if(c.forme){ var f=(''+c.forme).toLowerCase(); if(['sas','sasu','sarl','eurl','sci'].indexOf(f)>=0) o.type=f; } fill('societe.capital',c.capital?String(c.capital):'',false); fill('societe.objet',(c.activites||[]).join(', ')||c.objet||'',false);
+      fill('siege.rue',c.adresse||c.siege||'',false); fill('siege.cp',c.cp||'',false); fill('siege.ville',c.ville||'',false);
+      var g=c.gerant||{}; fill('direction.prenom',g.prenom||c.prenom||'',false); fill('direction.nom',g.nom||c.nom||'',false); fill('direction.civilite',g.civilite||c.civilite||'',false); fill('direction.naissance',g.naissance||'',false); fill('direction.lieuNaissance',g.lieuNaissance||'',false); fill('direction.adresse',g.adresse||'',false);
+      fill('contact.email',c.email||'',false); fill('contact.tel',c.tel||'',false); }
+    else { fill('modif.societe.denomination',c.denom||c.raison||'',false); if(c.forme) fill('modif.societe.forme',(''+c.forme).toLowerCase(),false); fill('modif.societe.siren',c.siren||(c.siret||'').slice(0,9),false); fill('modif.societe.siege',c.adresse||c.siege||'',false); fill('modif.societe.cp',c.cp||'',false); fill('modif.societe.ville',c.ville||'',false); fill('modif.societe.capital',c.capital?String(c.capital):'',false); fill('modif.societe.rcsVille',c.rcsVille||greffeDe(c.cp),false);
+      var g2=c.gerant||{}; fill('modif.signataire.prenom',g2.prenom||c.prenom||'',false); fill('modif.signataire.nom',g2.nom||c.nom||'',false); fill('contact.email',c.email||'',false); fill('contact.tel',c.tel||'',false); }
+    o.clientId=c.id; refreshAll(); window.formValeursUsuelles(true); T('Client repris : '+x.nom+' — complétez les éléments manquants.'); };
+  window.formReprendreDossierPrec=function(id){ var db=DBX(); var d=((db&&db.dossiers)||[]).filter(function(x){ return x.id===id; })[0]; if(!d||!d.intake) return; var o=FD(); var src=JSON.parse(JSON.stringify(d.intake)); ['numeroDossier','numeroService','id'].forEach(function(k){ delete src[k]; }); src.nature=o.nature||src.nature; window.__formData=Object.assign({},src,{numeroDossier:''}); delete window.__formData.extra; refreshAll(); T('Dossier '+(d.numeroDossier||'')+' repris comme modèle — nouveaux numéros attribués à l\'enregistrement.'); };
+  window.formObjetType=function(i){ var o=OBJETS[i]; if(!o) return; var nature=(FD().nature||'creation'); var path=nature==='creation'?'societe.objet':'modif.nouveau.objet'; fill(path,o[1],false); var ta=document.getElementById('fi-objet'); if(ta) ta.value=o[1]; try{ if(typeof formUpdateGate==='function') formUpdateGate(); }catch(e){} T('Objet social « '+o[0]+' » inséré — adaptez-le si besoin.'); };
+  window.formChoisirClientModal=function(){ var L=clients(); var body='<input id="fp-q" placeholder="Rechercher un client…" style="width:100%;margin-bottom:8px" oninput="formClientFiltre(this.value)"><div id="fp-list" class="fp-list">'+L.map(function(x){ return '<button class="fp-row" data-n="'+E(x.nom.toLowerCase())+'" onclick="closeModal();formReprendreClient(\''+x.c.id+'\')"><b>'+E(x.nom)+'</b><span>'+E([x.c.forme,x.c.ville,x.c.siren].filter(Boolean).join(' · '))+'</span></button>'; }).join('')+'</div>';
+    if(typeof openModal==='function') openModal('Reprendre un client',body,'<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'); setTimeout(function(){ var q=document.getElementById('fp-q'); if(q) q.focus(); },50); };
+  window.formClientFiltre=function(q){ q=(q||'').toLowerCase(); document.querySelectorAll('#fp-list .fp-row').forEach(function(b){ b.style.display=(!q||(b.getAttribute('data-n')||'').indexOf(q)>=0)?'':'none'; }); };
+
+  /* ---------- Menu Propositions ---------- */
+  window.formPropositions=function(btn){ var db=DBX(); var I=[]; var L=clients().slice(0,6); var nature=(FD().nature||'creation');
+    I.push({sep:'Reprendre un client enregistré'}); L.forEach(function(x){ I.push({ico:'👤',l:x.nom,sub:[x.c.forme,x.c.ville].filter(Boolean).join(' · ')||'client Mar\'q',fn:function(){ formReprendreClient(x.c.id); }}); }); I.push({ico:'⌕',l:'Tous les clients…',sub:'recherche par nom',fn:function(){ formChoisirClientModal(); }});
+    var D=((db&&db.dossiers)||[]).filter(function(d){ return d.intake&&!d.archived; }).slice(-5).reverse(); if(D.length){ I.push({sep:'Reprendre un dossier précédent comme modèle'}); D.forEach(function(d){ var it=d.intake||{}; var nom=(it.societe&&it.societe.denomination)||(it.modif&&it.modif.societe&&it.modif.societe.denomination)||d.numeroDossier||'Dossier'; I.push({ico:'⎘',l:nom,sub:(d.numeroDossier||'')+' · '+((it.nature==='modification')?'modification':'création '+(it.type||'').toUpperCase()),fn:function(){ formReprendreDossierPrec(d.id); }}); }); }
+    I.push({sep:'Compléter automatiquement'}); I.push({ico:'✦',l:'Valeurs usuelles',sub:'durée, clôture, greffe, titres, dépôt, dates, régime',fn:function(){ formValeursUsuelles(); }});
+    if(nature==='creation'||((FD().modif||{}).kind==='objet')){ I.push({sep:'Objet social type'}); OBJETS.forEach(function(o,i){ I.push({ico:'¶',l:o[0],sub:o[1].slice(0,60)+'…',fn:function(){ formObjetType(i); }}); }); }
+    if(typeof fbMenu==='function') fbMenu(btn,I,{wide:true}); };
+
+  /* ---------- Auto-remplissage dérivé pendant la saisie ---------- */
+  function pathOf(el){ var a=el.getAttribute('oninput')||el.getAttribute('onchange')||''; var m=a.match(/formSet\('([a-zA-Z.]+)'/)||a.match(/formMasqueDate\(this,'([a-zA-Z.]+)'/); return m?m[1]:''; }
+  document.addEventListener('input',function(ev){ var el=ev.target; if(!el||!el.closest||!el.closest('.fi-wrap')) return; el.classList.remove('fp-auto'); var path=pathOf(el); if(!path) return; var v=el.value; var o=FD(); var t=o.type||'sas';
+    setTimeout(function(){ try{
+      if(path==='siege.cp'&&v.replace(/\D/g,'').length===5){ var g=greffeDe(v); if(g){ var cur=inputsFor('dates.rcsVille')[0]; if(vide('dates.rcsVille')||(cur&&cur.classList.contains('fp-auto'))) fill('dates.rcsVille',g,true); } }
+      if(path==='modif.societe.cp'&&v.replace(/\D/g,'').length===5){ var g3=greffeDe(v); if(g3){ var c3=inputsFor('modif.societe.rcsVille')[0]; if(vide('modif.societe.rcsVille')||(c3&&c3.classList.contains('fp-auto'))) fill('modif.societe.rcsVille',g3,true); } }
+      if(path==='modif.nouveau.cp'&&v.replace(/\D/g,'').length===5&&!vide('modif.societe.cp')){ var r=greffeDe(v)===greffeDe(get('modif.societe.cp'))?'meme':'autre'; var cr=inputsFor('modif.nouveau.ressort')[0]; if(vide('modif.nouveau.ressort')||(cr&&cr.classList.contains('fp-auto'))) fill('modif.nouveau.ressort',r,true); }
+      if(path==='siege.ville'){ var cv=inputsFor('dates.villeSignature')[0]; if(vide('dates.villeSignature')||(cv&&cv.classList.contains('fp-auto'))) fill('dates.villeSignature',v,true); }
+      if(path==='modif.societe.ville'){ var cv2=inputsFor('modif.dates.ville')[0]; if(vide('modif.dates.ville')||(cv2&&cv2.classList.contains('fp-auto'))) fill('modif.dates.ville',v,true); }
+      if(path==='societe.capital'){ var cap=n(v); if(cap>0){ ['titres.nbTitres','apports.numeraire','depot.montant'].forEach(function(p){ var ce=inputsFor(p)[0]; if(vide(p)||(ce&&ce.classList.contains('fp-auto'))){ var val=(p==='titres.nbTitres')?String(Math.round(cap/(n(get('titres.nominal'))||1))):String(cap); fill(p,val,true); } }); var cn=inputsFor('titres.nominal')[0]; if(vide('titres.nominal')||(cn&&cn.classList.contains('fp-auto'))) fill('titres.nominal','1',true); } }
+      if(path==='titres.nominal'&&n(v)>0&&n(get('societe.capital'))>0){ var cnb=inputsFor('titres.nbTitres')[0]; if(vide('titres.nbTitres')||(cnb&&cnb.classList.contains('fp-auto'))) fill('titres.nbTitres',String(Math.round(n(get('societe.capital'))/n(v))),true); }
+      if(path==='siege.domiciliataire'&&v){ var st=inputsFor('siege.type')[0]; if(vide('siege.type')||(st&&st.classList.contains('fp-auto'))) fill('siege.type','Domiciliation',true); }
+      if(path==='siege.bailleur'&&v){ var st2=inputsFor('siege.type')[0]; if(vide('siege.type')||(st2&&st2.classList.contains('fp-auto'))) fill('siege.type','Local commercial',true); }
+    }catch(e){} },0); },true);
+  /* forme → fonction du dirigeant et régime : au changement de type de formalité */
+  var _ft=window.formType; if(typeof _ft==='function') window.formType=function(v){ var o=FD(); var oldF=o.direction&&o.direction.fonction; var r=_ft.apply(this,arguments); try{ var fn=(v==='sas'||v==='sasu')?'Président':'Gérant'; if(!oldF||oldF==='Président'||oldF==='Gérant'){ set('direction.fonction',fn); } if(vide('societe.regime')||['IS','IR'].indexOf(get('societe.regime'))>=0){ if(v==='sci') set('societe.regime','IR'); else if(get('societe.regime')==='IR'&&v!=='sci') set('societe.regime','IS'); } if(typeof render==='function') render(); }catch(e){} return r; };
+
+  /* ---------- Barre Propositions injectée dans le formulaire ---------- */
+  function inject(){ try{ if(typeof state==='undefined'||state.page!=='formulaire') return; var wrap=document.querySelector('#view .fi-wrap'); if(!wrap||wrap.querySelector('.fp-bar')) return; var head=wrap.querySelector('.fi-head')||wrap.firstElementChild; var bar=document.createElement('div'); bar.className='fp-bar';
+    var nb=clients().length; bar.innerHTML='<div class="fp-bar-t"><b>Propositions & remplissage automatique</b><span>'+nb+' client(s) enregistré(s) · les champs proposés sont surlignés en vert et restent modifiables</span></div><div class="fp-bar-b"><button class="btn btn-sm btn-pri" onclick="formPropositions(this)">💡 Propositions ▾</button><button class="btn btn-sm" onclick="formValeursUsuelles()">✦ Valeurs usuelles</button><button class="btn btn-sm" onclick="formChoisirClientModal()">👤 Reprendre un client</button></div>';
+    if(head&&head.parentNode===wrap) head.insertAdjacentElement('afterend',bar); else wrap.insertAdjacentElement('afterbegin',bar); }catch(e){} }
+  var _render=window.render; window.render=function(){ var r=_render.apply(this,arguments); try{ inject(); }catch(e){} return r; };
+  setTimeout(inject,400);
+
+  var css=document.createElement('style'); css.id='fp-mod'; css.textContent=[
+    '.fp-bar{margin:12px 0 0;border:1px solid var(--line-2,#2c384b);border-radius:12px;background:var(--card,#141b28);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.fp-bar-t{display:flex;flex-direction:column;gap:2px}.fp-bar-t b{font-size:13px}.fp-bar-t span{font-size:11.5px;color:var(--ink-3,#8494aa)}.fp-bar-b{display:flex;gap:6px;flex-wrap:wrap}',
+    '.fi-wrap .fp-auto{border-color:rgba(91,191,138,.7)!important;box-shadow:inset 0 0 0 1px rgba(91,191,138,.35)!important}',
+    '.fp-list{display:flex;flex-direction:column;gap:2px;max-height:360px;overflow:auto}.fp-row{display:flex;flex-direction:column;gap:1px;text-align:left;border:1px solid var(--line-2,#2c384b);background:var(--paper,#141b28);color:var(--ink,#f5f9fe);border-radius:8px;padding:8px 10px;cursor:pointer;font:inherit}.fp-row:hover{border-color:var(--accent,#4f9dff)}.fp-row span{font-size:11.5px;color:var(--ink-3,#8494aa)}'
+  ].join('\n'); document.head.appendChild(css);
+  window.__fpDebug={greffeDe:greffeDe,OBJETS:OBJETS,clients:clients};
 })();
 </script>
 
