@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=617;
+var LAST_VER=618;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -37172,6 +37172,115 @@ function testLienRdv()  {
    +'.yd-t{width:100%;border-collapse:collapse;font-size:12.5px}.yd-t th{text-align:left;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#8d95a5!important;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.1)}.yd-t td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top}.yd-t td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.yd-t tr.done td{opacity:.6}.yd-t .yd-det{font-size:11px;color:#8d95a5!important;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
    +'.yd-empty{font-size:12.5px;color:#8d95a5!important;padding:6px 0}.yd-badge{margin-left:auto;font:600 10px ui-monospace,Menlo,monospace;background:#1e90ff;color:#fff!important;border-radius:999px;padding:1px 7px}'
    +'@media(max-width:860px){.yd-kpis{grid-template-columns:1fr 1fr}}';
+  document.head.appendChild(st);
+})();
+</script>
+
+<script>
+/* ===== signact.js — Signature électronique des actes générés (v618) =====
+   Étape Actes : pour chaque acte à signer — signer À L'ÉCRAN (signature manuscrite,
+   horodatage, empreinte SHA-256 de l'acte, bloc de signature imprimé sur l'acte,
+   attestation), ENVOYER AU CLIENT (e-mail pré-rédigé + suivi Envoyé / Relancé / Signé),
+   DÉPOSER l'acte signé reçu, ou CONSTATER la signature papier. Le verrou de l'étape
+   (tous les actes signés) et le suivi existant (signDossier) sont conservés. */
+(function(){
+  if(window.__aemSignAct) return; window.__aemSignAct=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function DBX(){ try{ return (typeof DB!=='undefined'&&DB)?DB:null; }catch(e){ return null; } }
+  function doss(id){ var B=DBX(); return ((B&&B.dossiers)||[]).filter(function(x){return x.id===id;})[0]; }
+  function cli(d){ try{ return clientById((d.clientIds||[])[0])||{}; }catch(e){ return {}; } }
+  function T(){ return (typeof today==='function')?today():new Date().toISOString().slice(0,10); }
+  function frDT(ts){ if(!ts)return ''; var d=new Date(ts); return d.toLocaleDateString('fr-FR')+' à '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+  function S(d){ d.sign=d.sign||{}; return d.sign; }
+  function actes(d){ try{ if(typeof window.a3ASigner==='function')return window.a3ASigner(d)||[]; }catch(e){} return []; }
+  function signataire(d){ try{ if(typeof window.sigSigner==='function')return window.sigSigner(d); }catch(e){} var c=cli(d); return {nom:(c.president||((c.prenom||'')+' '+(c.nom||''))).trim()||'Signataire',email:c.email||''}; }
+  function suivi(d,k){ try{ if(typeof window.sigState==='function')return window.sigState(d,k); }catch(e){} d.signDossier=d.signDossier||{}; return d.signDossier[k]=d.signDossier[k]||{statut:'a_envoyer',relances:0}; }
+  function texteActe(d,k){ try{ var h=(typeof window.espDocRender==='function')?window.espDocRender(d,k):''; var t=document.createElement('div'); t.innerHTML=String(h||'').replace(/<div class="sig-bloc[\s\S]*$/,''); return (t.textContent||'').replace(/\s+/g,' ').trim(); }catch(e){ return ''; } }
+  function hashHex(str){ try{ if(window.crypto&&crypto.subtle&&window.TextEncoder){ return crypto.subtle.digest('SHA-256',new TextEncoder().encode(str)).then(function(b){ return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0');}).join(''); }); } }catch(e){}
+    return Promise.resolve((function(){ var h1=5381,h2=52711; for(var i=0;i<str.length;i++){ var c=str.charCodeAt(i); h1=((h1<<5)+h1+c)>>>0; h2=((h2<<5)+h2+c)>>>0; } return ('djb2-'+h1.toString(16).padStart(8,'0')+h2.toString(16).padStart(8,'0')); })()); }
+  function cabinet(){ try{ var B=DBX(); return (B&&B.parametres&&B.parametres.cabinet&&B.parametres.cabinet.nom)||(B&&B.societe&&(B.societe.raison||B.societe.nom))||"AEM CONSEIL"; }catch(e){ return "AEM CONSEIL"; } }
+  function docLib(d,k){ var a=actes(d).filter(function(x){return x.k===k;})[0]; return a?a.l:k; }
+  function marquerSigne(d,k,info){ var s=S(d); s[k]=Object.assign({ok:true,ts:Date.now()},info||{}); try{ var st=suivi(d,k); st.statut='signe'; st.signedAt=s[k].ts; }catch(e){} (d.historique=d.historique||[]).unshift({d:T(),t:'« '+docLib(d,k)+' » signé — '+({ecran:'signature à l\'écran',depot:'document signé déposé',cabinet:'signature constatée',client:'signé par le client'}[s[k].voie]||s[k].voie)+(s[k].signataire?(' par '+s[k].signataire):'')}); try{save();}catch(e){} }
+
+  /* ---------- Signature à l'écran (pavé manuscrit) ---------- */
+  window.actSignerEcran=function(id,k){ var d=doss(id); if(!d)return; actPadFermer(); var sg=signataire(d);
+    var ov=document.createElement('div'); ov.id='act-pad-ov'; ov.className='act-pad-ov';
+    ov.innerHTML='<div class="act-pad-box"><div class="act-pad-h"><b>Signature à l\'écran — '+E(docLib(d,k))+'</b><button type="button" class="btn btn-sm btn-ghost" onclick="actPadFermer()">✕</button></div>'
+      +'<div class="act-pad-sub">Signataire : <input id="act-pad-nom" value="'+E(sg.nom)+'"> · Qualité : <input id="act-pad-q" value="'+E(cli(d).presidentQualite||'Représentant légal')+'"></div>'
+      +'<div class="act-pad-sub">Le signataire trace sa signature dans le cadre. L\'acte est horodaté et scellé par une empreinte SHA-256 ; le bloc de signature est ajouté au document et une attestation peut être imprimée.</div>'
+      +'<canvas id="act-pad-c" width="620" height="220"></canvas>'
+      +'<label class="act-pad-ok"><input type="checkbox" id="act-pad-lu"> Le signataire déclare avoir lu l\'acte et consentir à le signer électroniquement.</label>'
+      +'<div class="act-pad-act"><button type="button" class="btn btn-ghost" onclick="actPadEffacer()">Effacer</button><button type="button" class="btn btn-ghost" onclick="actPadFermer()">Annuler</button><button type="button" class="btn btn-pri" onclick="actPadValider(\''+E(id)+'\',\''+E(k)+'\')">Valider la signature</button></div></div>';
+    document.body.appendChild(ov);
+    var c=document.getElementById('act-pad-c'), ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height); ctx.strokeStyle='#0a2a4a'; ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.lineCap='round';
+    window.__actPad={c:c,ctx:ctx,drawn:false}; var drawing=false,px=0,py=0;
+    function pos(e){ var r=c.getBoundingClientRect(); var x=(e.touches?e.touches[0].clientX:e.clientX)-r.left, y=(e.touches?e.touches[0].clientY:e.clientY)-r.top; return [x*(c.width/r.width),y*(c.height/r.height)]; }
+    function down(e){ drawing=true; var p=pos(e); px=p[0]; py=p[1]; if(e.cancelable)e.preventDefault(); }
+    function move(e){ if(!drawing)return; var p=pos(e); ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(p[0],p[1]); ctx.stroke(); px=p[0]; py=p[1]; window.__actPad.drawn=true; if(e.cancelable)e.preventDefault(); }
+    function up(){ drawing=false; }
+    c.addEventListener('mousedown',down); c.addEventListener('mousemove',move); window.addEventListener('mouseup',up); c.addEventListener('touchstart',down,{passive:false}); c.addEventListener('touchmove',move,{passive:false}); window.addEventListener('touchend',up); };
+  window.actPadEffacer=function(){ var p=window.__actPad; if(!p)return; p.ctx.fillStyle='#fff'; p.ctx.fillRect(0,0,p.c.width,p.c.height); p.drawn=false; };
+  window.actPadFermer=function(){ var ov=document.getElementById('act-pad-ov'); if(ov)ov.remove(); window.__actPad=null; };
+  window.actPadValider=function(id,k){ var d=doss(id), p=window.__actPad; if(!d||!p)return;
+    if(!p.drawn){ if(typeof toast==='function')toast('Tracez la signature dans le cadre.'); return; } var lu=document.getElementById('act-pad-lu'); if(lu&&!lu.checked){ if(typeof toast==='function')toast('Cochez la déclaration de consentement.'); return; }
+    var nom=(document.getElementById('act-pad-nom')||{}).value||signataire(d).nom, q=(document.getElementById('act-pad-q')||{}).value||''; var img=p.c.toDataURL('image/png'); var txt=texteActe(d,k);
+    hashHex(txt).then(function(h){ marquerSigne(d,k,{voie:'ecran',signataire:nom,qualite:q,image:img,empreinte:h,longueur:txt.length}); actPadFermer(); if(typeof toast==='function')toast('« '+docLib(d,k)+' » signé à l\'écran par '+nom+' — empreinte '+h.slice(0,12)+'…'); if(typeof render==='function')render(); }); };
+
+  /* ---------- Envoi au client / relance (e-mail pré-rédigé) ---------- */
+  function mailto(to,sujet,corps){ var u='mailto:'+encodeURIComponent(to||'')+'?subject='+encodeURIComponent(sujet)+'&body='+encodeURIComponent(corps); try{ var a=document.createElement('a'); a.href=u; a.style.display='none'; document.body.appendChild(a); a.click(); a.remove(); }catch(e){} return u; }
+  function corpsMail(d,liste,relance){ var sg=signataire(d); var c=cli(d); var soc=c.denomination||c.denom||''; var cab=cabinet();
+    return (relance?'Bonjour '+sg.nom+',\n\nSauf erreur de notre part, nous n\'avons pas encore reçu les documents ci-dessous signés':'Bonjour '+sg.nom+',\n\nVeuillez trouver ci-joint, pour signature, les documents relatifs à '+(soc||'votre société'))+' :\n'+liste.map(function(l){return ' • '+l;}).join('\n')
+      +'\n\nMerci de nous retourner chaque document signé (en réponse à ce message ou déposé au cabinet). Vous pouvez aussi passer au cabinet pour signer à l\'écran.\n\nBien cordialement,\n'+cab; }
+  window.actEnvoyer=function(id,k){ var d=doss(id); if(!d)return; var L=k?[k]:actes(d).filter(function(a){return !(S(d)[a.k]&&S(d)[a.k].ok);}).map(function(a){return a.k;}); if(!L.length){ if(typeof toast==='function')toast('Tous les actes sont déjà signés.'); return; }
+    var sg=signataire(d); if(!sg.email){ if(typeof toast==='function')toast('Aucune adresse e-mail pour le signataire — complétez la fiche Client.'); }
+    L.forEach(function(kk){ var st=suivi(d,kk); if(st.statut==='signe')return; var rel=(st.statut==='envoye'||st.statut==='ouvert'); if(rel){ st.relances=(st.relances||0)+1; st.lastRelance=Date.now(); } else { st.statut='envoye'; st.sentAt=Date.now(); st.relances=0; } st.signer=sg.nom; st.email=sg.email; st.canal='mail'; });
+    var relance=L.every(function(kk){ return (suivi(d,kk).relances||0)>0; });
+    var u=mailto(sg.email,(relance?'Relance — ':'')+'Documents à signer — '+(cli(d).denomination||cli(d).denom||d.ref||''),corpsMail(d,L.map(function(kk){return docLib(d,kk);}),relance));
+    (d.historique=d.historique||[]).unshift({d:T(),t:(relance?'Relance envoyée':'Actes envoyés pour signature')+' à '+(sg.email||sg.nom)+' : '+L.map(function(kk){return docLib(d,kk);}).join(', ')});
+    window.__actDernierMail=u; try{save();}catch(e){} if(typeof toast==='function')toast((relance?'Relance préparée':'E-mail de signature préparé')+' pour '+(sg.email||sg.nom)+' — joignez les PDF des actes avant l\'envoi.'); if(typeof render==='function')render(); };
+
+  /* ---------- Dépôt de l'acte signé reçu ---------- */
+  window.actDeposer=function(id,k,inp){ var f=inp&&inp.files&&inp.files[0]; if(!f)return; var r=new FileReader(); r.onload=function(e){ actDeposeData(id,k,{nom:f.name,type:f.type,data:e.target.result}); }; r.readAsDataURL(f); };
+  window.actDeposeData=function(id,k,fichier){ var d=doss(id); if(!d)return; var sg=signataire(d); marquerSigne(d,k,{voie:'depot',signataire:sg.nom,fichier:Object.assign({ts:Date.now()},fichier||{})}); if(typeof toast==='function')toast('Acte signé déposé : '+(fichier&&fichier.nom||'')); if(typeof render==='function')render(); };
+  window.actVoirDepot=function(id,k){ var d=doss(id); var f=d&&S(d)[k]&&S(d)[k].fichier; if(!f||!f.data)return; var a=document.createElement('a'); a.href=f.data; a.download=f.nom||'acte-signe'; a.click(); };
+
+  /* ---------- Attestation de signature ---------- */
+  window.actAttestationHTML=function(id,k){ var d=doss(id); if(!d)return ''; var s=S(d)[k]||{}; var c=cli(d);
+    return '<h1>Attestation de signature électronique</h1><div class="sub">'+E(cabinet())+'</div>'
+      +'<div class="row"><span class="lbl">Document</span><b>'+E(docLib(d,k))+'</b></div><div class="row"><span class="lbl">Société</span>'+E(c.denomination||c.denom||'')+' · dossier '+E(d.ref||'')+'</div>'
+      +'<div class="row"><span class="lbl">Signataire</span>'+E(s.signataire||'')+(s.qualite?(' — '+E(s.qualite)):'')+'</div><div class="row"><span class="lbl">Mode</span>'+E({ecran:'Signature manuscrite à l\'écran',depot:'Document signé déposé',cabinet:'Signature constatée au cabinet'}[s.voie]||s.voie||'')+'</div>'
+      +'<div class="row"><span class="lbl">Horodatage</span><b>'+E(frDT(s.ts))+'</b></div>'+(s.empreinte?('<div class="row"><span class="lbl">Empreinte SHA-256 de l\'acte</span><code>'+E(s.empreinte)+'</code></div>'):'')
+      +(s.image?('<div class="sig"><div style="font-size:11px;color:#555;margin-bottom:6px">Signature</div><img src="'+s.image+'" style="max-width:280px;border-bottom:1px solid #999"></div>'):'')
+      +'<p class="foot">Cette attestation est établie par '+E(cabinet())+' à partir des données enregistrées lors de la signature. L\'empreinte permet de vérifier que l\'acte n\'a pas été modifié depuis.</p>'; };
+  window.actAttestation=function(id,k){ var html=actAttestationHTML(id,k); if(!html)return; var w=window.open('','_blank'); if(!w){ if(typeof toast==='function')toast('Autorisez les fenêtres pop-up.'); return; }
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Attestation de signature</title><style>@page{size:A4;margin:22mm}body{font-family:Georgia,serif;color:#111;line-height:1.6;max-width:720px;margin:0 auto}h1{font-size:20px;text-align:center;margin-bottom:4px}.sub{text-align:center;color:#555;margin-bottom:26px}.row{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid #ddd}.lbl{flex:0 0 220px;color:#555}.sig{margin-top:26px}code{font-size:11px;word-break:break-all}.foot{margin-top:30px;font-size:11px;color:#555}</style></head><body>'+html+'<script>setTimeout(function(){window.print();},300);<\/script></body></html>'); w.document.close(); };
+
+  /* ---------- Bloc de signature sur l'acte (vue, impression, PDF) ---------- */
+  try{ var _rd=window.espDocRender; if(typeof _rd==='function'&&!_rd.__signact){ window.espDocRender=function(d,k){ var h=_rd.apply(this,arguments); try{ var s=d&&d.sign&&d.sign[k]; if(s&&s.ok&&s.voie==='ecran'&&s.image&&typeof h==='string'){ h+='<div class="sig-bloc" style="margin-top:28px;padding-top:10px;border-top:1px solid #999;font-size:11px;color:#333;page-break-inside:avoid"><div><b>Signé électroniquement</b> par '+E(s.signataire||'')+(s.qualite?(', '+E(s.qualite)):'')+' le '+E(frDT(s.ts))+'</div><img src="'+s.image+'" alt="signature" style="height:70px;margin:6px 0;display:block">'+(s.empreinte?('<div style="font-family:monospace;font-size:9px;color:#666">Empreinte SHA-256 : '+E(s.empreinte)+'</div>'):'')+'</div>'; } }catch(e){} return h; }; window.espDocRender.__signact=1; } }catch(e){}
+
+  /* ---------- Carte « Signature des actes » (étape Actes) ---------- */
+  function carte(d){ var L=actes(d); if(!L.length)return ''; var sg=signataire(d); var sigs=S(d); var ok=L.filter(function(a){return sigs[a.k]&&sigs[a.k].ok;}).length;
+    var rows=L.map(function(a){ var s=sigs[a.k]||{}; var st=suivi(d,a.k); var etat,cls;
+      if(s.ok){ cls='ok'; etat='Signé '+({ecran:'à l\'écran',depot:'(document déposé)',cabinet:'(constaté)',client:'par le client'}[s.voie]||'')+' · '+frDT(s.ts)+(s.signataire?(' · '+E(s.signataire)):''); }
+      else if(st.statut==='envoye'||st.statut==='ouvert'){ cls='wait'; etat='Envoyé au client le '+frDT(st.sentAt)+((st.relances||0)?(' · '+st.relances+' relance'+(st.relances>1?'s':'')+(st.lastRelance?(' (dernière '+frDT(st.lastRelance)+')'):'')):''); }
+      else { cls='todo'; etat='À signer'; }
+      var act=s.ok?('<button type="button" class="btn btn-sm btn-ghost" onclick="espDocVoir(\''+d.id+'\',\''+a.k+'\')">Voir l\'acte</button>'+(s.voie==='ecran'?('<button type="button" class="btn btn-sm btn-ghost" onclick="actAttestation(\''+d.id+'\',\''+a.k+'\')">Attestation</button>'):'')+(s.fichier?('<button type="button" class="btn btn-sm btn-ghost" onclick="actVoirDepot(\''+d.id+'\',\''+a.k+'\')">⤓ Signé</button>'):'')+'<button type="button" class="btn btn-sm btn-ghost" onclick="a3Devalider(\''+d.id+'\',\''+a.k+'\')" title="Annuler la signature">↺</button>')
+        :('<button type="button" class="btn btn-sm btn-pri" onclick="actSignerEcran(\''+d.id+'\',\''+a.k+'\')">✍ Signer à l\'écran</button><button type="button" class="btn btn-sm btn-ghost" onclick="actEnvoyer(\''+d.id+'\',\''+a.k+'\')">'+(cls==='wait'?'Relancer':'Envoyer au client')+'</button><label class="btn btn-sm btn-ghost act-up">Déposer le signé<input type="file" accept="application/pdf,image/*" style="display:none" onchange="actDeposer(\''+d.id+'\',\''+a.k+'\',this)"></label><button type="button" class="btn btn-sm btn-ghost" onclick="a3Signer(\''+d.id+'\',\''+a.k+'\')" title="Signature papier constatée au cabinet">Constater</button>');
+      return '<div class="act-row '+cls+'"><span class="act-dot"></span><div class="act-l"><b>'+E(a.l)+'</b><small>'+etat+'</small></div><span class="act-btns">'+act+'</span></div>'; }).join('');
+    var reste=L.length-ok;
+    return '<div class="card act-card"><div class="card-h"><h2>Signature des actes</h2><span class="sub" style="margin-left:auto">'+ok+' / '+L.length+' signé'+(ok>1?'s':'')+'</span>'+(reste?('<button type="button" class="btn btn-sm btn-ghost" style="margin-left:8px" onclick="actEnvoyer(\''+d.id+'\')">Envoyer tout au client</button>'):'')+'</div><div class="card-b">'
+      +'<div class="act-sg">Signataire : <b>'+E(sg.nom)+'</b>'+(sg.email?(' · '+E(sg.email)):' · <span class="act-warn">e-mail manquant dans la fiche Client</span>')+' — signez à l\'écran si le client est au cabinet, sinon envoyez-lui les actes et déposez les exemplaires signés reçus.</div>'+rows
+      +(reste?'<div class="act-hint">L\'étape Actes ne se valide qu\'une fois tous les actes signés.</div>':'<div class="act-hint ok">Tous les actes sont signés — vous pouvez valider l\'étape.</div>')+'</div></div>'; }
+  function peindre(){ try{ if(typeof state==='undefined'||state.page!=='espace')return; var d=doss(state.espaceDossier); if(!d)return; var panel=document.querySelector('.esp-tabpanel[data-tab="actes"]'); if(!panel)return; var html=carte(d); var old=panel.querySelector('.act-card');
+    if(old){ if(!html){old.remove();return;} var t=document.createElement('div'); t.innerHTML=html; old.replaceWith(t.firstChild); return; } if(!html)return; var t2=document.createElement('div'); t2.innerHTML=html; var a3=panel.querySelector('.a3-card'); if(a3)a3.insertAdjacentElement('afterend',t2.firstChild); else panel.insertBefore(t2.firstChild,panel.firstChild); }catch(e){} }
+  try{ var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var out=_r.apply(this,arguments); try{ peindre(); }catch(e){} return out; }; } }catch(e){}
+
+  var st=document.createElement('style'); st.id='act-mod'; st.textContent=
+    '.act-sg{font-size:12.5px;color:#aeb6c2!important;margin-bottom:10px}.act-sg b{color:#fff!important}.act-warn{color:#ff7b72!important}'
+   +'.act-row{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid rgba(255,255,255,.06)}.act-dot{width:9px;height:9px;border-radius:50%;background:#2f3541;flex:none}.act-row.ok .act-dot{background:#3fbf7f}.act-row.wait .act-dot{background:#e0a100}.act-l{flex:1;min-width:0}.act-l b{font-size:13px}.act-l small{display:block;font-size:11.5px;color:#8d95a5!important;margin-top:2px}.act-row.ok .act-l small{color:#3fbf7f!important}.act-row.wait .act-l small{color:#e0a100!important}'
+   +'.act-btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.act-btns .btn{width:auto}.act-up{cursor:pointer}.act-hint{margin-top:10px;font-size:12px;color:#8d95a5!important}.act-hint.ok{color:#3fbf7f!important}'
+   +'.act-pad-ov{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:100050;display:flex;align-items:center;justify-content:center;padding:20px}.act-pad-box{background:#12161d;border:1px solid #323848;border-radius:14px;padding:16px 18px;width:min(680px,100%);box-shadow:0 30px 60px -20px rgba(0,0,0,.9)}.act-pad-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.act-pad-sub{font-size:12px;color:#aeb6c2!important;margin:4px 0 8px;line-height:1.5}.act-pad-sub input{background:#0f1218;border:1px solid #323848;border-radius:6px;padding:3px 8px;color:#fff;font-size:12px;width:200px}'
+   +'#act-pad-c{width:100%;height:220px;background:#fff;border:1px dashed #6b7280;border-radius:8px;touch-action:none;cursor:crosshair;display:block}.act-pad-ok{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#aeb6c2!important;margin:10px 0}.act-pad-act{display:flex;gap:8px;justify-content:flex-end}';
   document.head.appendChild(st);
 })();
 </script>
