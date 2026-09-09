@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=606;
+var LAST_VER=607;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -36093,6 +36093,97 @@ function testLienRdv()  {
           +'<button class="ed2-new ed2-new-app" onclick="go(\'facturier\')">Factures</button>');
       } }catch(e){}
       return h; }; window.pageEditions.__ps=1; } }catch(e){}
+})();
+</script>
+
+<script>
+/* ── Éditions — entrée par situation du client ──────────────────────────────
+   La page d'accueil du module ne part plus des rubriques mais de ce qui
+   arrive chez le client : chaque situation liste ses documents dans l'ordre
+   où on les produit. Les rubriques restent accessibles en second niveau. */
+(function(){
+  if(window.__edParcours) return; window.__edParcours=1;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s); }
+  var FAM=[['*','Toutes les situations'],['soc','Société'],['sal','Salariés'],['fisc','Fiscal'],['fact','Facturation'],['cab','Cabinet']];
+  var PARC=[
+    {id:'creer',fam:'soc',t:'Créer une société',s:'des statuts au registre des bénéficiaires',
+      items:[{k:'statuts'},{k:'dnc'},{k:'depotcapital'},{k:'attparution'},{k:'rbe'},{k:'pouvoir'}]},
+    {id:'modifier',fam:'soc',t:'Modifier la société',s:'convocation, décision, puis formalité',
+      items:[{k:'convocag'},{k:'pvapprob'},{k:'pv',l:'Procès-verbal (modèle général)'},{k:'pvsiege'},{k:'pvdenom'},{k:'pvobjet'},{k:'pvnomdir'},{k:'decharge'},{k:'augcapital'},{k:'redcapital'},{k:'etatlieux'}]},
+    {id:'fermer',fam:'soc',t:'Suspendre ou fermer',s:'mise en sommeil, reprise, dissolution, liquidation',
+      items:[{k:'sommeil'},{k:'attnonact'},{k:'reprise'},{k:'dissol'},{k:'liquid'}]},
+    {id:'ceder',fam:'soc',t:'Céder, domicilier, sous-traiter',s:'parts sociales, siège, contrats',
+      items:[{k:'cesparts'},{k:'contratdomicil'},{k:'attestdomicil'},{k:'decladomicile'},{k:'soustrait'}]},
+    {id:'embaucher',fam:'sal',t:'Embaucher et payer',s:'de la promesse d’embauche au bulletin mensuel',
+      items:[{k:'promesse'},{k:'contrat'},{k:'registrepersonnel'},{app:'paie',l:'Paie — plan de travail annuel'},{k:'fichepaie26'},{k:'fichepaie'},{k:'attsalaire'},{k:'attemp'},{k:'avenant'}]},
+    {id:'fin',fam:'sal',t:'Fin de contrat',s:'de l’entretien au solde de tout compte',
+      items:[{k:'convoc'},{k:'rupture'},{k:'licenciement'},{k:'certif'},{k:'stc'},{k:'attemp'},{k:'attpresence'}]},
+    {id:'declarer',fam:'fisc',t:'Déclarer et attester',s:'options fiscales, régularité, TVA',
+      items:[{k:'optionis'},{k:'optionreel'},{k:'attregul'},{app:'tvarembours',l:'Remboursement de TVA'},{k:'bilanprev'},{k:'honneur'}]},
+    {id:'facturer',fam:'fact',t:'Facturer et relancer',s:'du devis à la mise en demeure',
+      items:[{k:'devis'},{k:'factnorm'},{k:'factbtp'},{app:'facturier',l:'Factures'},{k:'mandatsepa'},{k:'procbancaire'},{k:'relance'},{k:'miseendemeure'}]},
+    {id:'cabinet',fam:'cab',t:'Le cabinet et son client',s:'mission, mandat, honoraires',
+      items:[{k:'lettremission'},{k:'mandat'},{k:'atthono'},{k:'resiliation'}]}
+  ];
+  function typeOf(k){ var T=window.EDLIB_TYPES||[]; for(var i=0;i<T.length;i++) if(T[i].k===k) return T[i]; return null; }
+  function nOpen(k){ return (DB.editionsLibres||[]).filter(function(x){ return x.k===k; }).length; }
+  function item(it,i){
+    var t=it.k?typeOf(it.k):null; if(it.k && !t) return '';
+    var lbl=it.l||(t?t.l:''), forms=(it.k&&window.EDFORMS)?EDFORMS[it.k]:null, n=it.k?nOpen(it.k):0;
+    var open=it.app?('<button class="ed2-new ed2-pc-b ed2-pc-app" onclick="'+(it.app==='paie'?'paieSuiviOpen()':("go('"+it.app+"')"))+'">'+E(lbl)+'<small>application</small></button>')
+      :(forms?('<span class="ed2-new ed2-pc-b ed2-pc-lbl">'+E(lbl)+'</span>')
+      :('<button class="ed2-new ed2-pc-b" onclick="edLibNew(\''+it.k+'\')">'+E(lbl)+'</button>'));
+    var chips=forms?('<span class="ed2-pc-vs">'+forms.map(function(o){
+        if(typeof o==='string') return '<button class="ed2-pc-v" onclick="edLibNew(\''+it.k+'\',\''+o+'\')">'+E(o)+'</button>';
+        return '<button class="ed2-pc-v" onclick="edLibNew(\''+o.k+'\')">'+E(o.lbl)+'</button>'; }).join('')+'</span>'):'';
+    return '<li class="ed2-new-wrap ed2-pc-it"><span class="ed2-pc-n">'+(i+1)+'</span>'+open+chips
+      +(n?('<button class="ed2-cnt ed2-pc-open" title="Documents en cours de ce type" onclick="edSetCat(\'@open\')">'+n+' en cours</button>'):'')+'</li>';
+  }
+  function html(){
+    var fam=state.edParcFam||'*';
+    var chips='<div class="ed2-pc-chips">'+FAM.map(function(f){ return '<button class="ed2-pc-chip'+(fam===f[0]?' on':'')+'" onclick="edParcFam(\''+f[0]+'\')">'+E(f[1])+'</button>'; }).join('')
+      +'<span class="ed2-pc-sep"></span><button class="ed2-pc-chip" onclick="edSetCat(\'*\')">Tous les modèles</button></div>';
+    var cards=PARC.filter(function(p){ return fam==='*'||p.fam===fam; }).map(function(p){
+      var its=p.items.map(item).filter(Boolean);
+      return '<div class="ed2-grp ed2-pc"><div class="ed2-grp-h ed2-pc-h"><span>'+E(p.t)+'</span><em>'+E(p.s)+'</em></div>'
+        +'<div class="ed2-grp-b ed2-pc-body"><ol class="ed2-pc-l">'+its.join('')+'</ol></div></div>'; }).join('');
+    return '<div class="ed2-pc-title">Que se passe-t-il chez le client&nbsp;?</div>'+chips+'<div class="ed2-pcs">'+cards+'</div>';
+  }
+  window.edParcFam=function(f){ try{ state.edParcFam=f; }catch(e){} render(); };
+  try{ var _pe=window.pageEditions; if(typeof _pe==='function' && !_pe.__parc){
+    window.pageEditions=function(){
+      try{ if(state.edCat==null) state.edCat='@parcours'; }catch(e){}
+      var h=_pe.apply(this,arguments);
+      try{ if(typeof h==='string' && h.indexOf('ed2-home-2c')>=0){
+        h=h.replace('<div class="ed2-side-h">Modèles</div>',
+          '<div class="ed2-side-h">Parcours</div><button class="ed2-cat'+(state.edCat==='@parcours'?' on':'')+'" onclick="edSetCat(\'@parcours\')"><span class="ed2-cat-ic">◎</span><span class="ed2-cat-l">Situations du client</span><span class="ed2-cnt">'+PARC.length+'</span></button><div class="ed2-side-h">Modèles</div>');
+        if(state.edCat==='@parcours'){
+          h=h.replace('<div class="ed2-create" id="ed2-create"><div class="ed2-empty">Aucun modèle dans cette catégorie.</div></div>','<div class="ed2-create" id="ed2-create">'+html()+'</div>');
+          h=h.replace('Choisissez un modèle ou une application, renseignez le volet de saisie, puis imprimez ou enregistrez le document.','Partez de ce qui arrive chez le client : chaque situation liste ses documents dans l’ordre où on les produit. Les rubriques restent disponibles dans la colonne de gauche.');
+        } } }catch(e){}
+      return h; }; window.pageEditions.__parc=1; } }catch(e){}
+  var CSS='.ed2-pc-title{font-size:15px;font-weight:600;margin:0 0 10px}'
+    +'.ed2-pc-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px}'
+    +'.ed2-pc-chip{border:1px solid rgba(255,255,255,.14);background:transparent;color:inherit;font:inherit;font-size:12px;padding:5px 12px;border-radius:999px;cursor:pointer;opacity:.85}'
+    +'.ed2-pc-chip.on{background:rgba(120,170,255,.18);border-color:rgba(120,170,255,.5);opacity:1;font-weight:600}'
+    +'.ed2-pc-chip:hover{opacity:1;border-color:rgba(120,170,255,.5)}'
+    +'.ed2-pc-sep{width:1px;height:18px;background:rgba(255,255,255,.14);margin:0 4px}'
+    +'.ed2-pcs{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px}'
+    +'.ed2-pc{border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:12px 14px;background:rgba(255,255,255,.02);margin:0}'
+    +'.ed2-pc-h{align-items:baseline;justify-content:space-between}.ed2-pc-h em{font-style:normal;text-transform:none;letter-spacing:0;font-weight:400;opacity:.7;font-size:11px}'
+    +'.ed2-pc-body{display:block}'
+    +'.ed2-pc-l{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}'
+    +'.ed2-pc-it{display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
+    +'.ed2-pc-n{flex:none;width:20px;height:20px;border-radius:50%;background:rgba(120,170,255,.16);color:#9ec4ff;font-size:11px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}'
+    +'.ed2-new.ed2-pc-b{width:auto;height:auto;min-height:0;padding:6px 10px;font-size:12.5px;display:inline-flex;gap:8px;align-items:center}'
+    +'.ed2-pc-b small{font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.06em}'
+    +'.ed2-pc-app{border-color:rgba(120,170,255,.45)!important;background:rgba(120,170,255,.08)!important}'
+    +'.ed2-pc-lbl{cursor:default;opacity:.9}'
+    +'.ed2-pc-vs{display:inline-flex;gap:4px;flex-wrap:wrap}'
+    +'.ed2-pc-v{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:inherit;font:inherit;font-size:11px;padding:3px 8px;border-radius:6px;cursor:pointer}'
+    +'.ed2-pc-v:hover{border-color:rgba(120,170,255,.5);background:rgba(120,170,255,.12)}'
+    +'.ed2-pc-open{cursor:pointer;font:inherit;font-size:10px}';
+  try{ var st=document.createElement('style'); st.id='ed-parcours-css'; st.textContent=CSS; document.head.appendChild(st); }catch(e){}
 })();
 </script>
 
