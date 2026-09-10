@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=640;
+var LAST_VER=641;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -38691,7 +38691,7 @@ function testLienSignature() {
   try{ if(typeof IC!=='undefined'){ IC.doc=IC.doc||'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/>'; IC.receipt=IC.receipt||'<path d="M4 2v20l3-2 3 2 3-2 3 2 3-2V2l-3 2-3-2-3 2-3-2z"/><path d="M8 8h8M8 12h8M8 16h5"/>'; IC.hard=IC.hard||'<path d="M2 20h20"/><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/>'; } }catch(e){}
   var GROUPS=[
     {lbl:'',items:['cockpit']},
-    {lbl:'Dossiers',items:['demandes','espace','formulaire','clients','agenda']},
+    {lbl:'Dossiers',items:['demandes','formulaire','espace','clients','agenda']},
     {lbl:'Facturation',items:['facturier','__chantiers','factpresta','tvarembours','yada']},
     {lbl:'Documents',items:['editions','etudemarche','conformite']},
     {lbl:'Pilotage',items:['pilotage','services','prestataires']},
@@ -39790,7 +39790,7 @@ function testLienSignature() {
 </script>
 <script>
 /* ============================================================================
-   Mar'q — Harmonisation de l'interface : boutons, centrages, contours (v637, v638)
+   Mar'q — Harmonisation de l'interface : boutons, centrages, contours (v637, v638, v641)
    - Boutons : mêmes hauteurs (32 px / 28 px), même rayon (9 px / 8 px), libellé
      centré horizontalement et verticalement, contour 1 px uniforme, icône alignée.
    - Modules : contenu centré (gouttière de défilement symétrique, largeur bornée).
@@ -39844,7 +39844,12 @@ function testLienSignature() {
     P+'.ckp-hchip span,'+P+'.cli-fact i,'+P+'.ff-rail .h,'+P+'.trw-sep{font-size:11px!important}',
     P+'.ckp-ring-in span,'+P+'.ckp-sp span{font-size:10px!important}',
     P+'.ckp-lk{padding:3px 6px!important}',
-    P+'.ed2-pc-v{border-radius:8px!important}'
+    P+'.ed2-pc-v{border-radius:8px!important}',
+    /* ── v641 : onglets internes des modules unifiés (même hauteur, même police, même rayon, même contour) ── */
+    P+':is(.dem-mode,.dem-nat,.cli-tabs,.fi-subtabs-in,.fp-filters,.ed2-pc-chips,.ckp-racc,.emf-chips,.fb-tvap,.fb-modchips){display:flex!important;flex-wrap:wrap;gap:6px!important;align-items:center}',
+    P+':is(.dem-mode-b,.dem-nat-b,.cli-tab,.fi-subtab,.fp-filt,.ed2-pc-chip,.ckp-rbtn,.emf-chip,.fb-tv){min-height:32px!important;padding:6px 12px!important;border-radius:9px!important;border-width:1px!important;border-style:solid!important;font-size:12.5px!important;font-weight:600!important;line-height:1.2!important;box-sizing:border-box!important}',
+    P+':is(.dem-nat-b,.fi-subtab){min-height:32px!important;height:auto!important}',
+    P+':is(.dem-mode,.dem-nat,.cli-tabs){padding:4px!important;border-radius:11px!important}'
   ].join('\n');
   var st=document.createElement('style'); st.id='ui-polish-css'; st.textContent=css; document.head.appendChild(st);
   /* rester en dernier dans <head> (les thèmes injectent après le rendu) */
@@ -39854,5 +39859,84 @@ function testLienSignature() {
   window.__uiPolishDebug={css:css};
 })();
 </script>
+<script>
+/* ============================================================================
+   Mar'q — Éditions : entrées de la bibliothèque qui ouvrent l'application concernée (v641)
+   - « Contrat de travail » (générique) → contrat CDI (ou CDD si demandé) au lieu d'un
+     document vide ; « Devis », « Facture d'acompte », « Facture de situation (BTP) » →
+     facturier avec le bon type ; « Fiche de paie (modèle 2026) » → module Paie, sans
+     laisser de document fantôme dans « Documents ouverts ».
+   - Nettoyage des documents vides créés par ces entrées auparavant.
+   100 % additif : greffes sur edLibNew / edLibOpen.
+   ========================================================================= */
+(function(){
+  if(window.__aemEdRoute) return; window.__aemEdRoute=true;
+  var INV={devis:'Devis',factacpt:"Facture d'acompte",factbtp:'Situation de travaux'}; var INVK={devis:'devis',factacpt:'acompte',factbtp:'situation'};
+  function vide(d){ var k=Object.keys((d&&d.data)||{}).filter(function(x){ return x!=='forme'&&x!=='type'&&(d.data[x]!==''&&d.data[x]!=null); }); return !k.length; }
+  function pickType(label,tries){ try{ var btns=[].slice.call(document.querySelectorAll('.fb-type,.inv-type,button')); var b=btns.filter(function(x){ return (x.textContent||'').trim().indexOf(label)===0&&x.closest('main'); })[0]; if(b){ b.click(); return true; } }catch(e){} if(tries>0) setTimeout(function(){ pickType(label,tries-1); },120); return false; }
+  function openInvoice(k){ try{ window.__invUI=window.__invUI||{tab:'new',hidePrev:false}; window.__invUI.tab='new'; if(typeof invNew==='function'){ try{ invNew(); }catch(e){} } if(typeof go==='function') go('facturier'); else { state.page='facturier'; render(); } setTimeout(function(){ try{ if(typeof invSetType==='function'){ invSetType(INVK[k]); return; } }catch(e){} pickType(INV[k],8); },80); return true; }catch(e){ return false; } }
+  function purge(){ try{ var L=DB.editionsLibres||[]; var n=L.length; DB.editionsLibres=L.filter(function(d){ return !((d.k==='contrat'||d.k==='devis'||d.k==='factacpt'||d.k==='factbtp'||(d.k==='fichepaie26'&&!d.__ps))&&vide(d)); }); if(DB.editionsLibres.length!==n){ try{ save(); }catch(e){} } }catch(e){} }
+  try{ var _n=window.edLibNew; if(typeof _n==='function'&&!_n.__route){
+    window.edLibNew=function(k,forme){
+      if(k==='contrat'){ var kk=(/cdd/i.test(forme||''))?'cdd':'cdi'; return _n.call(this,kk); }
+      if(INV[k]){ if(openInvoice(k)) return; }
+      var r=_n.apply(this,arguments);
+      if(k==='fichepaie26'){ setTimeout(purge,50); }
+      return r; };
+    window.edLibNew.__route=1; } }catch(e){}
+  try{ var _o=window.edLibOpen; if(typeof _o==='function'&&!_o.__route){
+    window.edLibOpen=function(id){ try{ var d=(DB.editionsLibres||[]).filter(function(x){ return x.id===id; })[0]; if(d&&INV[d.k]&&vide(d)){ DB.editionsLibres=DB.editionsLibres.filter(function(x){ return x.id!==id; }); try{ save(); }catch(e){} if(openInvoice(d.k)) return; } if(d&&d.k==='contrat'&&vide(d)){ DB.editionsLibres=DB.editionsLibres.filter(function(x){ return x.id!==id; }); try{ save(); }catch(e){} return window.edLibNew('cdi'); } }catch(e){} return _o.apply(this,arguments); };
+    window.edLibOpen.__route=1; } }catch(e){}
+  setTimeout(purge,800);
+  window.__edRouteDebug={purge:purge,vide:vide};
+})();
+</script>
+
+<script>
+/* ============================================================================
+   Mar'q — Barre latérale en modules repliables (v641)
+   - Chaque groupe (Dossiers, Facturation, Documents, Pilotage) devient un MODULE :
+     en-tête cliquable (libellé, nombre d'entrées, chevron) qui replie / déplie ses
+     sous-modules. Le module de la page active est toujours déplié ; l'état des autres
+     est mémorisé sur l'appareil. « Tableau de bord » et « Paramètres » restent seuls.
+   - Ordre du module Dossiers aligné sur le parcours : Demandes → Formulaire → Traitement.
+   100 % additif : post-traitement de la barre après chaque reconstruction.
+   ========================================================================= */
+(function(){
+  if(window.__aemNavMod) return; window.__aemNavMod=true;
+  var KEY='marq-nav-open'; function st(){ try{ return JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(e){ return {}; } } function put(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); }catch(e){} }
+  var ICO={Dossiers:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',Facturation:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>',Documents:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',Pilotage:'<path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-7"/>'};
+  function svgOf(l){ var p=ICO[l]||'<circle cx="12" cy="12" r="8"/>'; return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>'; }
+  function apply(){ var nav=document.getElementById('nav'); if(!nav||nav.__modDone) return; var open=st(); var kids=[].slice.call(nav.children); var cur=null; var groups=[];
+    kids.forEach(function(el){ if(el.classList.contains('nav-lbl')){ cur={lbl:el,items:[]}; groups.push(cur); } else if(cur){ cur.items.push(el); } });
+    groups.forEach(function(g){ var name=(g.lbl.textContent||'').trim(); if(!name||name==='Système'||g.items.length<2) return;
+      var active=g.items.some(function(b){ return b.classList.contains('on'); });
+      var isOpen=active||open[name]!==false;
+      var head=document.createElement('button'); head.type='button'; head.className='nav-mod-h'+(isOpen?' open':'')+(active?' has-on':''); head.setAttribute('aria-expanded',isOpen?'true':'false');
+      head.innerHTML='<span class="nav-mod-ic">'+svgOf(name)+'</span><span class="nav-mod-l">'+name+'</span><span class="nav-mod-n">'+g.items.length+'</span><span class="nav-mod-c">›</span>';
+      var box=document.createElement('div'); box.className='nav-mod-b'+(isOpen?'':' closed');
+      g.lbl.replaceWith(head); g.items.forEach(function(b){ box.appendChild(b); }); head.insertAdjacentElement('afterend',box);
+      head.addEventListener('click',function(){ var o=st(); var now=box.classList.contains('closed'); box.classList.toggle('closed',!now); head.classList.toggle('open',now); head.setAttribute('aria-expanded',now?'true':'false'); o[name]=now; put(o); }); });
+    nav.__modDone=true; }
+  var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){ var r=_bn.apply(this,arguments); try{ var nav=document.getElementById('nav'); if(nav) nav.__modDone=false; apply(); }catch(e){ window.__navModErr=e&&e.message; } return r; }; }
+  var _r=window.render; if(typeof _r==='function'){ window.render=function(){ var o=_r.apply(this,arguments); try{ apply(); }catch(e){} return o; }; }
+  var css=document.createElement('style'); css.id='nav-mod-css'; css.textContent=[
+    '#nav .nav-mod-h{display:flex;align-items:center;gap:9px;width:100%;margin:6px 0 2px;padding:7px 9px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--ink-2,#b0b8c6);font:700 12.5px/1.2 inherit;letter-spacing:.1px;text-transform:none;cursor:pointer;text-align:left}',
+    '#nav .nav-mod-h:hover{background:rgba(255,255,255,.05);color:var(--ink,#f3f5f9)}',
+    '#nav .nav-mod-h.has-on{color:var(--ink,#f3f5f9)}',
+    '#nav .nav-mod-ic{display:inline-flex;width:16px;height:16px;opacity:.85}',
+    '#nav .nav-mod-l{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#nav .nav-mod-n{font:600 10px/1 inherit;letter-spacing:0;color:var(--ink-3,#858d9b);background:rgba(255,255,255,.06);border-radius:8px;padding:3px 6px}',
+    '#nav .nav-mod-c{font:600 14px/1 inherit;color:var(--ink-3,#858d9b);transition:transform .18s;transform:rotate(0deg)}',
+    '#nav .nav-mod-h.open .nav-mod-c{transform:rotate(90deg)}',
+    '#nav .nav-mod-b{display:flex;flex-direction:column;gap:2px;padding-left:6px;border-left:1px solid var(--line,#1f2024);margin-left:14px}',
+    '#nav .nav-mod-b.closed{display:none}',
+    '#nav .nav-mod-b .nav-btn{min-height:30px;padding-top:6px;padding-bottom:6px}'
+  ].join('\n'); document.head.appendChild(css);
+  setTimeout(apply,350);
+  window.__navModDebug={apply:apply,state:st};
+})();
+</script>
+
 </body>
 </html>
