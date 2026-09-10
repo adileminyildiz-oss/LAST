@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=630;
+var LAST_VER=631;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -39119,7 +39119,185 @@ function testLienSignature() {
   ].join('\n');
   var st=document.createElement('style'); st.id='paie-mod-css'; st.textContent=CSS; document.head.appendChild(st);
   window.paie26PrintExtra=(window.paie26PrintExtra||'')+CSS;
-  window.__paieModDebug={R:R,MODELES:MODELES,fixAll:fixAll};
+  window.__paieModDebug={R:R,MODELES:MODELES,fixAll:fixAll,B:{ctx:ctx,periode:periode,idRows:idRows,empRows:empRows,salRows:salRows,elRows:elRows,cotRows:cotRows,famRows:famRows,netsRows:netsRows,cpTable:cpTable,cumTable:cumTable,tx:tx,FOOT:FOOT,page:page}};
+})();
+</script>
+<script>
+/* ============================================================================
+   Mar'q — Fiche de paie : modèles haut de gamme (v631)
+   Trois présentations soignées, dignes d'un cabinet : Prestige (marine et or,
+   monogramme, panneau du net), Cabinet (bandeau de synthèse, mention « établi
+   par »), Élégant (typographie à empattements, filets fins, grands blancs).
+   Couleur d'accent réglable par exercice (plan de travail → Modèle de bulletin).
+   Même moteur 2026 ; briques partagées avec les modèles de la v630.
+   ========================================================================= */
+(function(){
+  if(window.__aemPaiePrem) return; window.__aemPaiePrem=true;
+  var D=window.__paieModDebug; if(!D||!D.B||!D.R) return; var B=D.B, R=D.R;
+  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function n(v){ var x=parseFloat(String(v==null?'':v).replace(/\s/g,'').replace(',','.')); return isNaN(x)?0:x; }
+  function fr(v){ v=(+v)||0; var g=v<0; v=Math.abs(v); var p=v.toFixed(2).split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,' '); return (g?'−':'')+p[0]+','+p[1]; }
+  function fh(v){ return fr(v).replace(/^−/,'-'); }
+  function DBX(){ try{ return (typeof DB!=='undefined'&&DB)?DB:null; }catch(e){ return null; } }
+  function PSx(){ var Bd=DBX(); var Rt=Bd&&Bd.paie26; return (Rt&&Rt.annees)?(Rt.annees[Rt.courante]||null):null; }
+  function cab(){ var Bd=DBX(); var em=(Bd&&Bd.parametres&&Bd.parametres.facturierEmetteur)||{}; return {nom:em.nom||'',mail:em.mail||'',tel:em.tel||'',adr:String(em.adr||'').split(/\n/)[0]||''}; }
+  function accent(doc){ var s=null; try{ if(doc.__ps) s=PSx(); }catch(e){} var a=(s&&s.accent)||(doc.data&&doc.data.accent)||''; return /^#[0-9a-f]{6}$/i.test(a)?a:''; }
+  function mono(nom){ var w=String(nom||'').replace(/[^A-Za-zÀ-ÿ0-9 ]/g,' ').trim().split(/\s+/).filter(Boolean); return (w.length?(w[0][0]+(w[1]?w[1][0]:'')):'•').toUpperCase(); }
+  function acc(doc,def){ var a=accent(doc); return a?' style="--pa:'+a+'"':(def?' style="--pa:'+def+'"':''); }
+  function page(key,doc,def,inner){ return '<div class="p26-a4"><div class="p26-page pm pm-'+key+' pq" data-doc="paie"'+acc(doc,def)+'>'+inner+'</div></div>'; }
+  var MOIS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  function perTitre(pe){ var m=String(pe.du||'').match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m?{mois:MOIS[+m[2]-1],an:m[3]}:{mois:pe.du||'',an:''}; }
+
+  /* Briques propres aux modèles haut de gamme (nombres à la virgule) */
+  function elRowsQ(c){ var e=c.e, r=c.r, o='';
+    o+='<tr><td>Salaire de base</td><td class="n">'+fh(n(e.heures))+' h</td><td class="n">'+fr(n(e.taux))+'</td><td class="n">'+fr(r.salBase)+'</td></tr>';
+    if(n(e.absH)) o+='<tr><td class="in">Absences</td><td class="n">'+fh(n(e.absH))+' h</td><td class="n">'+fr((e.absTaux!=null&&e.absTaux!=='')?n(e.absTaux):n(e.taux))+'</td><td class="n">'+fr(r.absMt)+'</td></tr>';
+    if(n(e.hs25)) o+='<tr><td>Heures supplémentaires majorées à 25 %</td><td class="n">'+fh(n(e.hs25))+' h</td><td class="n">'+fr(r.tx25)+'</td><td class="n">'+fr(r.mt25)+'</td></tr>';
+    if(n(e.hs50)) o+='<tr><td>Heures supplémentaires majorées à 50 %</td><td class="n">'+fh(n(e.hs50))+' h</td><td class="n">'+fr(r.tx50)+'</td><td class="n">'+fr(r.mt50)+'</td></tr>';
+    if(r.prime) o+='<tr><td>Prime</td><td class="n"></td><td class="n"></td><td class="n">'+fr(r.prime)+'</td></tr>';
+    o+='<tr class="tot"><td>Salaire brut</td><td></td><td></td><td class="n">'+fr(r.brut)+'</td></tr>';
+    if(r.panier) o+='<tr class="ns"><td>Paniers repas — non soumis</td><td class="n">'+fh(r.panNb)+'</td><td class="n">'+fr(r.panTx)+'</td><td class="n">'+fr(r.panier)+'</td></tr>';
+    if(r.indemn) o+='<tr class="ns"><td>Indemnités non soumises (transport, frais)</td><td></td><td></td><td class="n">'+fr(r.indemn)+'</td></tr>';
+    return o; }
+  function elTableQ(c){ return '<table class="pm-t pq-el"><thead><tr><th>Rémunération</th><th class="n">Nombre</th><th class="n">Taux</th><th class="n">Montant</th></tr></thead><tbody>'+elRowsQ(c)+'</tbody></table>'; }
+  function cotTableQ(c){ return '<table class="pm-t pq-cot"><thead><tr><th rowspan="2">Cotisations et contributions sociales</th><th colspan="3" class="c">Part salariale</th><th colspan="3" class="c">Part employeur</th></tr><tr><th class="n">Base</th><th class="n">Taux</th><th class="n">Montant</th><th class="n">Base</th><th class="n">Taux</th><th class="n">Montant</th></tr></thead><tbody>'+B.cotRows(c)+'</tbody></table>'; }
+  function netsQ(c){ var r=c.r; function li(l,v,cls){ return '<div class="pq-nl'+(cls?' '+cls:'')+'"><span>'+l+'</span><b>'+fr(v)+'</b></div>'; }
+    return '<div class="pq-nets">'+li('Salaire net imposable',r.netImp)+(r.hsExo?li('dont heures supplémentaires exonérées d’impôt',-r.hsExo,'in'):'')+li('Net à payer avant impôt sur le revenu',r.netAvant)
+      +li('Impôt sur le revenu prélevé à la source · '+B.tx(r.pasTx)+' %',r.pas)+'<div class="pq-net"><span>Net à payer</span><b>'+fr(r.netPay)+' €</b></div>'
+      +li('Montant net social',r.netSocial)+li('Total versé par l’employeur',r.cout,'mute')+'</div>'; }
+  function cpQ(c){ var cp=c.cp; return '<div class="pq-cp"><div class="pq-cph"><span>Congés payés</span><span>N-1</span><span>N</span></div>'
+      +'<div class="pq-cpr"><span>Acquis</span><span>'+fh(n(cp.n1du))+'</span><span>'+fh(n(cp.ndu))+'</span></div><div class="pq-cpr"><span>Pris</span><span>'+fh(n(cp.n1pris))+'</span><span>'+fh(n(cp.npris))+'</span></div>'
+      +'<div class="pq-cpr tot"><span>Solde</span><span>'+fh(n(cp.n1du)-n(cp.n1pris))+'</span><span>'+fh(n(cp.ndu)-n(cp.npris))+'</span></div></div>'; }
+  function cumQ(c){ var r=c.r, cum=c.cum; function row(l,brut,cot,ni,h,pp){ return '<tr><td>'+l+'</td><td class="n">'+fr(brut)+'</td><td class="n">'+fr(cot)+'</td><td class="n">'+fr(ni)+'</td><td class="n">'+fh(h)+' h</td><td class="n">'+fr(pp)+'</td></tr>'; }
+    return '<table class="pm-t pq-cum"><thead><tr><th>Cumuls</th><th class="n">Brut</th><th class="n">Cotisations</th><th class="n">Net imposable</th><th class="n">Heures</th><th class="n">Part employeur</th></tr></thead><tbody>'+row('Période',r.brut,r.cotis,r.netImp,r.hTrav,r.partPat)+(cum?row('Cumul '+E(cum.annee),cum.brut,cum.cotis,cum.netImp,cum.heures,cum.cotPat):'')+'</tbody></table>'; }
+  function idQ(pairs){ return pairs.filter(function(x){ return String(x[1]==null?'':x[1]).trim(); }).map(function(x){ return '<div class="pq-id"><span>'+E(x[0])+'</span><b>'+E(x[1])+'</b></div>'; }).join(''); }
+  function empQ(c){ return idQ([['Adresse',[c.em.adr,c.em.cpv].filter(Boolean).join(', ')],['SIRET',c.em.siret],['Code APE',c.em.ape],['URSSAF',c.em.urssaf]]); }
+  function salQ(c){ return idQ([['Adresse',[c.sa.adr,c.sa.cpv].filter(Boolean).join(', ')],['N° de Sécurité sociale',c.sa.nss],['Emploi',c.sa.emploi],['Qualification',c.sa.quali],['Statut',c.sa.statut||'Non cadre'],['Convention collective',c.sa.conv],['Ancienneté',c.sa.anc]]); }
+  function footQ(c,extra){ var k=cab(); return '<div class="pq-foot"><span>'+B.FOOT+'</span><span>'+(k.nom?('Établi par '+E(k.nom)+(k.mail?(' · '+E(k.mail)):'')+' · '):'')+(extra||'')+'</span></div>'; }
+
+  /* ── Prestige : marine et or, monogramme, panneau du net ─────────────── */
+  R.prestige=function(doc){ var c=B.ctx(doc), r=c.r, t=perTitre(c.pe);
+    return page('prestige',doc,'#14213d',
+      '<div class="pq-head"><div class="pq-mono">'+E(mono(c.em.nom))+'</div><div class="pq-headt"><div class="pq-kicker">Bulletin de paie</div><div class="pq-title">'+E(t.mois)+' <span>'+E(t.an)+'</span></div><div class="pq-sub">Du '+E(c.pe.du||'…')+' au '+E(c.pe.au||'…')+(c.pe.payeLe?(' · payé le '+E(c.pe.payeLe)):'')+'</div></div>'
+      +'<div class="pq-headr"><div class="pq-hr-l">Net à payer</div><div class="pq-hr-v">'+fr(r.netPay)+' €</div><div class="pq-hr-s">Brut '+fr(r.brut)+' € · net social '+fr(r.netSocial)+' €</div></div></div>'
+      +'<div class="pq-2"><div class="pq-part"><div class="pq-pt">Employeur</div><div class="pq-pn">'+E(c.em.nom||'')+'</div>'+empQ(c)+'</div><div class="pq-part"><div class="pq-pt">Salarié</div><div class="pq-pn">'+E(c.sa.nom||'')+'</div>'+salQ(c)+'</div></div>'
+      +elTableQ(c)+cotTableQ(c)
+      +'<div class="pq-bas"><div>'+cpQ(c)+cumQ(c)+'</div>'+netsQ(c)+'</div>'
+      +footQ(c)); };
+
+  /* ── Cabinet : bandeau de synthèse, style expert-comptable ────────────── */
+  R.cabinet=function(doc){ var c=B.ctx(doc), r=c.r, t=perTitre(c.pe), k=cab();
+    function kpi(l,v){ return '<div class="pq-kpi"><span>'+l+'</span><b>'+fr(v)+' €</b></div>'; }
+    return page('cabinet',doc,'#1f4e79',
+      '<div class="pq-chead"><div><div class="pq-kicker">Bulletin de paie</div><div class="pq-title">'+E(t.mois)+' <span>'+E(t.an)+'</span></div><div class="pq-sub">Période du '+E(c.pe.du||'…')+' au '+E(c.pe.au||'…')+(c.pe.payeLe?(' · paiement le '+E(c.pe.payeLe)):'')+'</div></div>'
+      +'<div class="pq-cab"><b>'+E(k.nom||c.em.nom||'')+'</b>'+(k.adr?('<span>'+E(k.adr)+'</span>'):'')+(k.mail||k.tel?('<span>'+E([k.mail,k.tel].filter(Boolean).join(' · '))+'</span>'):'')+'<span class="pq-cab-t">Établissement du bulletin</span></div></div>'
+      +'<div class="pq-kpis">'+kpi('Salaire brut',r.brut)+kpi('Cotisations salariales',-r.totSal)+kpi('Net imposable',r.netImp)+kpi('Net social',r.netSocial)+'<div class="pq-kpi pq-kpi-net"><span>Net à payer</span><b>'+fr(r.netPay)+' €</b></div></div>'
+      +'<div class="pq-2"><div class="pq-part"><div class="pq-pt">Employeur</div><div class="pq-pn">'+E(c.em.nom||'')+'</div>'+empQ(c)+'</div><div class="pq-part"><div class="pq-pt">Salarié</div><div class="pq-pn">'+E(c.sa.nom||'')+'</div>'+salQ(c)+'</div></div>'
+      +elTableQ(c)+cotTableQ(c)
+      +'<div class="pq-bas"><div>'+cpQ(c)+cumQ(c)+'</div>'+netsQ(c)+'</div>'
+      +footQ(c,'Document confidentiel')); };
+
+  /* ── Élégant : empattements, filets fins, grands blancs ───────────────── */
+  R.elegant=function(doc){ var c=B.ctx(doc), r=c.r, t=perTitre(c.pe);
+    return page('elegant',doc,'#2b2b2b',
+      '<div class="pq-ehead"><div><div class="pq-etitle">Bulletin de paie</div><div class="pq-esub">'+E(t.mois)+' '+E(t.an)+' — du '+E(c.pe.du||'…')+' au '+E(c.pe.au||'…')+'</div></div><div class="pq-enet"><span>Net à payer</span><b>'+fr(r.netPay)+' €</b>'+(c.pe.payeLe?('<i>payé le '+E(c.pe.payeLe)+'</i>'):'')+'</div></div>'
+      +'<div class="pq-2 pq-e2"><div><div class="pq-pt">Employeur</div><div class="pq-pn">'+E(c.em.nom||'')+'</div>'+empQ(c)+'</div><div><div class="pq-pt">Salarié</div><div class="pq-pn">'+E(c.sa.nom||'')+'</div>'+salQ(c)+'</div></div>'
+      +elTableQ(c)+cotTableQ(c)
+      +'<div class="pq-bas"><div>'+cpQ(c)+cumQ(c)+'</div>'+netsQ(c)+'</div>'
+      +footQ(c)); };
+
+  /* ── Sélecteurs : en tête de liste + couleur d'accent ─────────────────── */
+  var NEW=[['prestige','Prestige — marine et or, panneau du net'],['cabinet','Cabinet — synthèse, établi par le cabinet'],['elegant','Élégant — empattements, filets fins']];
+  NEW.slice().reverse().forEach(function(m){ if(!D.MODELES.some(function(x){ return x[0]===m[0]; })) D.MODELES.unshift(m); });
+  window.psSetAccent=function(v){ var s=PSx(); if(!s) return; s.accent=/^#[0-9a-f]{6}$/i.test(v)?v:''; try{save();}catch(e){} try{ if(window.__pfTpl==='__paie26'&&window.paie26Render) window.paie26Render(); }catch(e){} };
+  function decor(){ var s=PSx(); if(!s) return;
+    document.querySelectorAll('#pf-ov select[onchange*="psSetModele("],#pf-ov select.pex-mods').forEach(function(sel){ var host=sel.parentNode; if(!host||host.querySelector('.pq-acc')||(host.nextElementSibling&&host.nextElementSibling.classList.contains('pq-acc'))) return;
+      var w=document.createElement('label'); w.className='pq-acc'; w.title='Couleur d’accent des modèles Prestige, Cabinet, Élégant et Moderne'; w.innerHTML='<span>Accent</span><input type="color" value="'+(s.accent||'#14213d')+'" onchange="psSetAccent(this.value)"><button type="button" onclick="psSetAccent(\'\')" title="Couleur du modèle">↺</button>'; if(host.tagName==='LABEL') host.insertAdjacentElement('afterend',w); else host.appendChild(w); }); }
+  var sched=null; function schedule(){ if(sched) return; sched=setTimeout(function(){ sched=null; try{ decor(); }catch(e){} },5); }
+  function ensureObs(){ var ov=document.getElementById('pf-ov'); if(!ov||ov.__pqObs) return; ov.__pqObs=new MutationObserver(schedule); ov.__pqObs.observe(ov,{childList:true}); schedule(); }
+  try{ new MutationObserver(function(){ ensureObs(); }).observe(document.body,{childList:true}); }catch(e){}
+  ['paie26Open','paie26Render','paieSuiviOpen','psPaint'].forEach(function(f){ var o=window[f]; if(typeof o!=='function'||o.__pq) return; window[f]=function(){ var r=o.apply(this,arguments); ensureObs(); schedule(); return r; }; window[f].__pq=1; });
+
+  /* ── Styles ─────────────────────────────────────────────────────────────── */
+  var PRE='html body:not(#p26x):not(#p26x):not(#p26x) .p26-page.pq.pm';
+  function RX(sub,decl){ return sub.split(',').map(function(s){ s=s.trim(); return PRE+(s.charAt(0)==='-'?s:(' '+s)); }).join(',')+'{'+decl+'}'; }
+  var CSS=[
+    RX('','--pa:#14213d;font-family:"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif!important;font-size:9.4px!important;line-height:1.3!important;color:#1b1f27!important'),
+    RX(' *','color:#1b1f27!important;-webkit-text-fill-color:#1b1f27!important'),
+    RX(' .pq-kicker','font-size:8.5px;letter-spacing:.22em;text-transform:uppercase;opacity:.65'),
+    RX(' .pq-title','font-size:22px;font-weight:300;letter-spacing:.01em;line-height:1.05;margin-top:2px;text-transform:capitalize'),RX(' .pq-title span','font-weight:700'),
+    RX(' .pq-sub','font-size:9px;opacity:.7;margin-top:3px'),
+    /* identités */
+    RX(' .pq-2','display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0'),
+    RX(' .pq-part','border-top:1.5px solid var(--pa);padding-top:5px'),
+    RX(' .pq-pt','font-size:7.8px;letter-spacing:.2em;text-transform:uppercase;opacity:.6'),
+    RX(' .pq-pn','font-size:12px;font-weight:700;margin:1px 0 3px'),
+    RX(' .pq-id','display:grid;grid-template-columns:38% 1fr;gap:6px;padding:.5px 0;font-size:9px'),RX(' .pq-id span','opacity:.6'),RX(' .pq-id b','font-weight:600'),
+    /* tableaux */
+    RX(' .pm-t','margin:0 0 7px;border-collapse:collapse;width:100%'),
+    RX(' .pm-t th, .pm-t td','border:0!important;border-bottom:1px solid #e6e8ec!important;padding:2px 6px;background:#fff!important'),
+    RX(' .pm-t th','font-size:7.8px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--pa)!important;-webkit-text-fill-color:var(--pa)!important;border-bottom:1.5px solid var(--pa)!important;background:#fff!important;white-space:nowrap'),
+    RX(' .pm-t th.c','text-align:center'),RX(' .pm-t .n','text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap'),
+    RX(' .pm-t tr.grp td','background:#fff!important;font-size:7.8px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;padding-top:5px;border-bottom:1px solid #d9dce2!important'),
+    RX(' .pm-t tr.grp td::before','content:"";display:inline-block;width:8px;height:1.5px;background:var(--pa);vertical-align:middle;margin-right:6px'),
+    RX(' .pm-t tr.tot td','font-weight:700;background:#f6f7f9!important;border-top:1px solid #cfd3da!important'),
+    RX(' .pm-t tr.ns td','font-style:italic;opacity:.85'),RX(' .pm-t td.in','padding-left:18px!important;font-style:italic;opacity:.8'),
+    RX(' .pq-cot thead tr:first-child th','border-bottom:0!important'),
+    /* bas de page : congés + cumuls | nets */
+    RX(' .pq-bas','display:grid;grid-template-columns:1fr 250px;gap:14px;align-items:start;margin-top:4px'),
+    RX(' .pq-cp','margin-bottom:8px;font-size:9px'),RX(' .pq-cph, .pq-cpr','display:grid;grid-template-columns:1fr 56px 56px;gap:6px;padding:2.4px 6px;border-bottom:1px solid #e6e8ec'),
+    RX(' .pq-cph','font-size:7.8px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--pa)!important;-webkit-text-fill-color:var(--pa)!important;border-bottom:1.5px solid var(--pa)'),
+    RX(' .pq-cph span:not(:first-child), .pq-cpr span:not(:first-child)','text-align:right;font-variant-numeric:tabular-nums'),RX(' .pq-cpr.tot','font-weight:700;background:#f6f7f9'),
+    RX(' .pq-nets','border:1px solid #d9dce2;border-radius:6px;overflow:hidden;font-size:9px'),
+    RX(' .pq-nl','display:flex;justify-content:space-between;gap:10px;padding:4px 9px;border-bottom:1px solid #eceef2'),RX(' .pq-nl b','font-variant-numeric:tabular-nums;white-space:nowrap'),
+    RX(' .pq-nl.in','padding-left:16px;font-style:italic;opacity:.8'),RX(' .pq-nl.mute','opacity:.75;border-bottom:0'),
+    RX(' .pq-net','display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 9px;background:var(--pa)!important;-webkit-print-color-adjust:exact;print-color-adjust:exact'),
+    RX(' .pq-net *','color:#fff!important;-webkit-text-fill-color:#fff!important'),RX(' .pq-net span','font-size:8px;letter-spacing:.2em;text-transform:uppercase'),RX(' .pq-net b','font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap'),
+    RX(' .pq-foot','display:flex;justify-content:space-between;gap:16px;margin-top:8px;padding-top:5px;border-top:1px solid #d9dce2;font-size:7.6px;opacity:.7'),RX(' .pq-foot span:first-child','font-style:italic'),RX(' .pq-foot span:last-child','white-space:nowrap'),
+    /* Prestige */
+    RX('-prestige .pq-head','display:grid;grid-template-columns:52px 1fr auto;gap:14px;align-items:center;padding-bottom:10px;border-bottom:2px solid var(--pa);margin-bottom:6px'),
+    RX('-prestige .pq-mono','width:52px;height:52px;border-radius:6px;background:var(--pa)!important;display:flex;align-items:center;justify-content:center;font-family:Georgia,"Times New Roman",serif;font-size:22px;letter-spacing:.04em;-webkit-print-color-adjust:exact;print-color-adjust:exact;box-shadow:inset 0 0 0 2px #fff,inset 0 0 0 3.5px #c9a227'),
+    RX('-prestige .pq-mono','color:#fff!important;-webkit-text-fill-color:#fff!important'),
+    RX('-prestige .pq-title','font-family:Georgia,"Times New Roman",serif;font-size:24px'),
+    RX('-prestige .pq-headr','text-align:right;padding-left:16px;border-left:1px solid #c9a227'),
+    RX('-prestige .pq-hr-l','font-size:7.8px;letter-spacing:.24em;text-transform:uppercase;color:#a3801a!important;-webkit-text-fill-color:#a3801a!important'),
+    RX('-prestige .pq-hr-v','font-family:Georgia,"Times New Roman",serif;font-size:22px;font-weight:700;color:var(--pa)!important;-webkit-text-fill-color:var(--pa)!important;font-variant-numeric:tabular-nums;white-space:nowrap'),
+    RX('-prestige .pq-hr-s','font-size:8.5px;opacity:.7'),
+    RX('-prestige .pq-pt','color:#a3801a!important;-webkit-text-fill-color:#a3801a!important;opacity:1'),RX('-prestige .pq-part','border-top-color:#c9a227'),
+    RX('-prestige .pm-t tr.grp td::before','background:#c9a227'),
+    RX('-prestige .pq-net','background:linear-gradient(135deg,var(--pa),color-mix(in srgb,var(--pa) 70%,#000))!important'),
+    /* Cabinet */
+    RX('-cabinet .pq-chead','display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:8px'),
+    RX('-cabinet .pq-cab','text-align:right;font-size:8.6px;line-height:1.35;display:flex;flex-direction:column;padding:6px 10px;border-right:3px solid var(--pa)'),
+    RX('-cabinet .pq-cab b','font-size:11px;letter-spacing:.02em'),RX('-cabinet .pq-cab-t','font-size:7.4px;letter-spacing:.18em;text-transform:uppercase;opacity:.55;margin-top:2px'),
+    RX('-cabinet','font-size:9.2px!important'),RX('-cabinet .pq-chead','margin-bottom:4px'),RX('-cabinet .pq-2','margin:4px 0'),
+    RX('-cabinet .pq-kpis','display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:2px 0 6px'),
+    RX('-cabinet .pq-kpi','border:1px solid #d9dce2;border-radius:6px;padding:3px 7px;background:#f8f9fb!important;display:flex;flex-direction:column;gap:2px'),
+    RX('-cabinet .pq-kpi span','font-size:7.4px;letter-spacing:.14em;text-transform:uppercase;opacity:.6'),RX('-cabinet .pq-kpi b','font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap'),
+    RX('-cabinet .pq-kpi-net','background:var(--pa)!important;border-color:var(--pa);-webkit-print-color-adjust:exact;print-color-adjust:exact'),RX('-cabinet .pq-kpi-net *','color:#fff!important;-webkit-text-fill-color:#fff!important;opacity:1'),
+    RX('-cabinet .pm-t th','background:color-mix(in srgb,var(--pa) 7%,#fff)!important;border-bottom:1px solid color-mix(in srgb,var(--pa) 35%,#fff)!important;padding:3px 6px'),
+    RX('-cabinet .pm-t tbody tr:nth-child(even) td','background:#fafbfc!important'),
+    /* Élégant */
+    RX('-elegant','font-family:Georgia,"Palatino Linotype",Palatino,"Times New Roman",serif!important;font-size:9.6px!important;padding:14mm 13mm!important'),
+    RX('-elegant .pq-ehead','display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding-bottom:8px;border-bottom:1px solid #1b1f27;margin-bottom:10px'),
+    RX('-elegant .pq-etitle','font-size:26px;font-weight:400;letter-spacing:.14em;text-transform:uppercase;line-height:1'),RX('-elegant .pq-esub','font-size:9.5px;font-style:italic;margin-top:5px;opacity:.75'),
+    RX('-elegant .pq-enet','text-align:right;display:flex;flex-direction:column'),RX('-elegant .pq-enet span','font-size:8px;letter-spacing:.24em;text-transform:uppercase;opacity:.6'),
+    RX('-elegant .pq-enet b','font-size:24px;font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap'),RX('-elegant .pq-enet i','font-size:8.5px;opacity:.65'),
+    RX('-elegant .pq-e2 .pq-pt','opacity:.55;letter-spacing:.24em'),RX('-elegant .pq-e2 .pq-pn','font-size:13px;font-weight:400;letter-spacing:.02em'),
+    RX('-elegant .pm-t th','font-family:"Segoe UI",Roboto,Arial,sans-serif;color:#1b1f27!important;-webkit-text-fill-color:#1b1f27!important;border-bottom:1px solid #1b1f27!important;font-weight:600'),
+    RX('-elegant .pm-t th, -elegant .pm-t td','border-bottom:1px solid #e9e9e9!important'),RX('-elegant .pm-t tr.grp td','font-family:"Segoe UI",Roboto,Arial,sans-serif;font-weight:600'),RX('-elegant .pm-t tr.grp td::before','background:#1b1f27;width:14px;height:1px'),
+    RX('-elegant .pm-t tr.tot td','background:#fff!important;border-top:1px solid #1b1f27!important;border-bottom:1px solid #1b1f27!important'),
+    RX('-elegant .pq-nets','border:0;border-top:1px solid #1b1f27;border-radius:0'),RX('-elegant .pq-net','background:#fff!important;border-top:1px solid #1b1f27;border-bottom:1px solid #1b1f27;padding:8px 9px'),
+    RX('-elegant .pq-net *','color:#1b1f27!important;-webkit-text-fill-color:#1b1f27!important'),RX('-elegant .pq-net b','font-size:17px;font-weight:400'),
+    RX('-elegant .pq-cph','color:#1b1f27!important;-webkit-text-fill-color:#1b1f27!important;border-bottom-color:#1b1f27;font-family:"Segoe UI",Roboto,Arial,sans-serif;font-weight:600'),RX('-elegant .pq-cpr.tot','background:#fff'),
+    RX('-elegant .pq-foot','border-top-color:#1b1f27;font-style:italic'),
+    /* volet : accent */
+    '.pq-acc{display:inline-flex;align-items:center;gap:6px;margin-left:10px;font-size:11px;color:#aab6c8}.pq-acc input{width:30px;height:24px;border:1px solid #2a2b31;background:#17181d;border-radius:6px;padding:1px;cursor:pointer}.pq-acc button{border:1px solid #2a2b31;background:#17181d;color:#aab6c8;border-radius:6px;height:24px;padding:0 6px;cursor:pointer;font:inherit}',
+    '.ps-grid .pq-acc{margin:6px 0 0}'
+  ].join('\n');
+  var st=document.createElement('style'); st.id='paie-prem-css'; st.textContent=CSS; document.head.appendChild(st);
+  window.paie26PrintExtra=(window.paie26PrintExtra||'')+CSS+'@media print{'+RX('-elegant','padding:0!important')+'}';
+  window.__paiePremDebug={NEW:NEW,decor:decor};
 })();
 </script>
 </body>
