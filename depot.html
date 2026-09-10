@@ -11,7 +11,7 @@ body{margin:0;background:linear-gradient(180deg,#f3ecdc,#faf6ec 240px);color:var
 .wrap{max-width:680px;margin:0 auto}
 .brand{display:flex;align-items:center;gap:12px;margin-bottom:4px}
 .brand .logo{font:800 24px/1 Georgia,serif;letter-spacing:2px;color:var(--accent)}
-.brand .sub{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);font-weight:700}
+.brand .sub{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);font-weight:700}
 h1{font-size:21px;margin:14px 0 4px}
 .lead{color:var(--ink2);margin:0 0 16px}
 .dosno{display:inline-block;font:700 14px/1 Georgia,serif;letter-spacing:1px;color:var(--accent);background:#f6f0e2;border:1px solid var(--line);border-radius:9px;padding:7px 12px;margin-bottom:14px}
@@ -33,6 +33,7 @@ h1{font-size:21px;margin:14px 0 4px}
 .ok{display:none;text-align:center;padding:34px 12px}
 .ok h2{color:var(--ok)}
 .err{color:var(--err);font-size:13px;text-align:center;padding:20px}
+@media(max-width:600px){input,select,textarea{font-size:16px}}
 </style>
 </head>
 <body>
@@ -114,6 +115,13 @@ document.getElementById('send').addEventListener('click',function(){
   document.getElementById('post').submit();
 });
 if(location.hash==='#ok'){document.getElementById('cardForm').style.display='none';document.getElementById('dosno').style.display='none';document.getElementById('cardOk').style.display='block';}
+</script>
+<script>
+/* Accessibilité : chaque libellé est relié à son champ (clic sur le libellé = focus du champ, lecteurs d'écran). */
+(function(){ var n=0; var SEL='input:not([type=hidden]),select,textarea'; function link(){
+  document.querySelectorAll('label:not([for])').forEach(function(l){ var c=null; var s=l.nextElementSibling; if(s&&s.matches&&s.matches(SEL)) c=s; if(!c&&l.parentElement) c=l.parentElement.querySelector(SEL); if(!c||c.closest('label')) return; if(!c.id) c.id='fld-'+(++n); l.htmlFor=c.id; });
+  document.querySelectorAll(SEL).forEach(function(c){ if(c.getAttribute('aria-label')) return; if(c.id&&document.querySelector('label[for="'+c.id+'"]')) return; if(c.closest('label')) return; var ph=c.getAttribute('placeholder'); if(ph) c.setAttribute('aria-label',ph); }); }
+  link(); try{ new MutationObserver(function(){ clearTimeout(link._t); link._t=setTimeout(link,30); }).observe(document.body,{childList:true,subtree:true}); }catch(e){} })();
 </script>
 </body>
 </html>
