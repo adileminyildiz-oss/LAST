@@ -6,14 +6,14 @@ traitement des dossiers, génération des documents (statuts, souscripteurs,
 pouvoir, non-condamnation…), mails avec pièces jointes + logo, facturation.
 
 ## Site en ligne
-**https://last.aemconseil.eu** — hébergé sur **GitHub Pages** (ce dépôt).
+**https://marq.aemconseil.eu** — hébergé sur **GitHub Pages** (ce dépôt).
 Le fichier `CNAME` fixe le domaine ; `index.html` est l'application (fichier
 unique, autonome, sans build ni serveur ; données locales à chaque appareil).
 
 ## Déploiement
 Pousser sur `main` suffit : GitHub Pages reconstruit et publie automatiquement.
 - Source Pages : *Settings → Pages → Deploy from a branch → `main` / `/root`*
-- Domaine : `last.aemconseil.eu` (fichier `CNAME`) + **Enforce HTTPS**
+- Domaine : `marq.aemconseil.eu` (fichier `CNAME`) + **Enforce HTTPS**
 
 ## Accès
 Une page de connexion (mot de passe) protège l'outil. Seule l'empreinte
@@ -24,6 +24,9 @@ Changer le mot de passe : calculer l'empreinte du nouveau
 
 ## Structure
 - `index.html` — l'application complète (HTML/CSS/JS en un seul fichier)
+- `formulaire.html` — formulaire public d'ouverture de dossier (client)
+- `infos.html` — formulaire public de récupération d'informations / questionnaire en ligne, envoyé par lien depuis un dossier (réponses rattachées automatiquement au dossier)
+- `depot.html` — portail public de dépôt sécurisé des pièces
 - `CNAME` — domaine personnalisé GitHub Pages
 - `README.md` — ce fichier
 
