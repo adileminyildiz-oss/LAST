@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=636;
+var LAST_VER=637;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -30044,10 +30044,10 @@ html body .mq-ib-add .mq-ic{width:18px;height:18px}
   /* ---------- greffe ---------- */
   function graft(){
     var _pp=window.pageParams;
-    if(typeof _pp!=='function'||_pp.__sp) return;
+    if(typeof _pp!=='function'||_pp.__sp||window.__spGrafted) return;
     var w=function(){ var h=_pp.apply(this,arguments);
-      try{ return shell(h); }catch(e){ try{console.warn('sp-shell',e);}catch(_){} return h; } };
-    w.__sp=1; window.pageParams=w;
+      try{ if(typeof h==='string'&&h.indexOf('class="sp-wrap"')>=0) return h; return shell(h); }catch(e){ try{console.warn('sp-shell',e);}catch(_){} return h; } };
+    w.__sp=1; window.__spGrafted=1; window.pageParams=w;
   }
   graft(); setTimeout(graft,0); setTimeout(graft,400);
 
@@ -39744,6 +39744,62 @@ function testLienSignature() {
   ].join('\n'); document.head.appendChild(css);
 
   window.__infosFormDebug={MAP:MAP,SECTIONS:SECTIONS,manquants:manquants,trouverEntite:trouverEntite,typeDe:typeDe,numeroDe:numeroDe};
+})();
+</script>
+<script>
+/* ============================================================================
+   Mar'q — Harmonisation de l'interface : boutons, centrages, contours (v637)
+   - Boutons : mêmes hauteurs (32 px / 28 px), même rayon (9 px / 8 px), libellé
+     centré horizontalement et verticalement, contour 1 px uniforme, icône alignée.
+   - Modules : contenu centré (gouttière de défilement symétrique, largeur bornée).
+   - Barres d'actions centrées : facturier, vue d'une demande, pied des fenêtres.
+   - Contours : cartes, champs et pastilles au même rayon, même couleur de bord.
+   100 % CSS additif, injecté en dernier (prime sur les thèmes).
+   ========================================================================= */
+(function(){
+  if(window.__aemUiPolish) return; window.__aemUiPolish=true;
+  var P='html body:not(#mq):not(#mq):not(#mq) ';
+  var css=[
+    /* ── modules centrés ── */
+    P+'main{scrollbar-gutter:stable both-edges!important}',
+    P+'.content{margin-left:auto!important;margin-right:auto!important;max-width:1720px!important;width:100%!important;box-sizing:border-box}',
+    /* ── boutons standard ── */
+    P+'.btn,'+P+'a.btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;gap:6px!important;min-height:32px!important;padding:6px 13px!important;border-radius:9px!important;border-width:1px!important;border-style:solid!important;font-size:12px!important;font-weight:600!important;line-height:1.2!important;box-sizing:border-box!important;white-space:nowrap;vertical-align:middle}',
+    P+'.btn.btn-sm{min-height:28px!important;padding:4px 10px!important;font-size:11.5px!important;border-radius:8px!important}',
+    P+'.btn svg{width:14px!important;height:14px!important;flex:none}',
+    P+'.btn.btn-sm svg{width:12px!important;height:12px!important}',
+    P+'.btn>*{vertical-align:middle}',
+    /* ── boutons des modules (mêmes règles de centrage et de contour) ── */
+    P+'.inv-tb,'+P+'.inv-addl,'+P+'.fb-tv,'+P+'.ckp-rbtn,'+P+'.dem-mode-b,'+P+'.dem-nat-b,'+P+'.cli-tab,'+P+'.fi-subtab,'+P+'.fp-filt,'+P+'.ed2-pc-chip,'+P+'.ed2-pc-v,'+P+'.ed2-cat,'+P+'.inv-sb,'+P+'.fb-type,'+P+'.inv-lx,'+P+'.topbar-refresh,'+P+'.topbar-theme,'+P+'.dots{display:inline-flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;box-sizing:border-box!important;line-height:1.2!important}',
+    P+'.inv-tb{min-height:34px!important;padding:7px 13px!important;border-radius:9px!important;border-width:1px!important;font-size:12.5px!important}',
+    P+'.inv-addl{min-height:36px!important;border-radius:9px!important;border-width:1px!important}',
+    P+'.inv-lx{border-radius:7px!important;border-width:1px!important}',
+    P+'.fb-tv{min-height:27px!important;border-radius:8px!important;border-width:1px!important;padding:3px 9px!important}',
+    P+'.ckp-rbtn,'+P+'.dem-mode-b{border-radius:9px!important}',
+    P+'.ed2-cat{justify-content:flex-start!important;text-align:left!important}',
+    P+'.fb-type{flex-direction:column!important;align-items:flex-start!important;text-align:left!important}',
+    /* ── barres d'actions centrées ── */
+    P+'.inv-toolbar{justify-content:center!important;gap:8px!important}',
+    P+'.dem-view-acts,'+P+'.dem-decide{justify-content:center!important}',
+    P+'.dem-view-acts{display:flex!important;flex-wrap:wrap;gap:8px!important}',
+    P+'#ov-f,'+P+'.ov-f{display:flex!important;justify-content:center!important;gap:8px!important;flex-wrap:wrap}',
+    P+'.fb-lbtns{justify-content:center!important}',
+    P+'.if-presets,'+P+'.fb-modchips{justify-content:flex-start}',
+    /* ── contours ── */
+    P+'.card{border-radius:12px!important;border-width:1px!important;border-style:solid!important}',
+    P+'.card-h{min-height:40px!important}',
+    P+'input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not(.inv-lin):not(.ec-i),'+P+'select,'+P+'textarea{border-radius:9px!important;border-width:1px!important}',
+    P+'.tag,'+P+'.inv-badge{display:inline-flex!important;align-items:center!important;justify-content:center!important;line-height:1.2!important;border-width:1px!important;border-style:solid!important;border-color:transparent}',
+    P+'.seg,'+P+'.inv-seg{border-radius:9px!important;border-width:1px!important}',
+    /* ── boutons d'un groupe : même hauteur, même ligne ── */
+    P+'.dem-view-acts .btn,'+P+'.inv-toolbar .inv-tb,'+P+'.ov-f .btn,'+P+'#ov-f .btn{min-height:34px!important}'
+  ].join('\n');
+  var st=document.createElement('style'); st.id='ui-polish-css'; st.textContent=css; document.head.appendChild(st);
+  /* rester en dernier dans <head> (les thèmes injectent après le rendu) */
+  function last(){ try{ var s=document.getElementById('ui-polish-css'); if(s&&s!==document.head.lastElementChild) document.head.appendChild(s); }catch(e){} }
+  if(typeof window.render==='function'){ var _r=window.render; window.render=function(){ var o=_r.apply(this,arguments); last(); return o; }; }
+  setTimeout(last,400); setTimeout(last,1500);
+  window.__uiPolishDebug={css:css};
 })();
 </script>
 </body>
