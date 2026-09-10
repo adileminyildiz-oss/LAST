@@ -62,6 +62,7 @@ textarea{min-height:90px;resize:vertical}
 .doc .files{margin-top:8px;display:flex;flex-direction:column;gap:6px}
 .doc .file{display:flex;align-items:center;gap:8px;font-size:13px;background:#f6f0e2;border-radius:8px;padding:6px 10px}
 .doc .file b{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc .file small{color:var(--ink3);font-size:11.5px;white-space:nowrap}
 .doc .file button{border:none;background:none;color:var(--ink3);cursor:pointer;font-size:16px;padding:0 4px}
 .doc .ok{color:var(--ok);font-size:12px;font-weight:700}
 .libre{background:#fbf7ec;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 14px}
@@ -230,7 +231,7 @@ function init(){
   try{ var saved=JSON.parse(localStorage.getItem(STORE_KEY)||'null'); if(saved&&saved.champs){ D=saved; if(!D.associes||!D.associes.length)D.associes=[{},{}]; } }catch(e){}
   render();
   document.getElementById('body').addEventListener('input',function(ev){ collect(); progress(); persist(); if(ev&&ev.target&&ev.target.getAttribute('data-k')==='heberge'){ renderDocs(); progress(); } });
-  document.getElementById('body').addEventListener('change',function(ev){ var t=ev.target; if(t&&t.getAttribute&&t.getAttribute('data-doc')){ var k=t.getAttribute('data-doc'); FILES[k]=FILES[k]||[]; Array.prototype.forEach.call(t.files||[],function(f){ if(f&&f.size>0) FILES[k].push(f); }); renderDocs(); progress(); } if(t&&t.getAttribute&&t.getAttribute('data-k')==='heberge'){ collect(); renderDocs(); progress(); } });
+  document.getElementById('body').addEventListener('change',function(ev){ var t=ev.target; if(t&&t.getAttribute&&t.getAttribute('data-doc')){ var k=t.getAttribute('data-doc'); FILES[k]=FILES[k]||[]; Array.prototype.forEach.call(t.files||[],function(f){ if(!(f&&f.size>0)) return; var ph={name:f.name,size:f.size,pending:true}; FILES[k].push(ph); renderDocs(); (window.aemShrink?aemShrink(f):Promise.resolve(f)).then(function(f2){ var i=FILES[k].indexOf(ph); if(i>=0) FILES[k][i]=f2; else FILES[k].push(f2); if(f2!==f) f2.__orig=f.size; renderDocs(); progress(); }); }); t.value=''; renderDocs(); progress(); } if(t&&t.getAttribute&&t.getAttribute('data-k')==='heberge'){ collect(); renderDocs(); progress(); } });
   document.getElementById('message').addEventListener('input',persist);
   document.getElementById('email').addEventListener('input',persist);
   document.getElementById('tel').addEventListener('input',persist);
@@ -269,7 +270,7 @@ function renderDocs(){
   el.innerHTML=docsVisibles().map(function(d){ var fl=FILES[d.k]||[];
     return '<div class="doc" id="doc-'+d.k+'"><div class="dl">'+esc(d.l)+(d.req?' <span class="req">*</span>':'')+'</div><div class="dh">'+esc(d.h)+'</div>'
       +'<label class="pick">📎 Ajouter un fichier<input type="file" accept="image/*,.pdf" multiple data-doc="'+d.k+'"></label>'
-      +'<div class="files">'+fl.map(function(f,i){ return '<div class="file"><b>'+esc(f.name)+'</b><span class="ok">✓</span><button type="button" data-rm="'+d.k+'" data-i="'+i+'" title="Retirer">✕</button></div>'; }).join('')+'</div></div>'; }).join('');
+      +'<div class="files">'+fl.map(function(f,i){ var sz=f.pending?'préparation…':((f.__orig?(aemKo(f.__orig)+' → '):'')+aemKo(f.size||0)); return '<div class="file"><b>'+esc(f.name)+'</b><small>'+esc(sz)+'</small><span class="ok">'+(f.pending?'⏳':'✓')+'</span><button type="button" data-rm="'+d.k+'" data-i="'+i+'" title="Retirer">✕</button></div>'; }).join('')+'</div></div>'; }).join('');
 }
 function renderAsso(){
   var el=document.getElementById('assoList'); if(!el)return;
@@ -299,7 +300,7 @@ function validate(){
   var em=document.getElementById('email'); var bad=!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em.value.trim()); em.classList.toggle('bad',bad); if(bad)ok=false;
   if(keys.indexOf('associes')>=0){ var n=D.associes.filter(function(a){return (a.nom||'').trim()&&(a.prenom||'').trim();}).length; if(!n){ ok=false; var a0=document.querySelector('#assoList input'); if(a0)a0.classList.add('bad'); } }
   if(keys.indexOf('hebergeurNom')>=0&&(D.champs.heberge||'')==='Oui'){ var hn=document.getElementById('f-hebergeurNom'); if(hn){ var badH=!(''+hn.value).trim(); hn.classList.toggle('bad',badH); if(badH)ok=false; } }
-  docsVisibles().forEach(function(d){ var box=document.getElementById('doc-'+d.k); var need=d.req||(d.cond==='heberge'); var bad=need&&!(FILES[d.k]||[]).length; if(box)box.classList.toggle('bad',bad); if(bad)ok=false; });
+  docsVisibles().forEach(function(d){ var box=document.getElementById('doc-'+d.k); var need=d.req||(d.cond==='heberge'); var ready=(FILES[d.k]||[]).filter(function(f){return !f.pending;}); var bad=(need&&!ready.length)||(FILES[d.k]||[]).some(function(f){return f.pending;}); if(box)box.classList.toggle('bad',bad); if(bad)ok=false; });
   return ok;
 }
 function flat(){
@@ -318,7 +319,7 @@ function submitForm(){
   if(libre){ hidden('Origine questionnaire','Questionnaire public (lien partagé)'); hidden('Projet',(document.getElementById('l-type').options[document.getElementById('l-type').selectedIndex]||{}).text||type); }
   else { hidden('Numéro de dossier',dossier); if(societe)hidden('Société',societe); }
   var pfl=document.getElementById('postfiles'); pfl.innerHTML=''; var pieces={};
-  docsVisibles().forEach(function(d){ (FILES[d.k]||[]).forEach(function(f,i){ try{ var dt=new DataTransfer(); dt.items.add(f); var inp=document.createElement('input'); inp.type='file'; inp.name='Pièce '+d.k+' '+(i+1); inp.files=dt.files; pfl.appendChild(inp); (pieces[d.k]=pieces[d.k]||[]).push(f.name); }catch(e){} }); });
+  docsVisibles().forEach(function(d){ (FILES[d.k]||[]).filter(function(f){return !f.pending;}).forEach(function(f,i){ try{ var dt=new DataTransfer(); dt.items.add(f); var inp=document.createElement('input'); inp.type='file'; inp.name='Pièce '+d.k+' '+(i+1); inp.files=dt.files; pfl.appendChild(inp); (pieces[d.k]=pieces[d.k]||[]).push(f.name); }catch(e){} }); });
   var rows=flat(); rows.forEach(function(p){ hidden(p[0],p[1]); });
   var champs={}; keys.forEach(function(k){ if((D.champs[k]||'').trim())champs[k]=D.champs[k].trim(); });
   var payload={version:'INFOSv1',dossier:dossier||'',token:token,societe:societe||(champs.denomination||''),type:type,libre:libre,champs:champs,associes:D.associes.filter(function(a){return (a.nom||a.prenom);}),pieces:pieces,message:(D.message||'').trim(),email:(D.email||'').trim(),tel:(D.tel||'').trim(),ts:new Date().toISOString()};
@@ -341,6 +342,20 @@ document.addEventListener('click',function(e){
 });
 window.addEventListener('hashchange',function(){ if(location.hash.indexOf('#ok')===0&&dossier) showOk(); });
 window.__infosDebug={FIELDS:FIELDS,DOCS:DOCS,get keys(){return keys;},get D(){return D;},FILES:FILES,flat:flat,validate:validate,docsVisibles:docsVisibles,libre:libre};
+</script>
+<script>
+/* Photos de téléphone : réduction avant envoi (côté appareil, sans réseau) — max 1800 px, JPEG 82 %.
+   Les PDF et les petites images sont envoyés tels quels. */
+window.aemShrink=function(file){ return new Promise(function(res){ try{
+  if(!file||!/^image\//.test(file.type||'')||file.size<450000||/gif|svg/.test(file.type)) return res(file);
+  var url=URL.createObjectURL(file); var img=new Image();
+  img.onload=function(){ try{ var MAX=1800, w=img.naturalWidth, h=img.naturalHeight, r=Math.min(1,MAX/Math.max(w,h)); var cw=Math.round(w*r), ch=Math.round(h*r);
+      var c=document.createElement('canvas'); c.width=cw; c.height=ch; c.getContext('2d').drawImage(img,0,0,cw,ch);
+      c.toBlob(function(b){ URL.revokeObjectURL(url); if(!b||b.size>=file.size) return res(file); var nm=(file.name||'photo').replace(/\.[a-z0-9]+$/i,'')+'.jpg'; try{ res(new File([b],nm,{type:'image/jpeg',lastModified:Date.now()})); }catch(e){ b.name=nm; res(b); } },'image/jpeg',0.82);
+    }catch(e){ URL.revokeObjectURL(url); res(file); } };
+  img.onerror=function(){ URL.revokeObjectURL(url); res(file); }; img.src=url;
+}catch(e){ res(file); } }); };
+window.aemKo=function(n){ return n>=1048576?(Math.round(n/104857.6)/10+' Mo'):(Math.round(n/1024)+' Ko'); };
 </script>
 <script>
 /* Accessibilité : chaque libellé est relié à son champ (clic sur le libellé = focus du champ, lecteurs d'écran). */

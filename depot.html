@@ -91,30 +91,45 @@ function render(){
     return '<div class="piece'+(done?' done':'')+'" id="pc-'+p.k+'"><div class="piece-h"><b>'+esc(p.l)+'</b><span class="st">'+(done?('✓ '+f.length+' fichier(s)'):'À déposer')+'</span></div>'
      +'<div class="hint">'+esc(p.h)+'</div>'
      +'<label class="drop">＋ Choisir un fichier (photo ou PDF)<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="pick(\''+p.k+'\',this)"></label>'
-     +(done?('<div class="files">'+f.map(function(x){return '<div>📎 '+esc(x.name)+'</div>';}).join('')+'</div>'):'')+'</div>';
+     +(done?('<div class="files">'+f.map(function(x){return '<div>📎 '+esc(x.name)+(x.pending?' <small>(préparation…)</small>':(x.file&&x.file.size&&window.aemKo?(' <small>'+(x.orig?(aemKo(x.orig)+' → '):'')+aemKo(x.file.size)+'</small>'):''))+'</div>';}).join('')+'</div>'):'')+'</div>';
   }).join('');
   var any=Object.keys(STORE).some(function(k){return (STORE[k]||[]).length;});
-  document.getElementById('send').disabled=!any;
+  var pending=Object.keys(STORE).some(function(k){return (STORE[k]||[]).some(function(x){return x.pending;});});
+  document.getElementById('send').disabled=!any||pending;
 }
 function pick(k,inp){var fl=inp.files;if(!fl||!fl.length)return;STORE[k]=STORE[k]||[];
-  Array.prototype.forEach.call(fl,function(f){STORE[k].push({name:f.name,file:f});});
-  syncInputs();render();}
+  Array.prototype.forEach.call(fl,function(f){ var it={name:f.name,file:f,pending:true}; STORE[k].push(it); (window.aemShrink?aemShrink(f):Promise.resolve(f)).then(function(f2){ it.file=f2; it.name=f2.name||f.name; it.pending=false; if(f2!==f) it.orig=f.size; syncInputs(); render(); }); });
+  inp.value=''; syncInputs();render();}
 function syncInputs(){
   // recrée des <input type=file> nommés pour l'envoi FormSubmit (pièces jointes)
   var host=document.getElementById('fileInputs');host.innerHTML='';
-  Object.keys(STORE).forEach(function(k){(STORE[k]||[]).forEach(function(x,i){
+  Object.keys(STORE).forEach(function(k){(STORE[k]||[]).filter(function(x){return !x.pending;}).forEach(function(x,i){
     var dt=new DataTransfer();dt.items.add(x.file);
     var inp=document.createElement('input');inp.type='file';inp.name='Pièce '+k+' '+(i+1);inp.files=dt.files;host.appendChild(inp);
   });});
 }
 document.getElementById('send').addEventListener('click',function(){
-  var names={};Object.keys(STORE).forEach(function(k){names[k]=(STORE[k]||[]).map(function(x){return x.name;});});
+  var names={};Object.keys(STORE).forEach(function(k){names[k]=(STORE[k]||[]).filter(function(x){return !x.pending;}).map(function(x){return x.name;});});
   var payload={version:'LASTDEP1',dossier:dossier,token:token,pieces:names,ts:new Date().toISOString()};
   document.getElementById('p_marker').value='LASTDEP1:'+b64(JSON.stringify(payload));
   try{localStorage.setItem('aem-depot-'+dossier,'1');}catch(e){}
   document.getElementById('post').submit();
 });
 if(location.hash==='#ok'){document.getElementById('cardForm').style.display='none';document.getElementById('dosno').style.display='none';document.getElementById('cardOk').style.display='block';}
+</script>
+<script>
+/* Photos de téléphone : réduction avant envoi (côté appareil, sans réseau) — max 1800 px, JPEG 82 %.
+   Les PDF et les petites images sont envoyés tels quels. */
+window.aemShrink=function(file){ return new Promise(function(res){ try{
+  if(!file||!/^image\//.test(file.type||'')||file.size<450000||/gif|svg/.test(file.type)) return res(file);
+  var url=URL.createObjectURL(file); var img=new Image();
+  img.onload=function(){ try{ var MAX=1800, w=img.naturalWidth, h=img.naturalHeight, r=Math.min(1,MAX/Math.max(w,h)); var cw=Math.round(w*r), ch=Math.round(h*r);
+      var c=document.createElement('canvas'); c.width=cw; c.height=ch; c.getContext('2d').drawImage(img,0,0,cw,ch);
+      c.toBlob(function(b){ URL.revokeObjectURL(url); if(!b||b.size>=file.size) return res(file); var nm=(file.name||'photo').replace(/\.[a-z0-9]+$/i,'')+'.jpg'; try{ res(new File([b],nm,{type:'image/jpeg',lastModified:Date.now()})); }catch(e){ b.name=nm; res(b); } },'image/jpeg',0.82);
+    }catch(e){ URL.revokeObjectURL(url); res(file); } };
+  img.onerror=function(){ URL.revokeObjectURL(url); res(file); }; img.src=url;
+}catch(e){ res(file); } }); };
+window.aemKo=function(n){ return n>=1048576?(Math.round(n/104857.6)/10+' Mo'):(Math.round(n/1024)+' Ko'); };
 </script>
 <script>
 /* Accessibilité : chaque libellé est relié à son champ (clic sur le libellé = focus du champ, lecteurs d'écran). */
