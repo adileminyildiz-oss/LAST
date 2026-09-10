@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=635;
+var LAST_VER=636;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -37823,7 +37823,8 @@ function testLienSignature() {
   /* ---------- Lignes : unités, lots, avancement, catalogue ---------- */
   function catalogue(){ var p=P(); if(!Array.isArray(p.facturierCatalogue)) p.facturierCatalogue=[]; return p.facturierCatalogue; }
   function catalogueApprendre(d){ var cat=catalogue(); lignesReelles(d).forEach(function(l){ var des=(l.des||'').trim(); if(!des||des.length<3) return; var ex=cat.filter(function(c){ return c.des.toLowerCase()===des.toLowerCase(); })[0]; if(ex){ ex.pu=n(l.pu)||ex.pu; ex.u=l.u||ex.u; ex.n=(ex.n||0)+1; } else cat.push({des:des,pu:n(l.pu),u:l.u||'u',n:1}); }); if(cat.length>400) cat.splice(0,cat.length-400); }
-  window.invCatalogueChoix=function(i,val){ var d=draft(); var l=(d.lignes||[])[i]; if(!l) return; var c=catalogue().filter(function(x){ return x.des===val; })[0]; if(c){ l.des=c.des; if(!n(l.pu)) l.pu=c.pu; if(c.u) l.u=c.u; rerenderLines(); } };
+  /* v636 : la désignation est un champ libre — aucune reprise automatique du contenu (désignation, unité, prix) */
+  window.invCatalogueChoix=function(i,val){ };
   window.invAddLot=function(){ var d=draft(); try{ invRead(); }catch(e){} d.lignes.push({lot:true,des:'',qte:0,pu:0}); rerenderLines(); };
   window.invAddLineBTP=function(){ var d=draft(); try{ invRead(); }catch(e){} d.lignes.push({des:'',qte:1,pu:0,u:'u',av:0}); rerenderLines(); setTimeout(function(){ var i=d.lignes.length-1; var e=document.getElementById('inv-l-des-'+i); if(e) e.focus(); },30); };
   window.invMoveLine=function(i,dir){ var d=draft(); try{ invRead(); }catch(e){} var j=i+dir; if(j<0||j>=d.lignes.length) return; var t=d.lignes[i]; d.lignes[i]=d.lignes[j]; d.lignes[j]=t; rerenderLines(); };
@@ -37831,14 +37832,13 @@ function testLienSignature() {
   function rerenderLines(){ var box=document.getElementById('inv-lines'); if(box) box.innerHTML=linesHTML(draft()); try{ invRefresh(); }catch(e){} }
 
   function linesHTML(d){ var type=typeOf(d), situ=(type==='situation'||type==='solde'), dev=d.devise||'EUR';
-    var cat=catalogue(); var dl='<datalist id="inv-catalog">'+cat.map(function(c){ return '<option value="'+E(c.des)+'">'; }).join('')+'</datalist>';
-    return dl+(d.lignes||[]).map(function(l,i){
+    return (d.lignes||[]).map(function(l,i){
       if(l.lot){ return '<div class="fb-lrow fb-lot'+(situ?' situ':'')+'"><input id="inv-l-des-'+i+'" class="inv-lin des" placeholder="Intitulé du lot (ex : Lot 2 — Gros œuvre)" value="'+E(l.des)+'" oninput="invRefresh()"><span class="fb-lot-tag">LOT</span><span></span><span></span>'+(situ?'<span></span>':'')+'<span></span>'
           +'<span class="fb-lact"><button class="inv-lx" title="Monter" onclick="invMoveLine('+i+',-1)">↑</button><button class="inv-lx" title="Descendre" onclick="invMoveLine('+i+',1)">↓</button><button class="inv-lx" title="Supprimer" onclick="invDelLine('+i+')">×</button></span></div>'; }
       var q=n(l.qte), pu=n(l.pu), m=r2(q*pu), av=situ?(type==='solde'?100:n(l.av)):100; var opt=isOpt(l);
       var us=UNITES.slice(); if(l.u&&us.indexOf(l.u)<0) us.unshift(l.u);
       return '<div class="fb-lrow'+(situ?' situ':'')+(opt?' fb-optrow':'')+'">'
-        +'<input id="inv-l-des-'+i+'" class="inv-lin des" list="inv-catalog" placeholder="Prestation / ouvrage" value="'+E(l.des)+'" oninput="invRefresh()" onchange="invCatalogueChoix('+i+',this.value)">'
+        +'<input id="inv-l-des-'+i+'" class="inv-lin des" placeholder="Désignation (saisie libre)" value="'+E(l.des)+'" oninput="invRefresh()" autocomplete="off">'
         +'<select id="inv-l-u-'+i+'" class="inv-lin u" onchange="invRefresh()">'+us.map(function(u){ return '<option value="'+E(u)+'"'+((l.u||'u')===u?' selected':'')+'>'+E(u)+'</option>'; }).join('')+'</select>'
         +'<input id="inv-l-qte-'+i+'" class="inv-lin qte" type="number" min="0" step="0.01" value="'+(l.qte==null?1:l.qte)+'" oninput="invRefresh()">'
         +'<input id="inv-l-pu-'+i+'" class="inv-lin pu" type="number" min="0" step="0.01" value="'+(l.pu==null?0:l.pu)+'" oninput="invRefresh()">'
@@ -37891,8 +37891,6 @@ function testLienSignature() {
   window.invAddLignesMenu=function(btn){ var items=[{sep:'Lignes vides'}];
     [3,5,10].forEach(function(k){ items.push({ico:'＋',l:k+' lignes vides',sub:'à compléter (désignation, unité, quantité, prix)',fn:function(){ var L=[]; for(var i=0;i<k;i++) L.push({des:'',qte:1,pu:0,u:'u',av:0}); ajouterLignes(L); }}); });
     items.push({sep:'Depuis une liste'}); items.push({ico:'⌘',l:'Coller une liste de prestations',sub:'une prestation par ligne : Désignation ; quantité ; unité ; prix unitaire',fn:function(){ invCollerListe(); }});
-    items.push({sep:'Chantier complet'}); items.push({ico:'🏗',l:'Chantier complet — tous corps d\'état',sub:'lots Gros œuvre, Second œuvre, Plomberie, Électricité, Couverture, Finitions (quantités et prix à compléter)',r:packChantierComplet().length+' lignes',fn:function(){ ajouterLignes(packChantierComplet()); }});
-    items.push({ico:'🧾',l:'Préparer une facture de chantier complet',sub:'type facture, modèle BTP, chantier détaillé (surface, dates, modalités) + tous corps d\'état',fn:function(){ invChantierComplet(); }});
     fbMenu(btn,items,{wide:true}); };
   window.invCollerListe=function(){ if(typeof openModal!=='function'){ T('Fenêtre indisponible.'); return; }
     openModal('Coller une liste de prestations','<p class="inv-mute" style="margin:0 0 8px;font-size:12px">Une prestation par ligne. Séparez les éléments par « ; » ou « | » : <b>Désignation ; quantité ; unité ; prix unitaire</b>. Une ligne commençant par « Lot : » crée un titre de lot. Un texte supplémentaire devient l\'annotation de la ligne.</p><textarea id="inv-coller" class="fb-ta" rows="9" style="width:100%" placeholder="Lot : Second œuvre\nPeinture 2 couches murs et plafonds ; 54 ; m² ; 28\nCarrelage sol ; 22,5 ; m² ; 65 ; salle de bain RDC\nDépose cloison ; 1 ; forfait ; 450"></textarea>',
@@ -39582,184 +39580,6 @@ function testLienSignature() {
   /* Style en dernier : repasse derrière les feuilles réinjectées à chaque rendu */
   var _r=window.render; if(typeof _r==='function'&&!_r.__fm2){ window.render=function(){ var o=_r.apply(this,arguments); try{ if(st!==document.head.lastElementChild) document.head.appendChild(st); }catch(e){} return o; }; window.render.__fm2=1; }
   window.__facMod2Debug={MODS:MODS};
-})();
-</script>
-<script>
-/* ============================================================================
-   Mar'q — Facturation : liste d'activités et mots-clés pour les prestations (v634)
-   Dans le champ « Désignation » d'une ligne, la saisie d'un mot-clé (plomb,
-   création, tenue, peinture, formation…) ouvre une liste de prestations classées
-   par activité (expertise comptable, formalités, paie, BTP gros œuvre, second
-   œuvre, électricité, plomberie, peinture, menuiserie, isolation, espaces verts,
-   nettoyage, informatique, formation, transport, immobilier, restauration,
-   communication, location). Le choix remplit la désignation et l'unité, et
-   reprend le prix habituel quand la prestation est déjà connue. Le champ vide
-   propose les activités ; un bouton « Activités » permet d'ajouter plusieurs
-   prestations d'un coup. Les prestations habituelles (catalogue) et les
-   services du cabinet sont indexés avec leurs propres mots-clés.
-   100 % additif : écouteurs délégués, panneau fixe, bouton greffé après rendu.
-   ========================================================================= */
-(function(){
-  if(window.__aemFacPresta) return; window.__aemFacPresta=true;
-  function E(s){ return (typeof esc==='function')?esc(s):String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
-  function n(v){ var x=parseFloat(String(v==null?'':v).replace(/\s/g,'').replace(',','.')); return isNaN(x)?0:x; }
-  function DBX(){ try{ return (typeof DB!=='undefined'&&DB)?DB:null; }catch(e){ return null; } }
-  function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim(); }
-  function money(v){ try{ return n(v).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }catch(e){ return v+' €'; } }
-  function zoom(){ try{ return (typeof uiZoom==='function')?uiZoom():((typeof fbZoom==='function')?fbZoom():1); }catch(e){ return 1; } }
-
-  /* ── Activités et prestations (désignation · unité · mots-clés) ─────────── */
-  var ACT=[
-    ['compta','Expertise comptable & gestion',['comptable','comptabilite','tenue','bilan','liasse','fiscal','tva','gestion','expert','ecritures','revision','cloture'],[
-      ['Tenue de la comptabilité — mensuelle','mois',['tenue','saisie','ecritures']],['Tenue de la comptabilité — trimestrielle','trimestre',['tenue','saisie']],['Révision des comptes annuels','forfait',['revision','cloture','annuel']],
-      ['Établissement du bilan et de la liasse fiscale','forfait',['bilan','liasse','2065','2033','cloture']],['Déclaration de TVA (CA3)','mois',['tva','ca3','declaration']],['Déclaration de TVA annuelle (CA12)','an',['tva','ca12']],
-      ['Déclaration de résultat (IS / IR)','forfait',['impot','is','ir','2065','2031']],['Situation comptable intermédiaire','forfait',['situation','intermediaire','arrete']],['Tableau de bord mensuel','mois',['tableau','bord','reporting','indicateurs']],
-      ['Prévisionnel financier (3 ans)','forfait',['previsionnel','business plan','financement','banque']],['Lettrage et rapprochement bancaire','mois',['lettrage','rapprochement','banque']],['Assistance à contrôle fiscal','heure',['controle','fiscal','verification']]]],
-    ['formalites','Formalités juridiques',['juridique','formalite','statuts','greffe','creation','societe','sas','sarl','sci','eurl','modification','dissolution','transfert','cession','kbis','annonce','legale','immatriculation'],[
-      ['Création de société (SAS / SASU) — honoraires','forfait',['creation','sas','sasu','constitution','immatriculation']],['Création de société (SARL / EURL) — honoraires','forfait',['creation','sarl','eurl','constitution']],['Création de SCI — honoraires','forfait',['creation','sci','immobilier']],
-      ['Rédaction des statuts','forfait',['statuts','redaction']],['Annonce légale — débours','débours',['annonce','legale','journal','publication']],['Frais de greffe — débours','débours',['greffe','frais','debours','inpi']],
-      ['Transfert de siège social','forfait',['transfert','siege','adresse','domiciliation']],['Changement de dirigeant','forfait',['dirigeant','gerant','president','nomination']],['Modification de l’objet social','forfait',['objet','social','modification']],
-      ['Augmentation / réduction de capital','forfait',['capital','augmentation','reduction']],['Cession de parts sociales / actions','forfait',['cession','parts','actions','transmission']],['Approbation des comptes et dépôt au greffe','forfait',['approbation','ago','assemblee','depot','comptes']],
-      ['Dissolution et liquidation amiable','forfait',['dissolution','liquidation','fermeture','radiation']],['Immatriculation micro-entreprise','forfait',['micro','auto entrepreneur','immatriculation']],['Domiciliation d’entreprise','mois',['domiciliation','siege','adresse']]]],
-    ['paie','Paie & social',['paie','salaire','bulletin','dsn','urssaf','contrat','embauche','licenciement','rupture','social','salarie','mutuelle'],[
-      ['Établissement des bulletins de paie','mois',['bulletin','paie','salaire']],['Déclaration sociale nominative (DSN)','mois',['dsn','urssaf','declaration']],['Formalités d’embauche (DPAE, contrat)','forfait',['embauche','dpae','contrat','cdi','cdd']],
-      ['Rédaction de contrat de travail','forfait',['contrat','travail','cdi','cdd','redaction']],['Rupture conventionnelle — accompagnement','forfait',['rupture','conventionnelle','depart']],['Solde de tout compte et documents de fin de contrat','forfait',['solde','fin de contrat','attestation','certificat']],
-      ['Audit social / conformité paie','forfait',['audit','conformite','social']],['Registre unique du personnel','forfait',['registre','personnel']]]],
-    ['conseil','Conseil & accompagnement',['conseil','accompagnement','strategie','audit','etude','marche','financement','rendez vous','reunion','mission','honoraires'],[
-      ['Conseil — honoraires horaires','heure',['conseil','honoraires','heure']],['Rendez-vous conseil (1 h)','forfait',['rendez vous','rdv','entretien']],['Étude de marché','forfait',['etude','marche','concurrence']],
-      ['Business plan et dossier de financement','forfait',['business plan','financement','pret','banque']],['Accompagnement à la création d’entreprise','forfait',['accompagnement','creation','porteur de projet']],['Audit d’organisation','jour',['audit','organisation','process']],
-      ['Mission de conseil — journée','jour',['mission','jour','journee']],['Optimisation fiscale et sociale','forfait',['optimisation','fiscale','remuneration','dividendes']]]],
-    ['gros','BTP — gros œuvre',['btp','batiment','maconnerie','beton','fondation','terrassement','demolition','dalle','mur','gros oeuvre','chantier','parpaing','coffrage'],[
-      ['Terrassement et évacuation des terres','m³',['terrassement','fouille','deblai','evacuation']],['Fondations en béton armé','m³',['fondation','beton','semelle']],['Dalle béton','m²',['dalle','beton','plancher']],
-      ['Maçonnerie de parpaings','m²',['maconnerie','parpaing','mur','elevation']],['Démolition et dépose','m²',['demolition','depose','cloison']],['Coffrage et ferraillage','m²',['coffrage','ferraillage','armature']],
-      ['Chape ciment','m²',['chape','ciment','ragreage']],['Enduit de façade','m²',['enduit','facade','crepi']],['Ouverture de mur porteur (avec IPN)','forfait',['ouverture','mur porteur','ipn','poutre']],['Évacuation des gravats — benne','forfait',['gravats','benne','dechets','evacuation']]]],
-    ['second','BTP — second œuvre',['second oeuvre','platrerie','placo','cloison','carrelage','faience','sol','parquet','renovation','amenagement','faux plafond','isolation'],[
-      ['Cloisons en plaques de plâtre','m²',['cloison','placo','platre','ba13']],['Doublage isolant des murs','m²',['doublage','isolation','placo']],['Faux plafond','m²',['faux plafond','plafond','suspendu']],
-      ['Pose de carrelage sol','m²',['carrelage','sol','pose']],['Pose de faïence murale','m²',['faience','murale','salle de bain']],['Pose de parquet','m²',['parquet','flottant','massif','stratifie']],
-      ['Ragréage et préparation des sols','m²',['ragreage','sol','preparation']],['Plinthes','ml',['plinthe']],['Rénovation complète — salle de bain','forfait',['salle de bain','renovation','sdb']],['Rénovation complète — cuisine','forfait',['cuisine','renovation']]]],
-    ['elec','Électricité',['electricite','electrique','tableau','prise','luminaire','cablage','mise aux normes','consuel','domotique','vmc'],[
-      ['Mise aux normes du tableau électrique','forfait',['tableau','normes','nf c 15 100','disjoncteur']],['Pose de prise ou interrupteur','u',['prise','interrupteur','point']],['Point lumineux et luminaire','u',['luminaire','point lumineux','applique','spot']],
-      ['Câblage et tirage de lignes','ml',['cablage','ligne','gaine','tirage']],['Installation électrique complète (logement)','forfait',['installation','complete','logement','neuf']],['Installation de VMC','forfait',['vmc','ventilation']],
-      ['Borne de recharge véhicule électrique','forfait',['borne','recharge','irve','voiture']],['Attestation Consuel — débours','débours',['consuel','attestation','conformite']],['Dépannage électrique — déplacement','forfait',['depannage','panne','urgence']]]],
-    ['plomb','Plomberie & chauffage',['plomberie','plombier','chauffage','chaudiere','sanitaire','robinet','wc','douche','fuite','radiateur','pompe a chaleur','ballon','eau chaude'],[
-      ['Remplacement de chaudière gaz','forfait',['chaudiere','gaz','remplacement']],['Installation de pompe à chaleur air/eau','forfait',['pompe a chaleur','pac','chauffage']],['Chauffe-eau / ballon d’eau chaude','forfait',['ballon','chauffe eau','cumulus','eau chaude']],
-      ['Pose de radiateur','u',['radiateur','chauffage']],['Installation sanitaire (WC, lavabo, douche)','forfait',['sanitaire','wc','lavabo','douche','baignoire']],['Remplacement de robinetterie','u',['robinet','mitigeur','robinetterie']],
-      ['Recherche et réparation de fuite','forfait',['fuite','reparation','degat des eaux']],['Débouchage de canalisation','forfait',['debouchage','canalisation','bouche']],['Alimentation et évacuation — réseau','ml',['reseau','alimentation','evacuation','per','cuivre']],['Entretien annuel de chaudière','forfait',['entretien','chaudiere','annuel','ramonage']]]],
-    ['peinture','Peinture & revêtements',['peinture','peintre','revetement','papier peint','enduit','laque','tapisserie','decoration','facade'],[
-      ['Peinture des murs (2 couches)','m²',['peinture','mur','couches']],['Peinture des plafonds','m²',['peinture','plafond']],['Peinture des boiseries et menuiseries','ml',['boiserie','porte','fenetre','laque']],
-      ['Préparation des supports (rebouchage, ponçage)','m²',['preparation','rebouchage','poncage','enduit']],['Pose de papier peint','m²',['papier peint','tapisserie','pose']],['Toile de verre','m²',['toile de verre','fibre']],
-      ['Peinture de façade','m²',['facade','exterieur','ravalement']],['Lasure / vernis extérieur','m²',['lasure','vernis','bois','exterieur']]]],
-    ['menuiserie','Menuiserie & fermetures',['menuiserie','menuisier','fenetre','porte','volet','bois','pvc','alu','placard','escalier','terrasse','serrurerie'],[
-      ['Fourniture et pose de fenêtre PVC / alu','u',['fenetre','pvc','alu','pose']],['Porte d’entrée','u',['porte','entree','blindee']],['Porte intérieure et bloc-porte','u',['porte','interieure','bloc porte']],
-      ['Volets roulants','u',['volet','roulant','motorise']],['Placard sur mesure','forfait',['placard','dressing','sur mesure','rangement']],['Escalier bois','forfait',['escalier','bois']],
-      ['Terrasse bois','m²',['terrasse','bois','lames']],['Serrurerie — remplacement de serrure','u',['serrure','serrurerie','cle','cylindre']],['Portail et clôture','forfait',['portail','cloture','grillage']]]],
-    ['isolation','Isolation & rénovation énergétique',['isolation','energetique','combles','thermique','laine','maprimerenov','dpe','renovation','toiture','couverture','zinguerie','etancheite'],[
-      ['Isolation des combles perdus (soufflage)','m²',['combles','soufflage','laine','isolation']],['Isolation thermique par l’extérieur (ITE)','m²',['ite','exterieur','isolation','facade']],['Isolation des murs par l’intérieur','m²',['isolation','murs','interieur']],
-      ['Isolation des planchers bas','m²',['plancher','bas','isolation']],['Réfection de couverture (tuiles)','m²',['couverture','toiture','tuiles','toit']],['Zinguerie et gouttières','ml',['zinguerie','gouttiere','descente']],
-      ['Étanchéité toiture-terrasse','m²',['etancheite','terrasse','toit plat']],['Audit énergétique','forfait',['audit','energetique','dpe']],['Dossier MaPrimeRénov’ — assistance','forfait',['maprimerenov','aide','dossier','anah']]]],
-    ['jardin','Espaces verts & extérieurs',['jardin','espaces verts','paysagiste','tonte','taille','haie','elagage','arbre','gazon','terrasse','allee','cloture','arrosage'],[
-      ['Tonte de pelouse','m²',['tonte','pelouse','gazon']],['Taille de haie','ml',['taille','haie']],['Élagage et abattage d’arbre','u',['elagage','abattage','arbre']],
-      ['Création de gazon','m²',['gazon','semis','engazonnement']],['Plantation d’arbustes et massifs','forfait',['plantation','arbuste','massif','fleurs']],['Entretien de jardin — contrat annuel','mois',['entretien','contrat','jardin']],
-      ['Allée en gravier / pavés','m²',['allee','gravier','paves','dallage']],['Arrosage automatique','forfait',['arrosage','automatique']],['Évacuation des déchets verts','forfait',['dechets','verts','evacuation']]]],
-    ['nettoyage','Nettoyage & entretien',['nettoyage','menage','entretien','bureaux','vitres','proprete','desinfection','fin de chantier','remise en etat'],[
-      ['Nettoyage de bureaux — prestation régulière','mois',['bureaux','regulier','menage']],['Nettoyage de fin de chantier','m²',['fin de chantier','chantier','remise en etat']],['Nettoyage de vitres','m²',['vitres','vitrerie','carreaux']],
-      ['Remise en état de logement','forfait',['logement','remise en etat','etat des lieux']],['Désinfection des locaux','forfait',['desinfection','sanitaire','covid']],['Nettoyage de parties communes','mois',['parties communes','immeuble','copropriete']],['Shampouinage de moquette','m²',['moquette','shampouinage','sols']]]],
-    ['info','Informatique & web',['informatique','web','site','logiciel','developpement','maintenance','reseau','ordinateur','hebergement','seo','application','installation','support'],[
-      ['Création de site internet vitrine','forfait',['site','internet','vitrine','web']],['Site e-commerce','forfait',['e commerce','boutique','site']],['Hébergement et nom de domaine — annuel','an',['hebergement','domaine','annuel']],
-      ['Maintenance informatique — contrat mensuel','mois',['maintenance','contrat','support']],['Intervention / dépannage informatique','heure',['depannage','intervention','panne','support']],['Installation de poste de travail','u',['installation','poste','ordinateur','pc']],
-      ['Développement sur mesure — journée','jour',['developpement','logiciel','application','sur mesure']],['Référencement (SEO) — mensuel','mois',['seo','referencement','google']],['Sauvegarde et sécurité — mise en place','forfait',['sauvegarde','securite','backup','antivirus']]]],
-    ['formation','Formation',['formation','formateur','stage','atelier','cours','coaching','session','pedagogique'],[
-      ['Formation intra-entreprise — journée','jour',['formation','journee','intra']],['Formation inter-entreprises — par stagiaire','u',['formation','stagiaire','inter']],['Atelier / séminaire — demi-journée','forfait',['atelier','seminaire','demi journee']],
-      ['Coaching individuel — séance','forfait',['coaching','seance','individuel']],['Conception de support pédagogique','forfait',['support','pedagogique','conception']],['Bilan de compétences','forfait',['bilan','competences']]]],
-    ['transport','Transport & livraison',['transport','livraison','course','demenagement','messagerie','colis','chauffeur','vehicule','km','kilometre'],[
-      ['Livraison — course urbaine','u',['livraison','course','colis']],['Transport de marchandises — au km','km',['transport','km','kilometre','marchandises']],['Déménagement — forfait','forfait',['demenagement','forfait']],
-      ['Mise à disposition de véhicule avec chauffeur','heure',['chauffeur','vehicule','mise a disposition']],['Manutention','heure',['manutention','chargement']],['Frais de péage et carburant — débours','débours',['peage','carburant','debours']]]],
-    ['immo','Immobilier & gestion locative',['immobilier','gestion','locative','loyer','bail','etat des lieux','syndic','copropriete','mandat','agence','honoraires'],[
-      ['Honoraires de gestion locative','mois',['gestion','locative','honoraires']],['Honoraires de mise en location','forfait',['mise en location','bail','location']],['État des lieux d’entrée / de sortie','forfait',['etat des lieux','entree','sortie']],
-      ['Rédaction de bail','forfait',['bail','redaction','contrat']],['Honoraires de transaction','forfait',['transaction','vente','honoraires','agence']],['Syndic de copropriété — honoraires annuels','an',['syndic','copropriete']],['Estimation de bien immobilier','forfait',['estimation','evaluation','bien']]]],
-    ['resto','Restauration & événementiel',['restauration','traiteur','repas','buffet','cocktail','evenement','reception','mariage','seminaire','boisson','menu'],[
-      ['Repas — par convive','u',['repas','convive','menu','couvert']],['Buffet / cocktail — par personne','u',['buffet','cocktail','personne']],['Forfait boissons','forfait',['boissons','bar']],
-      ['Service en salle — par serveur','heure',['service','serveur','salle']],['Location de vaisselle et mobilier','forfait',['vaisselle','mobilier','location']],['Prestation traiteur — événement','forfait',['traiteur','evenement','reception']],['Livraison de plateaux-repas','u',['plateau','repas','livraison']]]],
-    ['com','Communication & design',['communication','design','graphisme','logo','identite','impression','flyer','carte de visite','photo','video','reseaux sociaux','community'],[
-      ['Création de logo et identité visuelle','forfait',['logo','identite','visuelle','charte']],['Cartes de visite — impression','u',['carte de visite','impression']],['Flyers / dépliants — conception','forfait',['flyer','depliant','conception']],
-      ['Community management — mensuel','mois',['community','reseaux sociaux','instagram','facebook']],['Reportage photo','forfait',['photo','reportage','shooting']],['Vidéo promotionnelle','forfait',['video','montage','promotion']],['Conception de plaquette commerciale','forfait',['plaquette','brochure','commerciale']]]],
-    ['location','Location de matériel',['location','materiel','engin','echafaudage','nacelle','benne','mini pelle','outillage','jour'],[
-      ['Location d’échafaudage','jour',['echafaudage','location']],['Location de nacelle','jour',['nacelle','location','hauteur']],['Location de mini-pelle avec chauffeur','jour',['mini pelle','engin','terrassement']],
-      ['Location de benne','forfait',['benne','gravats','location']],['Location d’outillage','jour',['outillage','location','outils']],['Livraison / reprise du matériel','forfait',['livraison','reprise','materiel']]]]
-  ];
-  window.FAC_ACTIVITES=ACT;
-
-  /* ── Index de recherche : activités + catalogue + services du cabinet ──── */
-  function index(){ var out=[]; ACT.forEach(function(a){ a[3].forEach(function(p){ out.push({act:a[1],key:a[0],des:p[0],u:p[1],mots:norm((p[2]||[]).join(' ')+' '+a[2].join(' ')+' '+p[0])}); }); });
-    var B=DBX(); if(B){ try{ var cat=(B.parametres&&B.parametres.facturierCatalogue)||[]; cat.forEach(function(c){ if(c&&c.des) out.push({act:'Vos prestations habituelles',key:'@cat',des:c.des,u:c.u||'u',pu:n(c.pu),mots:norm(c.des),n:c.n||0}); }); }catch(e){}
-      try{ (B.services||[]).forEach(function(s){ if(s&&s.nom&&s.actif!==false) out.push({act:'Services du cabinet',key:'@svc',des:s.nom,u:'forfait',pu:n(s.prix),deb:n(s.debours),mots:norm([s.nom,s.famille,s.type,s.mots,s.description].filter(Boolean).join(' '))}); }); }catch(e){} }
-    return out; }
-  function search(q,limit){ q=norm(q); if(!q) return []; var toks=q.split(' ').filter(Boolean); var res=[];
-    index().forEach(function(it){ var d=norm(it.des), sc=0; toks.forEach(function(t){ if(d.indexOf(t)===0) sc+=6; else if(d.indexOf(t)>=0) sc+=4; else if(it.mots.indexOf(t)>=0) sc+=2; else if(t.length>=4&&it.mots.indexOf(t.slice(0,4))>=0) sc+=1; });
-      if(sc>0){ if(it.key==='@cat') sc+=2+Math.min(3,it.n||0); if(it.key==='@svc') sc+=1; res.push({it:it,sc:sc}); } });
-    res.sort(function(a,b){ return b.sc-a.sc||a.it.des.localeCompare(b.it.des,'fr'); }); return res.slice(0,limit||14).map(function(x){ return x.it; }); }
-  window.facPrestaSearch=search;
-
-  /* ── Panneau de suggestions ─────────────────────────────────────────────── */
-  var ST={inp:null,items:[],sel:-1,mode:'search',act:null,btn:null};
-  function panel(){ var p=document.getElementById('fp-sugg'); if(!p){ p=document.createElement('div'); p.id='fp-sugg'; p.className='fb-menu fp-sugg'; document.body.appendChild(p);
-      p.addEventListener('mousedown',function(ev){ ev.preventDefault(); });
-      p.addEventListener('click',function(ev){ var a=ev.target.closest('[data-act]'); if(a){ ST.act=a.getAttribute('data-act'); ST.mode='browse'; paint(); return; } var b=ev.target.closest('[data-i]'); if(b){ choose(+b.getAttribute('data-i')); } var back=ev.target.closest('.fp-back'); if(back){ ST.act=null; paint(); } }); }
-    return p; }
-  function close(){ var p=document.getElementById('fp-sugg'); if(p) p.remove(); ST.inp=null; ST.btn=null; ST.items=[]; ST.sel=-1; }
-  window.facPrestaClose=close;
-  function place(anchor){ var p=panel(); var z=zoom(); var r0=anchor.getBoundingClientRect(); var r={left:r0.left/z,top:r0.top/z,right:r0.right/z,bottom:r0.bottom/z,width:r0.width/z}; var W=window.innerWidth/z, H=window.innerHeight/z;
-    p.style.visibility='hidden'; p.style.display='block'; p.style.width=Math.max(320,Math.min(560,r.width))+'px'; var mw=p.offsetWidth, mh=p.offsetHeight; var x=r.left, y=r.bottom+4; if(y+mh>H-8){ var above=r.top-mh-4; if(above>8) y=above; else { p.style.maxHeight=(H-y-10)+'px'; } } if(x+mw>W-8) x=W-8-mw; if(x<8) x=8;
-    p.style.left=x+'px'; p.style.top=y+'px'; p.style.visibility=''; }
-  function lineIndex(inp){ var m=String(inp.id||'').match(/^inv-l-des-(\d+)$/); return m?+m[1]:-1; }
-  function itemHTML(it,i){ return '<button class="fb-mi'+(i===ST.sel?' fp-on':'')+'" data-i="'+i+'"><span class="fb-mi-l">'+E(it.des)+'<small>'+E(it.act)+'</small></span><span class="fb-mi-r">'+E(it.u||'u')+(it.pu?(' · '+money(it.pu)):'')+'</span></button>'; }
-  function paint(){ var p=panel(); var h='';
-    if(ST.mode==='search'){ if(ST.items.length){ var cur=''; ST.items.forEach(function(it,i){ if(it.act!==cur){ h+='<div class="fb-mi-sep">'+E(it.act)+'</div>'; cur=it.act; } h+=itemHTML(it,i); }); h+='<div class="fp-hint">↑↓ pour choisir · Entrée pour valider · Échap pour fermer</div>'; }
-      else { h+='<div class="fb-mi-sep">Aucune prestation ne correspond — choisissez une activité</div>'+chipsHTML(); } }
-    else { if(!ST.act){ h+='<div class="fb-mi-sep">Activités — choisissez pour voir les prestations</div>'+chipsHTML(); }
-      else { var a=ACT.filter(function(x){ return x[0]===ST.act; })[0]; var list=a?a[3].map(function(pr){ return {act:a[1],key:a[0],des:pr[0],u:pr[1]}; }):index().filter(function(x){ return x.key===ST.act; }); ST.items=list;
-        h+='<div class="fb-mi-sep"><button class="fp-back">‹ Activités</button> '+E(a?a[1]:(ST.act==='@cat'?'Vos prestations habituelles':'Services du cabinet'))+(ST.btn?' — cliquez pour ajouter une ligne':'')+'</div>'+list.map(itemHTML).join(''); } }
-    p.innerHTML=h; }
-  function chipsHTML(){ var B=DBX(); var extra=''; try{ if(B&&B.parametres&&(B.parametres.facturierCatalogue||[]).length) extra+='<button class="fp-chip fp-chip-acc" data-act="@cat">★ Vos prestations habituelles</button>'; if(B&&(B.services||[]).some(function(s){ return s&&s.nom&&s.actif!==false; })) extra+='<button class="fp-chip fp-chip-acc" data-act="@svc">◆ Services du cabinet</button>'; }catch(e){}
-    return '<div class="fp-chips">'+extra+ACT.map(function(a){ return '<button class="fp-chip" data-act="'+a[0]+'">'+E(a[1])+'</button>'; }).join('')+'</div>'; }
-  function choose(i){ var it=ST.items[i]; if(!it) return;
-    if(ST.btn){ addLine(it); return; }
-    var inp=ST.inp; if(!inp) return; var li=lineIndex(inp); inp.value=it.des;
-    var u=document.getElementById('inv-l-u-'+li); if(u){ if(![].slice.call(u.options).some(function(o){ return o.value===it.u; })){ var o=document.createElement('option'); o.value=it.u; o.textContent=it.u; u.insertBefore(o,u.firstChild); } u.value=it.u; }
-    var pu=document.getElementById('inv-l-pu-'+li); if(pu&&it.pu&&!n(pu.value)) pu.value=it.pu;
-    try{ if(typeof invCatalogueChoix==='function'&&li>=0) invCatalogueChoix(li,it.des); }catch(e){}
-    try{ invRefresh(); }catch(e){} close();
-    var q=document.getElementById('inv-l-qte-'+li); if(q){ try{ q.focus(); q.select(); }catch(e){} } }
-  function addLine(it){ try{ if(typeof invRead==='function') invRead(); }catch(e){} var d=window.__invDraft; if(!d) return; d.lignes=d.lignes||[];
-    var L=[{des:it.des,qte:1,pu:n(it.pu)||0,u:it.u||'u',av:0}]; if(it.deb) L.push({des:'Débours — '+it.des,qte:1,pu:n(it.deb),u:'débours',av:0});
-    if(typeof invAjouterLignes==='function'){ invAjouterLignes(L); } else { L.forEach(function(l){ d.lignes.push(l); }); try{ render(); }catch(e){} try{ if(typeof toast==='function') toast('Ligne ajoutée : '+it.des); }catch(e){} }
-    setTimeout(function(){ var b=document.querySelector('.fp-actbtn'); if(b){ ST.btn=b; ST.mode='browse'; paint(); place(b); } },60); }
-  window.facPrestaActivites=function(btn){ ST.inp=null; ST.btn=btn; ST.mode='browse'; ST.act=null; ST.sel=-1; paint(); place(btn); };
-
-  /* ── Écouteurs délégués sur les champs Désignation ──────────────────────── */
-  function isDes(el){ return el&&el.tagName==='INPUT'&&el.classList.contains('inv-lin')&&el.classList.contains('des')&&!(el.closest&&el.closest('.fb-lot')); }
-  document.addEventListener('focusin',function(ev){ var el=ev.target; if(!isDes(el)) return; ST.inp=el; ST.btn=null; ST.sel=-1; var q=el.value.trim(); if(q.length>=2){ ST.mode='search'; ST.items=search(q); } else { ST.mode='browse'; ST.act=null; ST.items=[]; } paint(); place(el); },true);
-  document.addEventListener('input',function(ev){ var el=ev.target; if(!isDes(el)) return; ST.inp=el; ST.btn=null; ST.sel=-1; var q=el.value.trim(); if(q.length>=2){ ST.mode='search'; ST.items=search(q); } else { ST.mode='browse'; ST.act=null; ST.items=[]; } paint(); place(el); },true);
-  document.addEventListener('focusout',function(ev){ if(isDes(ev.target)) setTimeout(function(){ if(ST.inp===ev.target&&document.activeElement!==ev.target) close(); },150); },true);
-  document.addEventListener('keydown',function(ev){ var p=document.getElementById('fp-sugg'); if(!p) return; if(ev.key==='Escape'){ close(); return; } if(!ST.items.length||ST.mode!=='search') return;
-    if(ev.key==='ArrowDown'){ ev.preventDefault(); ST.sel=(ST.sel+1)%ST.items.length; paint(); } else if(ev.key==='ArrowUp'){ ev.preventDefault(); ST.sel=(ST.sel-1+ST.items.length)%ST.items.length; paint(); } else if(ev.key==='Enter'&&ST.sel>=0){ ev.preventDefault(); choose(ST.sel); } },true);
-  document.addEventListener('mousedown',function(ev){ var p=document.getElementById('fp-sugg'); if(!p) return; if(p.contains(ev.target)||(ST.inp&&ST.inp===ev.target)||(ST.btn&&ST.btn.contains(ev.target))) return; close(); },true);
-  window.addEventListener('scroll',function(){ if(ST.btn) close(); },true);
-
-  /* ── Bouton « Activités » après « Ajouter une ligne / prestation » ───────── */
-  function decor(){ var host=document.querySelector('.fb-lbtns')||(function(){ var b=document.querySelector('.inv-addl'); return b?b.parentNode:null; })(); if(!host||host.querySelector('.fp-actbtn')) return;
-    var b=document.createElement('button'); b.className='inv-addl fp-actbtn'; b.setAttribute('onclick','facPrestaActivites(this)'); b.title='Prestations classées par activité — un clic ajoute une ligne'; b.textContent='🗂 Activités & prestations ▾';
-    var ref=[].slice.call(host.querySelectorAll('.inv-addl')).filter(function(x){ return !x.classList.contains('fp-actbtn'); })[0]; if(ref&&host.classList.contains('fb-lbtns')) ref.insertAdjacentElement('afterend',b); else if(ref) ref.insertAdjacentElement('afterend',b); else host.appendChild(b); }
-  var _r=window.render; if(typeof _r==='function'&&!_r.__fp){ window.render=function(){ var o=_r.apply(this,arguments); try{ decor(); }catch(e){} return o; }; window.render.__fp=1; }
-  setTimeout(function(){ try{ decor(); }catch(e){} },400);
-
-  var css=document.createElement('style'); css.id='fac-presta-css'; css.textContent=[
-    '.fp-sugg{max-width:none;padding:6px;max-height:min(60vh,520px);overflow:auto}.fp-sugg .fb-mi.fp-on{background:rgba(79,157,255,.22)}.fp-sugg .fb-mi-l small{display:block;font-size:10.5px;opacity:.6}',
-    '.fp-chips{display:flex;flex-wrap:wrap;gap:6px;padding:6px 4px 8px}.fp-chip{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:inherit;font:inherit;font-size:11.5px;padding:5px 10px;border-radius:999px;cursor:pointer}.fp-chip:hover{background:rgba(79,157,255,.18)}.fp-chip-acc{border-color:rgba(79,157,255,.5);color:#9ec4ff}',
-    '.fp-back{border:none;background:none;color:#9ec4ff;font:inherit;font-size:12px;cursor:pointer;padding:0 4px 0 0}.fp-hint{font-size:10.5px;opacity:.55;padding:6px 10px 2px}',
-    '.fp-actbtn{white-space:nowrap}'
-  ].join('\n'); document.head.appendChild(css);
-  window.__facPrestaDebug={ACT:ACT,index:index,search:search,ST:ST};
 })();
 </script>
 <script>
