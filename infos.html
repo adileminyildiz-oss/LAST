@@ -53,6 +53,21 @@ textarea{min-height:90px;resize:vertical}
 .ok .recap div{padding:2px 0}
 .fatal{color:var(--err);font-size:13px;text-align:center;padding:20px}
 .foot{font-size:11.5px;color:var(--ink3);text-align:center;margin-top:18px}
+.doc{border:1px solid var(--line2);border-radius:12px;padding:12px 14px;margin-top:10px;background:#fffefb}
+.doc.bad{border-color:var(--err);box-shadow:0 0 0 3px rgba(176,68,47,.14)}
+.doc .dl{font-size:13.5px;font-weight:700;color:var(--ink)}
+.doc .dh{font-size:12px;color:var(--ink3);margin:2px 0 8px}
+.doc .pick{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px dashed var(--accent2);border-radius:10px;background:#fbf7ec;color:var(--accent);font-weight:600;cursor:pointer;font-size:14px}
+.doc .pick input{display:none}
+.doc .files{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.doc .file{display:flex;align-items:center;gap:8px;font-size:13px;background:#f6f0e2;border-radius:8px;padding:6px 10px}
+.doc .file b{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc .file button{border:none;background:none;color:var(--ink3);cursor:pointer;font-size:16px;padding:0 4px}
+.doc .ok{color:var(--ok);font-size:12px;font-weight:700}
+.libre{background:#fbf7ec;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 14px}
+.libre label{margin-top:8px}
+.share{margin-top:10px;font-size:12.5px;color:var(--ink3);text-align:center}
+@media(max-width:600px){.card{padding:18px 14px;border-radius:14px}h1{font-size:20px}.btn{width:100%;text-align:center}.nav{flex-direction:column}.doc .pick{width:100%;justify-content:center}}
 @media(max-width:600px){input,select,textarea{font-size:16px}}
 </style>
 </head>
@@ -63,6 +78,18 @@ textarea{min-height:90px;resize:vertical}
   <p class="lead" id="lead">Merci de compléter les éléments ci-dessous : ils nous sont nécessaires pour poursuivre vos formalités. Quelques minutes suffisent, vos réponses sont enregistrées au fur et à mesure sur cet appareil.</p>
   <div id="dosno" class="dosno"></div>
   <div class="card" id="cardForm">
+    <div class="libre" id="libre" style="display:none">
+      <label for="l-type">Votre projet <span class="req">*</span></label>
+      <select id="l-type">
+        <option value="sasu">Création d'une SASU (associé unique)</option>
+        <option value="sas">Création d'une SAS (plusieurs associés)</option>
+        <option value="eurl">Création d'une EURL (associé unique)</option>
+        <option value="sarl">Création d'une SARL (plusieurs associés)</option>
+        <option value="sci">Création d'une SCI</option>
+        <option value="autre">Je ne sais pas encore / autre formalité</option>
+      </select>
+      <p class="hint" style="margin:8px 0 0">Choisissez la forme envisagée : le questionnaire s'adapte. Nous vous conseillons ensuite si une autre forme est plus adaptée.</p>
+    </div>
     <div id="msg" class="msg" style="display:none"></div>
     <div class="prog"><span id="progtxt">0 / 0</span><div class="bar"><i id="progbar"></i></div></div>
     <div id="body"></div>
@@ -74,13 +101,14 @@ textarea{min-height:90px;resize:vertical}
     </div>
     <div class="pieces" id="pieces" style="display:none">📎 Vous avez aussi des <b>pièces justificatives</b> à nous transmettre ? <a id="depotlink" href="#" target="_blank" rel="noopener">Déposez-les en ligne, en toute sécurité →</a></div>
     <div class="err" id="err">Merci de compléter les champs signalés.</div>
-    <form id="post" action="https://formsubmit.co/aemconseil.sas@gmail.com" method="POST" style="display:none">
+    <form id="post" action="https://formsubmit.co/aemconseil.sas@gmail.com" method="POST" enctype="multipart/form-data" style="display:none">
       <input type="hidden" name="_captcha" value="false">
       <input type="hidden" name="_template" value="table">
       <input type="hidden" name="_subject" id="p_subject" value="INFORMATIONS DOSSIER — AEM CONSEIL">
       <input type="hidden" name="_next" id="p_next" value="">
       <input type="hidden" name="Origine" value="Formulaire de récupération d'informations">
       <div id="postfields"></div>
+      <div id="postfiles"></div>
     </form>
     <div class="nav"><span></span><button type="button" class="btn" id="send">Envoyer mes informations</button></div>
     <div class="note">🔒 Vos réponses sont rattachées directement à votre dossier. Aucun compte à créer.</div>
@@ -90,17 +118,18 @@ textarea{min-height:90px;resize:vertical}
     <p class="lead" style="text-align:center">Nous les intégrons à votre dossier et poursuivons vos démarches. Nous revenons vers vous si un élément reste nécessaire.</p>
     <div class="recap" id="okrecap"></div>
   </div>
-  <div class="fatal" id="cardErr" style="display:none">Lien invalide : numéro de dossier manquant. Utilisez le lien reçu par e-mail ou contactez-nous.</div>
+  <div class="fatal" id="cardErr" style="display:none">Lien invalide. Utilisez le lien reçu par e-mail ou contactez-nous.</div>
   <div class="foot">AEM CONSEIL — Création &amp; formalités d'entreprise · aemconseil.eu</div>
 </div>
 <script>
 /* ---------------- Champs connus (mêmes clés que le Formulaire de Mar'q) ---------------- */
-var SECTIONS={societe:'La société',siege:'Le siège social',dirigeant:'Le dirigeant',associes:'Les associés',modif:'La modification',autre:'Autres informations'};
+var SECTIONS={societe:'La société',siege:'Le siège social',dirigeant:'Le dirigeant',associes:'Les associés',modif:'La modification',autre:'Autres informations',documents:'Vos documents'};
 var FIELDS=[
  {k:'denomination',l:'Dénomination sociale',s:'societe',ph:'Ex : ATELIER DUPONT'},
- {k:'nomCommercial',l:'Sigle / nom commercial',s:'societe',ph:'Facultatif'},
+ {k:'nomCommercial',l:'Sigle / nom commercial',s:'societe',ph:'Facultatif',opt:true},
  {k:'forme',l:'Forme juridique',s:'societe',sel:['SASU','SAS','EURL','SARL','SCI','Association','Autre']},
  {k:'objet',l:'Objet social (activités)',s:'societe',ta:true,ph:'Décrivez les activités de la société'},
+ {k:'ape',l:'Code APE choisi (activité principale)',s:'societe',ph:'Ex : 6202A — conseil en systèmes informatiques'},
  {k:'capital',l:'Capital social (en euros)',s:'societe',type:'number',ph:'Ex : 1000'},
  {k:'debut',l:"Date de début d'activité",s:'societe',type:'date'},
  {k:'siege',l:'Adresse du siège social',s:'siege',ph:'N° et rue'},
@@ -116,6 +145,17 @@ var FIELDS=[
  {k:'nationalite',l:'Nationalité',s:'dirigeant',ph:'Française'},
  {k:'adressePerso',l:'Adresse personnelle du dirigeant',s:'dirigeant',ta:true,ph:'N° et rue, code postal, ville'},
  {k:'situation',l:'Situation matrimoniale',s:'dirigeant',sel:['Célibataire','Marié(e)','Pacsé(e)','Divorcé(e)','Veuf(ve)']},
+ {k:'perePrenom',l:'Prénom du père',s:'dirigeant'},
+ {k:'pereNom',l:'Nom du père',s:'dirigeant'},
+ {k:'merePrenom',l:'Prénom de la mère',s:'dirigeant'},
+ {k:'mereNom',l:'Nom de naissance de la mère',s:'dirigeant'},
+ {k:'secu',l:'Numéro de sécurité sociale',s:'dirigeant',ph:'15 chiffres',inputmode:'numeric'},
+ {k:'telPro',l:'Téléphone professionnel',s:'dirigeant',type:'tel',ph:'06 …'},
+ {k:'mailPro',l:'E-mail professionnel',s:'dirigeant',type:'email',ph:'contact@votre-societe.fr'},
+ {k:'typePiece',l:"Pièce d'identité présentée",s:'dirigeant',sel:["Carte nationale d'identité",'Passeport',"Titre de séjour avec autorisation d'exercer une activité en France"]},
+ {k:'heberge',l:'Êtes-vous hébergé(e) par un tiers ?',s:'dirigeant',sel:['Non','Oui']},
+ {k:'hebergeurNom',l:"Nom et prénom de l'hébergeur",s:'dirigeant',opt:true,ph:'Si vous êtes hébergé(e)'},
+ {k:'documents',l:'Documents à déposer',s:'documents',docs:true},
  {k:'associes',l:'Associés',s:'associes',asso:true},
  {k:'siren',l:'SIREN de la société',s:'modif',ph:'9 chiffres'},
  {k:'ancienSiege',l:'Ancienne adresse du siège',s:'modif',ta:true},
@@ -132,7 +172,15 @@ var FIELDS=[
  {k:'effectif',l:'Effectif prévu (salariés)',s:'autre',type:'number'},
  {k:'precisions',l:'Précisions demandées',s:'autre',ta:true}
 ];
-var CREATION=['denomination','nomCommercial','objet','siege','cp','ville','capital','debut','fonction','civilite','nom','prenom','naissance','lieuNaissance','pays','nationalite','adressePerso','situation'];
+var CREATION=['denomination','nomCommercial','objet','ape','siege','cp','ville','capital','debut','fonction','civilite','nom','prenom','naissance','lieuNaissance','pays','nationalite','adressePerso','situation','perePrenom','pereNom','merePrenom','mereNom','secu','telPro','mailPro','typePiece','heberge','hebergeurNom','documents'];
+var DOCS=[
+ {k:'cni',l:"Pièce d'identité du dirigeant",h:"Carte nationale d'identité, passeport ou titre de séjour avec autorisation d'exercer une activité en France — recto et verso.",req:true},
+ {k:'domicile',l:'Justificatif de domicile de moins de 3 mois',h:"Facture d'électricité, de gaz, de téléphone, quittance de loyer ou avis d'imposition, à votre nom.",req:true},
+ {k:'hebergement',l:"Attestation d'hébergement",h:'Signée par la personne qui vous héberge, datée de moins de 3 mois.',cond:'heberge'},
+ {k:'hebergeurId',l:"Pièce d'identité de l'hébergeur",h:'Recto et verso.',cond:'heberge'},
+ {k:'assoc',l:"Pièce d'identité de chaque associé",h:'Recto et verso, pour chaque associé autre que vous.',cond:'associes'}
+];
+var FILES={};
 var DEFAUT={sasu:CREATION,eurl:CREATION,sas:CREATION.concat(['associes']),sarl:CREATION.concat(['associes']),sci:CREATION.concat(['associes']),
  transfert:['denomination','siren','forme','ancienSiege','nouveauSiege','cp','ville','dateEffet','fonction','civilite','nom','prenom'],
  dirigeant:['denomination','siren','ancienDirigeant','fonction','civilite','nom','prenom','naissance','lieuNaissance','pays','nationalite','adressePerso','dateEffet'],
@@ -147,26 +195,42 @@ function hash(s){s=''+(s||'');var h=5381;for(var i=0;i<s.length;i++)h=((h<<5)+h+
 function depotToken(no){var s='AEM-DEPOT-'+(no||'');return (hash(s)+hash(s+'/2')).slice(0,8);}
 
 var dossier=qp('d')||qp('dossier'), token=qp('k'), societe=qp('s'), client=qp('c'), type=qp('t'), msgCab=qp('m');
-var keys=(qp('f')||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
-if(!keys.length) keys=(DEFAUT[type]||CREATION.concat(['associes'])).slice();
-keys=keys.filter(function(k){return FIELDS.some(function(f){return f.k===k;});});
+var libre=!dossier; /* mode libre : questionnaire public (story, site, SMS) — crée la demande chez AEM CONSEIL */
+if(libre&&!type) type=(function(){ try{ return localStorage.getItem('aem-infos-libre-type')||'sasu'; }catch(e){ return 'sasu'; } })();
+var keys=[];
+function computeKeys(){
+  var k=(qp('f')||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+  if(libre||!k.length) k=(DEFAUT[type]||CREATION.concat(['associes'])).slice();
+  if(libre&&type==='autre') k=CREATION.concat(['associes','regime','tva','precisions']);
+  return k.filter(function(k){return FIELDS.some(function(f){return f.k===k;});});
+}
+keys=computeKeys();
 var D={champs:{},associes:[{},{}]};
-var STORE_KEY='aem-infos-'+dossier;
+var STORE_KEY='aem-infos-'+(libre?'libre':dossier);
 
-if(!dossier){ document.getElementById('cardForm').style.display='none'; document.getElementById('cardErr').style.display='block'; }
-else if(location.hash.indexOf('#ok')===0){ showOk(); }
+if(location.hash.indexOf('#ok')===0){ showOk(); }
 else init();
 
 function init(){
-  var dn=document.getElementById('dosno'); dn.innerHTML='Dossier '+esc(dossier)+(societe?(' <small>· '+esc(societe)+'</small>'):'');
-  if(client) document.getElementById('lead').textContent='Bonjour '+client+', merci de compléter les éléments ci-dessous : ils nous sont nécessaires pour poursuivre vos formalités. Quelques minutes suffisent, vos réponses sont enregistrées au fur et à mesure sur cet appareil.';
+  var dn=document.getElementById('dosno');
+  if(libre){
+    dn.style.display='none';
+    document.querySelector('h1').textContent='Questionnaire de création d\'entreprise';
+    document.getElementById('lead').textContent='Répondez à ce questionnaire et déposez vos documents : nous préparons votre dossier et revenons vers vous rapidement. Quelques minutes suffisent, vos réponses sont enregistrées au fur et à mesure sur cet appareil.';
+    var lb=document.getElementById('libre'); lb.style.display='block'; var sel=document.getElementById('l-type'); sel.value=type; if(sel.value!==type){ sel.value='autre'; type='autre'; }
+    sel.addEventListener('change',function(){ collect(); type=sel.value; try{ localStorage.setItem('aem-infos-libre-type',type); }catch(e){} keys=computeKeys(); render(); persist(); });
+    document.querySelector('.note').textContent='🔒 Vos réponses créent votre dossier chez AEM CONSEIL. Aucun compte à créer, aucun engagement.';
+  } else {
+    dn.innerHTML='Dossier '+esc(dossier)+(societe?(' <small>· '+esc(societe)+'</small>'):'');
+    if(client) document.getElementById('lead').textContent='Bonjour '+client+', merci de compléter les éléments ci-dessous : ils nous sont nécessaires pour poursuivre vos formalités. Quelques minutes suffisent, vos réponses sont enregistrées au fur et à mesure sur cet appareil.';
+    if(keys.indexOf('documents')<0){ var pl=document.getElementById('pieces'); pl.style.display='block'; document.getElementById('depotlink').href=location.href.replace(/[^\/]*$/,'').split('?')[0]+'depot.html?d='+encodeURIComponent(dossier)+'&k='+depotToken(dossier); }
+  }
   if(msgCab){ var m=document.getElementById('msg'); m.textContent=msgCab; m.style.display='block'; }
   document.getElementById('p_next').value=location.href.split('#')[0]+'#ok';
-  var pl=document.getElementById('pieces'); pl.style.display='block';
-  document.getElementById('depotlink').href=location.href.replace(/[^\/]*$/,'').split('?')[0]+'depot.html?d='+encodeURIComponent(dossier)+'&k='+depotToken(dossier);
   try{ var saved=JSON.parse(localStorage.getItem(STORE_KEY)||'null'); if(saved&&saved.champs){ D=saved; if(!D.associes||!D.associes.length)D.associes=[{},{}]; } }catch(e){}
   render();
-  document.getElementById('body').addEventListener('input',function(){ collect(); progress(); persist(); });
+  document.getElementById('body').addEventListener('input',function(ev){ collect(); progress(); persist(); if(ev&&ev.target&&ev.target.getAttribute('data-k')==='heberge'){ renderDocs(); progress(); } });
+  document.getElementById('body').addEventListener('change',function(ev){ var t=ev.target; if(t&&t.getAttribute&&t.getAttribute('data-doc')){ var k=t.getAttribute('data-doc'); FILES[k]=FILES[k]||[]; Array.prototype.forEach.call(t.files||[],function(f){ if(f&&f.size>0) FILES[k].push(f); }); renderDocs(); progress(); } if(t&&t.getAttribute&&t.getAttribute('data-k')==='heberge'){ collect(); renderDocs(); progress(); } });
   document.getElementById('message').addEventListener('input',persist);
   document.getElementById('email').addEventListener('input',persist);
   document.getElementById('tel').addEventListener('input',persist);
@@ -175,31 +239,45 @@ function init(){
   if(D.tel)document.getElementById('tel').value=D.tel;
 }
 function fieldHTML(f){
-  var v=esc(D.champs[f.k]||''); var attr='id="f-'+f.k+'" data-k="'+f.k+'" data-req="1"'+(f.type==='number'?' inputmode="decimal"':'');
+  var v=esc(D.champs[f.k]||''); var attr='id="f-'+f.k+'" data-k="'+f.k+'"'+(f.opt?'':' data-req="1"')+(f.type==='number'?' inputmode="decimal"':'')+(f.inputmode?(' inputmode="'+f.inputmode+'"'):'');
   var inp;
   if(f.ta) inp='<textarea '+attr+(f.ph?(' placeholder="'+esc(f.ph)+'"'):'')+'>'+v+'</textarea>';
   else if(f.sel) inp='<select '+attr+'><option value="">— choisir —</option>'+f.sel.map(function(x){return '<option'+((D.champs[f.k]||'')===x?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select>';
   else inp='<input '+attr+' type="'+(f.type||'text')+'" value="'+v+'"'+(f.ph?(' placeholder="'+esc(f.ph)+'"'):'')+'>';
-  return '<div><label for="f-'+f.k+'">'+esc(f.l)+' <span class="req">*</span></label>'+inp+'</div>';
+  return '<div><label for="f-'+f.k+'">'+esc(f.l)+(f.opt?'':' <span class="req">*</span>')+'</label>'+inp+'</div>';
 }
 function render(){
   var body=document.getElementById('body'); var out='';
-  var order=['societe','siege','dirigeant','associes','modif','autre'];
+  var order=['societe','siege','dirigeant','associes','modif','autre','documents'];
   order.forEach(function(s){
     var fs=FIELDS.filter(function(f){return f.s===s&&keys.indexOf(f.k)>=0;}); if(!fs.length)return;
     out+='<h2>'+esc(SECTIONS[s])+'</h2>';
+    if(s==='documents'){ out+='<p class="hint">Photos ou PDF acceptés (depuis votre téléphone, vous pouvez prendre la photo directement). Chaque document peut comporter plusieurs fichiers.</p><div id="docList"></div>'; return; }
     if(s==='associes'){ out+='<p class="hint">Indiquez chaque associé avec son apport et le nombre de '+((type==='sas'||type==='sasu')?'actions':'parts')+'.</p><div id="assoList"></div><button type="button" class="btn sec" id="addAsso" style="margin-top:10px">＋ Ajouter un associé</button>'; return; }
     var short=fs.filter(function(f){return !f.ta;}), long=fs.filter(function(f){return f.ta;});
     if(short.length) out+='<div class="row">'+short.map(fieldHTML).join('')+'</div>';
     out+=long.map(fieldHTML).join('');
   });
-  body.innerHTML=out; renderAsso(); progress();
+  body.innerHTML=out; renderAsso(); renderDocs(); progress();
+}
+function docsVisibles(){
+  if(keys.indexOf('documents')<0) return [];
+  return DOCS.filter(function(d){ if(d.cond==='heberge') return (D.champs.heberge||'')==='Oui'; if(d.cond==='associes') return keys.indexOf('associes')>=0; return true; });
+}
+function renderDocs(){
+  var el=document.getElementById('docList'); if(!el)return;
+  el.innerHTML=docsVisibles().map(function(d){ var fl=FILES[d.k]||[];
+    return '<div class="doc" id="doc-'+d.k+'"><div class="dl">'+esc(d.l)+(d.req?' <span class="req">*</span>':'')+'</div><div class="dh">'+esc(d.h)+'</div>'
+      +'<label class="pick">📎 Ajouter un fichier<input type="file" accept="image/*,.pdf" multiple data-doc="'+d.k+'"></label>'
+      +'<div class="files">'+fl.map(function(f,i){ return '<div class="file"><b>'+esc(f.name)+'</b><span class="ok">✓</span><button type="button" data-rm="'+d.k+'" data-i="'+i+'" title="Retirer">✕</button></div>'; }).join('')+'</div></div>'; }).join('');
 }
 function renderAsso(){
   var el=document.getElementById('assoList'); if(!el)return;
   var unite=(type==='sas'||type==='sasu')?'actions':'parts';
   el.innerHTML=D.associes.map(function(a,i){ return '<div class="asso"><div class="tt">Associé '+(i+1)+'</div>'+(D.associes.length>1?('<button type="button" class="del" data-del="'+i+'" title="Retirer">✕</button>'):'')
     +'<div class="row"><div><label>Nom</label><input data-a="'+i+'" data-k="nom" value="'+esc(a.nom||'')+'"></div><div><label>Prénom</label><input data-a="'+i+'" data-k="prenom" value="'+esc(a.prenom||'')+'"></div></div>'
+    +'<div class="row"><div><label>Date de naissance</label><input type="date" data-a="'+i+'" data-k="naissance" value="'+esc(a.naissance||'')+'"></div><div><label>Lieu de naissance</label><input data-a="'+i+'" data-k="lieuNaissance" value="'+esc(a.lieuNaissance||'')+'"></div></div>'
+    +'<div class="row"><div><label>Nationalité</label><input data-a="'+i+'" data-k="nationalite" value="'+esc(a.nationalite||'')+'" placeholder="Française"></div><div><label>Adresse personnelle</label><input data-a="'+i+'" data-k="adresse" value="'+esc(a.adresse||'')+'" placeholder="N° et rue, code postal, ville"></div></div>'
     +'<div class="row3"><div><label>Apport (€)</label><input data-a="'+i+'" data-k="apport" inputmode="decimal" value="'+esc(a.apport||'')+'"></div><div><label>Nombre de '+unite+'</label><input data-a="'+i+'" data-k="parts" inputmode="decimal" value="'+esc(a.parts||'')+'"></div><div><label>Rôle</label><select data-a="'+i+'" data-k="role"><option value="">—</option>'+['Associé','Dirigeant et associé'].map(function(x){return '<option'+(a.role===x?' selected':'')+'>'+x+'</option>';}).join('')+'</select></div></div>'
     +'</div>'; }).join('');
 }
@@ -212,6 +290,7 @@ function persist(){ collect(); try{ localStorage.setItem(STORE_KEY,JSON.stringif
 function progress(){
   var els=[].slice.call(document.querySelectorAll('#body [data-req]')); var done=els.filter(function(e){return (''+e.value).trim();}).length;
   var tot=els.length+(keys.indexOf('associes')>=0?1:0); if(keys.indexOf('associes')>=0&&D.associes.some(function(a){return (a.nom||'').trim();}))done++;
+  docsVisibles().filter(function(d){return d.req;}).forEach(function(d){ tot++; if((FILES[d.k]||[]).length)done++; });
   document.getElementById('progtxt').textContent=done+' / '+tot; document.getElementById('progbar').style.width=(tot?Math.round(done/tot*100):0)+'%';
 }
 function validate(){
@@ -219,11 +298,14 @@ function validate(){
   document.querySelectorAll('#body [data-req]').forEach(function(el){ var bad=!(''+el.value).trim(); el.classList.toggle('bad',bad); if(bad)ok=false; });
   var em=document.getElementById('email'); var bad=!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em.value.trim()); em.classList.toggle('bad',bad); if(bad)ok=false;
   if(keys.indexOf('associes')>=0){ var n=D.associes.filter(function(a){return (a.nom||'').trim()&&(a.prenom||'').trim();}).length; if(!n){ ok=false; var a0=document.querySelector('#assoList input'); if(a0)a0.classList.add('bad'); } }
+  if(keys.indexOf('hebergeurNom')>=0&&(D.champs.heberge||'')==='Oui'){ var hn=document.getElementById('f-hebergeurNom'); if(hn){ var badH=!(''+hn.value).trim(); hn.classList.toggle('bad',badH); if(badH)ok=false; } }
+  docsVisibles().forEach(function(d){ var box=document.getElementById('doc-'+d.k); var need=d.req||(d.cond==='heberge'); var bad=need&&!(FILES[d.k]||[]).length; if(box)box.classList.toggle('bad',bad); if(bad)ok=false; });
   return ok;
 }
 function flat(){
   var out=[]; keys.forEach(function(k){ var f=FIELDS.filter(function(x){return x.k===k;})[0]; if(!f||f.asso)return; var v=(D.champs[k]||'').trim(); if(v)out.push([f.l,v]); });
-  D.associes.forEach(function(a,i){ if(!(a.nom||a.prenom))return; out.push(['Associé '+(i+1),[a.prenom,a.nom].filter(Boolean).join(' ')+(a.apport?(' — apport '+a.apport+' €'):'')+(a.parts?(' — '+a.parts+' parts/actions'):'')+(a.role?(' — '+a.role):'')]); });
+  D.associes.forEach(function(a,i){ if(!(a.nom||a.prenom))return; out.push(['Associé '+(i+1),[a.prenom,a.nom].filter(Boolean).join(' ')+(a.naissance?(' — né(e) le '+a.naissance+(a.lieuNaissance?(' à '+a.lieuNaissance):'')):'')+(a.nationalite?(' — '+a.nationalite):'')+(a.adresse?(' — '+a.adresse):'')+(a.apport?(' — apport '+a.apport+' €'):'')+(a.parts?(' — '+a.parts+' parts/actions'):'')+(a.role?(' — '+a.role):'')]); });
+  docsVisibles().forEach(function(d){ var fl=FILES[d.k]||[]; if(fl.length) out.push([d.l,fl.map(function(f){return f.name;}).join(', ')]); });
   if((D.message||'').trim())out.push(['Message',D.message.trim()]);
   out.push(['E-mail',D.email||'']); if(D.tel)out.push(['Téléphone',D.tel]);
   return out;
@@ -233,27 +315,32 @@ function submitForm(){
   document.getElementById('err').style.display='none';
   var pf=document.getElementById('postfields'); pf.innerHTML='';
   function hidden(name,val){ var i=document.createElement('input'); i.type='hidden'; i.name=name; i.value=val; pf.appendChild(i); }
-  hidden('Numéro de dossier',dossier); if(societe)hidden('Société',societe);
+  if(libre){ hidden('Origine questionnaire','Questionnaire public (lien partagé)'); hidden('Projet',(document.getElementById('l-type').options[document.getElementById('l-type').selectedIndex]||{}).text||type); }
+  else { hidden('Numéro de dossier',dossier); if(societe)hidden('Société',societe); }
+  var pfl=document.getElementById('postfiles'); pfl.innerHTML=''; var pieces={};
+  docsVisibles().forEach(function(d){ (FILES[d.k]||[]).forEach(function(f,i){ try{ var dt=new DataTransfer(); dt.items.add(f); var inp=document.createElement('input'); inp.type='file'; inp.name='Pièce '+d.k+' '+(i+1); inp.files=dt.files; pfl.appendChild(inp); (pieces[d.k]=pieces[d.k]||[]).push(f.name); }catch(e){} }); });
   var rows=flat(); rows.forEach(function(p){ hidden(p[0],p[1]); });
   var champs={}; keys.forEach(function(k){ if((D.champs[k]||'').trim())champs[k]=D.champs[k].trim(); });
-  var payload={version:'INFOSv1',dossier:dossier,token:token,societe:societe,type:type,champs:champs,associes:D.associes.filter(function(a){return (a.nom||a.prenom);}),message:(D.message||'').trim(),email:(D.email||'').trim(),tel:(D.tel||'').trim(),ts:new Date().toISOString()};
+  var payload={version:'INFOSv1',dossier:dossier||'',token:token,societe:societe||(champs.denomination||''),type:type,libre:libre,champs:champs,associes:D.associes.filter(function(a){return (a.nom||a.prenom);}),pieces:pieces,message:(D.message||'').trim(),email:(D.email||'').trim(),tel:(D.tel||'').trim(),ts:new Date().toISOString()};
   hidden('LAST_INFOS','INFOSv1:'+b64(JSON.stringify(payload)));
-  document.getElementById('p_subject').value='INFORMATIONS DOSSIER — '+dossier+(societe?(' — '+societe):'')+' — AEM CONSEIL';
+  document.getElementById('p_subject').value=libre?('QUESTIONNAIRE — '+([champs.prenom,champs.nom].filter(Boolean).join(' ')||(D.email||''))+(champs.denomination?(' — '+champs.denomination):'')+' — AEM CONSEIL'):('INFORMATIONS DOSSIER — '+dossier+(societe?(' — '+societe):'')+' — AEM CONSEIL');
   try{ localStorage.setItem(STORE_KEY+'-sent',JSON.stringify(rows)); }catch(e){}
   document.getElementById('post').submit();
 }
 function showOk(){
   document.getElementById('cardForm').style.display='none'; var ok=document.getElementById('cardOk'); ok.style.display='block';
-  document.getElementById('dosno').textContent='Dossier '+dossier;
+  if(libre){ document.getElementById('dosno').style.display='none'; document.querySelector('h1').textContent='Questionnaire de création d\'entreprise'; document.getElementById('lead').style.display='none'; document.querySelector('#cardOk h2').textContent='✅ Merci, votre questionnaire est bien envoyé !'; document.querySelector('#cardOk .lead').textContent='Nous préparons votre dossier et revenons vers vous très vite par e-mail ou téléphone.'; }
+  else document.getElementById('dosno').textContent='Dossier '+dossier;
   try{ var rows=JSON.parse(localStorage.getItem(STORE_KEY+'-sent')||'[]'); document.getElementById('okrecap').innerHTML=rows.filter(function(r){return r[0]!=='E-mail'&&r[0]!=='Téléphone';}).map(function(r){return '<div><b>'+esc(r[0])+'</b> : '+esc(r[1])+'</div>';}).join(''); localStorage.removeItem(STORE_KEY); }catch(e){}
 }
 document.addEventListener('click',function(e){
   if(e.target.id==='send')submitForm();
   if(e.target.id==='addAsso'){ collect(); D.associes.push({}); renderAsso(); persist(); }
+  var rm=e.target.getAttribute&&e.target.getAttribute('data-rm'); if(rm){ var ri=+e.target.getAttribute('data-i'); (FILES[rm]||[]).splice(ri,1); renderDocs(); progress(); }
   var del=e.target.getAttribute&&e.target.getAttribute('data-del'); if(del!=null){ collect(); D.associes.splice(+del,1); if(!D.associes.length)D.associes=[{}]; renderAsso(); persist(); progress(); }
 });
 window.addEventListener('hashchange',function(){ if(location.hash.indexOf('#ok')===0&&dossier) showOk(); });
-window.__infosDebug={FIELDS:FIELDS,keys:keys,D:D,flat:flat,validate:validate};
+window.__infosDebug={FIELDS:FIELDS,DOCS:DOCS,get keys(){return keys;},get D(){return D;},FILES:FILES,flat:flat,validate:validate,docsVisibles:docsVisibles,libre:libre};
 </script>
 <script>
 /* Accessibilité : chaque libellé est relié à son champ (clic sur le libellé = focus du champ, lecteurs d'écran). */

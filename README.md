@@ -25,7 +25,8 @@ Changer le mot de passe : calculer l'empreinte du nouveau
 ## Structure
 - `index.html` — l'application complète (HTML/CSS/JS en un seul fichier)
 - `formulaire.html` — formulaire public d'ouverture de dossier (client)
-- `infos.html` — formulaire public de récupération d'informations / questionnaire en ligne, envoyé par lien depuis un dossier (réponses rattachées automatiquement au dossier)
+- `infos.html` — questionnaire client en ligne : identité du dirigeant (filiation, n° de sécurité sociale, coordonnées professionnelles, pièce d'identité, hébergement), associés, société (activité, code APE), dépôt des documents (pièce d'identité, justificatif de domicile, attestation d'hébergement). Deux usages : **lien par dossier** (envoyé depuis Mar'q, réponses rattachées au dossier) ou **lien public** `questionnaire.html` (story, site, SMS : la réponse crée la demande dans Mar'q)
+- `questionnaire.html` — lien court public vers le questionnaire (`https://marq.aemconseil.eu/questionnaire.html`)
 - `depot.html` — portail public de dépôt sécurisé des pièces
 - `CNAME` — domaine personnalisé GitHub Pages
 - `README.md` — ce fichier

@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=639;
+var LAST_VER=640;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -39584,7 +39584,7 @@ function testLienSignature() {
 </script>
 <script>
 /* ============================================================================
-   Mar'q — Formulaire en ligne de récupération d'informations (infos.html) (v635)
+   Mar'q — Formulaire en ligne de récupération d'informations (infos.html) (v635, v640)
    - Lien sécurisé par dossier (numéro + jeton) : le cabinet choisit les
      informations à demander (clés du Formulaire), ajoute un message, et envoie
      le lien au client (mail préparé, copie du lien).
@@ -39593,6 +39593,11 @@ function testLienSignature() {
    - À la synchronisation de la boîte, la réponse est rattachée à la demande /
      au dossier (pas de nouvelle demande créée), fusionnée dans le questionnaire
      (intake) et reportée dans la fiche client ; carte « Informations reçues ».
+   - v640 : questionnaire complet (filiation, n° de sécurité sociale, coordonnées
+     professionnelles, code APE, pièce d'identité, hébergement, associés détaillés),
+     dépôt de documents depuis le questionnaire (pièces rattachées au dossier,
+     cases « Pièces attendues » cochées), mode LIBRE (lien public partagé : la
+     réponse crée la demande dans Mar'q), alias des clés de pièces du portail.
    100 % additif : greffes sur demIngest, demInfosCard, render ; correction du
    domaine du formulaire d'ouverture (base = adresse de l'application).
    ========================================================================= */
@@ -39610,9 +39615,18 @@ function testLienSignature() {
     siege:'siege.rue',cp:'siege.cp',ville:'siege.ville',
     fonction:'direction.fonction',civilite:'direction.civilite',nom:'direction.nom',prenom:'direction.prenom',naissance:'direction.naissance',lieuNaissance:'direction.lieuNaissance',pays:'direction.pays',nationalite:'direction.nationalite',adressePerso:'direction.adresse',situation:'direction.situation',
     siren:'modif.siren',ancienSiege:'modif.ancienSiege',nouveauSiege:'modif.nouveauSiege',ancienDirigeant:'modif.ancienDirigeant',nouvelleDenomination:'modif.nouvelleDenomination',nouvelObjet:'modif.nouvelObjet',capitalActuel:'modif.capitalActuel',nouveauCapital:'modif.nouveauCapital',dateEffet:'modif.dateEffet',
-    iban:'banque.iban',effectif:'societe.effectif',precisions:'contact.precisions'};
-  var EXTRA_FIELDS=[{key:'iban',label:'IBAN du compte professionnel'},{key:'regime',label:'Régime fiscal souhaité'},{key:'tva',label:'Régime de TVA souhaité'},{key:'effectif',label:'Effectif prévu (salariés)'},{key:'precisions',label:'Précisions demandées'}];
-  var SECTIONS=[['societe','La société',['denomination','nomCommercial','forme','objet','capital','debut']],['siege','Le siège',['siege','cp','ville']],['dirigeant','Le dirigeant',['fonction','civilite','nom','prenom','naissance','lieuNaissance','pays','nationalite','adressePerso','situation']],['associes','Les associés',['associes']],['modif','La modification',['siren','ancienSiege','nouveauSiege','ancienDirigeant','nouvelleDenomination','nouvelObjet','capitalActuel','nouveauCapital','dateEffet']],['autre','Autres informations',['iban','regime','tva','effectif','precisions']]];
+    iban:'banque.iban',effectif:'societe.effectif',precisions:'contact.precisions',
+    ape:'societe.ape',perePrenom:'dirx.perePrenom',pereNom:'dirx.pereNom',merePrenom:'dirx.merePrenom',mereNom:'dirx.mereNom',secu:'dirx.secu',telPro:'contact.telPro',mailPro:'contact.emailPro',typePiece:'dirx.typePiece',heberge:'dirx.heberge',hebergeurNom:'dirx.hebergeurNom'};
+  var CREATION_TYPES=['sas','sasu','sarl','eurl','sci','association','autre'];
+  var EXTRA_CREATION=['ape','perePrenom','pereNom','merePrenom','mereNom','secu','telPro','mailPro','typePiece','heberge','hebergeurNom','documents'];
+  function qKeys(type){ var k=(typeof formQuestionKeys==='function')?formQuestionKeys(type):Object.keys(MAP); k=(k||[]).slice(); if(CREATION_TYPES.indexOf(type)>=0||!type){ EXTRA_CREATION.forEach(function(x){ if(k.indexOf(x)<0){ var at=k.indexOf('situation'); if(x==='ape'&&k.indexOf('objet')>=0) k.splice(k.indexOf('objet')+1,0,x); else k.push(x); } }); } return k; }
+  var ALIAS={identite:'cni',domiciliation:'domicile',cni:'identite',domicile:'domiciliation'};
+  var PIECE_LABELS={cni:"Pièce d'identité du dirigeant",domicile:'Justificatif de domicile (− 3 mois)',hebergement:"Attestation d'hébergement",hebergeurId:"Pièce d'identité de l'hébergeur",assoc:"Pièce d'identité des associés",identite:"Pièce d'identité",domiciliation:'Justificatif de domicile'};
+  var EXTRA_FIELDS=[{key:'iban',label:'IBAN du compte professionnel'},{key:'regime',label:'Régime fiscal souhaité'},{key:'tva',label:'Régime de TVA souhaité'},{key:'effectif',label:'Effectif prévu (salariés)'},{key:'precisions',label:'Précisions demandées'},
+    {key:'ape',label:'Code APE choisi (activité principale)'},{key:'perePrenom',label:'Prénom du père du dirigeant'},{key:'pereNom',label:'Nom du père du dirigeant'},{key:'merePrenom',label:'Prénom de la mère du dirigeant'},{key:'mereNom',label:'Nom de naissance de la mère du dirigeant'},
+    {key:'secu',label:'Numéro de sécurité sociale du dirigeant'},{key:'telPro',label:'Téléphone professionnel'},{key:'mailPro',label:'E-mail professionnel'},{key:'typePiece',label:"Pièce d'identité présentée (CNI / passeport / titre de séjour)"},{key:'heberge',label:'Hébergé(e) par un tiers ?'},{key:'hebergeurNom',label:"Nom et prénom de l'hébergeur"},
+    {key:'documents',label:"Documents à déposer (pièce d'identité, justificatif de domicile − 3 mois, hébergement)"}];
+  var SECTIONS=[['societe','La société',['denomination','nomCommercial','forme','objet','ape','capital','debut']],['siege','Le siège',['siege','cp','ville']],['dirigeant','Le dirigeant',['fonction','civilite','nom','prenom','naissance','lieuNaissance','pays','nationalite','adressePerso','situation','perePrenom','pereNom','merePrenom','mereNom','secu','telPro','mailPro','typePiece','heberge','hebergeurNom']],['associes','Les associés',['associes']],['modif','La modification',['siren','ancienSiege','nouveauSiege','ancienDirigeant','nouvelleDenomination','nouvelObjet','capitalActuel','nouveauCapital','dateEffet']],['autre','Autres informations',['iban','regime','tva','effectif','precisions']],['documents','Documents à déposer',['documents']]];
   function fields(){ var F=(typeof FORM_FIELDS!=='undefined'?FORM_FIELDS:[]).slice(); EXTRA_FIELDS.forEach(function(x){ if(!F.some(function(f){ return f.key===x.key; })) F.push(x); }); return F; }
   function labelOf(k){ var f=fields().filter(function(x){ return x.key===k; })[0]; return f?f.label:k; }
   function get(o,path){ try{ return path.split('.').reduce(function(a,k){ return (a==null)?undefined:a[k]; },o); }catch(e){ return undefined; } }
@@ -39635,7 +39649,8 @@ function testLienSignature() {
   function nomDe(e){ try{ if(typeof demBestName==='function'&&demandeById(e.id)) return demBestName(e)||''; }catch(x){} var c=clientDe(e); return (e&&e.clientNom)||(c?((c.prenom||'')+' '+(c.nom||'')).trim()||c.denomination||'':'')||''; }
   function societeDe(e){ var o=e&&e.intake||{}; return (o.societe&&o.societe.denomination)||(o.modif&&o.modif.denomination)||(function(){ var c=clientDe(e); return c?(c.denomination||''):''; })()||''; }
   function emailDe(e){ try{ if(typeof demReplyTo==='function'&&demandeById(e.id)){ var m=demReplyTo(e); if(m&&m!=='—') return m; } }catch(x){} var c=clientDe(e); return (e&&e.clientEmail)||(c&&c.email)||(e&&e.intake&&e.intake.contact&&e.intake.contact.email)||''; }
-  function manquants(e,type){ var keys=(typeof formQuestionKeys==='function')?formQuestionKeys(type):Object.keys(MAP); var o=e&&e.intake||{}; return keys.filter(function(k){ if(k==='associes') return !((o.associes||[]).some(function(a){ return a&&(a.nom||a.prenom); })); var p=MAP[k]; return !p||vide(get(o,p)); }); }
+  function piecesRecuesDe(e){ var r={}; try{ var dm=e; [dm].concat(e&&e.dossierId?[dossierById(e.dossierId)]:[]).forEach(function(x){ if(!x) return; Object.keys(x.piecesRecues||{}).forEach(function(k){ if(x.piecesRecues[k]) r[k]=1; }); Object.keys(x.docs||{}).forEach(function(k){ if((x.docs[k]||[]).length) r[k]=1; }); Object.keys(x.pieces||{}).forEach(function(k){ if(x.pieces[k]&&x.pieces[k].recu) r[k]=1; }); }); }catch(x){} return r; }
+  function manquants(e,type){ var keys=qKeys(type); var o=e&&e.intake||{}; var pr=piecesRecuesDe(e); return keys.filter(function(k){ if(k==='associes') return !((o.associes||[]).some(function(a){ return a&&(a.nom||a.prenom); })); if(k==='documents') return !((pr.cni||pr.identite)&&(pr.domicile||pr.domiciliation)); var p=MAP[k]; return !p||vide(get(o,p)); }); }
 
   /* ── lien ── */
   window.infosLien=function(e,keys,msg){ if(!e) return ''; var no=assurerNumero(e); var q='d='+encodeURIComponent(no)+'&k='+window.infosToken(no);
@@ -39665,9 +39680,11 @@ function testLienSignature() {
     openModal('🧾 Demander des informations — formulaire en ligne', body, foot);
     setTimeout(function(){ window.infosMaj(); try{ if(typeof mailAttRender==='function') mailAttRender(); }catch(x){} },0); };
   window.infosCocher=function(sec){ var s=SECTIONS.filter(function(x){ return x[0]===sec; })[0]; if(!s) return; var boxes=[].slice.call(document.querySelectorAll('.if-grid input[data-k]')).filter(function(b){ return s[2].indexOf(b.getAttribute('data-k'))>=0; }); var all=boxes.every(function(b){ return b.checked; }); boxes.forEach(function(b){ b.checked=!all; }); window.infosMaj(); };
-  window.infosPreset=function(mode){ var e=entite(ST.id); if(!e) return; var sel=document.getElementById('if-type'); var type=(sel&&sel.value)||typeDe(e); var keys=mode==='questionnaire'?((typeof formQuestionKeys==='function')?formQuestionKeys(type):Object.keys(MAP)):(mode==='manquants'?manquants(e,type):[]); document.querySelectorAll('.if-grid input[data-k]').forEach(function(b){ b.checked=keys.indexOf(b.getAttribute('data-k'))>=0; }); window.infosMaj(); };
+  window.infosPreset=function(mode){ var e=entite(ST.id); if(!e) return; var sel=document.getElementById('if-type'); var type=(sel&&sel.value)||typeDe(e); var keys=mode==='questionnaire'?qKeys(type):(mode==='manquants'?manquants(e,type):[]); document.querySelectorAll('.if-grid input[data-k]').forEach(function(b){ b.checked=keys.indexOf(b.getAttribute('data-k'))>=0; }); window.infosMaj(); };
   /* questionnaire en ligne : lien complet de la formalité (toutes les questions) */
-  window.infosQuestionnaireLien=function(e,type){ if(!e) return ''; type=type||typeDe(e); var keys=(typeof formQuestionKeys==='function')?formQuestionKeys(type):Object.keys(MAP); return window.infosLien(e,keys,''); };
+  window.infosQuestionnaireLien=function(e,type){ if(!e) return ''; type=type||typeDe(e); return window.infosLien(e,qKeys(type),''); };
+  /* lien PUBLIC (story, site, SMS) : sans dossier — la réponse crée la demande dans Mar'q */
+  window.infosLienPublic=function(){ return baseUrl()+'questionnaire.html'; };
   window.infosType=function(){ var e=entite(ST.id); if(!e) return; var sel=document.getElementById('if-type'); var mq=manquants(e,(sel&&sel.value)||typeDe(e)); document.querySelectorAll('.if-grid input[data-k]').forEach(function(b){ b.checked=mq.indexOf(b.getAttribute('data-k'))>=0; }); window.infosMaj(); };
   window.infosKeys=function(){ return [].slice.call(document.querySelectorAll('.if-grid input[data-k]:checked')).map(function(b){ return b.getAttribute('data-k'); }); };
   window.infosMaj=function(){ var e=entite(ST.id); if(!e) return; var keys=window.infosKeys(); var msg=(document.getElementById('if-msg')||{}).value||''; var lien=window.infosLien(e,keys,msg);
@@ -39688,19 +39705,41 @@ function testLienSignature() {
     return null; };
   window.infosAppliquer=function(e,rec){ var o=e.intake; if(!o){ o=e.intake={version:'LASTv1',type:rec.type||typeDe(e)||'',societe:{},direction:{},siege:{},contact:{},modif:{},associes:[]}; }
     var appl=[]; Object.keys(rec.champs||{}).forEach(function(k){ var p=MAP[k]; if(!p) return; var v=rec.champs[k]; if(vide(v)) return; if(vide(get(o,p))||rec.force){ set(o,p,v); appl.push(k); } });
-    if(rec.associes&&rec.associes.length&&(rec.force||!(o.associes||[]).some(function(a){ return a&&(a.nom||a.prenom); }))){ o.associes=rec.associes.map(function(a){ return {nom:a.nom||'',prenom:a.prenom||'',apport:a.apport||'',parts:a.parts||'',role:a.role||''}; }); appl.push('associes'); }
-    if(rec.email&&!(o.contact&&o.contact.email)){ o.contact=o.contact||{}; o.contact.email=rec.email; } if(rec.tel&&!(o.contact&&o.contact.tel)){ o.contact=o.contact||{}; o.contact.tel=rec.tel; }
-    if(rec.email&&demandeById(e.id)&&!e.clientEmail) e.clientEmail=rec.email;
-    try{ var c=clientDe(e); if(c&&typeof lastIntakeToClient==='function'){ lastIntakeToClient(o,c); if(rec.champs&&rec.champs.iban&&!c.iban) c.iban=rec.champs.iban; } }catch(x){}
+    if(rec.associes&&rec.associes.length&&(rec.force||!(o.associes||[]).some(function(a){ return a&&(a.nom||a.prenom); }))){ o.associes=rec.associes.map(function(a){ return {nom:a.nom||'',prenom:a.prenom||'',apport:a.apport||'',parts:a.parts||'',role:a.role||'',naissance:a.naissance||'',lieuNaissance:a.lieuNaissance||'',nationalite:a.nationalite||'',adresse:a.adresse||''}; }); appl.push('associes'); }
+    var ch=rec.champs||{}; o.contact=o.contact||{};
+    if(rec.email&&!o.contact.email) o.contact.email=rec.email; if(rec.tel&&!o.contact.tel) o.contact.tel=rec.tel;
+    if(ch.mailPro&&!o.contact.email) o.contact.email=ch.mailPro; if(ch.telPro&&!o.contact.tel) o.contact.tel=ch.telPro;
+    if(!vide(ch.nom)&&(rec.force||vide(o.contact.nom))) o.contact.nom=ch.nom; if(!vide(ch.prenom)&&(rec.force||vide(o.contact.prenom))) o.contact.prenom=ch.prenom;
+    if(demandeById(e.id)){ if(rec.email&&!e.clientEmail) e.clientEmail=rec.email; if(!e.clientTel&&(rec.tel||ch.telPro)) e.clientTel=rec.tel||ch.telPro; }
+    try{ var c=clientDe(e); if(c&&typeof lastIntakeToClient==='function'){ lastIntakeToClient(o,c); if(ch.iban&&!c.iban) c.iban=ch.iban; c.docVars=c.docVars||{}; if(ch.pereNom||ch.perePrenom){ var pn=[ch.perePrenom,ch.pereNom].filter(Boolean).join(' '); if(rec.force||!c.docVars.pereNom) c.docVars.pereNom=pn; } if(ch.mereNom||ch.merePrenom){ var mn=[ch.merePrenom,ch.mereNom].filter(Boolean).join(' '); if(rec.force||!c.docVars.mereNom) c.docVars.mereNom=mn; } if(ch.secu&&(rec.force||!c.secu)) c.secu=ch.secu; if(ch.telPro&&!c.tel) c.tel=ch.telPro; if(ch.mailPro&&!c.email) c.email=ch.mailPro; if(ch.ape&&(rec.force||!c.ape)) c.ape=ch.ape; } }catch(x){}
     rec.appliquees=appl; rec.applique=true; try{ (e.historique=e.historique||[]).push({d:(typeof today==='function')?today():new Date().toISOString().slice(0,10),t:'Informations reçues via le formulaire en ligne ('+appl.length+' élément'+(appl.length>1?'s':'')+' reporté'+(appl.length>1?'s':'')+')'}); }catch(x){}
     return appl; };
-  window.infosAttacher=function(info,mail){ var no=info&&info.dossier; if(!no) return {ok:false,raison:'numéro absent'}; var e=trouverEntite(no); if(!e) return {ok:false,raison:'dossier introuvable',dossier:no};
-    var key=(mail&&mail.id)||''; e.infosRecues=e.infosRecues||[]; if(key&&e.infosRecues.some(function(r){ return r.msgId===key; })) return {ok:true,dup:true,entite:e.id};
-    var rec={ts:info.ts||new Date().toISOString(),msgId:key,champs:info.champs||{},associes:info.associes||[],message:info.message||'',email:info.email||'',tel:info.tel||'',type:info.type||'',tokenOk:!info.token||info.token===window.infosToken(no)};
+  function typeLabel(t){ try{ var x=(FORM_TYPES||[]).filter(function(y){ return y.k===t; })[0]; if(x) return x.label; }catch(e){} return t==='autre'?'Création de société (forme à définir)':'Création de société'; }
+  function mailAtts(mail){ return ((mail&&(mail.att||mail.attachments))||[]).map(function(a){ var o=(typeof a==='string')?{name:a}:Object.assign({},a); o.msgId=o.msgId||(mail&&mail.id); return o; }); }
+  /* mode libre : le questionnaire public crée la demande (comme un mail du formulaire du site) */
+  function creerDemandeLibre(info,mail){ var ch=info.champs||{}; var nom=[ch.prenom,ch.nom].filter(Boolean).join(' ')||info.email||'Client'; var lab=typeLabel(info.type); var dateISO=(typeof today==='function')?today():new Date().toISOString().slice(0,10);
+    var d={id:(typeof uid==='function')?uid('d'):('d'+Date.now()),code:(typeof demCodeGen==='function')?demCodeGen():'',clientNom:nom,clientEmail:info.email||ch.mailPro||'',clientTel:info.tel||ch.telPro||'',canal:'Questionnaire en ligne',subject:'Questionnaire — '+lab,serviceSouhaite:lab,message:info.message||'',rawBody:'',rawHtml:'',date:dateISO,dateTime:info.ts||'',statut:'Nouveau',assigneA:'',docsRecus:false,dossierId:'',msgKey:(mail&&mail.id)||'',fields:{},lu:false,attachments:mailAtts(mail),thread:[{from:nom,subject:'Questionnaire — '+lab,date:dateISO,body:info.message||'(questionnaire en ligne)'}],
+      intake:{version:'LASTv1',type:(info.type&&info.type!=='autre')?info.type:'sas',societe:{},direction:{},siege:{},contact:{},modif:{},associes:[]}};
+    DB.demandes=DB.demandes||[]; DB.demandes.unshift(d); return d; }
+  window.infosAttacher=function(info,mail){ var no=info&&info.dossier; var e=null; var libre=false;
+    if(no){ e=trouverEntite(no); if(!e) return {ok:false,raison:'dossier introuvable',dossier:no}; }
+    else { if(!info||!(info.libre||info.email||(info.champs&&Object.keys(info.champs).length))) return {ok:false,raison:'numéro absent'}; libre=true; }
+    var key=(mail&&mail.id)||'';
+    if(libre){ if(key&&(DB.demandes||[]).some(function(x){ return x.msgKey===key||(x.infosRecues||[]).some(function(r){ return r.msgId===key; }); })) return {ok:true,dup:true}; e=creerDemandeLibre(info,mail); }
+    e.infosRecues=e.infosRecues||[]; if(key&&e.infosRecues.some(function(r){ return r.msgId===key; })) return {ok:true,dup:true,entite:e.id};
+    var rec={ts:info.ts||new Date().toISOString(),msgId:key,champs:info.champs||{},associes:info.associes||[],pieces:info.pieces||{},message:info.message||'',email:info.email||'',tel:info.tel||'',type:info.type||'',libre:libre,tokenOk:libre?true:(!info.token||info.token===window.infosToken(no))};
     e.infosRecues.push(rec); window.infosAppliquer(e,rec); e.infosPortail={statut:'reçu',ts:Date.now(),nb:e.infosRecues.length};
-    try{ save(); }catch(x){} T('🧾 Informations reçues via le formulaire en ligne — dossier '+no+' ('+Object.keys(rec.champs).length+' élément(s))'); return {ok:true,entite:e.id,rec:rec}; };
+    /* pièces déposées avec le questionnaire → dossier (mêmes clés que les « Pièces attendues ») */
+    try{ var pk=Object.keys(rec.pieces||{}).filter(function(k){ return (rec.pieces[k]||[]).length; }); if(pk.length){ var pieces={}; pk.forEach(function(k){ pieces[k]=rec.pieces[k].slice(); }); rattacherPieces(e,pieces); var atts=mailAtts(mail); if(atts.length&&demandeById(e.id)){ e.attachments=e.attachments||[]; atts.forEach(function(a){ if(!e.attachments.some(function(x){ return x.name===a.name&&x.msgId===a.msgId; })) e.attachments.push(a); }); e.docsRecus=true; } } }catch(x){}
+    try{ save(); }catch(x){} T(libre?('🧾 Nouveau questionnaire reçu — '+(e.clientNom||'')+' ('+typeLabel(info.type)+')'):('🧾 Informations reçues via le formulaire en ligne — dossier '+no+' ('+Object.keys(rec.champs).length+' élément(s))')); return {ok:true,entite:e.id,rec:rec,libre:libre}; };
+  function rattacherPieces(e,pieces){ var targets=[e]; try{ if(e.dossierId){ var dos=dossierById(e.dossierId); if(dos&&dos!==e) targets.push(dos); } }catch(x){}
+    targets.forEach(function(t){ t.piecesRecues=t.piecesRecues||{}; t.docs=t.docs||{}; t.pieces=t.pieces||{};
+      Object.keys(pieces).forEach(function(k){ [k].concat(ALIAS[k]?[ALIAS[k]]:[]).forEach(function(kk){ t.piecesRecues[kk]=true; t.docs[kk]=t.docs[kk]||[]; pieces[k].forEach(function(nm){ if(!t.docs[kk].some(function(x){ return x.name===nm; })) t.docs[kk].push({name:nm,portail:true,questionnaire:true,ts:Date.now()}); }); t.pieces[kk]=Object.assign({},t.pieces[kk]||{},{recu:true,nom:pieces[k].join(', '),date:(typeof today==='function')?today():new Date().toISOString().slice(0,10),origine:'questionnaire'}); }); }); });
+    e.depotPortail={statut:'reçu',ts:Date.now(),keys:Object.keys(pieces),nb:Object.keys(pieces).length}; }
+  /* le portail de dépôt (depot.html) utilise les clés identite / domiciliation : on renseigne aussi cni / domicile (« Pièces attendues ») */
+  if(typeof window.depotAttacherAuDossier==='function'){ var _dad=window.depotAttacherAuDossier; window.depotAttacherAuDossier=function(numero,info,mail){ var r=_dad.apply(this,arguments); try{ if(r&&r.ok){ var e=trouverEntite(numero); if(e){ var pieces={}; (r.keys||[]).forEach(function(k){ pieces[k]=((info&&info.pieces&&info.pieces[k])||[]).slice(); if(!pieces[k].length) pieces[k]=['pièce déposée']; }); rattacherPieces(e,pieces); try{ save(); }catch(x){} } } }catch(x){} return r; }; }
   if(typeof demIngest==='function'){ var _di=demIngest; demIngest=window.demIngest=function(mails){ var rest=[]; try{ DB.parametres=DB.parametres||{}; DB.parametres.mailsImportes=DB.parametres.mailsImportes||[]; var seen=DB.parametres.mailsImportes;
-      (mails||[]).forEach(function(m){ var info=null; try{ info=window.infosDetectEmail(m); }catch(x){} if(!info||!info.dossier){ rest.push(m); return; }
+      (mails||[]).forEach(function(m){ var info=null; try{ info=window.infosDetectEmail(m); }catch(x){} if(!info||(!info.dossier&&!info.libre)){ rest.push(m); return; }
         var fr={email:''}; try{ fr=mailParseFrom(m.from)||fr; }catch(x){} var key=((''+(m.id||'')).trim())||(fr.email+'|'+(m.subject||'')+'|'+(m.date||''));
         if(seen.indexOf(key)>=0) return; var r=window.infosAttacher(info,m); if(r&&r.ok) seen.push(key); else rest.push(m); }); }catch(x){ rest=mails||[]; }
       return _di(rest); }; }
@@ -39710,9 +39749,11 @@ function testLienSignature() {
     var blocs=e.infosRecues.slice().reverse().map(function(r,i){ var d=new Date(r.ts); var when=isNaN(d.getTime())?'':d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
       var rows=Object.keys(r.champs||{}).map(function(k){ return '<div class="dinf-row"><span class="dinf-l">'+E(labelOf(k))+'</span><span class="dinf-v">'+E(r.champs[k])+(r.appliquees&&r.appliquees.indexOf(k)>=0?' <span class="if-tag">reporté</span>':'')+'</span></div>'; }).join('');
       if((r.associes||[]).length) rows+='<div class="dinf-row"><span class="dinf-l">Associés</span><span class="dinf-v">'+r.associes.map(function(a){ return E([a.prenom,a.nom].filter(Boolean).join(' '))+(a.apport?(' — '+E(a.apport)+' €'):'')+(a.parts?(' — '+E(a.parts)+' parts/actions'):''); }).join('<br>')+'</span></div>';
+      if(r.associes&&r.associes.some(function(a){ return a.naissance||a.adresse; })) rows+='<div class="dinf-row dinf-long"><span class="dinf-l">Associés — identité</span><span class="dinf-v">'+r.associes.map(function(a){ return E([a.prenom,a.nom].filter(Boolean).join(' '))+(a.naissance?(' · né(e) le '+E(a.naissance)+(a.lieuNaissance?(' à '+E(a.lieuNaissance)):'')):'')+(a.nationalite?(' · '+E(a.nationalite)):'')+(a.adresse?(' · '+E(a.adresse)):''); }).join('<br>')+'</span></div>';
+      var pks=Object.keys(r.pieces||{}).filter(function(k){ return (r.pieces[k]||[]).length; }); if(pks.length) rows+='<div class="dinf-row dinf-long"><span class="dinf-l">Documents déposés</span><span class="dinf-v">'+pks.map(function(k){ return '<b>'+E(PIECE_LABELS[k]||k)+'</b> : '+E(r.pieces[k].join(', '))+' <span class="if-tag">rattaché au dossier</span>'; }).join('<br>')+'</span></div>';
       if(r.message) rows+='<div class="dinf-row dinf-long"><span class="dinf-l">Message</span><span class="dinf-v">'+E(r.message)+'</span></div>';
       var idx=e.infosRecues.length-1-i;
-      return '<div class="if-rec"><div class="if-rec-h"><b>Réponse du client</b><span>'+E(when)+(r.tokenOk===false?' · <span class="if-warn">lien non vérifié</span>':'')+'</span><button type="button" class="btn btn-sm btn-ghost" onclick="infosReporter(\''+E(e.id)+'\','+idx+')" title="Reporter toutes ces réponses dans le questionnaire et la fiche client (écrase les valeurs existantes)">↻ Reporter tout</button></div><div class="dinf">'+rows+'</div></div>'; }).join('');
+      return '<div class="if-rec"><div class="if-rec-h"><b>'+(r.libre?'Questionnaire public (lien partagé)':'Réponse du client')+'</b><span>'+E(when)+(r.tokenOk===false?' · <span class="if-warn">lien non vérifié</span>':'')+'</span><button type="button" class="btn btn-sm btn-ghost" onclick="infosReporter(\''+E(e.id)+'\','+idx+')" title="Reporter toutes ces réponses dans le questionnaire et la fiche client (écrase les valeurs existantes)">↻ Reporter tout</button></div><div class="dinf">'+rows+'</div></div>'; }).join('');
     return '<div class="card if-card"><div class="card-h"><h2>Informations reçues du client</h2><span class="sub" style="margin-left:auto">Formulaire en ligne · '+e.infosRecues.length+' réponse'+(e.infosRecues.length>1?'s':'')+'</span></div><div class="card-b">'+blocs+'</div></div>'; };
   window.infosReporter=function(id,idx){ var e=entite(id); if(!e) return; var r=(e.infosRecues||[])[idx]; if(!r) return; r.force=true; var appl=window.infosAppliquer(e,r); delete r.force; try{ save(); }catch(x){} T(appl.length+' élément(s) reporté(s) dans le dossier.'); try{ render(); }catch(x){} };
   if(typeof window.demInfosCard==='function'){ var _dic=window.demInfosCard; window.demInfosCard=function(d){ var h=''; try{ h=_dic.apply(this,arguments)||''; }catch(x){} var e=d&&(entite(d.id)||d); return h+(window.infosRecuesCard(e)||''); }; }
@@ -39743,6 +39784,7 @@ function testLienSignature() {
     '.if-tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#3f7d54;border:1px solid rgba(63,125,84,.5);border-radius:6px;padding:1px 5px;margin-left:6px}.if-warn{color:#c0392b;font-weight:700}'
   ].join('\n'); document.head.appendChild(css);
 
+  window.__infosFormDebugExtra={qKeys:qKeys,ALIAS:ALIAS,rattacherPieces:rattacherPieces,creerDemandeLibre:creerDemandeLibre};
   window.__infosFormDebug={MAP:MAP,SECTIONS:SECTIONS,manquants:manquants,trouverEntite:trouverEntite,typeDe:typeDe,numeroDe:numeroDe};
 })();
 </script>
