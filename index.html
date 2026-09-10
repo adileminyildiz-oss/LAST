@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=624;
+var LAST_VER=625;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -38495,6 +38495,58 @@ function testLienSignature() {
   var _render=window.render; window.render=function(){ var r=_render.apply(this,arguments); try{ inject(); }catch(e){} return r; };
   var css=document.createElement('style'); css.id='ep-mod'; css.textContent='.ep-bar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px;padding-bottom:12px;border-bottom:1px solid #23262d}.ed2-form .ep-auto{border-color:rgba(91,191,138,.7)!important;box-shadow:inset 0 0 0 1px rgba(91,191,138,.35)!important}'; document.head.appendChild(css);
   window.__epDebug={keys:keys,emetteur:emetteur};
+})();
+</script>
+
+
+<script>
+/* ============================================================================
+   Mar'q — Barre latérale en modules à plat (v625, variante B validée)
+   Cinq modules, tous les sous-modules visibles sous leur module, sans clic :
+     Tableau de bord · DOSSIERS (Demandes, Traitement, Formulaire, Clients, Agenda)
+     · FACTURATION (Factures & devis, Chantiers, Factures prestataires, Remboursement TVA,
+       Export YADA) · DOCUMENTS (Éditions, Étude de marché, Fiscal / Conformité)
+     · PILOTAGE (Pilotage, Services, Justificatifs du cabinet) · SYSTÈME (Paramètres).
+   Les boutons existants (badges, étiquettes « en pause », compteurs) sont conservés et
+   réordonnés ; les pages jusqu'ici invisibles sont ajoutées ; icônes manquantes complétées ;
+   la barre défile si la hauteur manque. 100 % additif (greffe sur buildNav).
+   ========================================================================= */
+(function(){
+  if(window.__aemNavFlat) return; window.__aemNavFlat=true;
+  try{ if(typeof IC!=='undefined'){ IC.doc=IC.doc||'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/>'; IC.receipt=IC.receipt||'<path d="M4 2v20l3-2 3 2 3-2 3 2 3-2V2l-3 2-3-2-3 2-3-2z"/><path d="M8 8h8M8 12h8M8 16h5"/>'; IC.hard=IC.hard||'<path d="M2 20h20"/><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/>'; } }catch(e){}
+  var GROUPS=[
+    {lbl:'',items:['cockpit']},
+    {lbl:'Dossiers',items:['demandes','espace','formulaire','clients','agenda']},
+    {lbl:'Facturation',items:['facturier','__chantiers','factpresta','tvarembours','yada']},
+    {lbl:'Documents',items:['editions','etudemarche','conformite']},
+    {lbl:'Pilotage',items:['pilotage','services','prestataires']},
+    {lbl:'Système',items:['params']}
+  ];
+  var LBL={facturier:'Factures & devis',prestataires:'Justificatifs du cabinet',yada:'Export YADA',factpresta:'Factures prestataires'};
+  function pageOf(btn){ var m=(btn.getAttribute('onclick')||'').match(/go\('([a-z0-9]+)'\)/); return m?m[1]:''; }
+  function mkBtn(id){ var p=(typeof PAGES!=='undefined')?PAGES.filter(function(x){ return x.id===id; })[0]:null; if(!p) return null; try{ var t=document.createElement('div'); t.innerHTML=navBtn(p); return t.firstElementChild; }catch(e){ return null; } }
+  function chantiersBtn(){ var on=(typeof state!=='undefined'&&state.page==='facturier'&&window.__invUI&&window.__invUI.tab==='chantiers'); var b=document.createElement('button'); b.className='nav-btn nav-flat-sub'+(on?' on':''); b.setAttribute('onclick',"marqGoChantiers()"); var n=0; try{ n=Object.keys(typeof invChantiers==='function'?invChantiers():{}).length; }catch(e){} b.innerHTML=(typeof svg==='function'?svg(IC.hard):'')+'<span class="nav-btn-lbl">Chantiers</span>'+(n?('<span class="nav-badge nav-badge-soft" title="'+n+' chantier(s) suivi(s)">'+n+'</span>'):''); return b; }
+  window.marqGoFactures=function(){ window.__invUI=window.__invUI||{tab:'new',hidePrev:false}; if(window.__invUI.tab==='chantiers') window.__invUI.tab='new'; try{ go('facturier'); }catch(e){ state.page='facturier'; render(); } };
+  window.marqGoChantiers=function(){ window.__invUI=window.__invUI||{tab:'new',hidePrev:false}; window.__invUI.tab='chantiers'; try{ go('facturier'); }catch(e){ state.page='facturier'; render(); } };
+  function rebuild(){ var nav=document.getElementById('nav'); if(!nav) return; var have={}; [].slice.call(nav.querySelectorAll('button.nav-btn')).forEach(function(b){ var id=pageOf(b); if(id&&!have[id]) have[id]=b; });
+    var frag=document.createDocumentFragment(); var used={};
+    GROUPS.forEach(function(g){ var nodes=[]; g.items.forEach(function(id){ var b; if(id==='__chantiers'){ b=chantiersBtn(); } else { b=have[id]||mkBtn(id); if(!b) return; used[id]=1; if(LBL[id]){ var l=b.querySelector('.nav-btn-lbl'); if(l) l.textContent=LBL[id]; } if(id==='facturier'){ b.setAttribute('onclick','marqGoFactures()'); if(window.__invUI&&window.__invUI.tab==='chantiers') b.classList.remove('on'); } [].slice.call(b.childNodes).forEach(function(nd){ if(nd.nodeType===3&&/^\s*undefined\s*$/.test(nd.textContent)) nd.remove(); }); }
+        if(b) nodes.push(b); });
+      if(!nodes.length) return; if(g.lbl){ var l=document.createElement('div'); l.className='nav-lbl nav-flat-lbl'; l.textContent=g.lbl; frag.appendChild(l); } nodes.forEach(function(b){ frag.appendChild(b); }); });
+    /* pages inconnues du regroupement : conservées en fin de barre */
+    var rest=Object.keys(have).filter(function(id){ return !used[id]; }); if(rest.length){ var l2=document.createElement('div'); l2.className='nav-lbl nav-flat-lbl'; l2.textContent='Autres'; frag.appendChild(l2); rest.forEach(function(id){ frag.appendChild(have[id]); }); }
+    nav.innerHTML=''; nav.appendChild(frag); nav.classList.add('nav-flat'); fit(); }
+  function fit(){ try{ var nav=document.getElementById('nav'); if(!nav) return; var z=(typeof uiZoom==='function')?uiZoom():1; var top=nav.getBoundingClientRect().top/z; var foot=document.querySelector('aside .side-foot'); var fh=foot?(foot.getBoundingClientRect().height/z):0; var h=Math.max(160,Math.floor(window.innerHeight/z-top-fh-14)); nav.style.maxHeight=h+'px'; }catch(e){} }
+  window.addEventListener('resize',function(){ fit(); });
+  var _bn=window.buildNav; if(typeof _bn==='function'){ window.buildNav=function(){ var r=_bn.apply(this,arguments); try{ rebuild(); }catch(e){ window.__navFlatErr=e&&e.message; } return r; }; }
+  var _bnTick=0; var _render=window.render; window.render=function(){ var r=_render.apply(this,arguments); try{ var nav=document.getElementById('nav'); if(nav&&!nav.classList.contains('nav-flat')) rebuild(); }catch(e){} return r; };
+  var css=document.createElement('style'); css.id='nav-flat-mod'; css.textContent=[
+    '#nav.nav-flat{overflow-y:auto;overflow-x:hidden;min-height:0;scrollbar-width:thin;padding-right:2px}',
+    '#nav.nav-flat .nav-flat-lbl{margin-top:4px}#nav.nav-flat .nav-flat-lbl:first-child{margin-top:0}',
+    '#nav.nav-flat .nav-btn{min-height:32px}#nav.nav-flat .nav-badge-soft{background:rgba(79,157,255,.18);color:#9ec4ff}'
+  ].join('\n'); document.head.appendChild(css);
+  setTimeout(function(){ try{ rebuild(); }catch(e){} },300);
+  window.__navFlatDebug={rebuild:rebuild,GROUPS:GROUPS};
 })();
 </script>
 
