@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=625;
+var LAST_VER=626;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -38547,6 +38547,63 @@ function testLienSignature() {
   ].join('\n'); document.head.appendChild(css);
   setTimeout(function(){ try{ rebuild(); }catch(e){} },300);
   window.__navFlatDebug={rebuild:rebuild,GROUPS:GROUPS};
+})();
+</script>
+
+
+<script>
+/* ============================================================================
+   Mar'q — Ajustements du module de facturation (v626)
+   1. Aperçu toujours visible : colonne collante, page A4 rendue à sa taille réelle (794 px)
+      puis réduite pour tenir dans la largeur ET la hauteur disponibles → l'aperçu ne
+      disparaît plus en défilant, et ressemble exactement à l'impression.
+   2. Assistant compact : les six types en une rangée de pastilles (description du type
+      choisi sur une ligne), sélecteurs sur trois colonnes, TVA sur une ligne.
+   3. Barre d'outils : bouton « ＋ Nouveau » libellé ; en-têtes de colonnes du papier
+      jamais coupés en milieu de mot.
+   100 % additif (CSS + ajustement de l'aperçu après chaque rafraîchissement).
+   ========================================================================= */
+(function(){
+  if(window.__aemFacAdj) return; window.__aemFacAdj=true;
+  var A4W=794, A4H=1123;
+  function z(){ try{ return (typeof uiZoom==='function')?uiZoom():1; }catch(e){ return 1; } }
+  function fit(){ try{ var box=document.getElementById('inv-prev'); if(!box) return; var paper=box.querySelector('.inv-paper'); if(!paper) return;
+      var col=box.parentElement; var cw=col?col.clientWidth:box.clientWidth; if(!cw) return;
+      var top=box.getBoundingClientRect().top/z(); var availH=window.innerHeight/z()-Math.max(0,top)-16; if(availH<300) availH=300;
+      var ph=Math.max(A4H,paper.scrollHeight||A4H); var s=Math.min(1,cw/A4W,availH/ph);
+      paper.style.transform='scale('+s+')'; paper.style.transformOrigin='top left'; box.style.height=Math.ceil(ph*s)+'px'; box.style.width=Math.ceil(A4W*s)+'px'; box.classList.add('fa-fitted');
+      var d=window.__invDraft||{}; if(typeof invSetType==='function'){ var h=document.querySelector('.fb-type-hint'); var t=document.querySelector('.fb-type.on'); if(h&&t) h.textContent=t.getAttribute('title')||''; }
+  }catch(e){} }
+  window.invFitPreview=fit;
+  /* Agrandir : la page à taille réelle dans un voile plein écran (Échap ou clic hors page pour fermer) */
+  window.invPreviewZoom=function(){ var paper=document.querySelector('#inv-prev .inv-paper'); if(!paper) return; var ov=document.getElementById('fa-zoom'); if(!ov){ ov=document.createElement('div'); ov.id='fa-zoom'; ov.innerHTML='<div class="fa-zoom-bar"><span>Aperçu à taille réelle — Échap pour fermer</span><button class="inv-tb" onclick="invPrint()">⎙ Imprimer / PDF</button><button class="inv-tb" onclick="invPreviewZoomClose()">✕ Fermer</button></div><div class="fa-zoom-body"><div class="fa-zoom-page"></div></div>'; document.body.appendChild(ov); ov.addEventListener('mousedown',function(ev){ if(ev.target.classList.contains('fa-zoom-body')) invPreviewZoomClose(); }); document.addEventListener('keydown',function(ev){ if(ev.key==='Escape'&&document.getElementById('fa-zoom')&&document.getElementById('fa-zoom').classList.contains('on')) invPreviewZoomClose(); }); }
+    var pg=ov.querySelector('.fa-zoom-page'); pg.innerHTML=paper.outerHTML; var cl=pg.querySelector('.inv-paper'); cl.style.transform='none'; ov.classList.add('on'); };
+  window.invPreviewZoomClose=function(){ var ov=document.getElementById('fa-zoom'); if(ov) ov.classList.remove('on'); };
+  var _refresh=window.invRefresh; window.invRefresh=function(){ var r=_refresh.apply(this,arguments); try{ fit(); }catch(e){} return r; };
+  var _render=window.render; window.render=function(){ var r=_render.apply(this,arguments); try{ if(typeof state!=='undefined'&&state.page==='facturier'){ decor(); fit(); setTimeout(fit,60); } }catch(e){} return r; };
+  window.addEventListener('resize',function(){ if(typeof state!=='undefined'&&state.page==='facturier') fit(); });
+  function decor(){ try{ var plus=document.querySelector('.inv-toolbar .inv-plus'); if(plus&&!plus.querySelector('.fa-plus-l')){ plus.innerHTML='＋<span class="fa-plus-l">Nouveau</span>'; }
+      var types=document.querySelector('.fb-types'); if(types&&!(types.nextElementSibling&&types.nextElementSibling.classList.contains('fb-type-hint'))){ var h=document.createElement('div'); h.className='fb-type-hint'; var t=types.querySelector('.fb-type.on'); h.textContent=t?(t.getAttribute('title')||''):''; types.insertAdjacentElement('afterend',h); }
+      var lbl=document.querySelector('.inv-prev-lbl'); if(lbl&&!lbl.querySelector('.fa-prev-note')){ var n=document.createElement('span'); n.className='fa-prev-note'; n.innerHTML='réduit à l\'écran · <button class="fa-zoom-btn" onclick="invPreviewZoom()">⤢ Agrandir</button>'; lbl.appendChild(n); } var box=document.getElementById('inv-prev'); if(box&&!box.__zoom){ box.__zoom=1; box.style.cursor='zoom-in'; box.title='Cliquer pour agrandir'; box.addEventListener('click',function(){ invPreviewZoom(); }); } }catch(e){} }
+  var css=document.createElement('style'); css.id='fa-adj-mod'; css.textContent=[
+    /* aperçu collant, page A4 réelle réduite */
+    '.inv-col-prev{position:sticky;top:6px;align-self:start}@media(max-width:1320px){.inv-2col:not(.solo){grid-template-columns:1fr 1fr}}@media(max-width:1000px){.inv-2col{grid-template-columns:1fr}.inv-col-prev{position:static}}',
+    '#inv-prev{overflow:hidden;margin:0 auto}#inv-prev .inv-paper{width:'+A4W+'px!important;max-width:none!important;min-height:'+A4H+'px;aspect-ratio:auto!important;box-shadow:0 8px 30px rgba(0,0,0,.28)}',
+    '.inv-prev-lbl{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.fa-prev-note{font-size:10px;color:var(--ink-3,#8494aa);text-transform:none;letter-spacing:0;font-weight:500}',
+    /* assistant compact */
+    '.fb-types{display:flex!important;flex-wrap:wrap;gap:6px;padding:10px 12px 4px}.fb-type{flex:1 1 auto;flex-direction:row!important;align-items:center;padding:7px 11px!important;border-radius:20px!important;gap:6px}.fb-type b{font-size:12px;white-space:nowrap}.fb-type span{display:none}',
+    '.fb-type-hint{padding:0 12px 4px;font-size:11.5px;color:var(--ink-3,#8494aa);min-height:16px}',
+    '.fb-pick{grid-template-columns:1fr 1fr 1fr!important;align-items:end}.fb-pick .fb-tvap{grid-column:1/-1;padding-top:2px}.fb-pick .fb-tvap>span{margin-right:6px}',
+    '@media(max-width:1500px){.fb-pick{grid-template-columns:1fr 1fr!important}}',
+    /* barre d\'outils */
+    '.inv-toolbar .inv-plus{display:inline-flex;align-items:center;gap:6px;font-weight:700}.inv-toolbar .inv-plus.disabled{opacity:.45}.fa-plus-l{font-size:12px}',
+    /* papier : en-têtes jamais coupés */
+    '.inv-paper .fb-tbl th{white-space:nowrap}.inv-paper .fb-tbl td.r{white-space:nowrap}',
+    'html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper *{color:#1a1f28!important;-webkit-text-fill-color:#1a1f28!important;background-color:transparent}html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper{background:#fff!important}html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .fb-lbl,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .fb-sm,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .fb-em-lines,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .fb-legal,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .fb-note,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .fb-tbl th,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .fb-trow span,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .inv-mute,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .q-em-lines,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .inv-p-sm{color:#6b7380!important;-webkit-text-fill-color:#6b7380!important}html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper tr.fb-lot td{background:#f2f4f7!important}html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .fc-band,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .fc-band *,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .m-band,html body:not(#mq):not(#mq):not(#mq) #fa-zoom .inv-paper .m-band *{color:#fff!important;-webkit-text-fill-color:#fff!important}',
+    '.fa-zoom-btn{border:none;background:none;color:var(--accent-2,#9ec4ff);font:inherit;font-size:10.5px;font-weight:700;cursor:pointer;padding:0}',
+    '#fa-zoom{position:fixed;inset:0;z-index:99980;background:rgba(6,8,12,.86);display:none;flex-direction:column}#fa-zoom.on{display:flex}.fa-zoom-bar{display:flex;align-items:center;gap:8px;padding:10px 16px;color:#dfe2e8;font-size:12.5px;background:#0e1015;border-bottom:1px solid #22242b}.fa-zoom-bar span{flex:1}.fa-zoom-body{flex:1;overflow:auto;padding:24px;display:flex;justify-content:center;align-items:flex-start}.fa-zoom-page .inv-paper{width:'+A4W+'px!important;min-height:'+A4H+'px;background:#fff!important;color:#1a1a1a!important;transform:none!important;padding:30px 30px 34px;border-radius:6px}'
+  ].join('\n'); document.head.appendChild(css);
+  setTimeout(function(){ try{ if(typeof state!=='undefined'&&state.page==='facturier'){ decor(); fit(); } }catch(e){} },500);
 })();
 </script>
 
