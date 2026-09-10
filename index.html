@@ -3336,7 +3336,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',function(){
   try{ if(self.caches&&caches.keys) caches.keys().then(function(ks){ (ks||[]).forEach(function(k){ try{caches.delete(k);}catch(e){} }); }).catch(function(){}); }catch(e){}
 });}
 /* --- Anti-obsolescence : garde toujours la dernière version en ligne --- */
-var LAST_VER=637;
+var LAST_VER=638;
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){ if(window.__lastReloaded)return; window.__lastReloaded=true; location.reload(); });
   navigator.serviceWorker.addEventListener('message',function(e){ if((e&&e.data==='reload')&&!window.__lastReloaded){ window.__lastReloaded=true; try{location.reload(true);}catch(_){try{location.reload();}catch(__){}} } });
@@ -38202,7 +38202,7 @@ function testLienSignature() {
       +'<details class="inv-sec"><summary class="inv-sec-h">Mentions légales</summary><div class="inv-grid" style="margin-top:8px">'+inp('condReg','Conditions de règlement',d.condReg,'Paiement à réception',null,true)+inp('penalites','Taux des pénalités de retard',d.penalites,'3 fois le taux d’intérêt légal',null,true)+inp('assurance','Assurance décennale / RC pro',d.assurance,'Assureur · n° contrat',null,true)+'</div>'
       +'<div class="inv-chks">'+chk('franchiseTVA','TVA non applicable — art. 293 B du CGI (franchise en base)')+chk('autoliq','Autoliquidation de la TVA (sous-traitance BTP — art. 283-2 nonies)')+chk('tvaAttest','Taux réduit sur attestation du client (logement > 2 ans)')+chk('escompte','Escompte en cas de paiement anticipé')+chk('oga','Membre d’une association agréée')+chk('showAssur','Afficher l’assurance décennale / RC pro (BTP)')+'</div></details>'
       +'</div></div>'
-      +'<div class="card"><div class="card-h"><h2>'+(situ?'Ouvrages du marché & avancement':'Prestations / ouvrages')+'</h2>'+(situ&&type==='situation'?'<span class="fb-hint">Avancement <b>cumulé</b> par ligne : '+[25,50,75,100].map(function(v){ return '<button class="fb-tv" onclick="invAvTous('+v+')">'+v+' %</button>'; }).join(' ')+'</span>':'')+'<button class="inv-tb fb-prop" onclick="invPropositions(this)">💡 Propositions ▾</button></div><div class="card-b">'
+      +'<div class="card"><div class="card-h"><h2>'+(situ?'Ouvrages du marché & avancement':'Prestations / ouvrages')+'</h2>'+(situ&&type==='situation'?'<span class="fb-hint">Avancement <b>cumulé</b> par ligne : '+[25,50,75,100].map(function(v){ return '<button class="fb-tv" onclick="invAvTous('+v+')">'+v+' %</button>'; }).join(' ')+'</span>':'')+'</div><div class="card-b">'
       +'<div class="fb-lhead'+(situ?' situ':'')+'"><span>Désignation</span><span>Unité</span><span>Qté</span><span>P.U. HT</span>'+(situ?'<span>Avanc. %</span>':'')+'<span>'+(situ?'Cumul HT':'Total HT')+'</span><span></span></div>'
       +'<div id="inv-lines">'+linesHTML(d)+'</div>'
       +'<div class="fb-lbtns"><button class="inv-addl" onclick="invAddLineBTP()">➕ Ajouter une ligne</button><button class="inv-addl" onclick="invAddLot()">▤ Ajouter un lot / titre</button><button class="inv-addl" onclick="invAddLignesMenu(this)">➕ Plusieurs lignes ▾</button></div>'
@@ -39748,12 +39748,14 @@ function testLienSignature() {
 </script>
 <script>
 /* ============================================================================
-   Mar'q — Harmonisation de l'interface : boutons, centrages, contours (v637)
+   Mar'q — Harmonisation de l'interface : boutons, centrages, contours (v637, v638)
    - Boutons : mêmes hauteurs (32 px / 28 px), même rayon (9 px / 8 px), libellé
      centré horizontalement et verticalement, contour 1 px uniforme, icône alignée.
    - Modules : contenu centré (gouttière de défilement symétrique, largeur bornée).
    - Barres d'actions centrées : facturier, vue d'une demande, pied des fenêtres.
    - Contours : cartes, champs et pastilles au même rayon, même couleur de bord.
+   - v638 : plancher de 11 px pour les textes d'aide, sous-titres et en-têtes de tableaux
+     (documents papier exclus) ; petits boutons à 26 px de haut minimum.
    100 % CSS additif, injecté en dernier (prime sur les thèmes).
    ========================================================================= */
 (function(){
@@ -39792,7 +39794,15 @@ function testLienSignature() {
     P+'.tag,'+P+'.inv-badge{display:inline-flex!important;align-items:center!important;justify-content:center!important;line-height:1.2!important;border-width:1px!important;border-style:solid!important;border-color:transparent}',
     P+'.seg,'+P+'.inv-seg{border-radius:9px!important;border-width:1px!important}',
     /* ── boutons d'un groupe : même hauteur, même ligne ── */
-    P+'.dem-view-acts .btn,'+P+'.inv-toolbar .inv-tb,'+P+'.ov-f .btn,'+P+'#ov-f .btn{min-height:34px!important}'
+    P+'.dem-view-acts .btn,'+P+'.inv-toolbar .inv-tb,'+P+'.ov-f .btn,'+P+'#ov-f .btn{min-height:34px!important}',
+    /* ── v638 : lisibilité — aucun texte d'interface sous 11 px (documents papier exclus) ── */
+    P+'main :is(small,.hint,.sub,.tag,.cli-tag,.cli-tab-n,.ag-k-l,.frs-badge,.ff-tag,.emi-ref,.emi-obj,.emi-pill,.emi-docs,.emi-date,.emf-n,.esp-mini-h,.esp-mini-n,.bd8-l,.fa-prev-note,.card-b th,.tbl th,table th):not(.inv-paper *):not(.fac-a4 *):not(.doc-page *):not(.st-page *):not(.dg-page *):not(.p26-a4 *):not(.p26-page *):not(.pf-page *):not(.pfp-page *):not(.pex-page *):not(.pe-a4 *):not(.ed2-pages *):not(.fa-zoom-page *):not(.paper *){font-size:11px!important;line-height:1.35!important}',
+    /* ── v638 : petits boutons — hauteur minimale de 26 px, cible cliquable confortable ── */
+    P+'.ckp-lk,'+P+'.ed2-pc-v,'+P+'.emf-chip,'+P+'.fa-zoom-btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-height:26px!important;padding:3px 9px!important;font-size:11.5px!important;line-height:1.2!important;box-sizing:border-box!important}',
+    P+'.ckp-hchip span,'+P+'.cli-fact i,'+P+'.ff-rail .h,'+P+'.trw-sep{font-size:11px!important}',
+    P+'.ckp-ring-in span,'+P+'.ckp-sp span{font-size:10px!important}',
+    P+'.ckp-lk{padding:3px 6px!important}',
+    P+'.ed2-pc-v{border-radius:8px!important}'
   ].join('\n');
   var st=document.createElement('style'); st.id='ui-polish-css'; st.textContent=css; document.head.appendChild(st);
   /* rester en dernier dans <head> (les thèmes injectent après le rendu) */
